@@ -140,24 +140,24 @@ struct OrderedGrouping : PhysicalOperator<OrderedGrouping, GroupingOperator>
     using var_t_ = std::conditional_t<IsGlobal, Global<T>, Var<T>>;
     template<bool IsGlobal>
     using agg_t_ = std::variant<
-        var_t_<IsGlobal, I64>,
-        std::pair<var_t_<IsGlobal, I8>,     std::optional<var_t_<IsGlobal, Bool>>>,
-        std::pair<var_t_<IsGlobal, I16>,    std::optional<var_t_<IsGlobal, Bool>>>,
-        std::pair<var_t_<IsGlobal, I32>,    std::optional<var_t_<IsGlobal, Bool>>>,
-        std::pair<var_t_<IsGlobal, I64>,    std::optional<var_t_<IsGlobal, Bool>>>,
-        std::pair<var_t_<IsGlobal, Float>,  std::optional<var_t_<IsGlobal, Bool>>>,
-        std::pair<var_t_<IsGlobal, Double>, std::optional<var_t_<IsGlobal, Bool>>>
+        var_t_<IsGlobal, I64x1>,
+        std::pair<var_t_<IsGlobal, I8x1>,     std::optional<var_t_<IsGlobal, Boolx1>>>,
+        std::pair<var_t_<IsGlobal, I16x1>,    std::optional<var_t_<IsGlobal, Boolx1>>>,
+        std::pair<var_t_<IsGlobal, I32x1>,    std::optional<var_t_<IsGlobal, Boolx1>>>,
+        std::pair<var_t_<IsGlobal, I64x1>,    std::optional<var_t_<IsGlobal, Boolx1>>>,
+        std::pair<var_t_<IsGlobal, Floatx1>,  std::optional<var_t_<IsGlobal, Boolx1>>>,
+        std::pair<var_t_<IsGlobal, Doublex1>, std::optional<var_t_<IsGlobal, Boolx1>>>
     >;
     template<bool IsGlobal>
     using key_t_ = std::variant<
-        var_t_<IsGlobal, Ptr<Char>>,
-        std::pair<var_t_<IsGlobal, Bool>,      std::optional<var_t_<IsGlobal, Bool>>>,
-        std::pair<var_t_<IsGlobal, I8>,        std::optional<var_t_<IsGlobal, Bool>>>,
-        std::pair<var_t_<IsGlobal, I16>,       std::optional<var_t_<IsGlobal, Bool>>>,
-        std::pair<var_t_<IsGlobal, I32>,       std::optional<var_t_<IsGlobal, Bool>>>,
-        std::pair<var_t_<IsGlobal, I64>,       std::optional<var_t_<IsGlobal, Bool>>>,
-        std::pair<var_t_<IsGlobal, Float>,     std::optional<var_t_<IsGlobal, Bool>>>,
-        std::pair<var_t_<IsGlobal, Double>,    std::optional<var_t_<IsGlobal, Bool>>>
+        var_t_<IsGlobal, Ptr<Charx1>>,
+        std::pair<var_t_<IsGlobal, Boolx1>,      std::optional<var_t_<IsGlobal, Boolx1>>>,
+        std::pair<var_t_<IsGlobal, I8x1>,        std::optional<var_t_<IsGlobal, Boolx1>>>,
+        std::pair<var_t_<IsGlobal, I16x1>,       std::optional<var_t_<IsGlobal, Boolx1>>>,
+        std::pair<var_t_<IsGlobal, I32x1>,       std::optional<var_t_<IsGlobal, Boolx1>>>,
+        std::pair<var_t_<IsGlobal, I64x1>,       std::optional<var_t_<IsGlobal, Boolx1>>>,
+        std::pair<var_t_<IsGlobal, Floatx1>,     std::optional<var_t_<IsGlobal, Boolx1>>>,
+        std::pair<var_t_<IsGlobal, Doublex1>,    std::optional<var_t_<IsGlobal, Boolx1>>>
     >;
 
     public:
@@ -175,13 +175,13 @@ struct Aggregation : PhysicalOperator<Aggregation, AggregationOperator>
     using var_t_ = std::conditional_t<IsGlobal, Global<T>, Var<T>>;
     template<bool IsGlobal>
     using agg_t_ = std::variant<
-        var_t_<IsGlobal, I64>,
-        std::pair<var_t_<IsGlobal, I8>,     var_t_<IsGlobal, Bool>>,
-        std::pair<var_t_<IsGlobal, I16>,    var_t_<IsGlobal, Bool>>,
-        std::pair<var_t_<IsGlobal, I32>,    var_t_<IsGlobal, Bool>>,
-        std::pair<var_t_<IsGlobal, I64>,    var_t_<IsGlobal, Bool>>,
-        std::pair<var_t_<IsGlobal, Float>,  var_t_<IsGlobal, Bool>>,
-        std::pair<var_t_<IsGlobal, Double>, var_t_<IsGlobal, Bool>>
+        var_t_<IsGlobal, I64x1>,
+        std::pair<var_t_<IsGlobal, I8x1>,     var_t_<IsGlobal, Boolx1>>,
+        std::pair<var_t_<IsGlobal, I16x1>,    var_t_<IsGlobal, Boolx1>>,
+        std::pair<var_t_<IsGlobal, I32x1>,    var_t_<IsGlobal, Boolx1>>,
+        std::pair<var_t_<IsGlobal, I64x1>,    var_t_<IsGlobal, Boolx1>>,
+        std::pair<var_t_<IsGlobal, Floatx1>,  var_t_<IsGlobal, Boolx1>>,
+        std::pair<var_t_<IsGlobal, Doublex1>, var_t_<IsGlobal, Boolx1>>
     >;
 
     public:

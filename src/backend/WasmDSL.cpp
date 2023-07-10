@@ -235,7 +235,7 @@ struct LinearAllocator : Allocator
     ///> compile-time size of the currently used memory, used as pointer to next free pre-allocation
     uint32_t pre_alloc_addr_;
     ///> global size of the currently used memory, used as pointer to next free allocation
-    Global<U32> alloc_addr_;
+    Global<U32x1> alloc_addr_;
 
     public:
     LinearAllocator(uint32_t start_addr)
@@ -258,11 +258,11 @@ struct LinearAllocator : Allocator
         M_insist(is_pow_2(alignment), "alignment must be a power of 2");
         if (alignment != 1U)
             align_pre_memory(alignment);
-        Ptr<void> ptr(U32(pre_alloc_addr_).template to<void*>());
+        Ptr<void> ptr(U32x1(pre_alloc_addr_).template to<void*>());
         pre_alloc_addr_ += bytes; // advance memory size by bytes
         return ptr;
     }
-    Var<Ptr<void>> allocate(U32 bytes, uint32_t alignment) override {
+    Var<Ptr<void>> allocate(U32x1 bytes, uint32_t alignment) override {
         M_insist(alignment);
         M_insist(is_pow_2(alignment), "alignment must be a power of 2");
         if (alignment != 1U)
@@ -272,7 +272,7 @@ struct LinearAllocator : Allocator
         return ptr;
     }
 
-    void deallocate(Ptr<void> ptr, U32 bytes) override {
+    void deallocate(Ptr<void> ptr, U32x1 bytes) override {
         Wasm_insist(ptr.clone().template to<uint32_t>() < alloc_addr_, "must not try to free unallocated memory");
         IF (ptr.template to<uint32_t>() + bytes.clone() == alloc_addr_) { // last allocation can be freed
             alloc_addr_ -= bytes; // free by decreasing memory size

@@ -69,9 +69,9 @@ void convert_in_place(SQL_t &operand, const Numeric *to_type)
 }
 
 template<bool CanBeNull>
-std::conditional_t<CanBeNull, _Bool, Bool> compile_cnf(ExprCompiler &C, const cnf::CNF &cnf)
+std::conditional_t<CanBeNull, _Boolx1, Boolx1> compile_cnf(ExprCompiler &C, const cnf::CNF &cnf)
 {
-    using result_t = std::conditional_t<CanBeNull, _Bool, Bool>;
+    using result_t = std::conditional_t<CanBeNull, _Boolx1, Boolx1>;
 
     std::optional<result_t> wasm_cnf, wasm_clause;
     for (auto &clause : cnf) {
@@ -79,8 +79,8 @@ std::conditional_t<CanBeNull, _Bool, Bool> compile_cnf(ExprCompiler &C, const cn
         for (auto &pred : clause) {
             /* Generate code for the literal of the predicate. */
             M_insist(pred.expr().type()->is_boolean());
-            auto compiled = M_CONSTEXPR_COND(CanBeNull, C.compile<_Bool>(pred.expr()),
-                                                        C.compile<_Bool>(pred.expr()).insist_not_null());
+            auto compiled = M_CONSTEXPR_COND(CanBeNull, C.compile<_Boolx1>(pred.expr()),
+                                                        C.compile<_Boolx1>(pred.expr()).insist_not_null());
             auto wasm_pred = pred.negative() ? not compiled : compiled;
 
             /* Add the predicate to the clause with an `or`. */
@@ -112,7 +112,7 @@ void ExprCompiler::operator()(const ast::ErrorExpr&) { M_unreachable("no errors 
 void ExprCompiler::operator()(const ast::Designator &e)
 {
     if (e.type()->is_none()) {
-        set(_I32::Null()); // create NULL
+        set(_I32x1::Null()); // create NULL
         return;
     }
 
@@ -124,7 +124,7 @@ void ExprCompiler::operator()(const ast::Designator &e)
 void ExprCompiler::operator()(const ast::Constant &e)
 {
     if (e.type()->is_none()) {
-        set(_I32::Null()); // create NULL
+        set(_I32x1::Null()); // create NULL
         return;
     }
 
@@ -132,7 +132,7 @@ void ExprCompiler::operator()(const ast::Constant &e)
     auto value = Interpreter::eval(e);
 
     visit(overloaded {
-        [this, &value](const Boolean&) { set(_Bool(value.as_b())); },
+        [this, &value](const Boolean&) { set(_Boolx1(value.as_b())); },
         [this, &value](const Numeric &n) {
             switch (n.kind) {
                 case Numeric::N_Int:
@@ -141,31 +141,31 @@ void ExprCompiler::operator()(const ast::Constant &e)
                         default:
                             M_unreachable("invalid integer size");
                         case 8:
-                            set(_I8(value.as_i()));
+                            set(_I8x1(value.as_i()));
                             break;
                         case 16:
-                            set(_I16(value.as_i()));
+                            set(_I16x1(value.as_i()));
                             break;
                         case 32:
-                            set(_I32(value.as_i()));
+                            set(_I32x1(value.as_i()));
                             break;
                         case 64:
-                            set(_I64(value.as_i()));
+                            set(_I64x1(value.as_i()));
                             break;
                     }
                     break;
                 case Numeric::N_Float:
                     if (n.size() <= 32)
-                        set(_Float(value.as_f()));
+                        set(_Floatx1(value.as_f()));
                     else
-                        set(_Double(value.as_d()));
+                        set(_Doublex1(value.as_d()));
             }
         },
         [this, &value](const CharacterSequence&) {
             set(CodeGenContext::Get().get_literal_address(value.as<const char*>()));
         },
-        [this, &value](const Date&) { set(_I32(value.as_i())); },
-        [this, &value](const DateTime&) { set(_I64(value.as_i())); },
+        [this, &value](const Date&) { set(_I32x1(value.as_i())); },
+        [this, &value](const DateTime&) { set(_I64x1(value.as_i())); },
         [](const NoneType&) { M_unreachable("should've been handled earlier"); },
         [](auto&&) { M_unreachable("invalid type"); },
     }, *e.type());
@@ -244,7 +244,7 @@ void ExprCompiler::operator()(const ast::BinaryExpr &e)
         if (e.lhs->type()->is_character_sequence()) { \
             M_insist(e.rhs->type()->is_character_sequence()); \
             apply_binop( \
-                [](NChar lhs, NChar rhs) -> _Bool { \
+                [](NChar lhs, NChar rhs) -> _Boolx1 { \
                     return strcmp(lhs, rhs, STRCMP_OP); \
                 } \
             ); break; \
@@ -295,28 +295,28 @@ void ExprCompiler::operator()(const ast::BinaryExpr &e)
             M_insist(e.lhs->can_be_null() == lhs.can_be_null());
             M_insist(e.rhs->can_be_null() == rhs.can_be_null());
 
-            Var<Ptr<Char>> res; // always set here
+            Var<Ptr<Charx1>> res; // always set here
             bool res_can_be_null = lhs.can_be_null() or rhs.can_be_null();
             std::size_t res_length = lhs.length() + rhs.length() + 1; // allocate space for terminating NUL byte
 
             if (res_can_be_null) {
                 auto [_ptr_lhs, is_nullptr_lhs] = lhs.split();
                 auto [_ptr_rhs, is_nullptr_rhs] = rhs.split();
-                Ptr<Char> ptr_lhs(_ptr_lhs), ptr_rhs(_ptr_rhs); // since structured bindings cannot be used in lambda capture
+                Ptr<Charx1> ptr_lhs(_ptr_lhs), ptr_rhs(_ptr_rhs); // since structured bindings cannot be used in lambda capture
 
                 IF (is_nullptr_lhs or is_nullptr_rhs) {
-                    res = Ptr<Char>::Nullptr();
+                    res = Ptr<Charx1>::Nullptr();
                 } ELSE {
                     res = Module::Allocator().pre_malloc<char>(res_length); // create pre-allocation for result
-                    Var<Ptr<Char>> ptr(strncpy(res, ptr_lhs, U32(lhs.length()))); // since res must not be changed
-                    strncpy(ptr, ptr_rhs, U32(rhs.size_in_bytes())).discard(); // copy with possible terminating NUL byte
+                    Var<Ptr<Charx1>> ptr(strncpy(res, ptr_lhs, U32x1(lhs.length()))); // since res must not be changed
+                    strncpy(ptr, ptr_rhs, U32x1(rhs.size_in_bytes())).discard(); // copy with possible terminating NUL byte
                     if (not rhs.guarantees_terminating_nul())
                         *ptr = '\0'; // terminate with NUL byte
                 };
             } else {
                 res = Module::Allocator().pre_malloc<char>(res_length); // create pre-allocation for result
-                Var<Ptr<Char>> ptr(strncpy(res, lhs, U32(lhs.length()))); // since res must not be changed
-                strncpy(ptr, rhs, U32(rhs.size_in_bytes())).discard(); // copy with possible terminating NUL byte
+                Var<Ptr<Charx1>> ptr(strncpy(res, lhs, U32x1(lhs.length()))); // since res must not be changed
+                strncpy(ptr, rhs, U32x1(rhs.size_in_bytes())).discard(); // copy with possible terminating NUL byte
                 if (not rhs.guarantees_terminating_nul())
                     *ptr = '\0'; // terminate with NUL byte
             }
@@ -332,9 +332,9 @@ void ExprCompiler::operator()(const ast::BinaryExpr &e)
             M_insist(e.rhs->type()->is_boolean());
 
             (*this)(*e.lhs);
-            _Bool lhs = get<_Bool>();
+            _Boolx1 lhs = get<_Boolx1>();
             (*this)(*e.rhs);
-            _Bool rhs = get<_Bool>();
+            _Boolx1 rhs = get<_Boolx1>();
 
             if (e.op().type == TK_And)
                 set(lhs and rhs);
@@ -361,7 +361,7 @@ void ExprCompiler::operator()(const ast::FnApplicationExpr &e)
         case m::Function::FN_ISNULL: {
             (*this)(*e.args[0]);
             auto arg = get();
-            set(_Bool(is_null(arg)));
+            set(_Boolx1(is_null(arg)));
             break;
         }
 
@@ -369,7 +369,7 @@ void ExprCompiler::operator()(const ast::FnApplicationExpr &e)
         case m::Function::FN_INT: {
             (*this)(*e.args[0]);
             auto arg = get();
-            set(convert<_I32>(arg));
+            set(convert<_I32x1>(arg));
             break;
         }
 
@@ -394,7 +394,7 @@ void ExprCompiler::operator()(const ast::QueryExpr &e)
     set(env_.get(id));
 }
 
-_Bool ExprCompiler::compile(const cnf::CNF &cnf)
+_Boolx1 ExprCompiler::compile(const cnf::CNF &cnf)
 {
     if (cnf.can_be_null())
         return compile_cnf<true>(*this, cnf);
@@ -467,15 +467,15 @@ compile_data_layout_sequential(const Schema &tuple_schema, Ptr<void> base_addres
     ///> the values loaded for the entries in `tuple_schema`
     SQL_t values[tuple_schema.num_entries()];
     ///> the NULL information loaded for the entries in `tuple_schema`
-    Bool *null_bits;
+    Boolx1 *null_bits;
     if constexpr (not IsStore)
-        null_bits = static_cast<Bool*>(alloca(sizeof(Bool) * tuple_schema.num_entries()));
+        null_bits = static_cast<Boolx1*>(alloca(sizeof(Boolx1) * tuple_schema.num_entries()));
 
     using key_t = std::pair<uint8_t, uint64_t>;
     ///> variable type for pointers dependent on whether access should be done using a single pass
     using ptr_t = std::conditional_t<SinglePass, Var<Ptr<void>>, Global<Ptr<void>>>;
-    ///> variable type for pointers dependent on whether access should be done using a single pass
-    using mask_t = std::conditional_t<SinglePass, Var<U32>, Global<U32>>;
+    ///> variable type for masks dependent on whether access should be done using a single pass
+    using mask_t = std::conditional_t<SinglePass, Var<U32x1>, Global<U32x1>>;
     struct value_t
     {
         ptr_t ptr;
@@ -501,7 +501,7 @@ compile_data_layout_sequential(const Schema &tuple_schema, Ptr<void> base_addres
     /*----- If predication is used, introduce predication variable and update it before storing a tuple. -----*/
     const bool is_predicated = env.predicated();
     M_insist(not is_predicated or IsStore, "predication only supported for storing tuples");
-    std::optional<Var<Bool>> pred;
+    std::optional<Var<Boolx1>> pred;
     if (is_predicated) {
         BLOCK_OPEN(stores) {
             pred = env.extract_predicate().is_true_and_not_null();
@@ -538,33 +538,33 @@ compile_data_layout_sequential(const Schema &tuple_schema, Ptr<void> base_addres
         uint64_t null_bitmap_stride_in_bits;
 
         /*----- Compute INode offset in bytes and INode iteration depending on the given tuple ID. -----*/
-        auto compute_additional_inode_byte_offset = [&](U32 tuple_id) -> U64 {
-            auto rec = [&](U32 curr_tuple_id, decltype(levels.cbegin()) curr, const decltype(levels.cend()) end,
-                           auto rec) -> U64
+        auto compute_additional_inode_byte_offset = [&](U32x1 tuple_id) -> U64x1 {
+            auto rec = [&](U32x1 curr_tuple_id, decltype(levels.cbegin()) curr, const decltype(levels.cend()) end,
+                           auto rec) -> U64x1
             {
                 if (curr == end) {
                     Wasm_insist(curr_tuple_id == tuple_id % uint32_t(levels.back().num_tuples));
-                    return U64(0);
+                    return U64x1(0);
                 }
 
                 if (is_pow_2(curr->num_tuples)) {
-                    U32 child_iter = curr_tuple_id.clone() >> uint32_t(__builtin_ctzl(curr->num_tuples));
-                    U32 inner_tuple_id = curr_tuple_id bitand uint32_t(curr->num_tuples - 1U);
+                    U32x1 child_iter = curr_tuple_id.clone() >> uint32_t(__builtin_ctzl(curr->num_tuples));
+                    U32x1 inner_tuple_id = curr_tuple_id bitand uint32_t(curr->num_tuples - 1U);
                     M_insist(curr->stride_in_bits % 8 == 0, "INode stride must be byte aligned");
-                    U64 offset_in_bytes = child_iter * uint64_t(curr->stride_in_bits / 8);
+                    U64x1 offset_in_bytes = child_iter * uint64_t(curr->stride_in_bits / 8);
                     return offset_in_bytes + rec(inner_tuple_id, std::next(curr), end, rec);
                 } else {
-                    U32 child_iter = curr_tuple_id.clone() / uint32_t(curr->num_tuples);
-                    U32 inner_tuple_id = curr_tuple_id % uint32_t(curr->num_tuples);
+                    U32x1 child_iter = curr_tuple_id.clone() / uint32_t(curr->num_tuples);
+                    U32x1 inner_tuple_id = curr_tuple_id % uint32_t(curr->num_tuples);
                     M_insist(curr->stride_in_bits % 8 == 0, "INode stride must be byte aligned");
-                    U64 offset_in_bytes = child_iter * uint64_t(curr->stride_in_bits / 8);
+                    U64x1 offset_in_bytes = child_iter * uint64_t(curr->stride_in_bits / 8);
                     return offset_in_bytes + rec(inner_tuple_id, std::next(curr), end, rec);
                 }
             };
             return rec(tuple_id.clone(), levels.cbegin(), levels.cend(), rec);
         };
-        std::optional<const Var<I32>> inode_byte_offset;
-        std::optional<const Var<U32>> inode_iter;
+        std::optional<const Var<I32x1>> inode_byte_offset;
+        std::optional<const Var<U32x1>> inode_iter;
         BLOCK_OPEN(inits) {
             M_insist(inode_offset_in_bits % 8 == 0, "INode offset must be byte aligned");
             inode_byte_offset.emplace(
@@ -594,9 +594,9 @@ compile_data_layout_sequential(const Schema &tuple_schema, Ptr<void> base_addres
                 has_null_bitmap = true;
                 if (bit_stride) { // NULL bitmap with bit stride requires dynamic masking
                     M_insist(bool(inode_iter), "stride requires repetition");
-                    U64 leaf_offset_in_bits = leaf_info.offset_in_bits + *inode_iter * leaf_info.stride_in_bits;
-                    U8  leaf_bit_offset  = (leaf_offset_in_bits.clone() bitand uint64_t(7)).to<uint8_t>() ; // mod 8
-                    I32 leaf_byte_offset = (leaf_offset_in_bits >> uint64_t(3)).make_signed().to<int32_t>(); // div 8
+                    U64x1 leaf_offset_in_bits = leaf_info.offset_in_bits + *inode_iter * leaf_info.stride_in_bits;
+                    U8x1  leaf_bit_offset  = (leaf_offset_in_bits.clone() bitand uint64_t(7)).to<uint8_t>() ; // mod 8
+                    I32x1 leaf_byte_offset = (leaf_offset_in_bits >> uint64_t(3)).make_signed().to<int32_t>(); // div 8
 
                     null_bitmap_bit_offset = leaf_info.offset_in_bits % 8;
                     null_bitmap_stride_in_bits = leaf_info.stride_in_bits;
@@ -662,24 +662,24 @@ compile_data_layout_sequential(const Schema &tuple_schema, Ptr<void> base_addres
                                     }
                                 };
                                 visit(overloaded{
-                                    [&](const Boolean&) { store.template operator()<_Bool>(); },
+                                    [&](const Boolean&) { store.template operator()<_Boolx1>(); },
                                     [&](const Numeric &n) {
                                         switch (n.kind) {
                                             case Numeric::N_Int:
                                             case Numeric::N_Decimal:
                                                 switch (n.size()) {
                                                     default: M_unreachable("invalid size");
-                                                    case  8: store.template operator()<_I8 >(); break;
-                                                    case 16: store.template operator()<_I16>(); break;
-                                                    case 32: store.template operator()<_I32>(); break;
-                                                    case 64: store.template operator()<_I64>(); break;
+                                                    case  8: store.template operator()<_I8x1 >(); break;
+                                                    case 16: store.template operator()<_I16x1>(); break;
+                                                    case 32: store.template operator()<_I32x1>(); break;
+                                                    case 64: store.template operator()<_I64x1>(); break;
                                                 }
                                                 break;
                                             case Numeric::N_Float:
                                                 if (n.size() <= 32)
-                                                    store.template operator()<_Float>();
+                                                    store.template operator()<_Floatx1>();
                                                 else
-                                                    store.template operator()<_Double>();
+                                                    store.template operator()<_Doublex1>();
                                         }
                                     },
                                     [&](const CharacterSequence&) {
@@ -691,8 +691,8 @@ compile_data_layout_sequential(const Schema &tuple_schema, Ptr<void> base_addres
                                                    null_bitmap_mask->template to<uint8_t>()); // update bit
                                         }
                                     },
-                                    [&](const Date&) { store.template operator()<_I32>(); },
-                                    [&](const DateTime&) { store.template operator()<_I64>(); },
+                                    [&](const Date&) { store.template operator()<_I32x1>(); },
+                                    [&](const DateTime&) { store.template operator()<_I64x1>(); },
                                     [](auto&&) { M_unreachable("invalid type"); },
                                 }, *tuple_it->type);
                             } else {
@@ -700,11 +700,11 @@ compile_data_layout_sequential(const Schema &tuple_schema, Ptr<void> base_addres
                                 BLOCK_OPEN(loads) {
                                     advance_to_next_bit();
 
-                                    U8 byte = *null_bitmap_ptr->template to<uint8_t*>(); // load the byte
-                                    Var<Bool> value(
+                                    U8x1 byte = *null_bitmap_ptr->template to<uint8_t*>(); // load the byte
+                                    Var<Boolx1> value(
                                         (byte bitand *null_bitmap_mask).template to<bool>()
                                     ); // mask bit with dynamic mask
-                                    new (&null_bits[tuple_idx]) Bool(value);
+                                    new (&null_bits[tuple_idx]) Boolx1(value);
                                 }
                             }
 
@@ -718,29 +718,29 @@ compile_data_layout_sequential(const Schema &tuple_schema, Ptr<void> base_addres
                                                 "value of non-nullable entry must not be nullable");
                                 };
                                 visit(overloaded{
-                                    [&](const Boolean&) { check.template operator()<_Bool>(); },
+                                    [&](const Boolean&) { check.template operator()<_Boolx1>(); },
                                     [&](const Numeric &n) {
                                         switch (n.kind) {
                                             case Numeric::N_Int:
                                             case Numeric::N_Decimal:
                                                 switch (n.size()) {
                                                     default: M_unreachable("invalid size");
-                                                    case  8: check.template operator()<_I8 >(); break;
-                                                    case 16: check.template operator()<_I16>(); break;
-                                                    case 32: check.template operator()<_I32>(); break;
-                                                    case 64: check.template operator()<_I64>(); break;
+                                                    case  8: check.template operator()<_I8x1 >(); break;
+                                                    case 16: check.template operator()<_I16x1>(); break;
+                                                    case 32: check.template operator()<_I32x1>(); break;
+                                                    case 64: check.template operator()<_I64x1>(); break;
                                                 }
                                                 break;
                                             case Numeric::N_Float:
                                                 if (n.size() <= 32)
-                                                    check.template operator()<_Float>();
+                                                    check.template operator()<_Floatx1>();
                                                 else
-                                                    check.template operator()<_Double>();
+                                                    check.template operator()<_Doublex1>();
                                         }
                                     },
                                     [&](const CharacterSequence&) { check.template operator()<NChar>(); },
-                                    [&](const Date&) { check.template operator()<_I32>(); },
-                                    [&](const DateTime&) { check.template operator()<_I64>(); },
+                                    [&](const Date&) { check.template operator()<_I32x1>(); },
+                                    [&](const DateTime&) { check.template operator()<_I64x1>(); },
                                     [](auto&&) { M_unreachable("invalid type"); },
                                 }, *layout_entry.type);
                             }
@@ -780,14 +780,14 @@ compile_data_layout_sequential(const Schema &tuple_schema, Ptr<void> base_addres
                         }
                     }
                 } else { // NULL bitmap without bit stride can benefit from static masking of NULL bits
-                    auto byte_offset = [&]() -> I32 {
+                    auto byte_offset = [&]() -> I32x1 {
                         if (inode_iter and leaf_info.stride_in_bits) {
                             /* omit `leaf_info.offset_in_bits` here to add it to the static offsets and masks;
                              * this is valid since no bit stride means that the leaf byte offset computation is
                              * independent of the static parts */
-                            U64 leaf_offset_in_bits = *inode_iter * leaf_info.stride_in_bits;
-                            U8  leaf_bit_offset  = (leaf_offset_in_bits.clone() bitand uint64_t(7)).to<uint8_t>(); // mod 8
-                            I32 leaf_byte_offset = (leaf_offset_in_bits >> uint64_t(3)).make_signed().to<int32_t>(); // div 8
+                            U64x1 leaf_offset_in_bits = *inode_iter * leaf_info.stride_in_bits;
+                            U8x1  leaf_bit_offset  = (leaf_offset_in_bits.clone() bitand uint64_t(7)).to<uint8_t>(); // mod 8
+                            I32x1 leaf_byte_offset = (leaf_offset_in_bits >> uint64_t(3)).make_signed().to<int32_t>(); // div 8
                             BLOCK_OPEN(inits) {
                                 Wasm_insist(leaf_bit_offset == 0U, "no leaf bit offset without bit stride");
                             }
@@ -822,42 +822,42 @@ compile_data_layout_sequential(const Schema &tuple_schema, Ptr<void> base_addres
                                     BLOCK_OPEN(stores) {
                                         auto [value, is_null] = env.get<T>(tuple_entry.id).split(); // get value
                                         value.discard(); // handled at entry leaf
-                                        Ptr<U8> byte_ptr =
+                                        Ptr<U8x1> byte_ptr =
                                             (ptr + static_byte_offset).template to<uint8_t*>(); // compute byte address
-                                        setbit<U8>(byte_ptr, is_null, static_bit_offset); // update bit
+                                        setbit<U8x1>(byte_ptr, is_null, static_bit_offset); // update bit
                                     }
                                 };
                                 visit(overloaded{
-                                    [&](const Boolean&) { store.template operator()<_Bool>(); },
+                                    [&](const Boolean&) { store.template operator()<_Boolx1>(); },
                                     [&](const Numeric &n) {
                                         switch (n.kind) {
                                             case Numeric::N_Int:
                                             case Numeric::N_Decimal:
                                                 switch (n.size()) {
                                                     default: M_unreachable("invalid size");
-                                                    case  8: store.template operator()<_I8 >(); break;
-                                                    case 16: store.template operator()<_I16>(); break;
-                                                    case 32: store.template operator()<_I32>(); break;
-                                                    case 64: store.template operator()<_I64>(); break;
+                                                    case  8: store.template operator()<_I8x1 >(); break;
+                                                    case 16: store.template operator()<_I16x1>(); break;
+                                                    case 32: store.template operator()<_I32x1>(); break;
+                                                    case 64: store.template operator()<_I64x1>(); break;
                                                 }
                                                 break;
                                             case Numeric::N_Float:
                                                 if (n.size() <= 32)
-                                                    store.template operator()<_Float>();
+                                                    store.template operator()<_Floatx1>();
                                                 else
-                                                    store.template operator()<_Double>();
+                                                    store.template operator()<_Doublex1>();
                                         }
                                     },
                                     [&](const CharacterSequence&) {
                                         BLOCK_OPEN(stores) {
                                             auto value = env.get<NChar>(tuple_entry.id); // get value
-                                            Ptr<U8> byte_ptr =
+                                            Ptr<U8x1> byte_ptr =
                                                 (ptr + static_byte_offset).template to<uint8_t*>(); // compute byte address
-                                            setbit<U8>(byte_ptr, value.is_null(), static_bit_offset); // update bit
+                                            setbit<U8x1>(byte_ptr, value.is_null(), static_bit_offset); // update bit
                                         }
                                     },
-                                    [&](const Date&) { store.template operator()<_I32>(); },
-                                    [&](const DateTime&) { store.template operator()<_I64>(); },
+                                    [&](const Date&) { store.template operator()<_I32x1>(); },
+                                    [&](const DateTime&) { store.template operator()<_I64x1>(); },
                                     [](auto&&) { M_unreachable("invalid type"); },
                                 }, *tuple_entry.type);
                             } else {
@@ -865,8 +865,8 @@ compile_data_layout_sequential(const Schema &tuple_schema, Ptr<void> base_addres
                                 BLOCK_OPEN(loads) {
                                     U8 byte = *(ptr + static_byte_offset).template to<uint8_t*>(); // load the byte
                                     const uint8_t static_mask = 1U << static_bit_offset;
-                                    Var<Bool> value((byte bitand static_mask).to<bool>()); // mask bit with static mask
-                                    new (&null_bits[tuple_idx]) Bool(value);
+                                    Var<Boolx1> value((byte bitand static_mask).to<bool>()); // mask bit with static mask
+                                    new (&null_bits[tuple_idx]) Boolx1(value);
                                 }
                             }
                         } else { // entry must not be NULL
@@ -878,29 +878,29 @@ compile_data_layout_sequential(const Schema &tuple_schema, Ptr<void> base_addres
                                                 "value of non-nullable entry must not be nullable");
                                 };
                                 visit(overloaded{
-                                    [&](const Boolean&) { check.template operator()<_Bool>(); },
+                                    [&](const Boolean&) { check.template operator()<_Boolx1>(); },
                                     [&](const Numeric &n) {
                                         switch (n.kind) {
                                             case Numeric::N_Int:
                                             case Numeric::N_Decimal:
                                                 switch (n.size()) {
                                                     default: M_unreachable("invalid size");
-                                                    case  8: check.template operator()<_I8 >(); break;
-                                                    case 16: check.template operator()<_I16>(); break;
-                                                    case 32: check.template operator()<_I32>(); break;
-                                                    case 64: check.template operator()<_I64>(); break;
+                                                    case  8: check.template operator()<_I8x1 >(); break;
+                                                    case 16: check.template operator()<_I16x1>(); break;
+                                                    case 32: check.template operator()<_I32x1>(); break;
+                                                    case 64: check.template operator()<_I64x1>(); break;
                                                 }
                                                 break;
                                             case Numeric::N_Float:
                                                 if (n.size() <= 32)
-                                                    check.template operator()<_Float>();
+                                                    check.template operator()<_Floatx1>();
                                                 else
-                                                    check.template operator()<_Double>();
+                                                    check.template operator()<_Doublex1>();
                                         }
                                     },
                                     [&](const CharacterSequence&) { check.template operator()<NChar>(); },
-                                    [&](const Date&) { check.template operator()<_I32>(); },
-                                    [&](const DateTime&) { check.template operator()<_I64>(); },
+                                    [&](const Date&) { check.template operator()<_I32x1>(); },
+                                    [&](const DateTime&) { check.template operator()<_I64x1>(); },
                                     [](auto&&) { M_unreachable("invalid type"); },
                                 }, *tuple_entry.type);
                             }
@@ -922,9 +922,9 @@ compile_data_layout_sequential(const Schema &tuple_schema, Ptr<void> base_addres
                              "leaf bit stride currently only for `Boolean` supported");
 
                     M_insist(bool(inode_iter), "stride requires repetition");
-                    U64 leaf_offset_in_bits = leaf_info.offset_in_bits + *inode_iter * leaf_info.stride_in_bits;
-                    U8  leaf_bit_offset  = (leaf_offset_in_bits.clone() bitand uint64_t(7)).to<uint8_t>() ; // mod 8
-                    I32 leaf_byte_offset = (leaf_offset_in_bits >> uint64_t(3)).make_signed().to<int32_t>(); // div 8
+                    U64x1 leaf_offset_in_bits = leaf_info.offset_in_bits + *inode_iter * leaf_info.stride_in_bits;
+                    U8x1  leaf_bit_offset  = (leaf_offset_in_bits.clone() bitand uint64_t(7)).to<uint8_t>() ; // mod 8
+                    I32x1 leaf_byte_offset = (leaf_offset_in_bits >> uint64_t(3)).make_signed().to<int32_t>(); // div 8
 
                     auto [it, inserted] =
                         loading_context.try_emplace(key_t(leaf_info.offset_in_bits % 8, leaf_info.stride_in_bits));
@@ -945,30 +945,30 @@ compile_data_layout_sequential(const Schema &tuple_schema, Ptr<void> base_addres
                     if constexpr (IsStore) {
                         /*----- Store value. -----*/
                         BLOCK_OPEN(stores) {
-                            auto [value, is_null] = env.get<_Bool>(tuple_it->id).split(); // get value
+                            auto [value, is_null] = env.get<_Boolx1>(tuple_it->id).split(); // get value
                             is_null.discard(); // handled at NULL bitmap leaf
-                            Ptr<U8> byte_ptr = (ptr + leaf_byte_offset).template to<uint8_t*>(); // compute byte address
+                            Ptr<U8x1> byte_ptr = (ptr + leaf_byte_offset).template to<uint8_t*>(); // compute byte address
                             setbit(byte_ptr, value, mask.template to<uint8_t>()); // update bit
                         }
                     } else {
                         /*----- Load value. -----*/
                         BLOCK_OPEN(loads) {
-                            U8 byte = *(ptr + leaf_byte_offset).template to<uint8_t*>(); // load byte
-                            Var<Bool> value(
+                            U8x1 byte = *(ptr + leaf_byte_offset).template to<uint8_t*>(); // load byte
+                            Var<Boolx1> value(
                                 (byte bitand mask.template to<uint8_t>()).template to<bool>() // mask bit with dynamic mask
                             );
-                            new (&values[tuple_idx]) SQL_t(_Bool(value));
+                            new (&values[tuple_idx]) SQL_t(_Boolx1(value));
                         }
                     }
                 } else { // entry without bit stride; if masking is required, we can use a static mask
-                    auto byte_offset = [&]() -> I32 {
+                    auto byte_offset = [&]() -> I32x1 {
                         if (inode_iter and leaf_info.stride_in_bits) {
                             /* omit `leaf_info.offset_in_bits` here to use it as static offset and mask;
                              * this is valid since no bit stride means that the leaf byte offset computation is
                              * independent of the static parts */
-                            U64 leaf_offset_in_bits = *inode_iter * leaf_info.stride_in_bits;
-                            U8  leaf_bit_offset  = (leaf_offset_in_bits.clone() bitand uint64_t(7)).to<uint8_t>(); // mod 8
-                            I32 leaf_byte_offset = (leaf_offset_in_bits >> uint64_t(3)).make_signed().to<int32_t>(); // div 8
+                            U64x1 leaf_offset_in_bits = *inode_iter * leaf_info.stride_in_bits;
+                            U8x1  leaf_bit_offset  = (leaf_offset_in_bits.clone() bitand uint64_t(7)).to<uint8_t>(); // mod 8
+                            I32x1 leaf_byte_offset = (leaf_offset_in_bits >> uint64_t(3)).make_signed().to<int32_t>(); // div 8
                             BLOCK_OPEN(inits) {
                                 Wasm_insist(leaf_bit_offset == 0U, "no leaf bit offset without bit stride");
                             }
@@ -1020,20 +1020,20 @@ compile_data_layout_sequential(const Schema &tuple_schema, Ptr<void> base_addres
                             if constexpr (IsStore) {
                                 /*----- Store value. -----*/
                                 BLOCK_OPEN(stores) {
-                                    auto [value, is_null] = env.get<_Bool>(tuple_it->id).split(); // get value
+                                    auto [value, is_null] = env.get<_Boolx1>(tuple_it->id).split(); // get value
                                     is_null.discard(); // handled at NULL bitmap leaf
-                                    Ptr<U8> byte_ptr =
+                                    Ptr<U8x1> byte_ptr =
                                         (ptr + static_byte_offset).template to<uint8_t*>(); // compute byte address
-                                    setbit<U8>(byte_ptr, value, static_bit_offset); // update bit
+                                    setbit<U8x1>(byte_ptr, value, static_bit_offset); // update bit
                                 }
                             } else {
                                 /*----- Load value. -----*/
                                 BLOCK_OPEN(loads) {
                                     /* TODO: load byte once, create values with respective mask */
-                                    U8 byte = *(ptr + static_byte_offset).template to<uint8_t*>(); // load byte
+                                    U8x1 byte = *(ptr + static_byte_offset).template to<uint8_t*>(); // load byte
                                     const uint8_t static_mask = 1U << static_bit_offset;
-                                    Var<Bool> value((byte bitand static_mask).to<bool>()); // mask bit with static mask
-                                    new (&values[tuple_idx]) SQL_t(_Bool(value));
+                                    Var<Boolx1> value((byte bitand static_mask).to<bool>()); // mask bit with static mask
+                                    new (&values[tuple_idx]) SQL_t(_Boolx1(value));
                                 }
                             }
                         },
@@ -1043,17 +1043,17 @@ compile_data_layout_sequential(const Schema &tuple_schema, Ptr<void> base_addres
                                 case Numeric::N_Decimal:
                                     switch (n.size()) {
                                         default: M_unreachable("invalid size");
-                                        case  8: CALL(_I8 ); break;
-                                        case 16: CALL(_I16); break;
-                                        case 32: CALL(_I32); break;
-                                        case 64: CALL(_I64); break;
+                                        case  8: CALL(_I8x1 ); break;
+                                        case 16: CALL(_I16x1); break;
+                                        case 32: CALL(_I32x1); break;
+                                        case 64: CALL(_I64x1); break;
                                     }
                                     break;
                                 case Numeric::N_Float:
                                     if (n.size() <= 32)
-                                        CALL(_Float);
+                                        CALL(_Floatx1);
                                     else
-                                        CALL(_Double);
+                                        CALL(_Doublex1);
                             }
                         },
                         [&](const CharacterSequence &cs) {
@@ -1063,22 +1063,22 @@ compile_data_layout_sequential(const Schema &tuple_schema, Ptr<void> base_addres
                                 BLOCK_OPEN(stores) {
                                     auto value = env.get<NChar>(tuple_it->id); // get value
                                     IF (value.clone().not_null()) {
-                                        Ptr<Char> address((ptr + static_byte_offset).template to<char*>());
-                                        strncpy(address, value, U32(cs.size() / 8)).discard();
+                                        Ptr<Charx1> address((ptr + static_byte_offset).template to<char*>());
+                                        strncpy(address, value, U32x1(cs.size() / 8)).discard();
                                     };
                                 }
                             } else {
                                 /*----- Load value. -----*/
                                 BLOCK_OPEN(loads) {
-                                    Ptr<Char> address((ptr + static_byte_offset).template to<char*>());
+                                    Ptr<Charx1> address((ptr + static_byte_offset).template to<char*>());
                                     new (&values[tuple_idx]) SQL_t(
                                         NChar(address, layout_entry.nullable(), cs.length, cs.is_varying)
                                     );
                                 }
                             }
                         },
-                        [&](const Date&) { CALL(_I32); },
-                        [&](const DateTime&) { CALL(_I64); },
+                        [&](const Date&) { CALL(_I32x1); },
+                        [&](const DateTime&) { CALL(_I64x1); },
                         [](auto&&) { M_unreachable("invalid type"); },
                     }, *tuple_it->type);
 #undef CALL
@@ -1105,9 +1105,9 @@ compile_data_layout_sequential(const Schema &tuple_schema, Ptr<void> base_addres
                 if (const int32_t remaining_stride_in_bytes = stride_remaining_in_bits / 8) [[likely]] {
                     M_insist(curr->num_tuples > 0);
                     if (curr->num_tuples != 1U) {
-                        Bool cond_mod = (tuple_id % uint32_t(curr->num_tuples)).eqz();
-                        Bool cond_and = (tuple_id bitand uint32_t(curr->num_tuples - 1U)).eqz();
-                        Bool cond = is_pow_2(curr->num_tuples) ? cond_and : cond_mod; // select implementation to use...
+                        Boolx1 cond_mod = (tuple_id % uint32_t(curr->num_tuples)).eqz();
+                        Boolx1 cond_and = (tuple_id bitand uint32_t(curr->num_tuples - 1U)).eqz();
+                        Boolx1 cond = is_pow_2(curr->num_tuples) ? cond_and : cond_mod; // select implementation to use...
                         (is_pow_2(curr->num_tuples) ? cond_mod : cond_and).discard(); // ... and discard the other
 
                         /*----- Emit conditional stride jumps. -----*/
@@ -1284,10 +1284,10 @@ compile_data_layout_sequential(const Schema &tuple_schema, Ptr<void> base_addres
                 if (not lowest_inode_jumps.empty()) [[likely]] {
                     M_insist(levels.back().num_tuples > 0);
                     if (levels.back().num_tuples != 1U) {
-                        Bool cond_mod = (tuple_id % uint32_t(levels.back().num_tuples)).eqz();
-                        Bool cond_and = (tuple_id bitand uint32_t(levels.back().num_tuples - 1U)).eqz();
+                        Boolx1 cond_mod = (tuple_id % uint32_t(levels.back().num_tuples)).eqz();
+                        Boolx1 cond_and = (tuple_id bitand uint32_t(levels.back().num_tuples - 1U)).eqz();
                         /* Select implementation to use... */
-                        Bool cond = is_pow_2(levels.back().num_tuples) ? cond_and : cond_mod;
+                        Boolx1 cond = is_pow_2(levels.back().num_tuples) ? cond_and : cond_mod;
                         /* ... and discard the other. */
                         (is_pow_2(levels.back().num_tuples) ? cond_mod : cond_and).discard();
 
@@ -1331,11 +1331,11 @@ compile_data_layout_sequential(const Schema &tuple_schema, Ptr<void> base_addres
                     BLOCK_OPEN(loads) {
                         if (has_null_bitmap and layout_schema[tuple_entry.id].second.nullable()) {
                             /* introduce variable s.t. uses only load from it*/
-                            Var<Ptr<Char>> combined(Select(null_bits[idx], Ptr<Char>::Nullptr(), value.val()));
+                            Var<Ptr<Charx1>> combined(Select(null_bits[idx], Ptr<Charx1>::Nullptr(), value.val()));
                             env.add(tuple_entry.id, NChar(combined, /* can_be_null=*/ true, value.length(),
                                                           value.guarantees_terminating_nul()));
                         } else {
-                            Var<Ptr<Char>> _value(value.val()); // introduce variable s.t. uses only load from it
+                            Var<Ptr<Charx1>> _value(value.val()); // introduce variable s.t. uses only load from it
                             env.add(tuple_entry.id, NChar(_value, /* can_be_null=*/ false, value.length(),
                                                           value.guarantees_terminating_nul()));
                         }
@@ -1353,7 +1353,7 @@ compile_data_layout_sequential(const Schema &tuple_schema, Ptr<void> base_addres
         /*----- Destroy created NULL bits. -----*/
         for (std::size_t idx = 0; idx != tuple_schema.num_entries(); ++idx) {
             if (has_null_bitmap and layout_schema[tuple_schema[idx].id].second.nullable())
-                null_bits[idx].~Bool();
+                null_bits[idx].~Boolx1();
         }
     }
     base_address.discard(); // discard base address (as it was always cloned)
@@ -1399,28 +1399,28 @@ m::wasm::compile_load_sequential(const Schema &tuple_schema, Ptr<void> base_addr
 
 // explicit instantiations to prevent linker errors
 template std::tuple<m::wasm::Block, m::wasm::Block, m::wasm::Block> m::wasm::compile_store_sequential(
-    const Schema&, Ptr<void>, const storage::DataLayout&, const Schema&, Var<U32>&
+    const Schema&, Ptr<void>, const storage::DataLayout&, const Schema&, Var<U32x1>&
 );
 template std::tuple<m::wasm::Block, m::wasm::Block, m::wasm::Block> m::wasm::compile_store_sequential(
-    const Schema&, Ptr<void>, const storage::DataLayout&, const Schema&, Global<U32>&
+    const Schema&, Ptr<void>, const storage::DataLayout&, const Schema&, Global<U32x1>&
 );
 template std::tuple<m::wasm::Block, m::wasm::Block, m::wasm::Block> m::wasm::compile_store_sequential(
     const Schema&, Ptr<void>, const storage::DataLayout&, const Schema&, Variable<uint32_t, VariableKind::Param, false>&
 );
 template std::tuple<m::wasm::Block, m::wasm::Block, m::wasm::Block> m::wasm::compile_store_sequential_single_pass(
-    const Schema&, Ptr<void>, const storage::DataLayout&, const Schema&, Var<U32>&
+    const Schema&, Ptr<void>, const storage::DataLayout&, const Schema&, Var<U32x1>&
 );
 template std::tuple<m::wasm::Block, m::wasm::Block, m::wasm::Block> m::wasm::compile_store_sequential_single_pass(
-    const Schema&, Ptr<void>, const storage::DataLayout&, const Schema&, Global<U32>&
+    const Schema&, Ptr<void>, const storage::DataLayout&, const Schema&, Global<U32x1>&
 );
 template std::tuple<m::wasm::Block, m::wasm::Block, m::wasm::Block> m::wasm::compile_store_sequential_single_pass(
     const Schema&, Ptr<void>, const storage::DataLayout&, const Schema&, Variable<uint32_t, VariableKind::Param, false>&
 );
 template std::tuple<m::wasm::Block, m::wasm::Block, m::wasm::Block> m::wasm::compile_load_sequential(
-    const Schema&, Ptr<void>, const storage::DataLayout&, const Schema&, Var<U32>&
+    const Schema&, Ptr<void>, const storage::DataLayout&, const Schema&, Var<U32x1>&
 );
 template std::tuple<m::wasm::Block, m::wasm::Block, m::wasm::Block> m::wasm::compile_load_sequential(
-    const Schema&, Ptr<void>, const storage::DataLayout&, const Schema&, Global<U32>&
+    const Schema&, Ptr<void>, const storage::DataLayout&, const Schema&, Global<U32x1>&
 );
 template std::tuple<m::wasm::Block, m::wasm::Block, m::wasm::Block> m::wasm::compile_load_sequential(
     const Schema&, Ptr<void>, const storage::DataLayout&, const Schema&, Variable<uint32_t, VariableKind::Param, false>&
@@ -1437,7 +1437,7 @@ namespace wasm {
  * current block and adds the loaded values into the current environment. */
 template<bool IsStore>
 void compile_data_layout_point_access(const Schema &tuple_schema, Ptr<void> base_address,
-                                      const storage::DataLayout &layout, const Schema &layout_schema, U32 tuple_id)
+                                      const storage::DataLayout &layout, const Schema &layout_schema, U32x1 tuple_id)
 {
     M_insist(tuple_schema.num_entries() != 0, "point access must access at least one tuple schema entry");
 #ifndef NDEBUG
@@ -1448,9 +1448,9 @@ void compile_data_layout_point_access(const Schema &tuple_schema, Ptr<void> base
     ///> the values loaded for the entries in `tuple_schema`
     SQL_t values[tuple_schema.num_entries()];
     ///> the NULL information loaded for the entries in `tuple_schema`
-    Bool *null_bits;
+    Boolx1 *null_bits;
     if constexpr (not IsStore)
-        null_bits = static_cast<Bool*>(alloca(sizeof(Bool) * tuple_schema.num_entries()));
+        null_bits = static_cast<Boolx1*>(alloca(sizeof(Boolx1) * tuple_schema.num_entries()));
 
     auto &env = CodeGenContext::Get().env(); // the current codegen environment
 
@@ -1469,26 +1469,26 @@ void compile_data_layout_point_access(const Schema &tuple_schema, Ptr<void> base
                                   const DataLayout::level_info_stack_t &levels, uint64_t inode_offset_in_bits)
     {
         /*----- Compute INode pointer and INode iteration depending on the given tuple ID. -----*/
-        auto compute_additional_inode_byte_offset = [&](U32 tuple_id) -> U64 {
-            auto rec = [&](U32 curr_tuple_id, decltype(levels.cbegin()) curr, const decltype(levels.cend()) end,
-                           auto rec) -> U64
+        auto compute_additional_inode_byte_offset = [&](U32x1 tuple_id) -> U64x1 {
+            auto rec = [&](U32x1 curr_tuple_id, decltype(levels.cbegin()) curr, const decltype(levels.cend()) end,
+                           auto rec) -> U64x1
             {
                 if (curr == end) {
                     Wasm_insist(curr_tuple_id == tuple_id % uint32_t(levels.back().num_tuples));
-                    return U64(0);
+                    return U64x1(0);
                 }
 
                 if (is_pow_2(curr->num_tuples)) {
-                    U32 child_iter = curr_tuple_id.clone() >> uint32_t(__builtin_ctzl(curr->num_tuples));
-                    U32 inner_tuple_id = curr_tuple_id bitand uint32_t(curr->num_tuples - 1U);
+                    U32x1 child_iter = curr_tuple_id.clone() >> uint32_t(__builtin_ctzl(curr->num_tuples));
+                    U32x1 inner_tuple_id = curr_tuple_id bitand uint32_t(curr->num_tuples - 1U);
                     M_insist(curr->stride_in_bits % 8 == 0, "INode stride must be byte aligned");
-                    U64 offset_in_bytes = child_iter * uint64_t(curr->stride_in_bits / 8);
+                    U64x1 offset_in_bytes = child_iter * uint64_t(curr->stride_in_bits / 8);
                     return offset_in_bytes + rec(inner_tuple_id, std::next(curr), end, rec);
                 } else {
-                    U32 child_iter = curr_tuple_id.clone() / uint32_t(curr->num_tuples);
-                    U32 inner_tuple_id = curr_tuple_id % uint32_t(curr->num_tuples);
+                    U32x1 child_iter = curr_tuple_id.clone() / uint32_t(curr->num_tuples);
+                    U32x1 inner_tuple_id = curr_tuple_id % uint32_t(curr->num_tuples);
                     M_insist(curr->stride_in_bits % 8 == 0, "INode stride must be byte aligned");
-                    U64 offset_in_bytes = child_iter * uint64_t(curr->stride_in_bits / 8);
+                    U64x1 offset_in_bytes = child_iter * uint64_t(curr->stride_in_bits / 8);
                     return offset_in_bytes + rec(inner_tuple_id, std::next(curr), end, rec);
                 }
             };
@@ -1500,7 +1500,7 @@ void compile_data_layout_point_access(const Schema &tuple_schema, Ptr<void> base
             + int32_t(inode_offset_in_bits / 8)
             + compute_additional_inode_byte_offset(tuple_id.clone()).make_signed().template to<int32_t>()
         );
-        std::optional<const Var<U32>> inode_iter;
+        std::optional<const Var<U32x1>> inode_iter;
         M_insist(levels.back().num_tuples != 0, "INode must be large enough for at least one tuple");
         if (levels.back().num_tuples != 1) {
             inode_iter.emplace(
@@ -1524,11 +1524,11 @@ void compile_data_layout_point_access(const Schema &tuple_schema, Ptr<void> base
                 has_null_bitmap = true;
                 if (bit_stride) { // NULL bitmap with bit stride requires dynamic masking
                     M_insist(bool(inode_iter), "stride requires repetition");
-                    U64 leaf_offset_in_bits = leaf_info.offset_in_bits + *inode_iter * leaf_info.stride_in_bits;
-                    const Var<U8> leaf_bit_offset(
+                    U64x1 leaf_offset_in_bits = leaf_info.offset_in_bits + *inode_iter * leaf_info.stride_in_bits;
+                    const Var<U8x1> leaf_bit_offset(
                         (leaf_offset_in_bits.clone() bitand uint64_t(7)).to<uint8_t>() // mod 8
                     );
-                    I32 leaf_byte_offset = (leaf_offset_in_bits >> uint64_t(3)).make_signed().to<int32_t>(); // div 8
+                    I32x1 leaf_byte_offset = (leaf_offset_in_bits >> uint64_t(3)).make_signed().to<int32_t>(); // div 8
 
                     const Var<Ptr<void>> ptr(inode_ptr + leaf_byte_offset); // pointer to NULL bitmap
 
@@ -1538,54 +1538,54 @@ void compile_data_layout_point_access(const Schema &tuple_schema, Ptr<void> base
                         const auto &[layout_idx, layout_entry] = layout_schema[tuple_entry.id];
                         M_insist(*tuple_entry.type == *layout_entry.type);
                         if (layout_entry.nullable()) { // layout entry may be NULL
-                            U64 offset_in_bits = leaf_bit_offset + layout_idx;
-                            U8  bit_offset  = (offset_in_bits.clone() bitand uint64_t(7)).to<uint8_t>() ; // mod 8
-                            I32 byte_offset = (offset_in_bits >> uint64_t(3)).make_signed().to<int32_t>(); // div 8
+                            U64x1 offset_in_bits = leaf_bit_offset + layout_idx;
+                            U8x1  bit_offset  = (offset_in_bits.clone() bitand uint64_t(7)).to<uint8_t>() ; // mod 8
+                            I32x1 byte_offset = (offset_in_bits >> uint64_t(3)).make_signed().to<int32_t>(); // div 8
                             if constexpr (IsStore) {
                                 /*----- Store NULL bit depending on its type. -----*/
                                 auto store = [&]<typename T>() {
                                     auto [value, is_null] = env.get<T>(tuple_entry.id).split(); // get value
                                     value.discard(); // handled at entry leaf
-                                    Ptr<U8> byte_ptr =
+                                    Ptr<U8x1> byte_ptr =
                                         (ptr + byte_offset).template to<uint8_t*>(); // compute byte address
-                                    setbit<U8>(byte_ptr, is_null, uint8_t(1) << bit_offset); // update bit
+                                    setbit<U8x1>(byte_ptr, is_null, uint8_t(1) << bit_offset); // update bit
                                 };
                                 visit(overloaded{
-                                    [&](const Boolean&) { store.template operator()<_Bool>(); },
+                                    [&](const Boolean&) { store.template operator()<_Boolx1>(); },
                                     [&](const Numeric &n) {
                                         switch (n.kind) {
                                             case Numeric::N_Int:
                                             case Numeric::N_Decimal:
                                                 switch (n.size()) {
                                                     default: M_unreachable("invalid size");
-                                                    case  8: store.template operator()<_I8 >(); break;
-                                                    case 16: store.template operator()<_I16>(); break;
-                                                    case 32: store.template operator()<_I32>(); break;
-                                                    case 64: store.template operator()<_I64>(); break;
+                                                    case  8: store.template operator()<_I8x1 >(); break;
+                                                    case 16: store.template operator()<_I16x1>(); break;
+                                                    case 32: store.template operator()<_I32x1>(); break;
+                                                    case 64: store.template operator()<_I64x1>(); break;
                                                 }
                                                 break;
                                             case Numeric::N_Float:
                                                 if (n.size() <= 32)
-                                                    store.template operator()<_Float>();
+                                                    store.template operator()<_Floatx1>();
                                                 else
-                                                    store.template operator()<_Double>();
+                                                    store.template operator()<_Doublex1>();
                                         }
                                     },
                                     [&](const CharacterSequence&) {
                                         auto value = env.get<NChar>(tuple_entry.id); // get value
-                                        Ptr<U8> byte_ptr =
+                                        Ptr<U8x1> byte_ptr =
                                             (ptr + byte_offset).template to<uint8_t*>(); // compute byte address
-                                        setbit<U8>(byte_ptr, value.is_null(), uint8_t(1) << bit_offset); // update bit
+                                        setbit<U8x1>(byte_ptr, value.is_null(), uint8_t(1) << bit_offset); // update bit
                                     },
-                                    [&](const Date&) { store.template operator()<_I32>(); },
-                                    [&](const DateTime&) { store.template operator()<_I64>(); },
+                                    [&](const Date&) { store.template operator()<_I32x1>(); },
+                                    [&](const DateTime&) { store.template operator()<_I64x1>(); },
                                     [](auto&&) { M_unreachable("invalid type"); },
                                 }, *tuple_entry.type);
                             } else {
                                 /*----- Load NULL bit. -----*/
-                                U8 byte = *(ptr + byte_offset).template to<uint8_t*>(); // load the byte
-                                Var<Bool> value((byte bitand (uint8_t(1) << bit_offset)).to<bool>()); // mask bit
-                                new (&null_bits[tuple_idx]) Bool(value);
+                                U8x1 byte = *(ptr + byte_offset).template to<uint8_t*>(); // load the byte
+                                Var<Boolx1> value((byte bitand (uint8_t(1) << bit_offset)).to<bool>()); // mask bit
+                                new (&null_bits[tuple_idx]) Boolx1(value);
                             }
                         } else { // entry must not be NULL
 #ifndef NDEBUG
@@ -1596,29 +1596,29 @@ void compile_data_layout_point_access(const Schema &tuple_schema, Ptr<void> base
                                                 "value of non-nullable entry must not be nullable");
                                 };
                                 visit(overloaded{
-                                    [&](const Boolean&) { check.template operator()<_Bool>(); },
+                                    [&](const Boolean&) { check.template operator()<_Boolx1>(); },
                                     [&](const Numeric &n) {
                                         switch (n.kind) {
                                             case Numeric::N_Int:
                                             case Numeric::N_Decimal:
                                                 switch (n.size()) {
                                                     default: M_unreachable("invalid size");
-                                                    case  8: check.template operator()<_I8 >(); break;
-                                                    case 16: check.template operator()<_I16>(); break;
-                                                    case 32: check.template operator()<_I32>(); break;
-                                                    case 64: check.template operator()<_I64>(); break;
+                                                    case  8: check.template operator()<_I8x1 >(); break;
+                                                    case 16: check.template operator()<_I16x1>(); break;
+                                                    case 32: check.template operator()<_I32x1>(); break;
+                                                    case 64: check.template operator()<_I64x1>(); break;
                                                 }
                                                 break;
                                             case Numeric::N_Float:
                                                 if (n.size() <= 32)
-                                                    check.template operator()<_Float>();
+                                                    check.template operator()<_Floatx1>();
                                                 else
-                                                    check.template operator()<_Double>();
+                                                    check.template operator()<_Doublex1>();
                                         }
                                     },
                                     [&](const CharacterSequence&) { check.template operator()<NChar>(); },
-                                    [&](const Date&) { check.template operator()<_I32>(); },
-                                    [&](const DateTime&) { check.template operator()<_I64>(); },
+                                    [&](const Date&) { check.template operator()<_I32x1>(); },
+                                    [&](const DateTime&) { check.template operator()<_I64x1>(); },
                                     [](auto&&) { M_unreachable("invalid type"); },
                                 }, *tuple_entry.type);
                             }
@@ -1631,9 +1631,9 @@ void compile_data_layout_point_access(const Schema &tuple_schema, Ptr<void> base
                             /* omit `leaf_info.offset_in_bits` here to add it to the static offsets and masks;
                              * this is valid since no bit stride means that the leaf byte offset computation is
                              * independent of the static parts */
-                            U64 leaf_offset_in_bits = *inode_iter * leaf_info.stride_in_bits;
-                            U8  leaf_bit_offset  = (leaf_offset_in_bits.clone() bitand uint64_t(7)).to<uint8_t>(); // mod 8
-                            I32 leaf_byte_offset = (leaf_offset_in_bits >> uint64_t(3)).make_signed().to<int32_t>(); // div 8
+                            U64x1 leaf_offset_in_bits = *inode_iter * leaf_info.stride_in_bits;
+                            U8x1  leaf_bit_offset  = (leaf_offset_in_bits.clone() bitand uint64_t(7)).to<uint8_t>(); // mod 8
+                            I32x1 leaf_byte_offset = (leaf_offset_in_bits >> uint64_t(3)).make_signed().to<int32_t>(); // div 8
                             Wasm_insist(leaf_bit_offset == 0U, "no leaf bit offset without bit stride");
                             const Var<Ptr<void>> ptr(inode_ptr + leaf_byte_offset);
                             return ptr;
@@ -1655,47 +1655,47 @@ void compile_data_layout_point_access(const Schema &tuple_schema, Ptr<void> base
                                 auto store = [&]<typename T>() {
                                     auto [value, is_null] = env.get<T>(tuple_entry.id).split(); // get value
                                     value.discard(); // handled at entry leaf
-                                    Ptr<U8> byte_ptr =
+                                    Ptr<U8x1> byte_ptr =
                                         (ptr.clone() + static_byte_offset).template to<uint8_t*>(); // compute byte address
-                                    setbit<U8>(byte_ptr, is_null, static_bit_offset); // update bit
+                                    setbit<U8x1>(byte_ptr, is_null, static_bit_offset); // update bit
                                 };
                                 visit(overloaded{
-                                    [&](const Boolean&) { store.template operator()<_Bool>(); },
+                                    [&](const Boolean&) { store.template operator()<_Boolx1>(); },
                                     [&](const Numeric &n) {
                                         switch (n.kind) {
                                             case Numeric::N_Int:
                                             case Numeric::N_Decimal:
                                                 switch (n.size()) {
                                                     default: M_unreachable("invalid size");
-                                                    case  8: store.template operator()<_I8 >(); break;
-                                                    case 16: store.template operator()<_I16>(); break;
-                                                    case 32: store.template operator()<_I32>(); break;
-                                                    case 64: store.template operator()<_I64>(); break;
+                                                    case  8: store.template operator()<_I8x1 >(); break;
+                                                    case 16: store.template operator()<_I16x1>(); break;
+                                                    case 32: store.template operator()<_I32x1>(); break;
+                                                    case 64: store.template operator()<_I64x1>(); break;
                                                 }
                                                 break;
                                             case Numeric::N_Float:
                                                 if (n.size() <= 32)
-                                                    store.template operator()<_Float>();
+                                                    store.template operator()<_Floatx1>();
                                                 else
-                                                    store.template operator()<_Double>();
+                                                    store.template operator()<_Doublex1>();
                                         }
                                     },
                                     [&](const CharacterSequence&) {
                                         auto value = env.get<NChar>(tuple_entry.id); // get value
-                                        Ptr<U8> byte_ptr =
+                                        Ptr<U8x1> byte_ptr =
                                             (ptr.clone() + static_byte_offset).template to<uint8_t*>(); // compute byte address
-                                        setbit<U8>(byte_ptr, value.is_null(), static_bit_offset); // update bit
+                                        setbit<U8x1>(byte_ptr, value.is_null(), static_bit_offset); // update bit
                                     },
-                                    [&](const Date&) { store.template operator()<_I32>(); },
-                                    [&](const DateTime&) { store.template operator()<_I64>(); },
+                                    [&](const Date&) { store.template operator()<_I32x1>(); },
+                                    [&](const DateTime&) { store.template operator()<_I64x1>(); },
                                     [](auto&&) { M_unreachable("invalid type"); },
                                 }, *tuple_entry.type);
                             } else {
                                 /*----- Load NULL bit. -----*/
-                                U8 byte = *(ptr.clone() + static_byte_offset).template to<uint8_t*>(); // load the byte
+                                U8x1 byte = *(ptr.clone() + static_byte_offset).template to<uint8_t*>(); // load the byte
                                 const uint8_t static_mask = 1U << static_bit_offset;
-                                Var<Bool> value((byte bitand static_mask).to<bool>()); // mask bit
-                                new (&null_bits[tuple_idx]) Bool(value);
+                                Var<Boolx1> value((byte bitand static_mask).to<bool>()); // mask bit
+                                new (&null_bits[tuple_idx]) Boolx1(value);
                             }
                         } else { // entry must not be NULL
 #ifndef NDEBUG
@@ -1706,29 +1706,29 @@ void compile_data_layout_point_access(const Schema &tuple_schema, Ptr<void> base
                                                 "value of non-nullable entry must not be nullable");
                                 };
                                 visit(overloaded{
-                                    [&](const Boolean&) { check.template operator()<_Bool>(); },
+                                    [&](const Boolean&) { check.template operator()<_Boolx1>(); },
                                     [&](const Numeric &n) {
                                         switch (n.kind) {
                                             case Numeric::N_Int:
                                             case Numeric::N_Decimal:
                                                 switch (n.size()) {
                                                     default: M_unreachable("invalid size");
-                                                    case  8: check.template operator()<_I8 >(); break;
-                                                    case 16: check.template operator()<_I16>(); break;
-                                                    case 32: check.template operator()<_I32>(); break;
-                                                    case 64: check.template operator()<_I64>(); break;
+                                                    case  8: check.template operator()<_I8x1 >(); break;
+                                                    case 16: check.template operator()<_I16x1>(); break;
+                                                    case 32: check.template operator()<_I32x1>(); break;
+                                                    case 64: check.template operator()<_I64x1>(); break;
                                                 }
                                                 break;
                                             case Numeric::N_Float:
                                                 if (n.size() <= 32)
-                                                    check.template operator()<_Float>();
+                                                    check.template operator()<_Floatx1>();
                                                 else
-                                                    check.template operator()<_Double>();
+                                                    check.template operator()<_Doublex1>();
                                         }
                                     },
                                     [&](const CharacterSequence&) { check.template operator()<NChar>(); },
-                                    [&](const Date&) { check.template operator()<_I32>(); },
-                                    [&](const DateTime&) { check.template operator()<_I64>(); },
+                                    [&](const Date&) { check.template operator()<_I32x1>(); },
+                                    [&](const DateTime&) { check.template operator()<_I64x1>(); },
                                     [](auto&&) { M_unreachable("invalid type"); },
                                 }, *tuple_entry.type);
                             }
@@ -1750,23 +1750,23 @@ void compile_data_layout_point_access(const Schema &tuple_schema, Ptr<void> base
                     M_insist(tuple_it->type->is_boolean(), "leaf bit stride currently only for `Boolean` supported");
 
                     M_insist(bool(inode_iter), "stride requires repetition");
-                    U64 leaf_offset_in_bits = leaf_info.offset_in_bits + *inode_iter * leaf_info.stride_in_bits;
-                    U8  leaf_bit_offset  = (leaf_offset_in_bits.clone() bitand uint64_t(7)).to<uint8_t>() ; // mod 8
-                    I32 leaf_byte_offset = (leaf_offset_in_bits >> uint64_t(3)).make_signed().to<int32_t>(); // div 8
+                    U64x1 leaf_offset_in_bits = leaf_info.offset_in_bits + *inode_iter * leaf_info.stride_in_bits;
+                    U8x1  leaf_bit_offset  = (leaf_offset_in_bits.clone() bitand uint64_t(7)).to<uint8_t>() ; // mod 8
+                    I32x1 leaf_byte_offset = (leaf_offset_in_bits >> uint64_t(3)).make_signed().to<int32_t>(); // div 8
 
-                    Ptr<U8> byte_ptr = (inode_ptr + leaf_byte_offset).template to<uint8_t*>();
-                    U8 mask = uint8_t(1) << leaf_bit_offset;
+                    Ptr<U8x1> byte_ptr = (inode_ptr + leaf_byte_offset).template to<uint8_t*>();
+                    U8x1 mask = uint8_t(1) << leaf_bit_offset;
 
                     if constexpr (IsStore) {
                         /*----- Store value. -----*/
-                        auto [value, is_null] = env.get<_Bool>(tuple_it->id).split(); // get value
+                        auto [value, is_null] = env.get<_Boolx1>(tuple_it->id).split(); // get value
                         is_null.discard(); // handled at NULL bitmap leaf
                         setbit(byte_ptr, value, mask); // update bit
                     } else {
                         /*----- Load value. -----*/
                         /* TODO: load byte once, create values with respective mask */
-                        Var<Bool> value((*byte_ptr bitand mask).template to<bool>()); // mask bit with dynamic mask
-                        new (&values[tuple_idx]) SQL_t(_Bool(value));
+                        Var<Boolx1> value((*byte_ptr bitand mask).template to<bool>()); // mask bit with dynamic mask
+                        new (&values[tuple_idx]) SQL_t(_Boolx1(value));
                     }
                 } else { // entry without bit stride; if masking is required, we can use a static mask
                     auto ptr = [&]() -> Ptr<void> {
@@ -1774,9 +1774,9 @@ void compile_data_layout_point_access(const Schema &tuple_schema, Ptr<void> base
                             /* omit `leaf_info.offset_in_bits` here to use it as static offset and mask;
                              * this is valid since no bit stride means that the leaf byte offset computation is
                              * independent of the static parts */
-                            U64 leaf_offset_in_bits = *inode_iter * leaf_info.stride_in_bits;
-                            U8  leaf_bit_offset  = (leaf_offset_in_bits.clone() bitand uint64_t(7)).to<uint8_t>(); // mod 8
-                            I32 leaf_byte_offset = (leaf_offset_in_bits >> uint64_t(3)).make_signed().to<int32_t>(); // div 8
+                            U64x1 leaf_offset_in_bits = *inode_iter * leaf_info.stride_in_bits;
+                            U8x1  leaf_bit_offset  = (leaf_offset_in_bits.clone() bitand uint64_t(7)).to<uint8_t>(); // mod 8
+                            I32x1 leaf_byte_offset = (leaf_offset_in_bits >> uint64_t(3)).make_signed().to<int32_t>(); // div 8
                             Wasm_insist(leaf_bit_offset == 0U, "no leaf bit offset without bit stride");
                             return inode_ptr + leaf_byte_offset;
                         } else {
@@ -1808,18 +1808,18 @@ void compile_data_layout_point_access(const Schema &tuple_schema, Ptr<void> base
 #define CALL(TYPE) if constexpr (IsStore) store.template operator()<TYPE>(); else load.template operator()<TYPE>()
                     visit(overloaded{
                         [&](const Boolean&) {
-                            Ptr<U8> byte_ptr = (ptr + static_byte_offset).template to<uint8_t*>();
+                            Ptr<U8x1> byte_ptr = (ptr + static_byte_offset).template to<uint8_t*>();
                             if constexpr (IsStore) {
                                 /*----- Store value. -----*/
-                                auto [value, is_null] = env.get<_Bool>(tuple_it->id).split(); // get value
+                                auto [value, is_null] = env.get<_Boolx1>(tuple_it->id).split(); // get value
                                 is_null.discard(); // handled at NULL bitmap leaf
-                                setbit<U8>(byte_ptr, value, static_bit_offset); // update bit
+                                setbit<U8x1>(byte_ptr, value, static_bit_offset); // update bit
                             } else {
                                 /*----- Load value. -----*/
                                 /* TODO: load byte once, create values with respective mask */
                                 const uint8_t static_mask = 1U << static_bit_offset;
-                                Var<Bool> value((*byte_ptr bitand static_mask).to<bool>()); // mask bit
-                                new (&values[tuple_idx]) SQL_t(_Bool(value));
+                                Var<Boolx1> value((*byte_ptr bitand static_mask).to<bool>()); // mask bit
+                                new (&values[tuple_idx]) SQL_t(_Boolx1(value));
                             }
                         },
                         [&](const Numeric &n) {
@@ -1828,27 +1828,27 @@ void compile_data_layout_point_access(const Schema &tuple_schema, Ptr<void> base
                                 case Numeric::N_Decimal:
                                     switch (n.size()) {
                                         default: M_unreachable("invalid size");
-                                        case  8: CALL(_I8 ); break;
-                                        case 16: CALL(_I16); break;
-                                        case 32: CALL(_I32); break;
-                                        case 64: CALL(_I64); break;
+                                        case  8: CALL(_I8x1 ); break;
+                                        case 16: CALL(_I16x1); break;
+                                        case 32: CALL(_I32x1); break;
+                                        case 64: CALL(_I64x1); break;
                                     }
                                     break;
                                 case Numeric::N_Float:
                                     if (n.size() <= 32)
-                                        CALL(_Float);
+                                        CALL(_Floatx1);
                                     else
-                                        CALL(_Double);
+                                        CALL(_Doublex1);
                             }
                         },
                         [&](const CharacterSequence &cs) {
                             M_insist(static_bit_offset == 0, "leaf offset of `CharacterSequence` must be byte aligned");
-                            Ptr<Char> addr = (ptr + static_byte_offset).template to<char*>();
+                            Ptr<Charx1> addr = (ptr + static_byte_offset).template to<char*>();
                             if constexpr (IsStore) {
                                 /*----- Store value. -----*/
                                 auto value = env.get<NChar>(tuple_it->id); // get value
                                 IF (value.clone().not_null()) {
-                                    strncpy(addr, value, U32(cs.size() / 8)).discard();
+                                    strncpy(addr, value, U32x1(cs.size() / 8)).discard();
                                 };
                             } else {
                                 /*----- Load value. -----*/
@@ -1857,8 +1857,8 @@ void compile_data_layout_point_access(const Schema &tuple_schema, Ptr<void> base
                                 );
                             }
                         },
-                        [&](const Date&) { CALL(_I32); },
-                        [&](const DateTime&) { CALL(_I64); },
+                        [&](const Date&) { CALL(_I32x1); },
+                        [&](const DateTime&) { CALL(_I64x1); },
                         [](auto&&) { M_unreachable("invalid type"); },
                     }, *tuple_it->type);
 #undef CALL
@@ -1883,11 +1883,11 @@ void compile_data_layout_point_access(const Schema &tuple_schema, Ptr<void> base
                 [&](NChar value) {
                     if (has_null_bitmap and layout_schema[tuple_entry.id].second.nullable()) {
                         /* introduce variable s.t. uses only load from it */
-                        Var<Ptr<Char>> combined(Select(null_bits[idx], Ptr<Char>::Nullptr(), value.val()));
+                        Var<Ptr<Charx1>> combined(Select(null_bits[idx], Ptr<Charx1>::Nullptr(), value.val()));
                         env.add(tuple_entry.id, NChar(combined, /* can_be_null=*/ true, value.length(),
                                                       value.guarantees_terminating_nul()));
                     } else {
-                        Var<Ptr<Char>> _value(value.val()); // introduce variable s.t. uses only load from it
+                        Var<Ptr<Charx1>> _value(value.val()); // introduce variable s.t. uses only load from it
                         env.add(tuple_entry.id, NChar(_value, /* can_be_null=*/ false, value.length(),
                                                       value.guarantees_terminating_nul()));
                     }
@@ -1904,7 +1904,7 @@ void compile_data_layout_point_access(const Schema &tuple_schema, Ptr<void> base
         /*----- Destroy created NULL bits. -----*/
         for (std::size_t idx = 0; idx != tuple_schema.num_entries(); ++idx) {
             if (has_null_bitmap and layout_schema[tuple_schema[idx].id].second.nullable())
-                null_bits[idx].~Bool();
+                null_bits[idx].~Boolx1();
         }
     }
     base_address.discard(); // discard base address (as it was always cloned)
@@ -1915,13 +1915,13 @@ void compile_data_layout_point_access(const Schema &tuple_schema, Ptr<void> base
 }
 
 void m::wasm::compile_store_point_access(const Schema &tuple_schema, Ptr<void> base_address, const DataLayout &layout,
-                                         const Schema &layout_schema, U32 tuple_id)
+                                         const Schema &layout_schema, U32x1 tuple_id)
 {
     return compile_data_layout_point_access<true>(tuple_schema, base_address, layout, layout_schema, tuple_id);
 }
 
 void m::wasm::compile_load_point_access(const Schema &tuple_schema, Ptr<void> base_address, const DataLayout &layout,
-                                        const Schema &layout_schema, U32 tuple_id)
+                                        const Schema &layout_schema, U32x1 tuple_id)
 {
     return compile_data_layout_point_access<false>(tuple_schema, base_address, layout, layout_schema, tuple_id);
 }
@@ -2128,13 +2128,13 @@ void Buffer<IsGlobal>::resume_pipeline(param_t tuple_schema_)
 
             /*----- Access base address and size parameters. -----*/
             Ptr<void> base_address = PARAMETER(0);
-            U32 size = PARAMETER(1);
+            U32x1 size = PARAMETER(1);
 
             /*----- Emit setup code *before* compiling data layout to not overwrite its temporary boolean variables. -*/
             setup_();
 
             /*----- Compile data layout to generate sequential load from buffer. -----*/
-            Var<U32> load_tuple_id; // default initialized to 0
+            Var<U32x1> load_tuple_id; // default initialized to 0
             auto [load_inits, loads, load_jumps] =
                 compile_load_sequential(tuple_schema, base_address, layout_, schema_, load_tuple_id);
 
@@ -2175,22 +2175,22 @@ void Buffer<IsGlobal>::resume_pipeline_inline(param_t tuple_schema_) const
         M_CONSTEXPR_COND(IsGlobal,
                          base_address_ ? base_address_->val() : Var<Ptr<void>>(storage_.base_address_.val()).val(),
                          ({ M_insist(bool(base_address_)); base_address_->val(); }));
-    U32 size =
+    U32x1 size =
         M_CONSTEXPR_COND(IsGlobal,
-                         size_ ? size_->val() : Var<U32>(storage_.size_.val()).val(),
+                         size_ ? size_->val() : Var<U32x1>(storage_.size_.val()).val(),
                          ({ M_insist(bool(size_)); size_->val(); }));
 
     /*----- If predication is used, compute number of tuples to load from buffer depending on predicate. -----*/
-    std::optional<Var<Bool>> pred; // use variable since WHILE loop will clone it (for IF and DO_WHILE)
+    std::optional<Var<Boolx1>> pred; // use variable since WHILE loop will clone it (for IF and DO_WHILE)
     if (auto &env = CodeGenContext::Get().env(); env.predicated())
         pred = env.extract_predicate().is_true_and_not_null();
-    U32 num_tuples = pred ? Select(*pred, size, 0U) : size;
+    U32x1 num_tuples = pred ? Select(*pred, size, 0U) : size;
 
     /*----- Emit setup code *before* compiling data layout to not overwrite its temporary boolean variables. -----*/
     setup_();
 
     /*----- Compile data layout to generate sequential load from buffer. -----*/
-    Var<U32> load_tuple_id(0); // explicitly (re-)set tuple ID to 0
+    Var<U32x1> load_tuple_id(0); // explicitly (re-)set tuple ID to 0
     auto [load_inits, loads, load_jumps] =
         compile_load_sequential(tuple_schema, base_address, layout_, schema_, load_tuple_id);
 
@@ -2275,7 +2275,7 @@ template struct m::wasm::Buffer<true>;
  *====================================================================================================================*/
 
 template<bool IsGlobal>
-void buffer_swap_proxy_t<IsGlobal>::operator()(U32 first, U32 second)
+void buffer_swap_proxy_t<IsGlobal>::operator()(U32x1 first, U32x1 second)
 {
     /*----- Create load proxy. -----*/
     auto load = buffer_.get().create_load_proxy(schema_.get());
@@ -2291,7 +2291,7 @@ void buffer_swap_proxy_t<IsGlobal>::operator()(U32 first, U32 second)
 }
 
 template<bool IsGlobal>
-void buffer_swap_proxy_t<IsGlobal>::operator()(U32 first, U32 second, const Environment &env_first)
+void buffer_swap_proxy_t<IsGlobal>::operator()(U32x1 first, U32x1 second, const Environment &env_first)
 {
     /*----- Create load and store proxies. -----*/
     auto load  = buffer_.get().create_load_proxy(schema_.get());
@@ -2302,12 +2302,12 @@ void buffer_swap_proxy_t<IsGlobal>::operator()(U32 first, U32 second, const Envi
     for (auto &e : schema_.get()) {
         std::visit(overloaded {
             [&](NChar value) -> void {
-                Var<Ptr<Char>> ptr; // always set here
+                Var<Ptr<Charx1>> ptr; // always set here
                 IF (value.clone().is_null()) {
-                    ptr = Ptr<Char>::Nullptr();
+                    ptr = Ptr<Charx1>::Nullptr();
                 } ELSE {
                     ptr = Module::Allocator().pre_malloc<char>(value.size_in_bytes());
-                    strncpy(ptr, value, U32(value.size_in_bytes())).discard();
+                    strncpy(ptr, value, U32x1(value.size_in_bytes())).discard();
                 };
                 _env_first.add(e.id, NChar(ptr, value.can_be_null(), value.length(), value.guarantees_terminating_nul()));
             },
@@ -2339,7 +2339,7 @@ void buffer_swap_proxy_t<IsGlobal>::operator()(U32 first, U32 second, const Envi
 }
 
 template<bool IsGlobal>
-void buffer_swap_proxy_t<IsGlobal>::operator()(U32 first, U32 second, const Environment &env_first,
+void buffer_swap_proxy_t<IsGlobal>::operator()(U32x1 first, U32x1 second, const Environment &env_first,
                                                const Environment &env_second)
 {
     /*----- Create store proxy. -----*/
@@ -2350,12 +2350,12 @@ void buffer_swap_proxy_t<IsGlobal>::operator()(U32 first, U32 second, const Envi
     for (auto &e : schema_.get()) {
         std::visit(overloaded {
             [&](NChar value) -> void {
-                Var<Ptr<Char>> ptr; // always set here
+                Var<Ptr<Charx1>> ptr; // always set here
                 IF (value.clone().is_null()) {
-                    ptr = Ptr<Char>::Nullptr();
+                    ptr = Ptr<Charx1>::Nullptr();
                 } ELSE {
                     ptr = Module::Allocator().pre_malloc<char>(value.size_in_bytes());
-                    strncpy(ptr, value, U32(value.size_in_bytes())).discard();
+                    strncpy(ptr, value, U32x1(value.size_in_bytes())).discard();
                 };
                 _env_first.add(e.id, NChar(ptr, value.can_be_null(), value.length(), value.guarantees_terminating_nul()));
             },
@@ -2395,7 +2395,7 @@ template struct m::wasm::buffer_swap_proxy_t<true>;
  * string comparison
  *====================================================================================================================*/
 
-_I32 m::wasm::strncmp(NChar _left, NChar _right, U32 len)
+_I32x1 m::wasm::strncmp(NChar _left, NChar _right, U32x1 len)
 {
     static thread_local struct {} _; // unique caller handle
     struct data_t : GarbageCollectedData
@@ -2409,7 +2409,7 @@ _I32 m::wasm::strncmp(NChar _left, NChar _right, U32 len)
     };
     auto &d = Module::Get().add_garbage_collected_data<data_t>(&_); // garbage collect the `data_t` instance
 
-    auto strncmp_non_null = [&d, &_left, &_right](Ptr<Char> left, Ptr<Char> right, U32 len) -> I32 {
+    auto strncmp_non_null = [&d, &_left, &_right](Ptr<Charx1> left, Ptr<Charx1> right, U32x1 len) -> I32x1 {
         Wasm_insist(left.clone().not_null(), "left operand must not be NULL");
         Wasm_insist(right.clone().not_null(), "right operand must not be NULL");
         Wasm_insist(len.clone() != 0U, "length to compare must not be 0");
@@ -2433,12 +2433,12 @@ _I32 m::wasm::strncmp(NChar _left, NChar _right, U32 len)
                         auto right = PARAMETER(3);
                         const auto len = PARAMETER(4);
 
-                        Var<I32> result; // always set here
+                        Var<I32x1> result; // always set here
 
-                        I32 len_left  = Select(len < len_ty_left,  len, len_ty_left) .make_signed();
-                        I32 len_right = Select(len < len_ty_right, len, len_ty_right).make_signed();
-                        Var<Ptr<Char>> end_left (left  + len_left);
-                        Var<Ptr<Char>> end_right(right + len_right);
+                        I32x1 len_left  = Select(len < len_ty_left,  len, len_ty_left) .make_signed();
+                        I32x1 len_right = Select(len < len_ty_right, len, len_ty_right).make_signed();
+                        Var<Ptr<Charx1>> end_left (left  + len_left);
+                        Var<Ptr<Charx1>> end_right(right + len_right);
 
                         LOOP() {
                             /* Check whether one side is shorter than the other. */
@@ -2478,17 +2478,17 @@ _I32 m::wasm::strncmp(NChar _left, NChar _right, U32 len)
                         auto right = PARAMETER(3);
                         const auto len = PARAMETER(4);
 
-                        Var<I32> result; // always set here
+                        Var<I32x1> result; // always set here
 
-                        I32 len_left  = Select(len < len_ty_left,  len, len_ty_left) .make_signed();
-                        I32 len_right = Select(len < len_ty_right, len, len_ty_right).make_signed();
-                        Var<Ptr<Char>> end_left (left  + len_left);
-                        Var<Ptr<Char>> end_right(right + len_right);
+                        I32x1 len_left  = Select(len < len_ty_left,  len, len_ty_left) .make_signed();
+                        I32x1 len_right = Select(len < len_ty_right, len, len_ty_right).make_signed();
+                        Var<Ptr<Charx1>> end_left (left  + len_left);
+                        Var<Ptr<Charx1>> end_right(right + len_right);
 
                         LOOP() {
                             /* Check whether one side is shorter than the other. Load next character with in-bounds
                              * checks since the strings may not be NUL byte terminated. */
-                            Var<Char> val_left, val_right;
+                            Var<Charx1> val_left, val_right;
                             IF (left != end_left) {
                                 val_left = *left;
                             } ELSE {
@@ -2523,32 +2523,32 @@ _I32 m::wasm::strncmp(NChar _left, NChar _right, U32 len)
         }
     };
 
-    const Var<Ptr<Char>> left(_left.val()), right(_right.val());
+    const Var<Ptr<Charx1>> left(_left.val()), right(_right.val());
     if (_left.can_be_null() or _right.can_be_null()) {
-        _Var<I32> result; // always set here
+        _Var<I32x1> result; // always set here
         IF (left.is_null() or right.is_null()) {
-            result = _I32::Null();
+            result = _I32x1::Null();
         } ELSE {
             result = strncmp_non_null(left, right, len);
         };
         return result;
     } else {
-        const Var<I32> result(strncmp_non_null(left, right, len)); // to prevent duplicated computation due to `clone()`
-        return _I32(result);
+        const Var<I32x1> result(strncmp_non_null(left, right, len)); // to prevent duplicated computation due to `clone()`
+        return _I32x1(result);
     }
 }
 
-_I32 m::wasm::strcmp(NChar left, NChar right)
+_I32x1 m::wasm::strcmp(NChar left, NChar right)
 {
     /* Delegate to `strncmp` with length set to minimum of both string lengths **plus** 1 since we need to check if
      * one string is a prefix of the other, i.e. all of its characters are equal but it is shorter than the other. */
-    U32 len(std::min<uint32_t>(left.length(), right.length()) + 1U);
+    U32x1 len(std::min<uint32_t>(left.length(), right.length()) + 1U);
     return strncmp(left, right, len);
 }
 
-_Bool m::wasm::strncmp(NChar left, NChar right, U32 len, cmp_op op)
+_Boolx1 m::wasm::strncmp(NChar left, NChar right, U32x1 len, cmp_op op)
 {
-    _I32 res = strncmp(left, right, len);
+    _I32x1 res = strncmp(left, right, len);
 
     switch (op) {
         case EQ: return res == 0;
@@ -2560,9 +2560,9 @@ _Bool m::wasm::strncmp(NChar left, NChar right, U32 len, cmp_op op)
     }
 }
 
-_Bool m::wasm::strcmp(NChar left, NChar right, cmp_op op)
+_Boolx1 m::wasm::strcmp(NChar left, NChar right, cmp_op op)
 {
-    _I32 res = strcmp(left, right);
+    _I32x1 res = strcmp(left, right);
 
     switch (op) {
         case EQ: return res == 0;
@@ -2579,7 +2579,7 @@ _Bool m::wasm::strcmp(NChar left, NChar right, cmp_op op)
  * string copy
  *====================================================================================================================*/
 
-Ptr<Char> m::wasm::strncpy(Ptr<Char> dst, Ptr<Char> src, U32 count)
+Ptr<Charx1> m::wasm::strncpy(Ptr<Charx1> dst, Ptr<Charx1> src, U32x1 count)
 {
     static thread_local struct {} _; // unique caller handle
     struct data_t : GarbageCollectedData
@@ -2604,7 +2604,7 @@ Ptr<Char> m::wasm::strncpy(Ptr<Char> dst, Ptr<Char> src, U32 count)
             Wasm_insist(not src.is_nullptr(), "source must not be nullptr");
             Wasm_insist(not dst.is_nullptr(), "destination must not be nullptr");
 
-            Var<Ptr<Char>> src_end(src + count.make_signed());
+            Var<Ptr<Charx1>> src_end(src + count.make_signed());
             WHILE (src != src_end) {
                 *dst = *src;
                 BREAK(*src == '\0'); // break on terminating NUL byte
@@ -2619,7 +2619,7 @@ Ptr<Char> m::wasm::strncpy(Ptr<Char> dst, Ptr<Char> src, U32 count)
 
     /*----- Call strncpy function. ------*/
     M_insist(bool(d.strncpy));
-    const Var<Ptr<Char>> result((*d.strncpy)(dst, src, count)); // to prevent duplicated computation due to `clone()`
+    const Var<Ptr<Charx1>> result((*d.strncpy)(dst, src, count)); // to prevent duplicated computation due to `clone()`
     return result;
 }
 
@@ -2628,7 +2628,7 @@ Ptr<Char> m::wasm::strncpy(Ptr<Char> dst, Ptr<Char> src, U32 count)
  * WasmLike
  *====================================================================================================================*/
 
-_Bool m::wasm::like(NChar _str, NChar _pattern, const char escape_char)
+_Boolx1 m::wasm::like(NChar _str, NChar _pattern, const char escape_char)
 {
     static thread_local struct {} _; // unique caller handle
     struct data_t : GarbageCollectedData
@@ -2645,10 +2645,10 @@ _Bool m::wasm::like(NChar _str, NChar _pattern, const char escape_char)
     if (_str.length() == 0 and _pattern.length() == 0) {
         _str.discard();
         _pattern.discard();
-        return _Bool(true);
+        return _Boolx1(true);
     }
 
-    auto like_non_null = [&d, &_str, &_pattern, &escape_char](Ptr<Char> str, Ptr<Char> pattern) -> Bool {
+    auto like_non_null = [&d, &_str, &_pattern, &escape_char](Ptr<Charx1> str, Ptr<Charx1> pattern) -> Boolx1 {
         Wasm_insist(str.clone().not_null(), "string operand must not be NULL");
         Wasm_insist(pattern.clone().not_null(), "pattern operand must not be NULL");
 
@@ -2667,11 +2667,11 @@ _Bool m::wasm::like(NChar _str, NChar _pattern, const char escape_char)
                 /*----- Allocate memory for the dynamic programming table. -----*/
                 /* Invariant: dp[i][j] == true iff val_pattern[:i] contains val_str[:j]. Row i and column j is located
                  * at dp + (i - 1) * (`length_str` + 1) + (j - 1). */
-                I32 num_entries = (len_ty_str + 1) * (len_ty_pattern + 1);
-                const Var<Ptr<Bool>> dp = Module::Allocator().malloc<bool>(num_entries.clone().make_unsigned());
+                I32x1 num_entries = (len_ty_str + 1) * (len_ty_pattern + 1);
+                const Var<Ptr<Boolx1>> dp = Module::Allocator().malloc<bool>(num_entries.clone().make_unsigned());
 
                 /*----- Initialize table with all entries set to false. -----*/
-                Var<Ptr<Bool>> entry(dp.val());
+                Var<Ptr<Boolx1>> entry(dp.val());
                 WHILE (entry < dp + num_entries.clone()) {
                     *entry = false;
                     entry += 1;
@@ -2681,16 +2681,16 @@ _Bool m::wasm::like(NChar _str, NChar _pattern, const char escape_char)
                 entry = dp.val();
 
                 /*----- Create pointers to track locations of current characters of `val_str` and `val_pattern`. -----*/
-                Var<Ptr<Char>> str(val_str);
-                Var<Ptr<Char>> pattern(val_pattern);
+                Var<Ptr<Charx1>> str(val_str);
+                Var<Ptr<Charx1>> pattern(val_pattern);
 
                 /*----- Compute ends of str and pattern. -----*/
                 /* Create constant local variables to ensure correct pointers since `src` and `pattern` will change. */
-                const Var<Ptr<Char>> end_str(str + len_ty_str);
-                const Var<Ptr<Char>> end_pattern(pattern + len_ty_pattern);
+                const Var<Ptr<Charx1>> end_str(str + len_ty_str);
+                const Var<Ptr<Charx1>> end_pattern(pattern + len_ty_pattern);
 
                 /*----- Create variables for the current byte of str and pattern. -----*/
-                Var<Char> byte_str, byte_pattern; // always loaded before first access
+                Var<Charx1> byte_str, byte_pattern; // always loaded before first access
 
                 /*----- Initialize first column. -----*/
                 /* Iterate until current byte of pattern is not a `%`-wildcard and set the respective entries to true. */
@@ -2703,10 +2703,10 @@ _Bool m::wasm::like(NChar _str, NChar _pattern, const char escape_char)
 
                 /*----- Compute entire table. -----*/
                 /* Create variable for the actual length of str. */
-                Var<I32> len_str(0);
+                Var<I32x1> len_str(0);
 
                 /* Create flag whether the current byte of pattern is not escaped. */
-                Var<Bool> is_not_escaped(true);
+                Var<Boolx1> is_not_escaped(true);
 
                 /* Reset entry pointer to second row and second column. */
                 entry = dp + len_ty_str + 2;
@@ -2777,7 +2777,7 @@ _Bool m::wasm::like(NChar _str, NChar _pattern, const char escape_char)
                 /* Entry pointer points currently to the second column in the first row after the pattern has ended.
                  * Therefore, we have to go one row up and len_str - 1 columns to the right, i.e. the result is
                  * located at entry - (`length_str` + 1) + len_str - 1 = entry + len_str - (`length_str` + 2). */
-                const Var<Bool> result(*(entry + len_str - (len_ty_str + 2)));
+                const Var<Boolx1> result(*(entry + len_str - (len_ty_str + 2)));
 
                 /*----- Free allocated space. -----*/
                 Module::Allocator().free(dp, num_entries.make_unsigned());
@@ -2796,18 +2796,18 @@ _Bool m::wasm::like(NChar _str, NChar _pattern, const char escape_char)
     if (_str.can_be_null() or _pattern.can_be_null()) {
         auto [_val_str, is_null_str] = _str.split();
         auto [_val_pattern, is_null_pattern] = _pattern.split();
-        Ptr<Char> val_str(_val_str), val_pattern(_val_pattern); // since structured bindings cannot be used in lambda capture
+        Ptr<Charx1> val_str(_val_str), val_pattern(_val_pattern); // since structured bindings cannot be used in lambda capture
 
-        _Var<Bool> result; // always set here
+        _Var<Boolx1> result; // always set here
         IF (is_null_str or is_null_pattern) {
-            result = _Bool::Null();
+            result = _Boolx1::Null();
         } ELSE {
             result = like_non_null(val_str, val_pattern);
         };
         return result;
     } else {
-        const Var<Bool> result(like_non_null(_str, _pattern)); // to prevent duplicated computation due to `clone()`
-        return _Bool(result);
+        const Var<Boolx1> result(like_non_null(_str, _pattern)); // to prevent duplicated computation due to `clone()`
+        return _Boolx1(result);
     }
 }
 
@@ -2816,10 +2816,10 @@ _Bool m::wasm::like(NChar _str, NChar _pattern, const char escape_char)
  * comparator
  *====================================================================================================================*/
 
-I32 m::wasm::compare(const Environment &env_left, const Environment &env_right,
+I32x1 m::wasm::compare(const Environment &env_left, const Environment &env_right,
                      const std::vector<SortingOperator::order_type> &order)
 {
-    Var<I32> result(0); // explicitly (re-)set result to 0
+    Var<I32x1> result(0); // explicitly (re-)set result to 0
 
     /*----- Compile ordering. -----*/
     for (auto &o : order) {
@@ -2834,7 +2834,7 @@ I32 m::wasm::compare(const Environment &env_left, const Environment &env_right,
                 M_insist(val_left.can_be_null() == val_right.can_be_null(),
                          "either both or none of the value to compare must be nullable");
                 if (val_left.can_be_null()) {
-                    using type = std::conditional_t<std::is_same_v<T, bool>, _I32, Expr<T>>;
+                    using type = std::conditional_t<std::is_same_v<T, bool>, _I32x1, Expr<T>>;
                     Var<type> left, right;
                     if constexpr (std::is_same_v<T, bool>) {
                         left  = val_left.template to<int32_t>();
@@ -2845,17 +2845,17 @@ I32 m::wasm::compare(const Environment &env_left, const Environment &env_right,
                     }
 
                     /*----- Compare both with current order expression and update result. -----*/
-                    I32 cmp_null = right.is_null().template to<int32_t>() - left.is_null().template to<int32_t>();
-                    _I32 _val_lt = (left < right).template to<int32_t>();
-                    _I32 _val_gt = (left > right).template to<int32_t>();
-                    _I32 _cmp_val = o.second ? _val_gt - _val_lt : _val_lt - _val_gt;
+                    I32x1 cmp_null = right.is_null().template to<int32_t>() - left.is_null().template to<int32_t>();
+                    _I32x1 _val_lt = (left < right).template to<int32_t>();
+                    _I32x1 _val_gt = (left > right).template to<int32_t>();
+                    _I32x1 _cmp_val = o.second ? _val_gt - _val_lt : _val_lt - _val_gt;
                     auto [cmp_val, cmp_is_null] = _cmp_val.split();
                     cmp_is_null.discard();
-                    I32 cmp = (cmp_null << 1) + cmp_val; // potentially-null value of comparison is overruled by cmp_null
+                    I32x1 cmp = (cmp_null << 1) + cmp_val; // potentially-null value of comparison is overruled by cmp_null
                     result <<= 2; // shift result s.t. first difference will determine order
                     result += cmp; // add current comparison to result
                 } else {
-                    using type = std::conditional_t<std::is_same_v<T, bool>, I32, PrimitiveExpr<T>>;
+                    using type = std::conditional_t<std::is_same_v<T, bool>, I32x1, PrimitiveExpr<T>>;
                     Var<type> left, right;
                     if constexpr (std::is_same_v<T, bool>) {
                         left  = val_left.insist_not_null().template to<int32_t>();
@@ -2866,9 +2866,9 @@ I32 m::wasm::compare(const Environment &env_left, const Environment &env_right,
                     }
 
                     /*----- Compare both with current order expression and update result. -----*/
-                    I32 val_lt = (left < right).template to<int32_t>();
-                    I32 val_gt = (left > right).template to<int32_t>();
-                    I32 cmp = o.second ? val_gt - val_lt : val_lt - val_gt;
+                    I32x1 val_lt = (left < right).template to<int32_t>();
+                    I32x1 val_gt = (left > right).template to<int32_t>();
+                    I32x1 cmp = o.second ? val_gt - val_lt : val_lt - val_gt;
                     result <<= 1; // shift result s.t. first difference will determine order
                     result += cmp; // add current comparison to result
                 }
@@ -2879,7 +2879,7 @@ I32 m::wasm::compare(const Environment &env_left, const Environment &env_right,
                 /*----- Compile order expression for right tuple. -----*/
                 NChar val_right = env_right.template compile<NChar>(o.first);
 
-                Var<Ptr<Char>> _left(val_left.val()), _right(val_right.val());
+                Var<Ptr<Charx1>> _left(val_left.val()), _right(val_right.val());
                 NChar left(_left, val_left.can_be_null(), val_left.length(), val_left.guarantees_terminating_nul()),
                       right(_right, val_right.can_be_null(), val_right.length(), val_right.guarantees_terminating_nul());
 
@@ -2887,18 +2887,18 @@ I32 m::wasm::compare(const Environment &env_left, const Environment &env_right,
                          "either both or none of the value to compare must be nullable");
                 if (val_left.can_be_null()) {
                     /*----- Compare both with current order expression and update result. -----*/
-                    I32 cmp_null = _right.is_null().to<int32_t>() - _left.is_null().to<int32_t>();
-                    _I32 _delta = o.second ? strcmp(left, right) : strcmp(right, left);
+                    I32x1 cmp_null = _right.is_null().to<int32_t>() - _left.is_null().to<int32_t>();
+                    _I32x1 _delta = o.second ? strcmp(left, right) : strcmp(right, left);
                     auto [delta_val, delta_is_null] = _delta.split();
                     Wasm_insist(delta_val.clone() >= -1 and delta_val.clone() <= 1,
                                 "result of strcmp is assumed to be in [-1,1]");
                     delta_is_null.discard();
-                    I32 cmp = (cmp_null << 1) + delta_val; // potentially-null value of comparison is overruled by cmp_null
+                    I32x1 cmp = (cmp_null << 1) + delta_val; // potentially-null value of comparison is overruled by cmp_null
                     result <<= 2; // shift result s.t. first difference will determine order
                     result += cmp; // add current comparison to result
                 } else {
                     /*----- Compare both with current order expression and update result. -----*/
-                    I32 delta = o.second ? strcmp(left, right).insist_not_null() : strcmp(right, left).insist_not_null();
+                    I32x1 delta = o.second ? strcmp(left, right).insist_not_null() : strcmp(right, left).insist_not_null();
                     Wasm_insist(delta.clone() >= -1 and delta.clone() <= 1,
                                 "result of strcmp is assumed to be in [-1,1]");
                     result <<= 1; // shift result s.t. first difference will determine order

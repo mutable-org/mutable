@@ -59,12 +59,12 @@ void m::wasm::quicksort(Buffer<IsGlobal> &buffer, const std::vector<SortingOpera
      * given environment invalid). Returns ID of partition boundary s.t. all elements before this boundary are smaller
      * than or equal to the pivot element and all elements after or equal this boundary are greater than or equal to
      * the pivot element. */
-    auto partition = [&](U32 _begin, U32 _end, const Environment &env_pivot) -> U32 {
-        Var<U32> begin(_begin), end(_end);
+    auto partition = [&](U32x1 _begin, U32x1 _end, const Environment &env_pivot) -> U32x1 {
+        Var<U32x1> begin(_begin), end(_end);
 
         Wasm_insist(begin < end);
 
-        U32 last = end - 1U;
+        U32x1 last = end - 1U;
 
         DO_WHILE(begin < end) {
             /*----- Load entire begin tuple. -----*/
@@ -101,8 +101,8 @@ void m::wasm::quicksort(Buffer<IsGlobal> &buffer, const std::vector<SortingOpera
             }
 
             /*----- Compare begin and last tuples to pivot element and advance cursors respectively. -----*/
-            Bool begin_le_pivot = compare(env_begin, env_pivot, order) <= 0;
-            Bool last_ge_pivot  = compare(env_last, env_pivot, order) >= 0;
+            Boolx1 begin_le_pivot = compare(env_begin, env_pivot, order) <= 0;
+            Boolx1 last_ge_pivot  = compare(env_last, env_pivot, order) >= 0;
 
             begin += begin_le_pivot.to<uint32_t>();
             end -= last_ge_pivot.to<uint32_t>();
@@ -123,10 +123,10 @@ void m::wasm::quicksort(Buffer<IsGlobal> &buffer, const std::vector<SortingOpera
         auto end = PARAMETER(1); // past-the-end ID to sort
         Wasm_insist(begin <= end);
 
-        U32 last = end - 1U;
+        U32x1 last = end - 1U;
 
         WHILE(end - begin > 2U) {
-            Var<U32> mid((begin + end) >> 1U); // (begin + end) / 2
+            Var<U32x1> mid((begin + end) >> 1U); // (begin + end) / 2
 
             /*----- Load entire begin tuple. -----*/
             auto env_begin = [&](){
@@ -150,9 +150,9 @@ void m::wasm::quicksort(Buffer<IsGlobal> &buffer, const std::vector<SortingOpera
             }();
 
             /*----- Swap pivot (median of three) to begin. -----.*/
-            Bool begin_le_mid  = compare(env_begin, env_mid, order) <= 0;
-            Bool begin_le_last = compare(env_begin, env_last, order) <= 0;
-            Bool mid_le_last   = compare(env_mid, env_last, order) <= 0;
+            Boolx1 begin_le_mid  = compare(env_begin, env_mid, order) <= 0;
+            Boolx1 begin_le_last = compare(env_begin, env_last, order) <= 0;
+            Boolx1 mid_le_last   = compare(env_mid, env_last, order) <= 0;
             IF (begin_le_mid) {
                 IF (begin_le_last.clone()) {
                     IF (mid_le_last.clone()) {
@@ -172,7 +172,7 @@ void m::wasm::quicksort(Buffer<IsGlobal> &buffer, const std::vector<SortingOpera
             };
 
             /*----- Load entire pivot tuple. Must be loaded again as begin tuple may be swapped above. -----*/
-            U32 pivot = begin; // use begin as pivot
+            U32x1 pivot = begin; // use begin as pivot
             auto env_pivot = [&](){
                 auto S = CodeGenContext::Get().scoped_environment();
                 load(pivot.clone());
@@ -209,7 +209,7 @@ void m::wasm::quicksort(Buffer<IsGlobal> &buffer, const std::vector<SortingOpera
             }();
 
             /*----- Swap begin and last if they are not yet sorted. -----.*/
-            Bool begin_gt_last = compare(env_begin, env_last, order) > 0;
+            Boolx1 begin_gt_last = compare(env_begin, env_last, order) > 0;
             IF (begin_gt_last) {
                 swap(begin, last, env_begin, env_last);
             };
@@ -232,33 +232,33 @@ template void m::wasm::quicksort(GlobalBuffer&, const std::vector<SortingOperato
 
 template<typename T>
 requires unsigned_integral<T>
-U64 reinterpret_to_U64(m::wasm::PrimitiveExpr<T> value) { return value; }
+U64x1 reinterpret_to_U64(m::wasm::PrimitiveExpr<T> value) { return value; }
 
 template<typename T>
 requires signed_integral<T>
-U64 reinterpret_to_U64(m::wasm::PrimitiveExpr<T> value) { return value.make_unsigned(); }
+U64x1 reinterpret_to_U64(m::wasm::PrimitiveExpr<T> value) { return value.make_unsigned(); }
 
 template<typename T>
 requires std::floating_point<T> and (sizeof(T) == 4)
-U64 reinterpret_to_U64(m::wasm::PrimitiveExpr<T> value) { return value.template reinterpret<int32_t>().make_unsigned(); }
+U64x1 reinterpret_to_U64(m::wasm::PrimitiveExpr<T> value) { return value.template reinterpret<int32_t>().make_unsigned(); }
 
 template<typename T>
 requires std::floating_point<T> and (sizeof(T) == 8)
-U64 reinterpret_to_U64(m::wasm::PrimitiveExpr<T> value) { return value.template reinterpret<int64_t>().make_unsigned(); }
+U64x1 reinterpret_to_U64(m::wasm::PrimitiveExpr<T> value) { return value.template reinterpret<int64_t>().make_unsigned(); }
 
 template<typename T>
 requires std::same_as<T, bool>
-U64 reinterpret_to_U64(m::wasm::PrimitiveExpr<T> value) { return value.template to<uint64_t>(); }
+U64x1 reinterpret_to_U64(m::wasm::PrimitiveExpr<T> value) { return value.template to<uint64_t>(); }
 
 
 /*----- bit mix functions --------------------------------------------------------------------------------------------*/
 
-U64 m::wasm::murmur3_bit_mix(U64 bits)
+U64x1 m::wasm::murmur3_bit_mix(U64x1 bits)
 {
     /* Taken from https://github.com/aappleby/smhasher/blob/master/src/MurmurHash3.cpp by Austin Appleby.  We use the
      * optimized constants found by David Stafford, in particular the values for `Mix01`, as reported at
      * http://zimbry.blogspot.com/2011/09/better-bit-mixing-improving-on.html. */
-    Var<U64> res(bits);
+    Var<U64x1> res(bits);
     res ^= res >> uint64_t(31);
     res *= uint64_t(0x7fb5d329728ea185UL);
     res ^= res >> uint64_t(27);
@@ -270,14 +270,14 @@ U64 m::wasm::murmur3_bit_mix(U64 bits)
 
 /*----- hash functions -----------------------------------------------------------------------------------------------*/
 
-U64 m::wasm::fnv_1a(Ptr<U8> bytes, U32 num_bytes)
+U64x1 m::wasm::fnv_1a(Ptr<U8x1> bytes, U32x1 num_bytes)
 {
     Wasm_insist(not bytes.clone().is_nullptr(), "cannot compute hash of nullptr");
 
-    Var<U64> h(0xcbf29ce484222325UL);
+    Var<U64x1> h(0xcbf29ce484222325UL);
 
-    Var<Ptr<U8>> ptr(bytes.clone());
-    WHILE (ptr != bytes + num_bytes.make_signed() and U8(*ptr).to<bool>()) {
+    Var<Ptr<U8x1>> ptr(bytes.clone());
+    WHILE (ptr != bytes + num_bytes.make_signed() and U8x1(*ptr).to<bool>()) {
         h ^= *ptr;
         h *= uint64_t(0x100000001b3UL);
         ptr += 1;
@@ -286,32 +286,32 @@ U64 m::wasm::fnv_1a(Ptr<U8> bytes, U32 num_bytes)
     return h;
 }
 
-U64 m::wasm::str_hash(NChar _str)
+U64x1 m::wasm::str_hash(NChar _str)
 {
-    Var<U64> h(0); // always set here
+    Var<U64x1> h(0); // always set here
 
     IF (_str.clone().is_null()) {
         h = uint64_t(1UL << 63);
     } ELSE {
         if (_str.length() <= 8) {
-            /*----- If the string fits in a single U64, combine all characters and bit mix. -----*/
-            const Var<Ptr<Char>> str(_str.val());
+            /*----- If the string fits in a single U64x1, combine all characters and bit mix. -----*/
+            const Var<Ptr<Charx1>> str(_str.val());
             for (int32_t i = 0; i != _str.length(); ++i) {
                 h <<= 8U;
-                Char c = *(str + i);
+                Charx1 c = *(str + i);
                 h |= c.to<uint64_t>();
             }
             h = murmur3_bit_mix(h);
         } else {
             /*----- Compute FNV-1a hash of string. -----*/
-            h = fnv_1a(_str.to<void*>().to<uint8_t*>(), U32(_str.length()));
+            h = fnv_1a(_str.to<void*>().to<uint8_t*>(), U32x1(_str.length()));
         }
     };
 
     return h;
 }
 
-U64 m::wasm::murmur3_64a_hash(std::vector<std::pair<const Type*, SQL_t>> values)
+U64x1 m::wasm::murmur3_64a_hash(std::vector<std::pair<const Type*, SQL_t>> values)
 {
     /* Inspired by https://github.com/aappleby/smhasher/blob/master/src/MurmurHash3.cpp by Austin Appleby.  We use
      * constants from MurmurHash2_64 as reported on https://sites.google.com/site/murmurhash/. */
@@ -320,9 +320,9 @@ U64 m::wasm::murmur3_64a_hash(std::vector<std::pair<const Type*, SQL_t>> values)
     /*----- Handle a single value. -----*/
     if (values.size() == 1) {
         return std::visit(overloaded {
-            [&]<typename T>(Expr<T> val) -> U64 { return murmur3_bit_mix(val.hash()); },
-            [&](NChar val) -> U64 { return str_hash(val); },
-            [](std::monostate) -> U64 { M_unreachable("invalid variant"); }
+            [&]<typename T>(Expr<T> val) -> U64x1 { return murmur3_bit_mix(val.hash()); },
+            [&](NChar val) -> U64x1 { return str_hash(val); },
+            [](std::monostate) -> U64x1 { M_unreachable("invalid variant"); }
         }, values.front().second);
     }
 
@@ -336,9 +336,9 @@ U64 m::wasm::murmur3_64a_hash(std::vector<std::pair<const Type*, SQL_t>> values)
         }, p.second);
     }
 
-    /*----- If all values can be combined into a single U64 value, combine all values and bit mix. -----*/
+    /*----- If all values can be combined into a single U64x1 value, combine all values and bit mix. -----*/
     if (total_size_in_bits <= 64) {
-        Var<U64> h(0);
+        Var<U64x1> h(0);
         for (auto &p : values) {
             std::visit(overloaded {
                 [&]<typename T>(Expr<T> _val) -> void {
@@ -362,10 +362,10 @@ U64 m::wasm::murmur3_64a_hash(std::vector<std::pair<const Type*, SQL_t>> values)
                         uint64_t len_in_bits = 8 * _val.length();
                         h <<= len_in_bits;
                     } ELSE {
-                        const Var<Ptr<Char>> val(_val.val());
+                        const Var<Ptr<Charx1>> val(_val.val());
                         for (int32_t i = 0; i != _val.length(); ++i) {
                             h <<= 8U;
-                            Char c = *(val + i);
+                            Charx1 c = *(val + i);
                             h |= c.to<uint64_t>(); // add reinterpreted character
                         }
                     };
@@ -377,9 +377,9 @@ U64 m::wasm::murmur3_64a_hash(std::vector<std::pair<const Type*, SQL_t>> values)
     }
 
     /*----- Perform general Murmur3_64a. -----*/
-    U64 m(0xc6a4a7935bd1e995UL);
-    Var<U64> k; // always set before used
-    Var<U64> h(uint64_t(values.size()) * m.clone());
+    U64x1 m(0xc6a4a7935bd1e995UL);
+    Var<U64x1> k; // always set before used
+    Var<U64x1> h(uint64_t(values.size()) * m.clone());
 
     for (auto &p : values) {
         std::visit(overloaded {
@@ -678,10 +678,10 @@ Ptr<void> ChainedHashTable<IsGlobal>::hash_to_bucket(std::vector<SQL_t> key) con
         values.emplace_back(schema_.get()[k].type, std::move(*key_it++));
 
     /*----- Compute hash of key using Murmur3_64a. -----*/
-    U64 hash = murmur3_64a_hash(std::move(values));
+    U64x1 hash = murmur3_64a_hash(std::move(values));
 
     /*----- Compute bucket address. -----*/
-    U32 bucket_idx = hash.to<uint32_t>() bitand *mask_; // modulo capacity
+    U32x1 bucket_idx = hash.to<uint32_t>() bitand *mask_; // modulo capacity
     return begin() + (bucket_idx * uint32_t(sizeof(uint32_t))).make_signed();
 }
 
@@ -709,7 +709,7 @@ HashTable::entry_t ChainedHashTable<IsGlobal>::emplace_without_rehashing(std::ve
     Wasm_insist(*num_entries_ < *high_watermark_absolute_);
 
     /*----- If predication is used, introduce predication variable and update it before inserting a key. -----*/
-    std::optional<Var<Bool>> pred;
+    std::optional<Var<Boolx1>> pred;
     if (auto &env = CodeGenContext::Get().env(); env.predicated()) {
         pred = env.extract_predicate().is_true_and_not_null();
         if (not predication_dummy_)
@@ -732,7 +732,7 @@ HashTable::entry_t ChainedHashTable<IsGlobal>::emplace_without_rehashing(std::ve
                                    : entry.to<uint32_t>(); // FIXME: entry memory never freed iff predicate is not fulfilled
 
     /*----- Update number of entries. -----*/
-    *num_entries_ += pred ? pred->to<uint32_t>() : U32(1);
+    *num_entries_ += pred ? pred->to<uint32_t>() : U32x1(1);
 
     /*----- Insert key. -----*/
     insert_key(entry, std::move(key)); // move key at last use
@@ -742,7 +742,7 @@ HashTable::entry_t ChainedHashTable<IsGlobal>::emplace_without_rehashing(std::ve
 }
 
 template<bool IsGlobal>
-std::pair<HashTable::entry_t, Bool> ChainedHashTable<IsGlobal>::try_emplace(std::vector<SQL_t> key)
+std::pair<HashTable::entry_t, Boolx1> ChainedHashTable<IsGlobal>::try_emplace(std::vector<SQL_t> key)
 {
     M_insist(bool(num_entries_), "must call `setup()` before");
     M_insist(bool(high_watermark_absolute_), "must call `setup()` before");
@@ -755,7 +755,7 @@ std::pair<HashTable::entry_t, Bool> ChainedHashTable<IsGlobal>::try_emplace(std:
     Wasm_insist(*num_entries_ < *high_watermark_absolute_);
 
     /*----- If predication is used, introduce predication variable and update it before inserting a key. -----*/
-    std::optional<Var<Bool>> pred;
+    std::optional<Var<Boolx1>> pred;
     if (auto &env = CodeGenContext::Get().env(); env.predicated()) {
         pred = env.extract_predicate().is_true_and_not_null();
         if (not predication_dummy_)
@@ -770,7 +770,7 @@ std::pair<HashTable::entry_t, Bool> ChainedHashTable<IsGlobal>::try_emplace(std:
     ); // clone key since we need it again for insertion
 
     /*----- Probe collision list, abort and skip insertion if key already exists. -----*/
-    Var<Bool> entry_inserted(false);
+    Var<Boolx1> entry_inserted(false);
     Var<Ptr<void>> bucket_it(Ptr<void>(*bucket.to<uint32_t*>()));
     BLOCK(insert_entry) {
         IF (bucket_it.is_nullptr()) { // empty collision list
@@ -803,7 +803,7 @@ std::pair<HashTable::entry_t, Bool> ChainedHashTable<IsGlobal>::try_emplace(std:
         bucket_it = entry;
 
         /*----- Update number of entries. -----*/
-        *num_entries_ += pred ? pred->to<uint32_t>() : U32(1);
+        *num_entries_ += pred ? pred->to<uint32_t>() : U32x1(1);
 
         /*----- Insert key. -----*/
         insert_key(entry, std::move(key)); // move key at last use
@@ -816,10 +816,10 @@ std::pair<HashTable::entry_t, Bool> ChainedHashTable<IsGlobal>::try_emplace(std:
 }
 
 template<bool IsGlobal>
-std::pair<HashTable::entry_t, Bool> ChainedHashTable<IsGlobal>::find(std::vector<SQL_t> key)
+std::pair<HashTable::entry_t, Boolx1> ChainedHashTable<IsGlobal>::find(std::vector<SQL_t> key)
 {
     /*----- If predication is used, introduce predication temporal and set it before looking-up a key. -----*/
-    std::optional<Bool> pred;
+    std::optional<Boolx1> pred;
     if (auto &env = CodeGenContext::Get().env(); env.predicated()) {
         pred.emplace(env.extract_predicate().is_true_and_not_null());
         if (not predication_dummy_)
@@ -840,7 +840,7 @@ std::pair<HashTable::entry_t, Bool> ChainedHashTable<IsGlobal>::find(std::vector
     }
 
     /*----- Key is found iff end of collision list is not yet reached. -----*/
-    Bool key_found = not bucket_it.is_nullptr();
+    Boolx1 key_found = not bucket_it.is_nullptr();
 
     /*----- Return entry handle containing both keys and values and the flag whether key was found. -----*/
     return { value_entry(bucket_it), key_found };
@@ -867,7 +867,7 @@ void ChainedHashTable<IsGlobal>::for_each_in_equal_range(std::vector<SQL_t> key,
                                                          bool predicated) const
 {
     /*----- If predication is used, introduce predication temporal and set it before looking-up a key. -----*/
-    std::optional<Bool> pred;
+    std::optional<Boolx1> pred;
     if (auto &env = CodeGenContext::Get().env(); env.predicated()) {
         pred.emplace(env.extract_predicate().is_true_and_not_null());
         if (not predication_dummy_)
@@ -910,9 +910,9 @@ HashTable::entry_t ChainedHashTable<IsGlobal>::dummy_entry()
 }
 
 template<bool IsGlobal>
-Bool ChainedHashTable<IsGlobal>::equal_key(Ptr<void> entry, std::vector<SQL_t> key) const
+Boolx1 ChainedHashTable<IsGlobal>::equal_key(Ptr<void> entry, std::vector<SQL_t> key) const
 {
-    Var<Bool> res(true);
+    Var<Boolx1> res(true);
 
     for (std::size_t i = 0; i < key_indices_.size(); ++i) {
         auto &e = schema_.get()[key_indices_[i]];
@@ -930,24 +930,24 @@ Bool ChainedHashTable<IsGlobal>::equal_key(Ptr<void> entry, std::vector<SQL_t> k
             }
         };
         visit(overloaded {
-            [&](const Boolean&) { compare_equal.template operator()<_Bool>(); },
+            [&](const Boolean&) { compare_equal.template operator()<_Boolx1>(); },
             [&](const Numeric &n) {
                 switch (n.kind) {
                     case Numeric::N_Int:
                     case Numeric::N_Decimal:
                         switch (n.size()) {
                             default: M_unreachable("invalid size");
-                            case  8: compare_equal.template operator()<_I8 >(); break;
-                            case 16: compare_equal.template operator()<_I16>(); break;
-                            case 32: compare_equal.template operator()<_I32>(); break;
-                            case 64: compare_equal.template operator()<_I64>(); break;
+                            case  8: compare_equal.template operator()<_I8x1 >(); break;
+                            case 16: compare_equal.template operator()<_I16x1>(); break;
+                            case 32: compare_equal.template operator()<_I32x1>(); break;
+                            case 64: compare_equal.template operator()<_I64x1>(); break;
                         }
                         break;
                     case Numeric::N_Float:
                         if (n.size() <= 32)
-                            compare_equal.template operator()<_Float>();
+                            compare_equal.template operator()<_Floatx1>();
                         else
-                            compare_equal.template operator()<_Double>();
+                            compare_equal.template operator()<_Doublex1>();
                 }
             },
             [&](const CharacterSequence &cs) {
@@ -961,8 +961,8 @@ Bool ChainedHashTable<IsGlobal>::equal_key(Ptr<void> entry, std::vector<SQL_t> k
                     res = res and ref == *std::get_if<NChar>(&key[i]);
                 }
             },
-            [&](const Date&) { compare_equal.template operator()<_I32>(); },
-            [&](const DateTime&) { compare_equal.template operator()<_I64>(); },
+            [&](const Date&) { compare_equal.template operator()<_I32x1>(); },
+            [&](const DateTime&) { compare_equal.template operator()<_I64x1>(); },
             [](auto&&) { M_unreachable("invalid type"); },
         }, *e.type);
     }
@@ -991,24 +991,24 @@ void ChainedHashTable<IsGlobal>::insert_key(Ptr<void> entry, std::vector<SQL_t> 
             }
         };
         visit(overloaded {
-            [&](const Boolean&) { insert.template operator()<_Bool>(); },
+            [&](const Boolean&) { insert.template operator()<_Boolx1>(); },
             [&](const Numeric &n) {
                 switch (n.kind) {
                     case Numeric::N_Int:
                     case Numeric::N_Decimal:
                         switch (n.size()) {
                             default: M_unreachable("invalid size");
-                            case  8: insert.template operator()<_I8 >(); break;
-                            case 16: insert.template operator()<_I16>(); break;
-                            case 32: insert.template operator()<_I32>(); break;
-                            case 64: insert.template operator()<_I64>(); break;
+                            case  8: insert.template operator()<_I8x1 >(); break;
+                            case 16: insert.template operator()<_I16x1>(); break;
+                            case 32: insert.template operator()<_I32x1>(); break;
+                            case 64: insert.template operator()<_I64x1>(); break;
                         }
                         break;
                     case Numeric::N_Float:
                         if (n.size() <= 32)
-                            insert.template operator()<_Float>();
+                            insert.template operator()<_Floatx1>();
                         else
-                            insert.template operator()<_Double>();
+                            insert.template operator()<_Doublex1>();
                 }
             },
             [&](const CharacterSequence &cs) {
@@ -1022,8 +1022,8 @@ void ChainedHashTable<IsGlobal>::insert_key(Ptr<void> entry, std::vector<SQL_t> 
                     ref = *std::get_if<NChar>(&key[i]);
                 }
             },
-            [&](const Date&) { insert.template operator()<_I32>(); },
-            [&](const DateTime&) { insert.template operator()<_I64>(); },
+            [&](const Date&) { insert.template operator()<_I32x1>(); },
+            [&](const DateTime&) { insert.template operator()<_I64x1>(); },
             [](auto&&) { M_unreachable("invalid type"); },
         }, *e.type);
     }
@@ -1051,24 +1051,24 @@ HashTable::entry_t ChainedHashTable<IsGlobal>::value_entry(Ptr<void> entry) cons
             }
         };
         visit(overloaded {
-            [&](const Boolean&) { add.template operator()<_Bool>(); },
+            [&](const Boolean&) { add.template operator()<_Boolx1>(); },
             [&](const Numeric &n) {
                 switch (n.kind) {
                     case Numeric::N_Int:
                     case Numeric::N_Decimal:
                         switch (n.size()) {
                             default: M_unreachable("invalid size");
-                            case  8: add.template operator()<_I8 >(); break;
-                            case 16: add.template operator()<_I16>(); break;
-                            case 32: add.template operator()<_I32>(); break;
-                            case 64: add.template operator()<_I64>(); break;
+                            case  8: add.template operator()<_I8x1 >(); break;
+                            case 16: add.template operator()<_I16x1>(); break;
+                            case 32: add.template operator()<_I32x1>(); break;
+                            case 64: add.template operator()<_I64x1>(); break;
                         }
                         break;
                     case Numeric::N_Float:
                         if (n.size() <= 32)
-                            add.template operator()<_Float>();
+                            add.template operator()<_Floatx1>();
                         else
-                            add.template operator()<_Double>();
+                            add.template operator()<_Doublex1>();
                 }
             },
             [&](const CharacterSequence &cs) {
@@ -1081,8 +1081,8 @@ HashTable::entry_t ChainedHashTable<IsGlobal>::value_entry(Ptr<void> entry) cons
                     value_entry.add(e.id, std::move(ref));
                 }
             },
-            [&](const Date&) { add.template operator()<_I32>(); },
-            [&](const DateTime&) { add.template operator()<_I64>(); },
+            [&](const Date&) { add.template operator()<_I32x1>(); },
+            [&](const DateTime&) { add.template operator()<_I64x1>(); },
             [](auto&&) { M_unreachable("invalid type"); },
         }, *e.type);
     }
@@ -1112,24 +1112,24 @@ HashTable::const_entry_t ChainedHashTable<IsGlobal>::entry(Ptr<void> entry) cons
             }
         };
         visit(overloaded {
-            [&](const Boolean&) { add.template operator()<_Bool>(); },
+            [&](const Boolean&) { add.template operator()<_Boolx1>(); },
             [&](const Numeric &n) {
                 switch (n.kind) {
                     case Numeric::N_Int:
                     case Numeric::N_Decimal:
                         switch (n.size()) {
                             default: M_unreachable("invalid size");
-                            case  8: add.template operator()<_I8 >(); break;
-                            case 16: add.template operator()<_I16>(); break;
-                            case 32: add.template operator()<_I32>(); break;
-                            case 64: add.template operator()<_I64>(); break;
+                            case  8: add.template operator()<_I8x1 >(); break;
+                            case 16: add.template operator()<_I16x1>(); break;
+                            case 32: add.template operator()<_I32x1>(); break;
+                            case 64: add.template operator()<_I64x1>(); break;
                         }
                         break;
                     case Numeric::N_Float:
                         if (n.size() <= 32)
-                            add.template operator()<_Float>();
+                            add.template operator()<_Floatx1>();
                         else
-                            add.template operator()<_Double>();
+                            add.template operator()<_Doublex1>();
                 }
             },
             [&](const CharacterSequence &cs) {
@@ -1142,8 +1142,8 @@ HashTable::const_entry_t ChainedHashTable<IsGlobal>::entry(Ptr<void> entry) cons
                     _entry.add(e.id, std::move(ref));
                 }
             },
-            [&](const Date&) { add.template operator()<_I32>(); },
-            [&](const DateTime&) { add.template operator()<_I64>(); },
+            [&](const Date&) { add.template operator()<_I32x1>(); },
+            [&](const DateTime&) { add.template operator()<_I64x1>(); },
             [](auto&&) { M_unreachable("invalid type"); },
         }, *e.type);
     }
@@ -1169,7 +1169,7 @@ void ChainedHashTable<IsGlobal>::rehash()
         const Var<Ptr<void>> begin_old(begin());
         const Var<Ptr<void>> end_old(end());
 
-        /*----- Double capacity. -----*/
+        /*----- Doublex1 capacity. -----*/
         *mask_ = (*mask_ << 1U) + 1U;
 
         /*----- Allocate memory for new hash table with updated capacity. -----*/
@@ -1214,7 +1214,7 @@ void ChainedHashTable<IsGlobal>::rehash()
         }
 
         /*----- Free old hash table (without collision list entries since they are reused). -----*/
-        U32 size = (end_old - begin_old).make_unsigned();
+        U32x1 size = (end_old - begin_old).make_unsigned();
         Module::Allocator().deallocate(begin_old, size);
     };
 
@@ -1222,7 +1222,7 @@ void ChainedHashTable<IsGlobal>::rehash()
         if (not rehash_) {
             /*----- Backup former local variables to be able to use new ones for rehashing function. -----*/
             auto old_address = std::exchange(address_, std::optional<Var<Ptr<void>>>());
-            auto old_mask = std::exchange(mask_, std::optional<Var<U32>>());
+            auto old_mask = std::exchange(mask_, std::optional<Var<U32x1>>());
             /* omit `num_entries_` and `high_watermark_absolute_` as they are never accessed during rehashing */
 
             /*----- Create function for rehashing. -----*/
@@ -1294,10 +1294,10 @@ Ptr<void> OpenAddressingHashTableBase::hash_to_bucket(std::vector<SQL_t> key) co
         values.emplace_back(schema_.get()[k].type, std::move(*key_it++));
 
     /*----- Compute hash of key using Murmur3_64a. -----*/
-    U64 hash = murmur3_64a_hash(std::move(values));
+    U64x1 hash = murmur3_64a_hash(std::move(values));
 
     /*----- Compute bucket address. -----*/
-    U32 bucket_idx = hash.to<uint32_t>() bitand mask(); // modulo capacity
+    U32x1 bucket_idx = hash.to<uint32_t>() bitand mask(); // modulo capacity
     return begin() + (bucket_idx * entry_size_in_bytes_).make_signed();
 }
 
@@ -1570,7 +1570,7 @@ Ptr<void> OpenAddressingHashTable<IsGlobal, ValueInPlace>::emplace_without_rehas
     Wasm_insist(*num_entries_ < *high_watermark_absolute_);
 
     /*----- If predication is used, introduce predication variable and update it before inserting a key. -----*/
-    std::optional<Var<Bool>> pred;
+    std::optional<Var<Boolx1>> pred;
     if (auto &env = CodeGenContext::Get().env(); env.predicated()) {
         pred = env.extract_predicate().is_true_and_not_null();
         if (not predication_dummy_)
@@ -1607,7 +1607,7 @@ Ptr<void> OpenAddressingHashTable<IsGlobal, ValueInPlace>::emplace_without_rehas
     reference_count(slot) = pred ? pred->to<ref_t>() : PrimitiveExpr<ref_t>(1);
 
     /*----- Update number of entries. -----*/
-    *num_entries_ += pred ? pred->to<uint32_t>() : U32(1);
+    *num_entries_ += pred ? pred->to<uint32_t>() : U32x1(1);
     Wasm_insist(*num_entries_ < capacity(), "at least one entry must always be unoccupied for lookups");
 
     /*----- Insert key. -----*/
@@ -1617,7 +1617,7 @@ Ptr<void> OpenAddressingHashTable<IsGlobal, ValueInPlace>::emplace_without_rehas
 }
 
 template<bool IsGlobal, bool ValueInPlace>
-std::pair<HashTable::entry_t, Bool>
+std::pair<HashTable::entry_t, Boolx1>
 OpenAddressingHashTable<IsGlobal, ValueInPlace>::try_emplace(std::vector<SQL_t> key)
 {
     M_insist(bool(num_entries_), "must call `setup()` before");
@@ -1631,7 +1631,7 @@ OpenAddressingHashTable<IsGlobal, ValueInPlace>::try_emplace(std::vector<SQL_t> 
     Wasm_insist(*num_entries_ < *high_watermark_absolute_);
 
     /*----- If predication is used, introduce predication variable and update it before inserting a key. -----*/
-    std::optional<Var<Bool>> pred;
+    std::optional<Var<Boolx1>> pred;
     if (auto &env = CodeGenContext::Get().env(); env.predicated()) {
         pred = env.extract_predicate().is_true_and_not_null();
         if (not predication_dummy_)
@@ -1649,7 +1649,7 @@ OpenAddressingHashTable<IsGlobal, ValueInPlace>::try_emplace(std::vector<SQL_t> 
     Var<PrimitiveExpr<ref_t>> refs(0);
 
     /*----- Probe slots, abort and skip insertion if key already exists. -----*/
-    Var<Bool> entry_inserted(false);
+    Var<Boolx1> entry_inserted(false);
     Var<Ptr<void>> slot(bucket.val());
     BLOCK(insert_entry) {
         WHILE (reference_count(slot) != ref_t(0)) {
@@ -1674,7 +1674,7 @@ OpenAddressingHashTable<IsGlobal, ValueInPlace>::try_emplace(std::vector<SQL_t> 
         reference_count(slot) = pred ? pred->to<ref_t>() : PrimitiveExpr<ref_t>(1);
 
         /*----- Update number of entries. -----*/
-        *num_entries_ += pred ? pred->to<uint32_t>() : U32(1);
+        *num_entries_ += pred ? pred->to<uint32_t>() : U32x1(1);
         Wasm_insist(*num_entries_ < capacity(), "at least one entry must always be unoccupied for lookups");
 
         /*----- Insert key. -----*/
@@ -1709,12 +1709,12 @@ OpenAddressingHashTable<IsGlobal, ValueInPlace>::try_emplace(std::vector<SQL_t> 
 }
 
 template<bool IsGlobal, bool ValueInPlace>
-std::pair<HashTable::entry_t, Bool> OpenAddressingHashTable<IsGlobal, ValueInPlace>::find(std::vector<SQL_t> key)
+std::pair<HashTable::entry_t, Boolx1> OpenAddressingHashTable<IsGlobal, ValueInPlace>::find(std::vector<SQL_t> key)
 {
     M_insist(bool(num_entries_), "must call `setup()` before");
 
     /*----- If predication is used, introduce predication temporal and set it before looking-up a key. -----*/
-    std::optional<Bool> pred;
+    std::optional<Boolx1> pred;
     if (auto &env = CodeGenContext::Get().env(); env.predicated()) {
         pred.emplace(env.extract_predicate().is_true_and_not_null());
         if (not predication_dummy_)
@@ -1743,7 +1743,7 @@ std::pair<HashTable::entry_t, Bool> OpenAddressingHashTable<IsGlobal, ValueInPla
     }
 
     /*----- Key is found iff current slot is occupied. -----*/
-    const Var<Bool> key_found(reference_count(slot) != ref_t(0)); // create constant variable since `slot` may change
+    const Var<Boolx1> key_found(reference_count(slot) != ref_t(0)); // create constant variable since `slot` may change
 
     if constexpr (not ValueInPlace) {
         /*----- Set slot pointer to out-of-place values. -----*/
@@ -1776,7 +1776,7 @@ void OpenAddressingHashTable<IsGlobal, ValueInPlace>::for_each_in_equal_range(st
     M_insist(bool(num_entries_), "must call `setup()` before");
 
     /*----- If predication is used, introduce predication temporal and set it before looking-up a key. -----*/
-    std::optional<Bool> pred;
+    std::optional<Boolx1> pred;
     if (auto &env = CodeGenContext::Get().env(); env.predicated()) {
         pred.emplace(env.extract_predicate().is_true_and_not_null());
         if (not predication_dummy_)
@@ -1839,9 +1839,9 @@ HashTable::entry_t OpenAddressingHashTable<IsGlobal, ValueInPlace>::dummy_entry(
 }
 
 template<bool IsGlobal, bool ValueInPlace>
-Bool OpenAddressingHashTable<IsGlobal, ValueInPlace>::equal_key(Ptr<void> slot, std::vector<SQL_t> key) const
+Boolx1 OpenAddressingHashTable<IsGlobal, ValueInPlace>::equal_key(Ptr<void> slot, std::vector<SQL_t> key) const
 {
-    Var<Bool> res(true);
+    Var<Boolx1> res(true);
 
     const auto off_null_bitmap = M_CONSTEXPR_COND(ValueInPlace, layout_.null_bitmap_offset_in_bytes_,
                                                                 layout_.keys_null_bitmap_offset_in_bytes_);
@@ -1861,24 +1861,24 @@ Bool OpenAddressingHashTable<IsGlobal, ValueInPlace>::equal_key(Ptr<void> slot, 
             }
         };
         visit(overloaded {
-            [&](const Boolean&) { compare_equal.template operator()<_Bool>(); },
+            [&](const Boolean&) { compare_equal.template operator()<_Boolx1>(); },
             [&](const Numeric &n) {
                 switch (n.kind) {
                     case Numeric::N_Int:
                     case Numeric::N_Decimal:
                         switch (n.size()) {
                             default: M_unreachable("invalid size");
-                            case  8: compare_equal.template operator()<_I8 >(); break;
-                            case 16: compare_equal.template operator()<_I16>(); break;
-                            case 32: compare_equal.template operator()<_I32>(); break;
-                            case 64: compare_equal.template operator()<_I64>(); break;
+                            case  8: compare_equal.template operator()<_I8x1 >(); break;
+                            case 16: compare_equal.template operator()<_I16x1>(); break;
+                            case 32: compare_equal.template operator()<_I32x1>(); break;
+                            case 64: compare_equal.template operator()<_I64x1>(); break;
                         }
                         break;
                     case Numeric::N_Float:
                         if (n.size() <= 32)
-                            compare_equal.template operator()<_Float>();
+                            compare_equal.template operator()<_Floatx1>();
                         else
-                            compare_equal.template operator()<_Double>();
+                            compare_equal.template operator()<_Doublex1>();
                 }
             },
             [&](const CharacterSequence &cs) {
@@ -1892,8 +1892,8 @@ Bool OpenAddressingHashTable<IsGlobal, ValueInPlace>::equal_key(Ptr<void> slot, 
                     res = res and ref == *std::get_if<NChar>(&key[i]);
                 }
             },
-            [&](const Date&) { compare_equal.template operator()<_I32>(); },
-            [&](const DateTime&) { compare_equal.template operator()<_I64>(); },
+            [&](const Date&) { compare_equal.template operator()<_I32x1>(); },
+            [&](const DateTime&) { compare_equal.template operator()<_I64x1>(); },
             [](auto&&) { M_unreachable("invalid type"); },
         }, *e.type);
     }
@@ -1924,24 +1924,24 @@ void OpenAddressingHashTable<IsGlobal, ValueInPlace>::insert_key(Ptr<void> slot,
             }
         };
         visit(overloaded {
-            [&](const Boolean&) { insert.template operator()<_Bool>(); },
+            [&](const Boolean&) { insert.template operator()<_Boolx1>(); },
             [&](const Numeric &n) {
                 switch (n.kind) {
                     case Numeric::N_Int:
                     case Numeric::N_Decimal:
                         switch (n.size()) {
                             default: M_unreachable("invalid size");
-                            case  8: insert.template operator()<_I8 >(); break;
-                            case 16: insert.template operator()<_I16>(); break;
-                            case 32: insert.template operator()<_I32>(); break;
-                            case 64: insert.template operator()<_I64>(); break;
+                            case  8: insert.template operator()<_I8x1 >(); break;
+                            case 16: insert.template operator()<_I16x1>(); break;
+                            case 32: insert.template operator()<_I32x1>(); break;
+                            case 64: insert.template operator()<_I64x1>(); break;
                         }
                         break;
                     case Numeric::N_Float:
                         if (n.size() <= 32)
-                            insert.template operator()<_Float>();
+                            insert.template operator()<_Floatx1>();
                         else
-                            insert.template operator()<_Double>();
+                            insert.template operator()<_Doublex1>();
                 }
             },
             [&](const CharacterSequence &cs) {
@@ -1955,8 +1955,8 @@ void OpenAddressingHashTable<IsGlobal, ValueInPlace>::insert_key(Ptr<void> slot,
                     ref = *std::get_if<NChar>(&key[i]);
                 }
             },
-            [&](const Date&) { insert.template operator()<_I32>(); },
-            [&](const DateTime&) { insert.template operator()<_I64>(); },
+            [&](const Date&) { insert.template operator()<_I32x1>(); },
+            [&](const DateTime&) { insert.template operator()<_I64x1>(); },
             [](auto&&) { M_unreachable("invalid type"); },
         }, *e.type);
     }
@@ -1987,24 +1987,24 @@ HashTable::entry_t OpenAddressingHashTable<IsGlobal, ValueInPlace>::value_entry(
             }
         };
         visit(overloaded {
-            [&](const Boolean&) { add.template operator()<_Bool>(); },
+            [&](const Boolean&) { add.template operator()<_Boolx1>(); },
             [&](const Numeric &n) {
                 switch (n.kind) {
                     case Numeric::N_Int:
                     case Numeric::N_Decimal:
                         switch (n.size()) {
                             default: M_unreachable("invalid size");
-                            case  8: add.template operator()<_I8 >(); break;
-                            case 16: add.template operator()<_I16>(); break;
-                            case 32: add.template operator()<_I32>(); break;
-                            case 64: add.template operator()<_I64>(); break;
+                            case  8: add.template operator()<_I8x1 >(); break;
+                            case 16: add.template operator()<_I16x1>(); break;
+                            case 32: add.template operator()<_I32x1>(); break;
+                            case 64: add.template operator()<_I64x1>(); break;
                         }
                         break;
                     case Numeric::N_Float:
                         if (n.size() <= 32)
-                            add.template operator()<_Float>();
+                            add.template operator()<_Floatx1>();
                         else
-                            add.template operator()<_Double>();
+                            add.template operator()<_Doublex1>();
                 }
             },
             [&](const CharacterSequence &cs) {
@@ -2018,8 +2018,8 @@ HashTable::entry_t OpenAddressingHashTable<IsGlobal, ValueInPlace>::value_entry(
                     value_entry.add(e.id, std::move(ref));
                 }
             },
-            [&](const Date&) { add.template operator()<_I32>(); },
-            [&](const DateTime&) { add.template operator()<_I64>(); },
+            [&](const Date&) { add.template operator()<_I32x1>(); },
+            [&](const DateTime&) { add.template operator()<_I64x1>(); },
             [](auto&&) { M_unreachable("invalid type"); },
         }, *e.type);
     }
@@ -2073,24 +2073,24 @@ HashTable::const_entry_t OpenAddressingHashTable<IsGlobal, ValueInPlace>::entry(
             }
         };
         visit(overloaded {
-            [&](const Boolean&) { add.template operator()<_Bool>(); },
+            [&](const Boolean&) { add.template operator()<_Boolx1>(); },
             [&](const Numeric &n) {
                 switch (n.kind) {
                     case Numeric::N_Int:
                     case Numeric::N_Decimal:
                         switch (n.size()) {
                             default: M_unreachable("invalid size");
-                            case  8: add.template operator()<_I8 >(); break;
-                            case 16: add.template operator()<_I16>(); break;
-                            case 32: add.template operator()<_I32>(); break;
-                            case 64: add.template operator()<_I64>(); break;
+                            case  8: add.template operator()<_I8x1 >(); break;
+                            case 16: add.template operator()<_I16x1>(); break;
+                            case 32: add.template operator()<_I32x1>(); break;
+                            case 64: add.template operator()<_I64x1>(); break;
                         }
                         break;
                     case Numeric::N_Float:
                         if (n.size() <= 32)
-                            add.template operator()<_Float>();
+                            add.template operator()<_Floatx1>();
                         else
-                            add.template operator()<_Double>();
+                            add.template operator()<_Doublex1>();
                 }
             },
             [&](const CharacterSequence &cs) {
@@ -2105,8 +2105,8 @@ HashTable::const_entry_t OpenAddressingHashTable<IsGlobal, ValueInPlace>::entry(
                     entry.add(e.id, std::move(ref));
                 }
             },
-            [&](const Date&) { add.template operator()<_I32>(); },
-            [&](const DateTime&) { add.template operator()<_I64>(); },
+            [&](const Date&) { add.template operator()<_I32x1>(); },
+            [&](const DateTime&) { add.template operator()<_I64x1>(); },
             [](auto&&) { M_unreachable("invalid type"); },
         }, *e.type);
     }
@@ -2134,7 +2134,7 @@ void OpenAddressingHashTable<IsGlobal, ValueInPlace>::rehash()
         const Var<Ptr<void>> begin_old(begin());
         const Var<Ptr<void>> end_old(end());
 
-        /*----- Double capacity. -----*/
+        /*----- Doublex1 capacity. -----*/
         *mask_ = (*mask_ << 1U) + 1U;
 
         /*----- Allocate memory for new hash table with updated capacity. -----*/
@@ -2145,7 +2145,7 @@ void OpenAddressingHashTable<IsGlobal, ValueInPlace>::rehash()
 
 #ifndef NDEBUG
         /*----- Store old number of entries. -----*/
-        const Var<U32> num_entries_old(*num_entries_);
+        const Var<U32x1> num_entries_old(*num_entries_);
 #endif
 
         /*----- Reset number of entries (since they will be incremented at each insertion into the new hash table). --*/
@@ -2200,7 +2200,7 @@ void OpenAddressingHashTable<IsGlobal, ValueInPlace>::rehash()
 #endif
 
         /*----- Free old hash table. -----*/
-        U32 size = (end_old - begin_old).make_unsigned();
+        U32x1 size = (end_old - begin_old).make_unsigned();
         Module::Allocator().deallocate(begin_old, size);
     };
 
@@ -2208,9 +2208,9 @@ void OpenAddressingHashTable<IsGlobal, ValueInPlace>::rehash()
         if (not rehash_) {
             /*----- Backup former local variables to be able to use new ones for rehashing function. -----*/
             auto old_address = std::exchange(address_, std::optional<Var<Ptr<void>>>());
-            auto old_mask = std::exchange(mask_, std::optional<Var<U32>>());
-            auto old_num_entries = std::exchange(num_entries_, std::optional<Var<U32>>());
-            auto old_high_watermark_absolute = std::exchange(high_watermark_absolute_, std::optional<Var<U32>>());
+            auto old_mask = std::exchange(mask_, std::optional<Var<U32x1>>());
+            auto old_num_entries = std::exchange(num_entries_, std::optional<Var<U32x1>>());
+            auto old_high_watermark_absolute = std::exchange(high_watermark_absolute_, std::optional<Var<U32x1>>());
 
             /*----- Create function for rehashing. -----*/
             FUNCTION(rehash, void(void))
@@ -2272,7 +2272,7 @@ template struct m::wasm::OpenAddressingHashTable<true, true>;
 
 /*----- probing strategies for open addressing hash tables -----------------------------------------------------------*/
 
-Ptr<void> LinearProbing::skip_slots(Ptr<void> bucket, U32 skips) const
+Ptr<void> LinearProbing::skip_slots(Ptr<void> bucket, U32x1 skips) const
 {
     Wasm_insist(skips.clone() < ht_.capacity());
     const Var<Ptr<void>> slot(bucket + (skips * ht_.entry_size_in_bytes()).make_signed());
@@ -2280,7 +2280,7 @@ Ptr<void> LinearProbing::skip_slots(Ptr<void> bucket, U32 skips) const
     return Select(slot < ht_.end(), slot, slot - ht_.size_in_bytes().make_signed());
 }
 
-Ptr<void> LinearProbing::advance_to_next_slot(Ptr<void> slot, U32 current_step) const
+Ptr<void> LinearProbing::advance_to_next_slot(Ptr<void> slot, U32x1 current_step) const
 {
     current_step.discard(); // not needed for linear probing
 
@@ -2289,17 +2289,17 @@ Ptr<void> LinearProbing::advance_to_next_slot(Ptr<void> slot, U32 current_step) 
     return Select(next < ht_.end(), next, ht_.begin());
 }
 
-Ptr<void> QuadraticProbing::skip_slots(Ptr<void> bucket, U32 skips) const
+Ptr<void> QuadraticProbing::skip_slots(Ptr<void> bucket, U32x1 skips) const
 {
     auto skips_cloned = skips.clone();
-    U32 slots_skipped = (skips_cloned * (skips + 1U)) >> 1U; // compute gaussian sum
-    U32 slots_skipped_mod = slots_skipped bitand ht_.mask(); // modulo capacity
+    U32x1 slots_skipped = (skips_cloned * (skips + 1U)) >> 1U; // compute gaussian sum
+    U32x1 slots_skipped_mod = slots_skipped bitand ht_.mask(); // modulo capacity
     const Var<Ptr<void>> slot(bucket + (slots_skipped_mod * ht_.entry_size_in_bytes()).make_signed());
     Wasm_insist(slot < ht_.end() + ht_.size_in_bytes().make_signed());
     return Select(slot < ht_.end(), slot, slot - ht_.size_in_bytes().make_signed());
 }
 
-Ptr<void> QuadraticProbing::advance_to_next_slot(Ptr<void> slot, U32 current_step) const
+Ptr<void> QuadraticProbing::advance_to_next_slot(Ptr<void> slot, U32x1 current_step) const
 {
     const Var<Ptr<void>> next(slot + (current_step * ht_.entry_size_in_bytes()).make_signed());
     Wasm_insist(next < ht_.end() + ht_.size_in_bytes().make_signed());

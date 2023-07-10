@@ -13,14 +13,14 @@ namespace m {
 
 namespace wasm {
 
-inline void wasm_check(Bool cond, const char *msg)
+inline void wasm_check(Boolx1 cond, const char *msg)
 {
     IF (not cond) {
         Throw(exception::failed_unittest_check, Catalog::Get().pool(msg));
     };
 }
 
-inline void wasm_check(_Bool cond, const char *msg)
+inline void wasm_check(_Boolx1 cond, const char *msg)
 {
     IF (not (cond.is_true_and_not_null())) {
         Throw(exception::failed_unittest_check, Catalog::Get().pool(msg));
@@ -32,7 +32,7 @@ inline void wasm_check(_Bool cond, const char *msg)
 #define WASM_CHECK(COND, MSG) wasm_check(COND, MSG)
 
 /** Emits `WASM_CHECK`s to check equality of `expected` and `actual` for each of the first `length`-th characters. */
-inline void check_string(const char *expected, Ptr<Char> actual, std::size_t length, std::string msg)
+inline void check_string(const char *expected, Ptr<Charx1> actual, std::size_t length, std::string msg)
 {
     for (std::size_t idx = 0; idx < length; ++idx)
         WASM_CHECK(expected[idx] == *(actual.clone() + idx), (msg + " at index " + std::to_string(idx)).c_str());

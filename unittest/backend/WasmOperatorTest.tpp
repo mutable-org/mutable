@@ -99,37 +99,37 @@ TEST_CASE("Wasm/" BACKEND_NAME "/Scan", "[core][wasm]")
 
             /* Create return lambda which checks all the scanned data and throws an exception is a mismatch is found. */
             auto schema = table.schema();
-            Var<U8> iteration(0U);
+            Var<U8x1> iteration(0U);
             auto Return = [&]() {
                 auto &env = CodeGenContext::Get().env();
                 for (std::size_t idx = 0; idx < table.store().num_rows(); ++idx) {
                     auto msg = std::string("mismatch at tuple id ").append(std::to_string(idx)).append(", attribute ");
                     IF (iteration == idx) {
                         if (data.is_null.at(idx) bitand 0b000001)
-                            WASM_CHECK(env.get<_Float>(schema[0].id).is_null(), (msg + "f").c_str());
+                            WASM_CHECK(env.get<_Floatx1>(schema[0].id).is_null(), (msg + "f").c_str());
                         else
-                            WASM_CHECK(data.f.at(idx) == env.get<_Float>(schema[0].id), (msg + "f").c_str());
+                            WASM_CHECK(data.f.at(idx) == env.get<_Floatx1>(schema[0].id), (msg + "f").c_str());
                         if (data.is_null.at(idx) bitand 0b000010)
-                            WASM_CHECK(env.get<_I64>(schema[1].id).is_null(), (msg + "i64").c_str());
+                            WASM_CHECK(env.get<_I64x1>(schema[1].id).is_null(), (msg + "i64").c_str());
                         else
-                            WASM_CHECK(data.i64.at(idx) == env.get<_I64>(schema[1].id), (msg + "i64").c_str());
+                            WASM_CHECK(data.i64.at(idx) == env.get<_I64x1>(schema[1].id), (msg + "i64").c_str());
                         if (data.is_null.at(idx) bitand 0b000100)
-                            WASM_CHECK(env.get<_Bool>(schema[2].id).is_null(), (msg + "b1").c_str());
+                            WASM_CHECK(env.get<_Boolx1>(schema[2].id).is_null(), (msg + "b1").c_str());
                         else
-                            WASM_CHECK(bool(data.b1.at(idx)) == env.get<_Bool>(schema[2].id), (msg + "b1").c_str());
+                            WASM_CHECK(bool(data.b1.at(idx)) == env.get<_Boolx1>(schema[2].id), (msg + "b1").c_str());
                         if (data.is_null.at(idx) bitand 0b001000)
-                            WASM_CHECK(env.get<_Bool>(schema[3].id).is_null(), (msg + "b2").c_str());
+                            WASM_CHECK(env.get<_Boolx1>(schema[3].id).is_null(), (msg + "b2").c_str());
                         else
-                            WASM_CHECK(bool(data.b2.at(idx)) == env.get<_Bool>(schema[3].id), (msg + "b2").c_str());
+                            WASM_CHECK(bool(data.b2.at(idx)) == env.get<_Boolx1>(schema[3].id), (msg + "b2").c_str());
                         if (data.is_null.at(idx) bitand 0b010000)
                             WASM_CHECK(env.get<NChar>(schema[4].id).is_null(), (msg + "c").c_str());
                         else
                             check_string(data.c.at(idx), env.get<NChar>(schema[4].id),
                                          std::min(strlen(data.c.at(idx)) + 1, max_string_length), msg + "c");
                         if (data.is_null.at(idx) bitand 0b100000)
-                            WASM_CHECK(env.get<_I8>(schema[5].id).is_null(), (msg + "i8").c_str());
+                            WASM_CHECK(env.get<_I8x1>(schema[5].id).is_null(), (msg + "i8").c_str());
                         else
-                            WASM_CHECK(data.i8.at(idx) == env.get<_I8>(schema[5].id), (msg + "i8").c_str());
+                            WASM_CHECK(data.i8.at(idx) == env.get<_I8x1>(schema[5].id), (msg + "i8").c_str());
                     };
                 }
                 iteration += uint8_t(1);

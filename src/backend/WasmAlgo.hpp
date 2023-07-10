@@ -34,18 +34,18 @@ void quicksort(Buffer<IsGlobal> &buffer, const std::vector<SortingOperator::orde
 /*----- bit mix functions --------------------------------------------------------------------------------------------*/
 
 /** Mixes the bits of \p bits using the Murmur3 algorithm. */
-U64 murmur3_bit_mix(U64 bits);
+U64x1 murmur3_bit_mix(U64x1 bits);
 
 
 /*----- hash functions -----------------------------------------------------------------------------------------------*/
 
 /** Hashes \p num_bytes bytes of \p bytes using the FNV-1a algorithm. */
-U64 fnv_1a(Ptr<U8> bytes, U32 num_bytes);
+U64x1 fnv_1a(Ptr<U8x1> bytes, U32x1 num_bytes);
 /** Hashes the string \p str. */
-U64 str_hash(NChar str);
+U64x1 str_hash(NChar str);
 /** Hashes the elements of \p values where the first element is the type of the value to hash and the second element
  * is the value itself using the Murmur3-64a algorithm. */
-U64 murmur3_64a_hash(std::vector<std::pair<const Type*, SQL_t>> values);
+U64x1 murmur3_64a_hash(std::vector<std::pair<const Type*, SQL_t>> values);
 
 
 /*----- hash tables --------------------------------------------------------------------------------------------------*/
@@ -75,10 +75,10 @@ struct HashTable
 
         private:
         Ptr<value_t> value_;
-        std::optional<Ptr<U8>> is_null_byte_;
-        std::optional<U8> is_null_mask_;
+        std::optional<Ptr<U8x1>> is_null_byte_;
+        std::optional<U8x1> is_null_mask_;
 
-        explicit the_reference(Ptr<value_t> value, std::optional<Ptr<U8>> is_null_byte, std::optional<U8> is_null_mask)
+        explicit the_reference(Ptr<value_t> value, std::optional<Ptr<U8x1>> is_null_byte, std::optional<U8x1> is_null_mask)
             : value_(value)
             , is_null_byte_(std::move(is_null_byte))
             , is_null_mask_(std::move(is_null_mask))
@@ -86,7 +86,7 @@ struct HashTable
             M_insist(bool(is_null_byte_) == bool(is_null_mask_),
                      "either both or none of NULL byte and NULL mask must be specified");
         }
-        explicit the_reference(Ptr<value_t> value, Ptr<U8> is_null_byte, U8 is_null_mask)
+        explicit the_reference(Ptr<value_t> value, Ptr<U8x1> is_null_byte, U8x1 is_null_mask)
             : value_(value)
             , is_null_byte_(is_null_byte)
             , is_null_mask_(is_null_mask)
@@ -136,7 +136,7 @@ struct HashTable
             }
         }
         ///> Assigns the NULL bit of `this` to \p is_null.
-        void set_null_bit(Bool is_null) requires (not IsConst) {
+        void set_null_bit(Boolx1 is_null) requires (not IsConst) {
             value_.discard();
             M_insist(bool(is_null_byte_));
             M_insist(bool(is_null_mask_));
@@ -144,7 +144,7 @@ struct HashTable
         }
 
         ///> Compares `this` with \p _value.
-        Bool operator==(T _value) {
+        Boolx1 operator==(T _value) {
             auto [value, is_null] = _value.split();
             if (is_null_byte_) {
                 auto is_null_ = (**is_null_byte_ bitand *is_null_mask_).to<bool>();
@@ -164,7 +164,7 @@ struct HashTable
         }
 
         ///> Selects either the reference \p tru or \p fals depending on the value of \p cond.
-        friend the_reference Select(Bool cond, the_reference tru, the_reference fals) {
+        friend the_reference Select(Boolx1 cond, the_reference tru, the_reference fals) {
             M_insist(bool(tru.is_null_byte_) == bool(fals.is_null_byte_), "null byte mismatch");
             M_insist(bool(tru.is_null_mask_) == bool(fals.is_null_mask_), "null mask mismatch");
             if (tru.is_null_byte_) {
@@ -189,10 +189,10 @@ struct HashTable
 
         private:
         NChar addr_;
-        std::optional<Ptr<U8>> is_null_byte_;
-        std::optional<U8> is_null_mask_;
+        std::optional<Ptr<U8x1>> is_null_byte_;
+        std::optional<U8x1> is_null_mask_;
 
-        explicit the_reference(NChar addr, std::optional<Ptr<U8>> is_null_byte, std::optional<U8> is_null_mask)
+        explicit the_reference(NChar addr, std::optional<Ptr<U8x1>> is_null_byte, std::optional<U8x1> is_null_mask)
             : addr_(addr)
             , is_null_byte_(std::move(is_null_byte))
             , is_null_mask_(std::move(is_null_mask))
@@ -201,7 +201,7 @@ struct HashTable
             M_insist(bool(is_null_byte_) == bool(is_null_mask_),
                      "either both or none of NULL byte and NULL mask must be specified");
         }
-        explicit the_reference(NChar addr, Ptr<U8> is_null_byte, U8 is_null_mask)
+        explicit the_reference(NChar addr, Ptr<U8x1> is_null_byte, U8x1 is_null_mask)
             : addr_(addr)
             , is_null_byte_(is_null_byte)
             , is_null_mask_(is_null_mask)
@@ -246,12 +246,12 @@ struct HashTable
                      "type mismatch");
             if (addr_.can_be_null()) {
                 IF (not addr.clone().is_null()) {
-                    strncpy(addr_, addr.clone(), U32(addr.size_in_bytes())).discard();
+                    strncpy(addr_, addr.clone(), U32x1(addr.size_in_bytes())).discard();
                 };
                 setbit(*is_null_byte_, addr.is_null(), *is_null_mask_);
             } else {
                 Wasm_insist(addr.clone().not_null(), "value of non-nullable entry must not be nullable");
-                strncpy(addr_, addr, U32(addr.size_in_bytes())).discard();
+                strncpy(addr_, addr, U32x1(addr.size_in_bytes())).discard();
             }
         }
         ///> Assigns the value of `this` to the string stored at \p addr.
@@ -259,14 +259,14 @@ struct HashTable
             M_insist(addr_.length() == addr.length() and
                      addr_.guarantees_terminating_nul() == addr.guarantees_terminating_nul(),
                      "type mismatch");
-            strncpy(addr_, addr, U32(addr.size_in_bytes())).discard();
+            strncpy(addr_, addr, U32x1(addr.size_in_bytes())).discard();
             if (addr_.can_be_null()) {
                 is_null_byte_->discard();
                 is_null_mask_->discard();
             }
         }
         ///> Assigns the NULL bit of `this` to \p is_null.
-        void set_null_bit(Bool is_null) requires (not IsConst) {
+        void set_null_bit(Boolx1 is_null) requires (not IsConst) {
             addr_.discard();
             M_insist(bool(is_null_byte_));
             M_insist(bool(is_null_mask_));
@@ -274,14 +274,14 @@ struct HashTable
         }
 
         ///> Compares `this` with the string stored at \p _addr.
-        Bool operator==(NChar _addr) {
+        Boolx1 operator==(NChar _addr) {
             M_insist(addr_.length() == _addr.length() and
                      addr_.guarantees_terminating_nul() == _addr.guarantees_terminating_nul(),
                      "type mismatch");
             auto [addr, is_nullptr] = _addr.split();
-            _Bool _equal_addrs = strncmp(addr_, NChar(addr, _addr.can_be_null(), addr_.length(),
+            _Boolx1 _equal_addrs = strncmp(addr_, NChar(addr, _addr.can_be_null(), addr_.length(),
                                                       addr_.guarantees_terminating_nul()),
-                                         U32(addr_.length()), EQ);
+                                         U32x1(addr_.length()), EQ);
             auto [equal_addrs_val, equal_addrs_is_null] = _equal_addrs.split();
             equal_addrs_is_null.discard(); // use potentially-null value but it is overruled if it is invalid, i.e. NULL
             if (addr_.can_be_null()) {
@@ -296,8 +296,8 @@ struct HashTable
         ///> Loads the value of `this`.
         operator NChar() {
             if (addr_.can_be_null()) {
-                Bool is_null = (**is_null_byte_ bitand *is_null_mask_).to<bool>();
-                return NChar(Select(is_null, Ptr<Char>::Nullptr(), addr_.val()), /* can_be_null= */ true,
+                Boolx1 is_null = (**is_null_byte_ bitand *is_null_mask_).to<bool>();
+                return NChar(Select(is_null, Ptr<Charx1>::Nullptr(), addr_.val()), /* can_be_null= */ true,
                              addr_.length(), addr_.guarantees_terminating_nul());
             } else {
                 return addr_;
@@ -305,7 +305,7 @@ struct HashTable
         }
 
         ///> Selects either the reference \p tru or \p fals depending on the value of \p cond.
-        friend the_reference Select(Bool cond, the_reference tru, the_reference fals) {
+        friend the_reference Select(Boolx1 cond, the_reference tru, the_reference fals) {
             M_insist(tru.addr_.can_be_null() == fals.addr_.can_be_null(), "nullable mismatch");
             M_insist(tru.addr_.length() == fals.addr_.length() and
                      tru.addr_.guarantees_terminating_nul() == fals.addr_.guarantees_terminating_nul(),
@@ -521,19 +521,19 @@ struct HashTable
      * entry and a boolean flag to indicate whether an insertion was performed.  Rehashing of the hash table may be
      * performed.  Predication is supported, i.e. an entry is always inserted but can only be found later iff the
      * predication predicate is fulfilled. */
-    virtual std::pair<entry_t, Bool> try_emplace(std::vector<SQL_t> key) = 0;
+    virtual std::pair<entry_t, Boolx1> try_emplace(std::vector<SQL_t> key) = 0;
 
     /** Tries to find an entry with key \p key in the hash table.  Returns a pair of a handle to the found entry which
      * may be used to both read and write the values of this entry (if none is found this handle points to an
      * arbitrary entry and should be ignored) and a boolean flag to indicate whether an element with the specified
      * key was found.  Predication is supported, i.e. if the predication predicate is not fulfilled, no entry will be
      * found. */
-    virtual std::pair<entry_t, Bool> find(std::vector<SQL_t> key) = 0;
+    virtual std::pair<entry_t, Boolx1> find(std::vector<SQL_t> key) = 0;
     /** Tries to find an entry with key \p key in the hash table.  Returns a pair of a handle to the found entry which
      * may be used to only read the values of this entry (if none is found this handle points to an arbitrary entry
      * and should be ignored) and a boolean flag to indicate whether an element with the specified key was found.
      * Predication is supported, i.e. if the predication predicate is not fulfilled, no entry will be found. */
-    std::pair<const_entry_t, Bool> find(std::vector<SQL_t> key) const {
+    std::pair<const_entry_t, Boolx1> find(std::vector<SQL_t> key) const {
         return const_cast<HashTable*>(this)->find(std::move(key));
     }
 
@@ -577,9 +577,9 @@ class chained_hash_table_storage<true>
     friend struct ChainedHashTable<true>;
 
     Global<Ptr<void>> address_; ///< global backup for address of hash table
-    Global<U32> mask_; ///< global backup for mask of hash table
-    Global<U32> num_entries_; ///< global backup for number of occupied entries of hash table
-    Global<U32> high_watermark_absolute_; ///< global backup for absolute high watermark of hash table
+    Global<U32x1> mask_; ///< global backup for mask of hash table
+    Global<U32x1> num_entries_; ///< global backup for number of occupied entries of hash table
+    Global<U32x1> high_watermark_absolute_; ///< global backup for absolute high watermark of hash table
 };
 
 template<bool IsGlobal>
@@ -599,16 +599,16 @@ struct ChainedHashTable : HashTable
 
     std::optional<Var<Ptr<void>>> address_; ///< base address of hash table
      ///> mask of hash table, i.e. number of buckets / collision lists minus 1; always a power of 2 minus 1
-    std::optional<Var<U32>> mask_;
-    std::optional<Var<U32>> num_entries_; ///< number of occupied entries of hash table
+    std::optional<Var<U32x1>> mask_;
+    std::optional<Var<U32x1>> num_entries_; ///< number of occupied entries of hash table
     double high_watermark_percentage_ = 1.0; ///< fraction of occupied entries before growing the hash table is required
     ///> maximum number of entries before growing the hash table is required
-    std::optional<Var<U32>> high_watermark_absolute_;
+    std::optional<Var<U32x1>> high_watermark_absolute_;
     ///> if `IsGlobal`, contains backups for address, capacity, number of entries, and absolute high watermark
     chained_hash_table_storage<IsGlobal> storage_;
     ///> function to perform rehashing; only possible for global hash tables since variables have to be updated
     std::optional<FunctionProxy<void(void)>> rehash_;
-    std::vector<std::pair<Ptr<void>, U32>> dummy_allocations_; ///< address-size pairs of dummy entry allocations
+    std::vector<std::pair<Ptr<void>, U32x1>> dummy_allocations_; ///< address-size pairs of dummy entry allocations
     std::optional<var_t<Ptr<void>>> predication_dummy_; ///< dummy bucket used for predication
 
     public:
@@ -628,11 +628,11 @@ struct ChainedHashTable : HashTable
     Ptr<void> end() const { return begin() + size_in_bytes().make_signed(); }
     /** Returns the mask of the hash table, i.e. capacity - 1U, which can be used to mask a hash value into the range
      * of the hash table. */
-    U32 mask() const { M_insist(bool(mask_), "must call `setup()` before"); return *mask_; }
+    U32x1 mask() const { M_insist(bool(mask_), "must call `setup()` before"); return *mask_; }
     /** Returns the capacity of the hash table. */
-    U32 capacity() const { return mask() + 1U; }
+    U32x1 capacity() const { return mask() + 1U; }
     /** Returns the overall size in bytes of the actual hash table, i.e. without collision list entries. */
-    U32 size_in_bytes() const { return capacity() * uint32_t(sizeof(uint32_t)); }
+    U32x1 size_in_bytes() const { return capacity() * uint32_t(sizeof(uint32_t)); }
 
     public:
     /** Performs the setup of all local variables of the hash table (by reading them from the global backups iff
@@ -674,9 +674,9 @@ struct ChainedHashTable : HashTable
     void clear() override;
 
     entry_t emplace(std::vector<SQL_t> key) override;
-    std::pair<entry_t, Bool> try_emplace(std::vector<SQL_t> key) override;
+    std::pair<entry_t, Boolx1> try_emplace(std::vector<SQL_t> key) override;
 
-    std::pair<entry_t, Bool> find(std::vector<SQL_t> key) override;
+    std::pair<entry_t, Boolx1> find(std::vector<SQL_t> key) override;
 
     void for_each(callback_t Pipeline) const override;
     void for_each_in_equal_range(std::vector<SQL_t> key, callback_t Pipeline, bool predicated) const override;
@@ -694,7 +694,7 @@ struct ChainedHashTable : HashTable
     entry_t emplace_without_rehashing(std::vector<SQL_t> key);
 
     /** Compares the key of the entry at address \p entry with \p key and returns `true` iff they are equal. */
-    Bool equal_key(Ptr<void> entry, std::vector<SQL_t> key) const;
+    Boolx1 equal_key(Ptr<void> entry, std::vector<SQL_t> key) const;
 
     /** Inserts the key \p key into the entry at address \p entry. */
     void insert_key(Ptr<void> entry, std::vector<SQL_t> key);
@@ -736,10 +736,10 @@ struct OpenAddressingHashTableBase : HashTable
         virtual ~ProbingStrategy() { }
 
         /** Returns the address of the \p skips -th (starting with index 0) slot in the bucket starting at \p bucket. */
-        virtual Ptr<void> skip_slots(Ptr<void> bucket, U32 skips) const = 0;
+        virtual Ptr<void> skip_slots(Ptr<void> bucket, U32x1 skips) const = 0;
         /** Returns the address of the \p current_step -th slot (starting with index 0) of a bucket which follows the
          * slot \p slot. */
-        virtual Ptr<void> advance_to_next_slot(Ptr<void> slot, U32 current_step) const = 0;
+        virtual Ptr<void> advance_to_next_slot(Ptr<void> slot, U32x1 current_step) const = 0;
     };
 
     protected:
@@ -761,11 +761,11 @@ struct OpenAddressingHashTableBase : HashTable
     virtual Ptr<void> end() const = 0;
     /** Returns the mask of the hash table, i.e. capacity - 1U, which can be used to mask a hash value into the range
      * of the hash table. */
-    virtual U32 mask() const = 0;
+    virtual U32x1 mask() const = 0;
     /** Returns the capacity of the hash table. */
-    U32 capacity() const { return mask() + 1U; }
+    U32x1 capacity() const { return mask() + 1U; }
     /** Returns the overall size in bytes of the hash table. */
-    U32 size_in_bytes() const { return capacity() * entry_size_in_bytes_; }
+    U32x1 size_in_bytes() const { return capacity() * entry_size_in_bytes_; }
     /** Returns the size in bytes of a single entry in the hash table. */
     HashTable::size_t entry_size_in_bytes() const { return entry_size_in_bytes_; }
 
@@ -840,9 +840,9 @@ class open_addressing_hash_table_storage<true>
     friend struct OpenAddressingHashTable<true, true>;
 
     Global<Ptr<void>> address_; ///< global backup for address of hash table
-    Global<U32> mask_; ///< global backup for mask of hash table
-    Global<U32> num_entries_; ///< global backup for number of occupied entries of hash table
-    Global<U32> high_watermark_absolute_; ///< global backup for absolute high watermark of hash table
+    Global<U32x1> mask_; ///< global backup for mask of hash table
+    Global<U32x1> num_entries_; ///< global backup for number of occupied entries of hash table
+    Global<U32x1> high_watermark_absolute_; ///< global backup for absolute high watermark of hash table
 };
 
 template<bool IsGlobal, bool ValueInPlace>
@@ -855,14 +855,14 @@ struct OpenAddressingHashTable : OpenAddressingHashTableBase
 
     open_addressing_hash_table_layout<ValueInPlace> layout_; ///< layout of hash table
     std::optional<Var<Ptr<void>>> address_; ///< base address of hash table
-    std::optional<Var<U32>> mask_; ///< mask of hash table; always a power of 2 minus 1, i.e. 0b0..01..1
-    std::optional<Var<U32>> num_entries_; ///< number of occupied entries of hash table
-    std::optional<Var<U32>> high_watermark_absolute_; ///< maximum number of entries before growing the hash table is required
+    std::optional<Var<U32x1>> mask_; ///< mask of hash table; always a power of 2 minus 1, i.e. 0b0..01..1
+    std::optional<Var<U32x1>> num_entries_; ///< number of occupied entries of hash table
+    std::optional<Var<U32x1>> high_watermark_absolute_; ///< maximum number of entries before growing the hash table is required
     ///> if `IsGlobal`, contains backups for address, capacity, number of entries, and absolute high watermark
     open_addressing_hash_table_storage<IsGlobal> storage_;
     ///> function to perform rehashing; only possible for global hash tables since variables have to be updated
     std::optional<FunctionProxy<void(void)>> rehash_;
-    std::vector<std::pair<Ptr<void>, U32>> dummy_allocations_; ///< address-size pairs of dummy entry allocations
+    std::vector<std::pair<Ptr<void>, U32x1>> dummy_allocations_; ///< address-size pairs of dummy entry allocations
     std::optional<var_t<Ptr<void>>> predication_dummy_; ///< dummy entry used for predication
 
     public:
@@ -879,7 +879,7 @@ struct OpenAddressingHashTable : OpenAddressingHashTableBase
     private:
     Ptr<void> begin() const override { M_insist(bool(address_), "must call `setup()` before"); return *address_; }
     Ptr<void> end() const override { return begin() + (capacity() * entry_size_in_bytes_).make_signed(); }
-    U32 mask() const override { M_insist(bool(mask_), "must call `setup()` before"); return *mask_; }
+    U32x1 mask() const override { M_insist(bool(mask_), "must call `setup()` before"); return *mask_; }
 
     public:
     /** Performs the setup of all local variables of the hash table (by reading them from the global backups iff
@@ -895,7 +895,7 @@ struct OpenAddressingHashTable : OpenAddressingHashTableBase
     void update_high_watermark() override {
         M_insist(bool(high_watermark_absolute_), "must call `setup()` before");
         auto _capacity = capacity().make_signed().template to<double>();
-        const Var<U32> high_watermark_absolute_new(
+        const Var<U32x1> high_watermark_absolute_new(
             (high_watermark_percentage_ * _capacity).ceil().template to<int32_t>().make_unsigned()
         );
         *high_watermark_absolute_ =
@@ -916,9 +916,9 @@ struct OpenAddressingHashTable : OpenAddressingHashTableBase
 
     public:
     entry_t emplace(std::vector<SQL_t> key) override;
-    std::pair<entry_t, Bool> try_emplace(std::vector<SQL_t> key) override;
+    std::pair<entry_t, Boolx1> try_emplace(std::vector<SQL_t> key) override;
 
-    std::pair<entry_t, Bool> find(std::vector<SQL_t> key) override;
+    std::pair<entry_t, Boolx1> find(std::vector<SQL_t> key) override;
 
     void for_each(callback_t Pipeline) const override;
     void for_each_in_equal_range(std::vector<SQL_t> key, callback_t Pipeline, bool predicated) const override;
@@ -933,7 +933,7 @@ struct OpenAddressingHashTable : OpenAddressingHashTableBase
     Ptr<void> emplace_without_rehashing(std::vector<SQL_t> key);
 
     /** Compares the key of the slot at address \p slot with \p key and returns `true` iff they are equal. */
-    Bool equal_key(Ptr<void> slot, std::vector<SQL_t> key) const;
+    Boolx1 equal_key(Ptr<void> slot, std::vector<SQL_t> key) const;
 
     /** Inserts the key \p key into the slot at address \p slot. */
     void insert_key(Ptr<void> slot, std::vector<SQL_t> key);
@@ -965,8 +965,8 @@ struct LinearProbing : OpenAddressingHashTableBase::ProbingStrategy
 {
     LinearProbing(const OpenAddressingHashTableBase &ht) : OpenAddressingHashTableBase::ProbingStrategy(ht) { }
 
-    Ptr<void> skip_slots(Ptr<void> bucket, U32 skips) const override;
-    Ptr<void> advance_to_next_slot(Ptr<void> slot, U32 current_step) const override;
+    Ptr<void> skip_slots(Ptr<void> bucket, U32x1 skips) const override;
+    Ptr<void> advance_to_next_slot(Ptr<void> slot, U32x1 current_step) const override;
 };
 
 /** Quadratic probing strategy, i.e. at each step i, the slot to access next in a bucket is computed by skipping i
@@ -975,8 +975,8 @@ struct QuadraticProbing : OpenAddressingHashTableBase::ProbingStrategy
 {
     QuadraticProbing(const OpenAddressingHashTableBase &ht) : OpenAddressingHashTableBase::ProbingStrategy(ht) { }
 
-    Ptr<void> skip_slots(Ptr<void> bucket, U32 skips) const override;
-    Ptr<void> advance_to_next_slot(Ptr<void> slot, U32 current_step) const override;
+    Ptr<void> skip_slots(Ptr<void> bucket, U32x1 skips) const override;
+    Ptr<void> advance_to_next_slot(Ptr<void> slot, U32x1 current_step) const override;
 };
 
 

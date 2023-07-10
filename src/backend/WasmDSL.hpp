@@ -5088,8 +5088,9 @@ BINARY_LIST(MAKE_BINARY)
     using NAME = PrimitiveExpr<TYPE, LENGTH>; \
     using _ ## NAME = Expr<TYPE, LENGTH>;
 #define USING(TYPE, NAME) \
-    template<std::size_t L = 1> using NAME = PrimitiveExpr<TYPE, L>; \
-    template<std::size_t L = 1> using _ ## NAME = Expr<TYPE, L>; \
+    template<std::size_t L> using NAME = PrimitiveExpr<TYPE, L>; \
+    template<std::size_t L> using _ ## NAME = Expr<TYPE, L>; \
+    USING_N(TYPE, 1,  NAME ## x1) \
     USING_N(TYPE, 2,  NAME ## x2) \
     USING_N(TYPE, 4,  NAME ## x4) \
     USING_N(TYPE, 8,  NAME ## x8) \
@@ -5108,7 +5109,7 @@ BINARY_LIST(MAKE_BINARY)
     USING(float,    Float)
     USING(double,   Double)
     ///> this is neither signed nor unsigned char (see https://en.cppreference.com/w/cpp/language/types, Character types)
-    USING_N(char,   1,  Char)
+    USING_N(char,   1,  Charx1)
     USING_N(char,   16, Charx16)
     USING_N(char,   32, Charx32)
 #undef USING
@@ -5800,7 +5801,7 @@ struct LocalBitmap
 {
     friend struct Module;
 
-    Var<U64> u64;
+    Var<U64x1> u64;
     uint64_t bitmask = uint64_t(-1UL);
 
     private:
@@ -6022,7 +6023,7 @@ struct LocalBit<L> : Bit
     LocalBit & operator=(const LocalBit &other) {
         if constexpr (L == 1) {
             auto other_bit = other.storage_.bitmap_->u64 bitand other.mask();
-            Var<U64> this_bit;
+            Var<U64x1> this_bit;
 
             if (this->offset() > other.offset()) {
                 const auto shift_width = this->offset() - other.offset();
@@ -6414,16 +6415,16 @@ struct Allocator
     virtual Ptr<void> pre_allocate(uint32_t bytes, uint32_t align = 1) = 0;
     /** Allocates memory for \p bytes consecutive bytes with alignment requirement \p align and returns a pointer to the
      * beginning of this memory. */
-    virtual Var<Ptr<void>> allocate(U32 bytes, uint32_t align = 1) = 0;
+    virtual Var<Ptr<void>> allocate(U32x1 bytes, uint32_t align = 1) = 0;
     /** Deallocates the `bytes` consecutive bytes of allocated memory at address `ptr`. */
-    virtual void deallocate(Ptr<void> ptr, U32 bytes) = 0;
+    virtual void deallocate(Ptr<void> ptr, U32x1 bytes) = 0;
 
     /** Performs the actual pre-allocations.  Must be called exactly **once** **after** the last pre-allocation was
      * requested. */
     virtual void perform_pre_allocations() = 0;
 
-    Var<Ptr<void>> allocate(uint32_t bytes, uint32_t align = 1) { return allocate(U32(bytes), align); }
-    void deallocate(Ptr<void> ptr, uint32_t bytes) { return deallocate(ptr, U32(bytes)); }
+    Var<Ptr<void>> allocate(uint32_t bytes, uint32_t align = 1) { return allocate(U32x1(bytes), align); }
+    void deallocate(Ptr<void> ptr, uint32_t bytes) { return deallocate(ptr, U32x1(bytes)); }
 
     /** Pre-allocates memory for exactly one value of type \tparam T and number of SIMD lanes \tparam L.  Returns a
      * pointer to this memory. */
@@ -6448,7 +6449,7 @@ struct Allocator
     /** Allocates memory for an array of \p count consecutive values of type \tparam T and number of SIMD lanes
      * \tparam L.  Returns a pointer to this memory. */
     template<dsl_primitive T, std::size_t L = 1, typename U>
-    requires requires (U &&u) { U32(std::forward<U>(u)); }
+    requires requires (U &&u) { U32x1(std::forward<U>(u)); }
     Var<Ptr<PrimitiveExpr<T, L>>> malloc(U &&count) {
         if constexpr (L == 1) {
             Var<Ptr<PrimitiveExpr<T, L>>> ptr(
@@ -6477,7 +6478,7 @@ struct Allocator
 
     /** Frees \p count consecutive values of type \tparam T of allocated memory pointed by \p ptr. */
     template<primitive_convertible T, typename U>
-    requires requires (U &&u) { U32(std::forward<U>(u)); } and
+    requires requires (U &&u) { U32x1(std::forward<U>(u)); } and
              requires (T &&t) { primitive_expr_t<T>(std::forward<T>(t)).template to<void*>(); }
     void free(T &&ptr, U &&count) {
         primitive_expr_t<T> _ptr(std::forward<T>(ptr));

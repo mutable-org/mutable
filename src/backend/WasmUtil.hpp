@@ -26,18 +26,18 @@ template<bool IsGlobal> struct buffer_swap_proxy_t;
  * Declare SQL helper type for character sequences
  *====================================================================================================================*/
 
-struct NChar : Ptr<Char>
+struct NChar : Ptr<Charx1>
 {
     private:
     bool can_be_null_;
     const CharacterSequence *type_;
 
     public:
-    NChar(Ptr<Char> ptr, bool can_be_null, const CharacterSequence *type)
-        : Ptr<Char>(ptr), can_be_null_(can_be_null), type_(type)
+    NChar(Ptr<Charx1> ptr, bool can_be_null, const CharacterSequence *type)
+        : Ptr<Charx1>(ptr), can_be_null_(can_be_null), type_(type)
     { }
-    NChar(Ptr<Char> ptr, bool can_be_null, std::size_t length, bool guarantees_terminating_nul)
-        : Ptr<Char>(ptr)
+    NChar(Ptr<Charx1> ptr, bool can_be_null, std::size_t length, bool guarantees_terminating_nul)
+        : Ptr<Charx1>(ptr)
         , can_be_null_(can_be_null)
         , type_(guarantees_terminating_nul ? Type::Get_Varchar(Type::TY_Scalar, length)
                                            : Type::Get_Char(Type::TY_Scalar, length))
@@ -46,24 +46,24 @@ struct NChar : Ptr<Char>
     NChar(NChar&) = default;
     NChar(NChar&&) = default;
 
-    NChar clone() const { return NChar(Ptr<Char>::clone(), can_be_null_, type_); }
+    NChar clone() const { return NChar(Ptr<Charx1>::clone(), can_be_null_, type_); }
 
-    Ptr<Char> val() { return *this; }
+    Ptr<Charx1> val() { return *this; }
 
-    Bool is_null() {
+    Boolx1 is_null() {
         if (can_be_null()) {
-            return Ptr<Char>::is_null();
+            return Ptr<Charx1>::is_null();
         } else {
             discard();
-            return Bool(false);
+            return Boolx1(false);
         }
     }
-    Bool not_null() {
+    Boolx1 not_null() {
         if (can_be_null()) {
-            return Ptr<Char>::not_null();
+            return Ptr<Charx1>::not_null();
         } else {
             discard();
-            return Bool(true);
+            return Boolx1(true);
         }
     }
 
@@ -287,13 +287,13 @@ template<typename>
 struct is_sql_type;
 
 #define SQL_TYPES(X) \
-    X(_Bool) \
-    X(_I8) \
-    X(_I16) \
-    X(_I32) \
-    X(_I64) \
-    X(_Float) \
-    X(_Double) \
+    X(_Boolx1) \
+    X(_I8x1) \
+    X(_I16x1) \
+    X(_I32x1) \
+    X(_I64x1) \
+    X(_Floatx1) \
+    X(_Doublex1) \
     X(NChar)
 
 #define ADD_EXPR_SQL_TYPE(TYPE) template<> struct is_sql_type<TYPE>{};
@@ -345,19 +345,19 @@ inline bool can_be_null(const SQL_t &variant)
     }, variant);
 }
 
-inline Bool is_null(SQL_t &variant)
+inline Boolx1 is_null(SQL_t &variant)
 {
     return std::visit(overloaded {
-        []<sql_type T>(T actual) -> Bool { return actual.is_null(); },
-        [](std::monostate) -> Bool { M_unreachable("invalid variant"); },
+        []<sql_type T>(T actual) -> Boolx1 { return actual.is_null(); },
+        [](std::monostate) -> Boolx1 { M_unreachable("invalid variant"); },
     }, variant);
 }
 
-inline Bool not_null(SQL_t &variant)
+inline Boolx1 not_null(SQL_t &variant)
 {
     return std::visit(overloaded {
-        []<sql_type T>(T actual) -> Bool { return actual.not_null(); },
-        [](std::monostate) -> Bool { M_unreachable("invalid variant"); },
+        []<sql_type T>(T actual) -> Boolx1 { return actual.not_null(); },
+        [](std::monostate) -> Boolx1 { M_unreachable("invalid variant"); },
     }, variant);
 }
 
@@ -393,7 +393,7 @@ struct ExprCompiler : ast::ConstASTExprVisitor
     }
 
     ///> Compile a `m::cnf::CNF` \p cnf to an `Expr<bool>`.
-    _Bool compile(const cnf::CNF &cnf);
+    _Boolx1 compile(const cnf::CNF &cnf);
 
     private:
     using ConstASTExprVisitor::operator();
@@ -431,7 +431,7 @@ struct Environment
     ///> maps `Schema::Identifier`s to `Expr<T>`s that evaluate to the current expression
     std::unordered_map<Schema::Identifier, SQL_t> exprs_;
     ///> optional predicate if predication is used
-    std::optional<_Bool> predicate_;
+    std::optional<_Boolx1> predicate_;
 
     public:
     Environment() = default;
@@ -542,7 +542,7 @@ struct Environment
     ///> Returns `true` iff `this` `Environment` uses predication.
     bool predicated() const { return bool(predicate_); }
     ///> Adds the predicate \p pred to the predication predicate.
-    void add_predicate(_Bool pred) {
+    void add_predicate(_Boolx1 pred) {
         if (predicate_)
             predicate_.emplace(*predicate_ and pred);
         else
@@ -551,14 +551,14 @@ struct Environment
     ///> Adds the predicate compiled from the `cnf::CNF` \p cnf to the predication predicate.
     void add_predicate(const cnf::CNF &cnf) { add_predicate(compile(cnf)); }
     ///> Returns the **moved** current predication predicate.
-    _Bool extract_predicate() {
+    _Boolx1 extract_predicate() {
         M_insist(predicated(), "cannot access an undefined or already extracted predicate");
         auto tmp = *predicate_;
         predicate_.reset();
         return tmp;
     }
     ///> Returns the **copied** current predication predicate.
-    _Bool get_predicate() const {
+    _Boolx1 get_predicate() const {
         M_insist(predicated(), "cannot access an undefined or already extracted predicate");
         return predicate_->clone();
     }
@@ -606,7 +606,7 @@ struct CodeGenContext
 
     private:
     Environment *env_ = nullptr; ///< environment for locally bound identifiers
-    Global<U32> num_tuples_; ///< variable to hold the number of result tuples produced
+    Global<U32x1> num_tuples_; ///< variable to hold the number of result tuples produced
     std::unordered_map<const char*, NChar> literals_; ///< maps each literal to its address at which it is stored
 
     public:
@@ -655,15 +655,15 @@ struct CodeGenContext
     const Environment & env() const { M_insist(bool(env_)); return *env_; }
 
     /** Returns the number of result tuples produced. */
-    U32 num_tuples() const { return num_tuples_; }
+    U32x1 num_tuples() const { return num_tuples_; }
     /** Set the number of result tuples produced to `n`. */
-    void set_num_tuples(U32 n) { num_tuples_ = n; }
+    void set_num_tuples(U32x1 n) { num_tuples_ = n; }
     /** Increments the number of result tuples produced by `n`. */
-    void inc_num_tuples(U32 n = U32(1)) { num_tuples_ += n; }
+    void inc_num_tuples(U32x1 n = U32x1(1)) { num_tuples_ += n; }
 
     /** Adds the string literal `literal` located at pointer offset `ptr`. */
     void add_literal(const char *literal, uint32_t ptr) {
-        auto [_, inserted] = literals_.emplace(literal, NChar(Ptr<Char>(U32(ptr)), false, strlen(literal) + 1, true));
+        auto [_, inserted] = literals_.emplace(literal, NChar(Ptr<Charx1>(U32x1(ptr)), false, strlen(literal) + 1, true));
         M_insist(inserted);
     }
     /** Returns the address at which `literal` is stored. */
@@ -743,14 +743,14 @@ compile_load_sequential(const Schema &tuple_schema, Ptr<void> base_address, cons
  *
  * Emits the storing code into the current block. */
 void compile_store_point_access(const Schema &tuple_schema, Ptr<void> base_address, const storage::DataLayout &layout,
-                                const Schema &layout_schema, U32 tuple_id);
+                                const Schema &layout_schema, U32x1 tuple_id);
 
 /** Compiles the data layout \p layout starting at memory address \p base_address and containing tuples of schema
  * \p layout_schema such that it loads the single tuple with schema \p tuple_schema and ID \p tuple_id.
  *
  * Emits the loading code into the current block and adds the loaded values into the current environment. */
 void compile_load_point_access(const Schema &tuple_schema, Ptr<void> base_address, const storage::DataLayout &layout,
-                               const Schema &layout_schema, U32 tuple_id);
+                               const Schema &layout_schema, U32x1 tuple_id);
 
 
 /*======================================================================================================================
@@ -769,9 +769,9 @@ class buffer_storage<true>
     friend struct Buffer<true>;
 
     Global<Ptr<void>> base_address_; ///< global backup for base address of buffer
-    Global<U32> size_; ///< global backup for current size of buffer, default initialized to 0
+    Global<U32x1> size_; ///< global backup for current size of buffer, default initialized to 0
     ///> global backup for dynamic capacity of infinite buffer, default initialized to 0
-    std::optional<Global<U32>> capacity_;
+    std::optional<Global<U32x1>> capacity_;
 };
 
 /** Buffers tuples by materializing them into memory. */
@@ -785,9 +785,9 @@ struct Buffer
     std::reference_wrapper<const Schema> schema_; ///< schema of buffer
     storage::DataLayout layout_; ///< data layout of buffer
     std::optional<Var<Ptr<void>>> base_address_; ///< base address of buffer
-    std::optional<Var<U32>> size_; ///< current size of buffer, default initialized to 0
-    std::optional<Var<U32>> capacity_; ///< dynamic capacity of infinite buffer, default initialized to 0
-    std::optional<Var<Bool>> first_iteration_; ///< flag to indicate first loop iteration for infinite buffer
+    std::optional<Var<U32x1>> size_; ///< current size of buffer, default initialized to 0
+    std::optional<Var<U32x1>> capacity_; ///< dynamic capacity of infinite buffer, default initialized to 0
+    std::optional<Var<Boolx1>> first_iteration_; ///< flag to indicate first loop iteration for infinite buffer
     buffer_storage<IsGlobal> storage_; ///< if `IsGlobal`, contains backups for base address, capacity, and size
     setup_t setup_; ///< remaining pipeline initializations
     pipeline_t pipeline_; ///< remaining actual pipeline
@@ -825,7 +825,7 @@ struct Buffer
         }
     }
     /** Returns the current size of the buffer. */
-    U32 size() const {
+    U32x1 size() const {
         if constexpr (IsGlobal) {
             return size_ ? size_->val() : storage_.size_.val(); // since global may be outdated
         } else {
@@ -920,7 +920,7 @@ struct buffer_load_proxy_t
     const Schema & schema() const { return schema_; }
 
     /** Loads tuple with ID \p tuple_id into the current environment. */
-    void operator()(U32 tuple_id) {
+    void operator()(U32x1 tuple_id) {
         Wasm_insist(tuple_id.clone() < buffer_.get().size(), "tuple ID out of bounds");
         compile_load_point_access(schema_, buffer_.get().base_address(), buffer_.get().layout(),
                                   buffer_.get().schema(), tuple_id);
@@ -952,7 +952,7 @@ struct buffer_store_proxy_t
     const Schema & schema() const { return schema_; }
 
     /** Stores values from the current environment to tuple with ID \p tuple_id. */
-    void operator()(U32 tuple_id) {
+    void operator()(U32x1 tuple_id) {
         Wasm_insist(tuple_id.clone() < buffer_.get().size(), "tuple ID out of bounds");
         compile_store_point_access(schema_, buffer_.get().base_address(), buffer_.get().layout(),
                                    buffer_.get().schema(), tuple_id);
@@ -979,20 +979,20 @@ struct buffer_swap_proxy_t
     const Schema & schema() const { return schema_; }
 
     /** Swaps tuples with IDs \p first and \p second. */
-    void operator()(U32 first, U32 second);
+    void operator()(U32x1 first, U32x1 second);
     /** Swaps tuples with IDs \p first and \p second where the first one is already loaded and accessible through
      * \p env_first.  Note that environments are also swapped afterwards, i.e. \p env_first contains still the values
      * of the former tuple with ID \p first which is located at ID \p second after the call, except for `NChar`s
      * since they are only pointers to the actual values, i.e. \p env_first contains still the addresses of the
      * former tuple with ID \p first where the values of tuple with ID \p second are stored after the call. */
-    void operator()(U32 first, U32 second, const Environment &env_first);
+    void operator()(U32x1 first, U32x1 second, const Environment &env_first);
     /** Swaps tuples with IDs \p first and \p second which are already loaded and accessible through \p env_first and
      * \p env_second.  Note that environments are also swapped afterwards, i.e. \p env_first contains still the values
      * of the former tuple with ID \p first which is located at ID \p second after the call and vice versa, except
      * for `NChar`s since they are only pointers to the actual values, i.e. \p env_first contains still the addresses
      * of the former tuple with ID \p first where the values of tuple with ID \p second are stored after the call and
      * vice versa. */
-    void operator()(U32 first, U32 second, const Environment &env_first, const Environment &env_second);
+    void operator()(U32x1 first, U32x1 second, const Environment &env_first, const Environment &env_second);
 };
 
 
@@ -1003,14 +1003,14 @@ struct buffer_swap_proxy_t
 /** Sets the \p n -th bit of the value pointed to by \p bytes to \p value. */
 template<typename T>
 requires integral<typename T::type>
-void setbit(Ptr<T> bytes, Bool value, uint8_t n)
+void setbit(Ptr<T> bytes, Boolx1 value, uint8_t n)
 {
     *bytes ^= (-value.to<typename T::type>() xor *bytes.clone()) bitand T(1 << n);
 }
 /** Sets the bit masked by \p mask of the value pointed to by \p bytes to \p value. */
 template<typename T>
 requires integral<typename T::type>
-void setbit(Ptr<T> bytes, Bool value, T mask)
+void setbit(Ptr<T> bytes, Boolx1 value, T mask)
 {
     *bytes ^= (-value.to<typename T::type>() xor *bytes.clone()) bitand mask;
 }
@@ -1027,24 +1027,24 @@ enum cmp_op
 };
 
 /** Compares two strings \p left and \p right.  Has similar semantics to `strncmp` of libc. */
-_I32 strncmp(NChar left, NChar right, U32 len);
+_I32x1 strncmp(NChar left, NChar right, U32x1 len);
 /** Compares two strings \p left and \p right.  Has similar semantics to `strcmp` of libc. */
-_I32 strcmp(NChar left, NChar right);
+_I32x1 strcmp(NChar left, NChar right);
 /** Compares two strings \p left and \p right.  Has similar semantics to `strncmp` of libc. */
-_Bool strncmp(NChar left, NChar right, U32 len, cmp_op op);
+_Boolx1 strncmp(NChar left, NChar right, U32x1 len, cmp_op op);
 /** Compares two strings \p left and \p right.  Has similar semantics to `strcmp` of libc. */
-_Bool strcmp(NChar left, NChar right, cmp_op op);
+_Boolx1 strcmp(NChar left, NChar right, cmp_op op);
 
 
 /*======================================================================================================================
  * string copy
  *====================================================================================================================*/
 
-/** Copies the contents of \p src to \p dst, but no more than \p count characters.  The function returns a `Ptr<Char>`
+/** Copies the contents of \p src to \p dst, but no more than \p count characters.  The function returns a `Ptr<Charx1>`
  * to the *end* of the copied sequence in \p dst, i.e. to the copied NUL-byte or to the character *after* the lastly
  * copied character.  If the first \p count characters of \p src are *not* NUL-terminated, \p dst will not be
  * NUL-terminated, too. */
-Ptr<Char> strncpy(Ptr<Char> dst, Ptr<Char> src, U32 count);
+Ptr<Charx1> strncpy(Ptr<Charx1> dst, Ptr<Charx1> src, U32x1 count);
 
 
 /*======================================================================================================================
@@ -1053,7 +1053,7 @@ Ptr<Char> strncpy(Ptr<Char> dst, Ptr<Char> src, U32 count);
 
 /** Compares whether the string \p str matches the pattern \p pattern regarding SQL LIKE semantics using escape
  * character \p escape_char. */
-_Bool like(NChar str, NChar pattern, const char escape_char = '\\');
+_Boolx1 like(NChar str, NChar pattern, const char escape_char = '\\');
 
 
 /*======================================================================================================================
@@ -1075,7 +1075,7 @@ T signum(T value)
  *
  * Returns a negative number if \p left is smaller than \p right, 0 if both are equal, and a positive number if
  * \p left is greater than \p right, according to the ordering. */
-I32 compare(const Environment &env_left, const Environment &env_right,
+I32x1 compare(const Environment &env_left, const Environment &env_right,
             const std::vector<SortingOperator::order_type> &order);
 
 
@@ -1084,28 +1084,28 @@ I32 compare(const Environment &env_left, const Environment &env_right,
  *====================================================================================================================*/
 
 extern template std::tuple<Block, Block, Block> compile_store_sequential(
-    const Schema&, Ptr<void>, const storage::DataLayout&, const Schema&, Var<U32>&
+    const Schema&, Ptr<void>, const storage::DataLayout&, const Schema&, Var<U32x1>&
 );
 extern template std::tuple<Block, Block, Block> compile_store_sequential(
-    const Schema&, Ptr<void>, const storage::DataLayout&, const Schema&, Global<U32>&
+    const Schema&, Ptr<void>, const storage::DataLayout&, const Schema&, Global<U32x1>&
 );
 extern template std::tuple<Block, Block, Block> compile_store_sequential(
     const Schema&, Ptr<void>, const storage::DataLayout&, const Schema&, Variable<uint32_t, VariableKind::Param, false>&
 );
 extern template std::tuple<Block, Block, Block> compile_store_sequential_single_pass(
-    const Schema&, Ptr<void>, const storage::DataLayout&, const Schema&, Var<U32>&
+    const Schema&, Ptr<void>, const storage::DataLayout&, const Schema&, Var<U32x1>&
 );
 extern template std::tuple<Block, Block, Block> compile_store_sequential_single_pass(
-    const Schema&, Ptr<void>, const storage::DataLayout&, const Schema&, Global<U32>&
+    const Schema&, Ptr<void>, const storage::DataLayout&, const Schema&, Global<U32x1>&
 );
 extern template std::tuple<Block, Block, Block> compile_store_sequential_single_pass(
     const Schema&, Ptr<void>, const storage::DataLayout&, const Schema&, Variable<uint32_t, VariableKind::Param, false>&
 );
 extern template std::tuple<Block, Block, Block> compile_load_sequential(
-    const Schema&, Ptr<void>, const storage::DataLayout&, const Schema&, Var<U32>&
+    const Schema&, Ptr<void>, const storage::DataLayout&, const Schema&, Var<U32x1>&
 );
 extern template std::tuple<Block, Block, Block> compile_load_sequential(
-    const Schema&, Ptr<void>, const storage::DataLayout&, const Schema&, Global<U32>&
+    const Schema&, Ptr<void>, const storage::DataLayout&, const Schema&, Global<U32x1>&
 );
 extern template std::tuple<Block, Block, Block> compile_load_sequential(
     const Schema&, Ptr<void>, const storage::DataLayout&, const Schema&, Variable<uint32_t, VariableKind::Param, false>&

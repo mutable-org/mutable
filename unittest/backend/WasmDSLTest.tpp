@@ -54,7 +54,7 @@ TEST_CASE("Wasm/" BACKEND_NAME "/wasm_type", "[core][wasm]")
     REQUIRE(wasm_type<unsigned int, 2>() == ::wasm::Type::v128);
 
     /*----- PrimitiveExprs -----*/
-    REQUIRE(wasm_type<I8, 1>() == ::wasm::Type::i32);
+    REQUIRE(wasm_type<I8x1, 1>() == ::wasm::Type::i32);
 }
 
 TEST_CASE("Wasm/" BACKEND_NAME "/Block", "[core][wasm]")
@@ -109,7 +109,7 @@ TEST_CASE("Wasm/" BACKEND_NAME "/Function", "[core][wasm]")
         RETURN(Expr<signed int>(-123456));
     });
     CHECK_RESULT_INLINE(-123456789012, int64_t(), {
-        RETURN(_I64(-123456789012));
+        RETURN(_I64x1(-123456789012));
     });
     CHECK_RESULT_INLINE(12, unsigned char(), {
         RETURN(Expr<unsigned char>(12));
@@ -121,13 +121,13 @@ TEST_CASE("Wasm/" BACKEND_NAME "/Function", "[core][wasm]")
         RETURN(Expr<unsigned int>(123456));
     });
     CHECK_RESULT_INLINE(123456789012, uint64_t(), {
-        RETURN(_U64(123456789012));
+        RETURN(_U64x1(123456789012));
     });
     CHECK_RESULT_INLINE(3.14f, float(), {
-        RETURN(_Float(3.14f));
+        RETURN(_Floatx1(3.14f));
     });
     CHECK_RESULT_INLINE(3.14, double(), {
-        RETURN(_Double(3.14));
+        RETURN(_Doublex1(3.14));
     });
     CHECK_RESULT_INLINE(std::to_array({ 42, 42, 42, 42 }), I32x4(), {
         RETURN(I32x4(42));
@@ -286,7 +286,7 @@ TEST_CASE("Wasm/" BACKEND_NAME "/Function/call", "[core][wasm]")
 
     /* side-effects */
     CHECK_RESULT_INLINE(1, int(void), {
-        Global<I32> global(0);
+        Global<I32x1> global(0);
         FUNCTION(f, int(void))
         {
             global = 1;
@@ -304,7 +304,7 @@ TEST_CASE("Wasm/" BACKEND_NAME "/GlobalVariable", "[core][wasm]")
     Module::Init();
 
     CHECK_RESULT_INLINE(1, int(void), {
-        Global<I32> global(0);
+        Global<I32x1> global(0);
         FUNCTION(f, void(void))
         {
             global = 1;
@@ -332,8 +332,8 @@ TEST_CASE("Wasm/" BACKEND_NAME "/Expr/scalar/operations/unary", "[core][wasm]")
 {
     Module::Init();
 
-    CHECK_RESULT_INLINE( 42, int(), { _I32 a(42); RETURN(+a); });
-    CHECK_RESULT_INLINE(-42, int(), { _I32 a(42); RETURN(-a); });
+    CHECK_RESULT_INLINE( 42, int(), { _I32x1 a(42); RETURN(+a); });
+    CHECK_RESULT_INLINE(-42, int(), { _I32x1 a(42); RETURN(-a); });
     // abs() not supported for scalar integral types
     // ceil() not supported for integral types
     // floor() not supported for integral types
@@ -341,41 +341,41 @@ TEST_CASE("Wasm/" BACKEND_NAME "/Expr/scalar/operations/unary", "[core][wasm]")
     // nearest() not supported for scalar types
     // sqrt() not supported for integral types
     // add_pairwise() not supported for scalar types
-    CHECK_RESULT_INLINE(  ~42, int32_t(),  { _I32 a(42); RETURN(~a); });
-    CHECK_RESULT_INLINE(   28, uint32_t(), { _U32 a(0b1010);  RETURN(a.clz()); });
-    CHECK_RESULT_INLINE(   12, uint16_t(), { _U16 a(0b1010);  RETURN(a.clz()); });
-    CHECK_RESULT_INLINE(    4, uint8_t(),  { _U8  a(0b1010);  RETURN(a.clz()); });
-    CHECK_RESULT_INLINE(    1, uint32_t(), { _U32 a(0b1010);  RETURN(a.ctz()); });
-    CHECK_RESULT_INLINE(    1, uint16_t(), { _U16 a(0b1010);  RETURN(a.ctz()); });
-    CHECK_RESULT_INLINE(    1, uint8_t(),  { _U8  a(0b1010);  RETURN(a.ctz()); });
-    CHECK_RESULT_INLINE(    2, uint32_t(), { _U32 a(0b1010);  RETURN(a.popcnt()); });
-    CHECK_RESULT_INLINE(    2, uint16_t(), { _U16 a(0b1010);  RETURN(a.popcnt()); });
-    CHECK_RESULT_INLINE(    2, uint8_t(),  { _U8  a(0b1010);  RETURN(a.popcnt()); });
+    CHECK_RESULT_INLINE(  ~42, int32_t(),  { _I32x1 a(42); RETURN(~a); });
+    CHECK_RESULT_INLINE(   28, uint32_t(), { _U32x1 a(0b1010);  RETURN(a.clz()); });
+    CHECK_RESULT_INLINE(   12, uint16_t(), { _U16x1 a(0b1010);  RETURN(a.clz()); });
+    CHECK_RESULT_INLINE(    4, uint8_t(),  { _U8x1  a(0b1010);  RETURN(a.clz()); });
+    CHECK_RESULT_INLINE(    1, uint32_t(), { _U32x1 a(0b1010);  RETURN(a.ctz()); });
+    CHECK_RESULT_INLINE(    1, uint16_t(), { _U16x1 a(0b1010);  RETURN(a.ctz()); });
+    CHECK_RESULT_INLINE(    1, uint8_t(),  { _U8x1  a(0b1010);  RETURN(a.ctz()); });
+    CHECK_RESULT_INLINE(    2, uint32_t(), { _U32x1 a(0b1010);  RETURN(a.popcnt()); });
+    CHECK_RESULT_INLINE(    2, uint16_t(), { _U16x1 a(0b1010);  RETURN(a.popcnt()); });
+    CHECK_RESULT_INLINE(    2, uint8_t(),  { _U8x1  a(0b1010);  RETURN(a.popcnt()); });
     // bitmask() not supported for scalar types
-    CHECK_RESULT_INLINE(false, bool(), { _I32 a(42); RETURN(a.eqz()); });
-    CHECK_RESULT_INLINE( true, bool(), { _I32 a(0);  RETURN(a.eqz()); });
-    CHECK_RESULT_INLINE(false, bool(), { _Bool a(true);  RETURN(not a); });
-    CHECK_RESULT_INLINE( true, bool(), { _Bool a(false); RETURN(not a); });
-    CHECK_RESULT_INLINE( true, bool(), { _I32 a(_I32::Null()); RETURN(a.is_null()); });
-    CHECK_RESULT_INLINE(false, bool(), { _I32 a(42);           RETURN(a.is_null()); });
-    CHECK_RESULT_INLINE(false, bool(), { _I32 a(_I32::Null()); RETURN(a.not_null()); });
-    CHECK_RESULT_INLINE( true, bool(), { _I32 a(42);           RETURN(a.not_null()); });
-    CHECK_RESULT_INLINE(false, bool(), { _Bool a(_Bool::Null()); RETURN(a.is_true_and_not_null()); });
-    CHECK_RESULT_INLINE( true, bool(), { _Bool a(true);          RETURN(a.is_true_and_not_null()); });
-    CHECK_RESULT_INLINE(false, bool(), { _Bool a(false);         RETURN(a.is_true_and_not_null()); });
-    CHECK_RESULT_INLINE(false, bool(), { _Bool a(_Bool::Null()); RETURN(a.is_false_and_not_null()); });
-    CHECK_RESULT_INLINE(false, bool(), { _Bool a(true);          RETURN(a.is_false_and_not_null()); });
-    CHECK_RESULT_INLINE( true, bool(), { _Bool a(false);         RETURN(a.is_false_and_not_null()); });
+    CHECK_RESULT_INLINE(false, bool(), { _I32x1 a(42); RETURN(a.eqz()); });
+    CHECK_RESULT_INLINE( true, bool(), { _I32x1 a(0);  RETURN(a.eqz()); });
+    CHECK_RESULT_INLINE(false, bool(), { _Boolx1 a(true);  RETURN(not a); });
+    CHECK_RESULT_INLINE( true, bool(), { _Boolx1 a(false); RETURN(not a); });
+    CHECK_RESULT_INLINE( true, bool(), { _I32x1 a(_I32x1::Null()); RETURN(a.is_null()); });
+    CHECK_RESULT_INLINE(false, bool(), { _I32x1 a(42);           RETURN(a.is_null()); });
+    CHECK_RESULT_INLINE(false, bool(), { _I32x1 a(_I32x1::Null()); RETURN(a.not_null()); });
+    CHECK_RESULT_INLINE( true, bool(), { _I32x1 a(42);           RETURN(a.not_null()); });
+    CHECK_RESULT_INLINE(false, bool(), { _Boolx1 a(_Boolx1::Null()); RETURN(a.is_true_and_not_null()); });
+    CHECK_RESULT_INLINE( true, bool(), { _Boolx1 a(true);          RETURN(a.is_true_and_not_null()); });
+    CHECK_RESULT_INLINE(false, bool(), { _Boolx1 a(false);         RETURN(a.is_true_and_not_null()); });
+    CHECK_RESULT_INLINE(false, bool(), { _Boolx1 a(_Boolx1::Null()); RETURN(a.is_false_and_not_null()); });
+    CHECK_RESULT_INLINE(false, bool(), { _Boolx1 a(true);          RETURN(a.is_false_and_not_null()); });
+    CHECK_RESULT_INLINE( true, bool(), { _Boolx1 a(false);         RETURN(a.is_false_and_not_null()); });
 
-    CHECK_RESULT_INLINE( 3.14, double(), { _Double a( 3.14); RETURN(+a); });
-    CHECK_RESULT_INLINE(-3.14, double(), { _Double a( 3.14); RETURN(-a); });
-    CHECK_RESULT_INLINE( 3.14, double(), { _Double a( 3.14); RETURN(a.abs()); });
-    CHECK_RESULT_INLINE( 3.14, double(), { _Double a(-3.14); RETURN(a.abs()); });
-    CHECK_RESULT_INLINE( 4.0,  double(), { _Double a( 3.14); RETURN(a.ceil()); });
-    CHECK_RESULT_INLINE( 3.0,  double(), { _Double a( 3.14); RETURN(a.floor()); });
+    CHECK_RESULT_INLINE( 3.14, double(), { _Doublex1 a( 3.14); RETURN(+a); });
+    CHECK_RESULT_INLINE(-3.14, double(), { _Doublex1 a( 3.14); RETURN(-a); });
+    CHECK_RESULT_INLINE( 3.14, double(), { _Doublex1 a( 3.14); RETURN(a.abs()); });
+    CHECK_RESULT_INLINE( 3.14, double(), { _Doublex1 a(-3.14); RETURN(a.abs()); });
+    CHECK_RESULT_INLINE( 4.0,  double(), { _Doublex1 a( 3.14); RETURN(a.ceil()); });
+    CHECK_RESULT_INLINE( 3.0,  double(), { _Doublex1 a( 3.14); RETURN(a.floor()); });
     // trunc() not supported for scalar types
     // nearest() not supported for scalar types
-    CHECK_RESULT_INLINE( 3.0,  double(), { _Double a( 9.0);  RETURN(a.sqrt()); });
+    CHECK_RESULT_INLINE( 3.0,  double(), { _Doublex1 a( 9.0);  RETURN(a.sqrt()); });
     // add_pairwise() not supported for scalar types
     // operator~ not supported for floating-point types
     // clz() not supported for floating-point types
@@ -386,10 +386,10 @@ TEST_CASE("Wasm/" BACKEND_NAME "/Expr/scalar/operations/unary", "[core][wasm]")
     // operator! not supported for floating-point types
     // any_true() not supported for floating-point types
     // all_true() not supported for floating-point types
-    CHECK_RESULT_INLINE( true, bool(), { _Double a(_Double::Null()); RETURN(a.is_null()); });
-    CHECK_RESULT_INLINE(false, bool(), { _Double a(3.14);            RETURN(a.is_null()); });
-    CHECK_RESULT_INLINE(false, bool(), { _Double a(_Double::Null()); RETURN(a.not_null()); });
-    CHECK_RESULT_INLINE( true, bool(), { _Double a(3.14);            RETURN(a.not_null()); });
+    CHECK_RESULT_INLINE( true, bool(), { _Doublex1 a(_Doublex1::Null()); RETURN(a.is_null()); });
+    CHECK_RESULT_INLINE(false, bool(), { _Doublex1 a(3.14);            RETURN(a.is_null()); });
+    CHECK_RESULT_INLINE(false, bool(), { _Doublex1 a(_Doublex1::Null()); RETURN(a.not_null()); });
+    CHECK_RESULT_INLINE( true, bool(), { _Doublex1 a(3.14);            RETURN(a.not_null()); });
     // is_true_and_not_null() not supported for floating-point types
     // is_false_and_not_null() not supported for floating-point types
 
@@ -408,8 +408,8 @@ TEST_CASE("Wasm/" BACKEND_NAME "/Expr/vectorial/operations/unary", "[core][wasm]
     // trunc() not supported for integral types
     // nearest() not supported for integral types
     // sqrt() not supported for integral types
-    CHECK_RESULT_INLINE(25, I16(), { _I8x2  a(42, -17); RETURN(a.add_pairwise()); });
-    CHECK_RESULT_INLINE(25, I32(), { _I16x2 a(42, -17); RETURN(a.add_pairwise()); });
+    CHECK_RESULT_INLINE(25, int16_t(), { _I8x2  a(42, -17); RETURN(a.add_pairwise()); });
+    CHECK_RESULT_INLINE(25, int32_t(), { _I16x2 a(42, -17); RETURN(a.add_pairwise()); });
     CHECK_RESULT_INLINE(std::to_array<int16_t>({ 25, 154 }), I16x2(), { _I8x4  a(42, -17, 123, 31); RETURN(a.add_pairwise()); });
     CHECK_RESULT_INLINE(std::to_array<int32_t>({ 25, 154 }), I32x2(), { _I16x4 a(42, -17, 123, 31); RETURN(a.add_pairwise()); });
     CHECK_RESULT_INLINE(std::to_array({ ~42, ~(-17) }), I32x2(), { _I32x2 a(42, -17); RETURN(~a); });
@@ -472,57 +472,57 @@ TEST_CASE("Wasm/" BACKEND_NAME "/Expr/scalar/operations/binary", "[core][wasm]")
 {
     Module::Init();
 
-    CHECK_RESULT_INLINE( 59, int(), { _I32 a(42); _I32 b(17); RETURN(a + b); });
-    CHECK_RESULT_INLINE( 25, int(), { _I32 a(42); _I32 b(17); RETURN(a - b); });
-    CHECK_RESULT_INLINE(714, int(), { _I32 a(42); _I32 b(17); RETURN(a * b); });
-    CHECK_RESULT_INLINE(  2, int(), { _I32 a(42); _I32 b(17); RETURN(a / b); });
-    CHECK_RESULT_INLINE(  8, int(), { _I32 a(42); _I32 b(17); RETURN(a % b); });
+    CHECK_RESULT_INLINE( 59, int(), { _I32x1 a(42); _I32x1 b(17); RETURN(a + b); });
+    CHECK_RESULT_INLINE( 25, int(), { _I32x1 a(42); _I32x1 b(17); RETURN(a - b); });
+    CHECK_RESULT_INLINE(714, int(), { _I32x1 a(42); _I32x1 b(17); RETURN(a * b); });
+    CHECK_RESULT_INLINE(  2, int(), { _I32x1 a(42); _I32x1 b(17); RETURN(a / b); });
+    CHECK_RESULT_INLINE(  8, int(), { _I32x1 a(42); _I32x1 b(17); RETURN(a % b); });
     // copy_sign() not supported for integral types
     // min() not supported for integral types
     // max() not supported for integral types
     // avg() not supported for scalar types
-    CHECK_RESULT_INLINE(0b00001000, int(), { _I8 a(0b00101010);  _I8 b(0b00001001); RETURN(a bitand b); });
-    CHECK_RESULT_INLINE(0b00101011, int(), { _I8 a(0b00101010);  _I8 b(0b00001001); RETURN(a bitor b); });
-    CHECK_RESULT_INLINE(0b00100011, int(), { _I8 a(0b00101010);  _I8 b(0b00001001); RETURN(a xor b); });
-    CHECK_RESULT_INLINE(0b01000000, int8_t(), { _I8 a(0b00101010);  _I8 b(5);  RETURN(a << b); });
-    CHECK_RESULT_INLINE(0b00001010, int8_t(), { _I8 a(0b00101010);  _I8 b(2);  RETURN(a >> b); });
-    CHECK_RESULT_INLINE(0x01010001, int(), { _I32 a(0x00101010); _I32 b(12); RETURN(rotl(a, b)); });
-    CHECK_RESULT_INLINE(0x01000101, int(), { _I32 a(0x00101010); _I32 b(12); RETURN(rotr(a, b)); });
-    CHECK_RESULT_INLINE( true, bool(), { _I32 a(42); _I32 b(42); RETURN(a == b); });
-    CHECK_RESULT_INLINE(false, bool(), { _I32 a(42); _I32 b(17); RETURN(a == b); });
-    CHECK_RESULT_INLINE(false, bool(), { _I32 a(42); _I32 b(42); RETURN(a != b); });
-    CHECK_RESULT_INLINE( true, bool(), { _I32 a(42); _I32 b(17); RETURN(a != b); });
-    CHECK_RESULT_INLINE(false, bool(), { _I32 a(42); _I32 b(42); RETURN(a < b); });
-    CHECK_RESULT_INLINE(false, bool(), { _I32 a(42); _I32 b(17); RETURN(a < b); });
-    CHECK_RESULT_INLINE( true, bool(), { _I32 a(17); _I32 b(42); RETURN(a < b); });
-    CHECK_RESULT_INLINE( true, bool(), { _I32 a(42); _I32 b(42); RETURN(a <= b); });
-    CHECK_RESULT_INLINE(false, bool(), { _I32 a(42); _I32 b(17); RETURN(a <= b); });
-    CHECK_RESULT_INLINE( true, bool(), { _I32 a(17); _I32 b(42); RETURN(a <= b); });
-    CHECK_RESULT_INLINE(false, bool(), { _I32 a(42); _I32 b(42); RETURN(a > b); });
-    CHECK_RESULT_INLINE( true, bool(), { _I32 a(42); _I32 b(17); RETURN(a > b); });
-    CHECK_RESULT_INLINE(false, bool(), { _I32 a(17); _I32 b(42); RETURN(a > b); });
-    CHECK_RESULT_INLINE( true, bool(), { _I32 a(42); _I32 b(42); RETURN(a >= b); });
-    CHECK_RESULT_INLINE( true, bool(), { _I32 a(42); _I32 b(17); RETURN(a >= b); });
-    CHECK_RESULT_INLINE(false, bool(), { _I32 a(17); _I32 b(42); RETURN(a >= b); });
-    CHECK_RESULT_INLINE( true, bool(), { _Bool a(true);  _Bool b(true);  RETURN(a and b); });
-    CHECK_RESULT_INLINE(false, bool(), { _Bool a(false); _Bool b(true);  RETURN(a and b); });
-    CHECK_RESULT_INLINE(false, bool(), { _Bool a(true);  _Bool b(false); RETURN(a and b); });
-    CHECK_RESULT_INLINE(false, bool(), { _Bool a(false); _Bool b(false); RETURN(a and b); });
+    CHECK_RESULT_INLINE(0b00001000, int(), { _I8x1 a(0b00101010);  _I8x1 b(0b00001001); RETURN(a bitand b); });
+    CHECK_RESULT_INLINE(0b00101011, int(), { _I8x1 a(0b00101010);  _I8x1 b(0b00001001); RETURN(a bitor b); });
+    CHECK_RESULT_INLINE(0b00100011, int(), { _I8x1 a(0b00101010);  _I8x1 b(0b00001001); RETURN(a xor b); });
+    CHECK_RESULT_INLINE(0b01000000, int8_t(), { _I8x1 a(0b00101010);  _I8x1 b(5);  RETURN(a << b); });
+    CHECK_RESULT_INLINE(0b00001010, int8_t(), { _I8x1 a(0b00101010);  _I8x1 b(2);  RETURN(a >> b); });
+    CHECK_RESULT_INLINE(0x01010001, int(), { _I32x1 a(0x00101010); _I32x1 b(12); RETURN(rotl(a, b)); });
+    CHECK_RESULT_INLINE(0x01000101, int(), { _I32x1 a(0x00101010); _I32x1 b(12); RETURN(rotr(a, b)); });
+    CHECK_RESULT_INLINE( true, bool(), { _I32x1 a(42); _I32x1 b(42); RETURN(a == b); });
+    CHECK_RESULT_INLINE(false, bool(), { _I32x1 a(42); _I32x1 b(17); RETURN(a == b); });
+    CHECK_RESULT_INLINE(false, bool(), { _I32x1 a(42); _I32x1 b(42); RETURN(a != b); });
+    CHECK_RESULT_INLINE( true, bool(), { _I32x1 a(42); _I32x1 b(17); RETURN(a != b); });
+    CHECK_RESULT_INLINE(false, bool(), { _I32x1 a(42); _I32x1 b(42); RETURN(a < b); });
+    CHECK_RESULT_INLINE(false, bool(), { _I32x1 a(42); _I32x1 b(17); RETURN(a < b); });
+    CHECK_RESULT_INLINE( true, bool(), { _I32x1 a(17); _I32x1 b(42); RETURN(a < b); });
+    CHECK_RESULT_INLINE( true, bool(), { _I32x1 a(42); _I32x1 b(42); RETURN(a <= b); });
+    CHECK_RESULT_INLINE(false, bool(), { _I32x1 a(42); _I32x1 b(17); RETURN(a <= b); });
+    CHECK_RESULT_INLINE( true, bool(), { _I32x1 a(17); _I32x1 b(42); RETURN(a <= b); });
+    CHECK_RESULT_INLINE(false, bool(), { _I32x1 a(42); _I32x1 b(42); RETURN(a > b); });
+    CHECK_RESULT_INLINE( true, bool(), { _I32x1 a(42); _I32x1 b(17); RETURN(a > b); });
+    CHECK_RESULT_INLINE(false, bool(), { _I32x1 a(17); _I32x1 b(42); RETURN(a > b); });
+    CHECK_RESULT_INLINE( true, bool(), { _I32x1 a(42); _I32x1 b(42); RETURN(a >= b); });
+    CHECK_RESULT_INLINE( true, bool(), { _I32x1 a(42); _I32x1 b(17); RETURN(a >= b); });
+    CHECK_RESULT_INLINE(false, bool(), { _I32x1 a(17); _I32x1 b(42); RETURN(a >= b); });
+    CHECK_RESULT_INLINE( true, bool(), { _Boolx1 a(true);  _Boolx1 b(true);  RETURN(a and b); });
+    CHECK_RESULT_INLINE(false, bool(), { _Boolx1 a(false); _Boolx1 b(true);  RETURN(a and b); });
+    CHECK_RESULT_INLINE(false, bool(), { _Boolx1 a(true);  _Boolx1 b(false); RETURN(a and b); });
+    CHECK_RESULT_INLINE(false, bool(), { _Boolx1 a(false); _Boolx1 b(false); RETURN(a and b); });
     // and_not() not supported for scalar types
-    CHECK_RESULT_INLINE( true, bool(), { _Bool a(true);  _Bool b(true);  RETURN(a or b); });
-    CHECK_RESULT_INLINE( true, bool(), { _Bool a(false); _Bool b(true);  RETURN(a or b); });
-    CHECK_RESULT_INLINE( true, bool(), { _Bool a(true);  _Bool b(false); RETURN(a or b); });
-    CHECK_RESULT_INLINE(false, bool(), { _Bool a(false); _Bool b(false); RETURN(a or b); });
+    CHECK_RESULT_INLINE( true, bool(), { _Boolx1 a(true);  _Boolx1 b(true);  RETURN(a or b); });
+    CHECK_RESULT_INLINE( true, bool(), { _Boolx1 a(false); _Boolx1 b(true);  RETURN(a or b); });
+    CHECK_RESULT_INLINE( true, bool(), { _Boolx1 a(true);  _Boolx1 b(false); RETURN(a or b); });
+    CHECK_RESULT_INLINE(false, bool(), { _Boolx1 a(false); _Boolx1 b(false); RETURN(a or b); });
 
-    CHECK_RESULT_INLINE( Approx(5.85), double(), { _Double a(3.14); _Double b(2.71); RETURN(a + b); });
-    CHECK_RESULT_INLINE( Approx(0.43), double(), { _Double a(3.14); _Double b(2.71); RETURN(a - b); });
-    CHECK_RESULT_INLINE( Approx(1.57), double(), { _Double a(3.14); _Double b(0.5);  RETURN(a * b); });
-    CHECK_RESULT_INLINE( Approx(6.28), double(), { _Double a(3.14); _Double b(0.5);  RETURN(a / b); });
+    CHECK_RESULT_INLINE( Approx(5.85), double(), { _Doublex1 a(3.14); _Doublex1 b(2.71); RETURN(a + b); });
+    CHECK_RESULT_INLINE( Approx(0.43), double(), { _Doublex1 a(3.14); _Doublex1 b(2.71); RETURN(a - b); });
+    CHECK_RESULT_INLINE( Approx(1.57), double(), { _Doublex1 a(3.14); _Doublex1 b(0.5);  RETURN(a * b); });
+    CHECK_RESULT_INLINE( Approx(6.28), double(), { _Doublex1 a(3.14); _Doublex1 b(0.5);  RETURN(a / b); });
     // operator% not supported for floating-point types
-    CHECK_RESULT_INLINE( 3.14, double(), { _Double a(3.14); _Double b( 1.0);  RETURN(copy_sign(a, b)); });
-    CHECK_RESULT_INLINE(-3.14, double(), { _Double a(3.14); _Double b(-1.0);  RETURN(copy_sign(a, b)); });
-    CHECK_RESULT_INLINE( 2.71, double(), { _Double a(3.14); _Double b( 2.71); RETURN(min(a, b)); });
-    CHECK_RESULT_INLINE( 3.14, double(), { _Double a(3.14); _Double b( 2.71); RETURN(max(a, b)); });
+    CHECK_RESULT_INLINE( 3.14, double(), { _Doublex1 a(3.14); _Doublex1 b( 1.0);  RETURN(copy_sign(a, b)); });
+    CHECK_RESULT_INLINE(-3.14, double(), { _Doublex1 a(3.14); _Doublex1 b(-1.0);  RETURN(copy_sign(a, b)); });
+    CHECK_RESULT_INLINE( 2.71, double(), { _Doublex1 a(3.14); _Doublex1 b( 2.71); RETURN(min(a, b)); });
+    CHECK_RESULT_INLINE( 3.14, double(), { _Doublex1 a(3.14); _Doublex1 b( 2.71); RETURN(max(a, b)); });
     // avg() not supported for scalar types
     // operator& not supported for floating-point types
     // operator| not supported for floating-point types
@@ -531,22 +531,22 @@ TEST_CASE("Wasm/" BACKEND_NAME "/Expr/scalar/operations/binary", "[core][wasm]")
     // operator>> not supported for floating-point types
     // rotl() not supported for floating-point types
     // rotr() not supported for floating-point types
-    CHECK_RESULT_INLINE( true, bool(),   { _Double a(3.14); _Double b(3.14); RETURN(a == b); });
-    CHECK_RESULT_INLINE(false, bool(),   { _Double a(3.14); _Double b(2.71); RETURN(a == b); });
-    CHECK_RESULT_INLINE(false, bool(),   { _Double a(3.14); _Double b(3.14); RETURN(a != b); });
-    CHECK_RESULT_INLINE( true, bool(),   { _Double a(3.14); _Double b(2.71); RETURN(a != b); });
-    CHECK_RESULT_INLINE(false, bool(),   { _Double a(3.14); _Double b(3.14); RETURN(a < b); });
-    CHECK_RESULT_INLINE(false, bool(),   { _Double a(3.14); _Double b(2.71); RETURN(a < b); });
-    CHECK_RESULT_INLINE( true, bool(),   { _Double a(2.71); _Double b(3.14); RETURN(a < b); });
-    CHECK_RESULT_INLINE( true, bool(),   { _Double a(3.14); _Double b(3.14); RETURN(a <= b); });
-    CHECK_RESULT_INLINE(false, bool(),   { _Double a(3.14); _Double b(2.71); RETURN(a <= b); });
-    CHECK_RESULT_INLINE( true, bool(),   { _Double a(2.71); _Double b(3.14); RETURN(a <= b); });
-    CHECK_RESULT_INLINE(false, bool(),   { _Double a(3.14); _Double b(3.14); RETURN(a > b); });
-    CHECK_RESULT_INLINE( true, bool(),   { _Double a(3.14); _Double b(2.71); RETURN(a > b); });
-    CHECK_RESULT_INLINE(false, bool(),   { _Double a(2.71); _Double b(3.14); RETURN(a > b); });
-    CHECK_RESULT_INLINE( true, bool(),   { _Double a(3.14); _Double b(3.14); RETURN(a >= b); });
-    CHECK_RESULT_INLINE( true, bool(),   { _Double a(3.14); _Double b(2.71); RETURN(a >= b); });
-    CHECK_RESULT_INLINE(false, bool(),   { _Double a(2.71); _Double b(3.14); RETURN(a >= b); });
+    CHECK_RESULT_INLINE( true, bool(),   { _Doublex1 a(3.14); _Doublex1 b(3.14); RETURN(a == b); });
+    CHECK_RESULT_INLINE(false, bool(),   { _Doublex1 a(3.14); _Doublex1 b(2.71); RETURN(a == b); });
+    CHECK_RESULT_INLINE(false, bool(),   { _Doublex1 a(3.14); _Doublex1 b(3.14); RETURN(a != b); });
+    CHECK_RESULT_INLINE( true, bool(),   { _Doublex1 a(3.14); _Doublex1 b(2.71); RETURN(a != b); });
+    CHECK_RESULT_INLINE(false, bool(),   { _Doublex1 a(3.14); _Doublex1 b(3.14); RETURN(a < b); });
+    CHECK_RESULT_INLINE(false, bool(),   { _Doublex1 a(3.14); _Doublex1 b(2.71); RETURN(a < b); });
+    CHECK_RESULT_INLINE( true, bool(),   { _Doublex1 a(2.71); _Doublex1 b(3.14); RETURN(a < b); });
+    CHECK_RESULT_INLINE( true, bool(),   { _Doublex1 a(3.14); _Doublex1 b(3.14); RETURN(a <= b); });
+    CHECK_RESULT_INLINE(false, bool(),   { _Doublex1 a(3.14); _Doublex1 b(2.71); RETURN(a <= b); });
+    CHECK_RESULT_INLINE( true, bool(),   { _Doublex1 a(2.71); _Doublex1 b(3.14); RETURN(a <= b); });
+    CHECK_RESULT_INLINE(false, bool(),   { _Doublex1 a(3.14); _Doublex1 b(3.14); RETURN(a > b); });
+    CHECK_RESULT_INLINE( true, bool(),   { _Doublex1 a(3.14); _Doublex1 b(2.71); RETURN(a > b); });
+    CHECK_RESULT_INLINE(false, bool(),   { _Doublex1 a(2.71); _Doublex1 b(3.14); RETURN(a > b); });
+    CHECK_RESULT_INLINE( true, bool(),   { _Doublex1 a(3.14); _Doublex1 b(3.14); RETURN(a >= b); });
+    CHECK_RESULT_INLINE( true, bool(),   { _Doublex1 a(3.14); _Doublex1 b(2.71); RETURN(a >= b); });
+    CHECK_RESULT_INLINE(false, bool(),   { _Doublex1 a(2.71); _Doublex1 b(3.14); RETURN(a >= b); });
     // operator&& not supported for floating-point types
     // and_not() not supported for scalar types
     // operator|| not supported for floating-point types
@@ -577,10 +577,10 @@ TEST_CASE("Wasm/" BACKEND_NAME "/Expr/vectorial/operations/binary", "[core][wasm
         _I8x2 a(0b00101010, 0b11001001); _I8x2 b(0b00001001, 0b00000101); RETURN(a xor b);
     });
     CHECK_RESULT_INLINE(std::to_array<int8_t>({ 0b01000000, 0b00100000 }), I8x2(), {
-        _I8x2 a(0b00101010, 0b11001001); _I8 b(5); RETURN(a << b);
+        _I8x2 a(0b00101010, 0b11001001); _I8x1 b(5); RETURN(a << b);
     });
     CHECK_RESULT_INLINE(std::to_array<int8_t>({ 0b00001010, int8_t(0b11110010) }), I8x2(), {
-        _I8x2 a(0b00101010, 0b11001001); _I8 b(2); RETURN(a >> b);
+        _I8x2 a(0b00101010, 0b11001001); _I8x1 b(2); RETURN(a >> b);
     });
     // rotl() not supported for vectorial types
     // rotr() not supported for vectorial types
@@ -752,10 +752,10 @@ TEST_CASE("Wasm/" BACKEND_NAME "/Expr/conversions", "[core][wasm]")
     Module::Init();
 
     /* 8bit -> 32bit */
-    CHECK_RESULT_INLINE( 42, uint32_t(), { _U8 a(42);  RETURN(a); });
-    CHECK_RESULT_INLINE( 42, uint32_t(), { _U8 a(42);  RETURN(a.to<uint32_t>()); });
-    CHECK_RESULT_INLINE(-17, int32_t(),  { _I8 a(-17); RETURN(a); });
-    CHECK_RESULT_INLINE(-17, int32_t(),  { _I8 a(-17); RETURN(a.to<int32_t>()); });
+    CHECK_RESULT_INLINE( 42, uint32_t(), { _U8x1 a(42);  RETURN(a); });
+    CHECK_RESULT_INLINE( 42, uint32_t(), { _U8x1 a(42);  RETURN(a.to<uint32_t>()); });
+    CHECK_RESULT_INLINE(-17, int32_t(),  { _I8x1 a(-17); RETURN(a); });
+    CHECK_RESULT_INLINE(-17, int32_t(),  { _I8x1 a(-17); RETURN(a.to<int32_t>()); });
 
     CHECK_RESULT_INLINE(std::to_array({ 42U, 17U }), U32x2(), { _U8x2 a(42,  17); RETURN(a); });
     CHECK_RESULT_INLINE(std::to_array({ 42U, 17U }), U32x2(), { _U8x2 a(42,  17); RETURN(a.to<uint32_t>()); });
@@ -764,9 +764,9 @@ TEST_CASE("Wasm/" BACKEND_NAME "/Expr/conversions", "[core][wasm]")
 
     /* 32bit -> 8bit */
     // implicit conversion from uint32_t to uint8_t not allowed
-    CHECK_RESULT_INLINE(0x78, uint8_t(), { _U32 a(0x12345678); RETURN(a.to<uint8_t>()); });
+    CHECK_RESULT_INLINE(0x78, uint8_t(), { _U32x1 a(0x12345678); RETURN(a.to<uint8_t>()); });
     // implicit conversion from int32_t to int8_t not allowed
-    CHECK_RESULT_INLINE(0x21, int8_t(),  { _I32 a(0x87654321); RETURN(a.to<int8_t>()); });
+    CHECK_RESULT_INLINE(0x21, int8_t(),  { _I32x1 a(0x87654321); RETURN(a.to<int8_t>()); });
 
     // implicit conversion from uint32_t to uint8_t not allowed
     CHECK_RESULT_INLINE(        42,  uint8_t(), { _U32x16 a(42);  RETURN(a.to<uint8_t>().template extract<0>()); });
@@ -780,48 +780,48 @@ TEST_CASE("Wasm/" BACKEND_NAME "/Expr/conversions", "[core][wasm]")
     CHECK_RESULT_INLINE(-17, int32_t(), { _I64x4 a(-17); RETURN(a.to<int32_t>().template extract<0>()); });
 
     /* float -> double */
-    CHECK_RESULT_INLINE(Approx( 3.14), double(), { _Float a(3.14f);  RETURN(a); });
-    CHECK_RESULT_INLINE(Approx( 3.14), double(), { _Float a(3.14f);  RETURN(a.to<double>()); });
-    CHECK_RESULT_INLINE(Approx(-2.71), double(), { _Float a(-2.71f); RETURN(a); });
-    CHECK_RESULT_INLINE(Approx(-2.71), double(), { _Float a(-2.71f); RETURN(a.to<double>()); });
+    CHECK_RESULT_INLINE(Approx( 3.14), double(), { _Floatx1 a(3.14f);  RETURN(a); });
+    CHECK_RESULT_INLINE(Approx( 3.14), double(), { _Floatx1 a(3.14f);  RETURN(a.to<double>()); });
+    CHECK_RESULT_INLINE(Approx(-2.71), double(), { _Floatx1 a(-2.71f); RETURN(a); });
+    CHECK_RESULT_INLINE(Approx(-2.71), double(), { _Floatx1 a(-2.71f); RETURN(a.to<double>()); });
 
     /* double -> float */
     // implicit conversion from double to float not allowed
-    CHECK_RESULT_INLINE(Approx( 3.1415926535f), float(), { _Double a(3.1415926535);  RETURN(a.to<float>()); });
+    CHECK_RESULT_INLINE(Approx( 3.1415926535f), float(), { _Doublex1 a(3.1415926535);  RETURN(a.to<float>()); });
     // implicit conversion from double to float not allowed
-    CHECK_RESULT_INLINE(Approx(-2.7182818284f), float(), { _Double a(-2.7182818284); RETURN(a.to<float>()); });
+    CHECK_RESULT_INLINE(Approx(-2.7182818284f), float(), { _Doublex1 a(-2.7182818284); RETURN(a.to<float>()); });
 
     /* T -> bool */
     CHECK_RESULT_INLINE( true, bool(), { Expr<unsigned> a(42); RETURN(a.to<bool>()); });
     CHECK_RESULT_INLINE(false, bool(), { Expr<unsigned> a(0U); RETURN(a.to<bool>()); });
-    CHECK_RESULT_INLINE( true, bool(), { _I32 a(42);      RETURN(a.to<bool>()); });
-    CHECK_RESULT_INLINE(false, bool(), { _I32 a(0);       RETURN(a.to<bool>()); });
-    CHECK_RESULT_INLINE( true, bool(), { _Double a(42.0); RETURN(a.to<bool>()); });
-    CHECK_RESULT_INLINE(false, bool(), { _Double a(0.0);  RETURN(a.to<bool>()); });
-    CHECK_RESULT_INLINE( true, bool(), { _Float a(42.0f); RETURN(a.to<bool>()); });
-    CHECK_RESULT_INLINE(false, bool(), { _Float a(0.0f);  RETURN(a.to<bool>()); });
+    CHECK_RESULT_INLINE( true, bool(), { _I32x1 a(42);      RETURN(a.to<bool>()); });
+    CHECK_RESULT_INLINE(false, bool(), { _I32x1 a(0);       RETURN(a.to<bool>()); });
+    CHECK_RESULT_INLINE( true, bool(), { _Doublex1 a(42.0); RETURN(a.to<bool>()); });
+    CHECK_RESULT_INLINE(false, bool(), { _Doublex1 a(0.0);  RETURN(a.to<bool>()); });
+    CHECK_RESULT_INLINE( true, bool(), { _Floatx1 a(42.0f); RETURN(a.to<bool>()); });
+    CHECK_RESULT_INLINE(false, bool(), { _Floatx1 a(0.0f);  RETURN(a.to<bool>()); });
     // implicit conversion to bool not allowed
 
     /* implicit conversions */
-    CHECK_RESULT_INLINE(0x5a,       uint8_t(),  { _U8 a(0x12); _U8  b(0x48); RETURN(a | b); });
-    CHECK_RESULT_INLINE(0x0000005a, uint32_t(), { _U8 a(0x12); _U8  b(0x48); RETURN(a | b); });
+    CHECK_RESULT_INLINE(0x5a,       uint8_t(),  { _U8x1 a(0x12); _U8x1  b(0x48); RETURN(a | b); });
+    CHECK_RESULT_INLINE(0x0000005a, uint32_t(), { _U8x1 a(0x12); _U8x1  b(0x48); RETURN(a | b); });
     // implicit conversion from uint32_t (i.e. result of uint8_t and uint16_t) to uint8_t not allowed
-    CHECK_RESULT_INLINE(0x0000005a, uint32_t(), { _U8 a(0x12); _U16 b(0x48); RETURN(a | b); });
-    CHECK_RESULT_INLINE(0x5a,       int8_t(),   { _I8  a(0x12); _I8   b(0x48); RETURN(a | b); });
-    CHECK_RESULT_INLINE(0x0000005a, int32_t(),  { _I8  a(0x12); _I8   b(0x48); RETURN(a | b); });
+    CHECK_RESULT_INLINE(0x0000005a, uint32_t(), { _U8x1 a(0x12); _U16x1 b(0x48); RETURN(a | b); });
+    CHECK_RESULT_INLINE(0x5a,       int8_t(),   { _I8x1  a(0x12); _I8x1   b(0x48); RETURN(a | b); });
+    CHECK_RESULT_INLINE(0x0000005a, int32_t(),  { _I8x1  a(0x12); _I8x1   b(0x48); RETURN(a | b); });
     // implicit conversion from int32_t (i.e. result of int8_t and int16_t) to int8_t not allowed
-    CHECK_RESULT_INLINE(0x0000005a, int32_t(),  { _I8  a(0x12); _I16  b(0x48); RETURN(a | b); });
+    CHECK_RESULT_INLINE(0x0000005a, int32_t(),  { _I8x1  a(0x12); _I16x1  b(0x48); RETURN(a | b); });
 
-    CHECK_RESULT_INLINE(Approx(5.85f), float(),  { _Float a(3.14f); _Float  b(2.71f); RETURN(a + b); });
-    CHECK_RESULT_INLINE(Approx(5.85),  double(), { _Float a(3.14f); _Float  b(2.71f); RETURN(a + b); });
+    CHECK_RESULT_INLINE(Approx(5.85f), float(),  { _Floatx1 a(3.14f); _Floatx1  b(2.71f); RETURN(a + b); });
+    CHECK_RESULT_INLINE(Approx(5.85),  double(), { _Floatx1 a(3.14f); _Floatx1  b(2.71f); RETURN(a + b); });
     // implicit conversion from double (i.e. result of float and double) to float not allowed
-    CHECK_RESULT_INLINE(Approx(5.85),  double(), { _Float a(3.14f); _Double b(2.71);  RETURN(a + b); });
+    CHECK_RESULT_INLINE(Approx(5.85),  double(), { _Floatx1 a(3.14f); _Doublex1 b(2.71);  RETURN(a + b); });
 
     /* change signedness */
     CHECK_RESULT_INLINE(          42,  int(),      { Expr<unsigned> a( 42);  RETURN(a.make_signed()); });
     CHECK_RESULT_INLINE(         -42,  int(),      { Expr<unsigned> a(-42);  RETURN(a.make_signed()); });
-    CHECK_RESULT_INLINE(          42,  unsigned(), { _I32 a( 42);  RETURN(a.make_unsigned()); });
-    CHECK_RESULT_INLINE(unsigned(-42), unsigned(), { _I32 a(-42);  RETURN(a.make_unsigned()); });
+    CHECK_RESULT_INLINE(          42,  unsigned(), { _I32x1 a( 42);  RETURN(a.make_unsigned()); });
+    CHECK_RESULT_INLINE(unsigned(-42), unsigned(), { _I32x1 a(-42);  RETURN(a.make_unsigned()); });
 
     Module::Dispose();
 }
@@ -831,14 +831,14 @@ TEST_CASE("Wasm/" BACKEND_NAME "/Expr/null_semantics", "[core][wasm]")
     Module::Init();
 
     /* with unary operations */
-    CHECK_RESULT_INLINE( true, bool(), { _I32 a(_I32::Null()); _I32 b(-a); RETURN(b.is_null()); });
-    CHECK_RESULT_INLINE(false, bool(), { _I32 a(42); _I32 b(-a); RETURN(b.is_null()); });
+    CHECK_RESULT_INLINE( true, bool(), { _I32x1 a(_I32x1::Null()); _I32x1 b(-a); RETURN(b.is_null()); });
+    CHECK_RESULT_INLINE(false, bool(), { _I32x1 a(42); _I32x1 b(-a); RETURN(b.is_null()); });
 
     /* with binary operations */
-    CHECK_RESULT_INLINE( true, bool(), { _I32 a(_I32::Null()); _I32 b(_I32::Null()); _I32 c(a + b); RETURN(c.is_null()); });
-    CHECK_RESULT_INLINE( true, bool(), { _I32 a(_I32::Null()); _I32 b(17); _I32 c(a + b); RETURN(c.is_null()); });
-    CHECK_RESULT_INLINE( true, bool(), { _I32 a(42); _I32 b(_I32::Null()); _I32 c(a + b); RETURN(c.is_null()); });
-    CHECK_RESULT_INLINE(false, bool(), { _I32 a(42); _I32 b(17); _I32 c(a + b); RETURN(c.is_null()); });
+    CHECK_RESULT_INLINE( true, bool(), { _I32x1 a(_I32x1::Null()); _I32x1 b(_I32x1::Null()); _I32x1 c(a + b); RETURN(c.is_null()); });
+    CHECK_RESULT_INLINE( true, bool(), { _I32x1 a(_I32x1::Null()); _I32x1 b(17); _I32x1 c(a + b); RETURN(c.is_null()); });
+    CHECK_RESULT_INLINE( true, bool(), { _I32x1 a(42); _I32x1 b(_I32x1::Null()); _I32x1 c(a + b); RETURN(c.is_null()); });
+    CHECK_RESULT_INLINE(false, bool(), { _I32x1 a(42); _I32x1 b(17); _I32x1 c(a + b); RETURN(c.is_null()); });
 
     /* special cases with `add_pairwise` */
     CHECK_RESULT_INLINE(std::to_array({ false, true, true, true }), Boolx4(), {
@@ -861,27 +861,27 @@ TEST_CASE("Wasm/" BACKEND_NAME "/Expr/null_semantics", "[core][wasm]")
     CHECK_RESULT_INLINE( true, bool(), { _I8x2 a(I8x2(42, -17), Boolx2( true,  true)); RETURN(a.all_true().is_null()); })
 
     /* special cases with logical `or`, `and_not`, and `and` */
-    CHECK_RESULT_INLINE( true, bool(), { _Bool a(_Bool::Null()); _Bool b(_Bool::Null()); _Bool c(a or b); RETURN(c.is_null()); });
-    CHECK_RESULT_INLINE( true, bool(), { _Bool a(_Bool::Null()); _Bool b(false); _Bool c(a or b); RETURN(c.is_null()); });
-    CHECK_RESULT_INLINE( true, bool(), { _Bool a(_Bool::Null()); _Bool b(true);  _Bool c(a or b); RETURN(c.is_true_and_not_null()); });
-    CHECK_RESULT_INLINE( true, bool(), { _Bool a(false); _Bool b(_Bool::Null()); _Bool c(a or b); RETURN(c.is_null()); });
-    CHECK_RESULT_INLINE( true, bool(), { _Bool a(false); _Bool b(false); _Bool c(a or b); RETURN(c.is_false_and_not_null()); });
-    CHECK_RESULT_INLINE( true, bool(), { _Bool a(false); _Bool b(true);  _Bool c(a or b); RETURN(c.is_true_and_not_null()); });
-    CHECK_RESULT_INLINE( true, bool(), { _Bool a(true);  _Bool b(_Bool::Null()); _Bool c(a or b); RETURN(c.is_true_and_not_null()); });
-    CHECK_RESULT_INLINE( true, bool(), { _Bool a(true);  _Bool b(false); _Bool c(a or b); RETURN(c.is_true_and_not_null()); });
-    CHECK_RESULT_INLINE( true, bool(), { _Bool a(true);  _Bool b(true);  _Bool c(a or b); RETURN(c.is_true_and_not_null()); });
-    CHECK_RESULT_INLINE( true, bool(), { _Bool a(_Bool::Null()); Bool b(false); _Bool c(a or b); RETURN(c.is_null()); });
-    CHECK_RESULT_INLINE( true, bool(), { _Bool a(_Bool::Null()); Bool b(true);  _Bool c(a or b); RETURN(c.is_true_and_not_null()); });
-    CHECK_RESULT_INLINE( true, bool(), { _Bool a(false); Bool b(false); _Bool c(a or b); RETURN(c.is_false_and_not_null()); });
-    CHECK_RESULT_INLINE( true, bool(), { _Bool a(false); Bool b(true);  _Bool c(a or b); RETURN(c.is_true_and_not_null()); });
-    CHECK_RESULT_INLINE( true, bool(), { _Bool a(true);  Bool b(false); _Bool c(a or b); RETURN(c.is_true_and_not_null()); });
-    CHECK_RESULT_INLINE( true, bool(), { _Bool a(true);  Bool b(true);  _Bool c(a or b); RETURN(c.is_true_and_not_null()); });
-    CHECK_RESULT_INLINE( true, bool(), { Bool a(false); _Bool b(_Bool::Null()); _Bool c(a or b); RETURN(c.is_null()); });
-    CHECK_RESULT_INLINE( true, bool(), { Bool a(false); _Bool b(false); _Bool c(a or b); RETURN(c.is_false_and_not_null()); });
-    CHECK_RESULT_INLINE( true, bool(), { Bool a(false); _Bool b(true);  _Bool c(a or b); RETURN(c.is_true_and_not_null()); });
-    CHECK_RESULT_INLINE( true, bool(), { Bool a(true);  _Bool b(_Bool::Null()); _Bool c(a or b); RETURN(c.is_true_and_not_null()); });
-    CHECK_RESULT_INLINE( true, bool(), { Bool a(true);  _Bool b(false); _Bool c(a or b); RETURN(c.is_true_and_not_null()); });
-    CHECK_RESULT_INLINE( true, bool(), { Bool a(true);  _Bool b(true);  _Bool c(a or b); RETURN(c.is_true_and_not_null()); });
+    CHECK_RESULT_INLINE( true, bool(), { _Boolx1 a(_Boolx1::Null()); _Boolx1 b(_Boolx1::Null()); _Boolx1 c(a or b); RETURN(c.is_null()); });
+    CHECK_RESULT_INLINE( true, bool(), { _Boolx1 a(_Boolx1::Null()); _Boolx1 b(false); _Boolx1 c(a or b); RETURN(c.is_null()); });
+    CHECK_RESULT_INLINE( true, bool(), { _Boolx1 a(_Boolx1::Null()); _Boolx1 b(true);  _Boolx1 c(a or b); RETURN(c.is_true_and_not_null()); });
+    CHECK_RESULT_INLINE( true, bool(), { _Boolx1 a(false); _Boolx1 b(_Boolx1::Null()); _Boolx1 c(a or b); RETURN(c.is_null()); });
+    CHECK_RESULT_INLINE( true, bool(), { _Boolx1 a(false); _Boolx1 b(false); _Boolx1 c(a or b); RETURN(c.is_false_and_not_null()); });
+    CHECK_RESULT_INLINE( true, bool(), { _Boolx1 a(false); _Boolx1 b(true);  _Boolx1 c(a or b); RETURN(c.is_true_and_not_null()); });
+    CHECK_RESULT_INLINE( true, bool(), { _Boolx1 a(true);  _Boolx1 b(_Boolx1::Null()); _Boolx1 c(a or b); RETURN(c.is_true_and_not_null()); });
+    CHECK_RESULT_INLINE( true, bool(), { _Boolx1 a(true);  _Boolx1 b(false); _Boolx1 c(a or b); RETURN(c.is_true_and_not_null()); });
+    CHECK_RESULT_INLINE( true, bool(), { _Boolx1 a(true);  _Boolx1 b(true);  _Boolx1 c(a or b); RETURN(c.is_true_and_not_null()); });
+    CHECK_RESULT_INLINE( true, bool(), { _Boolx1 a(_Boolx1::Null()); Boolx1 b(false); _Boolx1 c(a or b); RETURN(c.is_null()); });
+    CHECK_RESULT_INLINE( true, bool(), { _Boolx1 a(_Boolx1::Null()); Boolx1 b(true);  _Boolx1 c(a or b); RETURN(c.is_true_and_not_null()); });
+    CHECK_RESULT_INLINE( true, bool(), { _Boolx1 a(false); Boolx1 b(false); _Boolx1 c(a or b); RETURN(c.is_false_and_not_null()); });
+    CHECK_RESULT_INLINE( true, bool(), { _Boolx1 a(false); Boolx1 b(true);  _Boolx1 c(a or b); RETURN(c.is_true_and_not_null()); });
+    CHECK_RESULT_INLINE( true, bool(), { _Boolx1 a(true);  Boolx1 b(false); _Boolx1 c(a or b); RETURN(c.is_true_and_not_null()); });
+    CHECK_RESULT_INLINE( true, bool(), { _Boolx1 a(true);  Boolx1 b(true);  _Boolx1 c(a or b); RETURN(c.is_true_and_not_null()); });
+    CHECK_RESULT_INLINE( true, bool(), { Boolx1 a(false); _Boolx1 b(_Boolx1::Null()); _Boolx1 c(a or b); RETURN(c.is_null()); });
+    CHECK_RESULT_INLINE( true, bool(), { Boolx1 a(false); _Boolx1 b(false); _Boolx1 c(a or b); RETURN(c.is_false_and_not_null()); });
+    CHECK_RESULT_INLINE( true, bool(), { Boolx1 a(false); _Boolx1 b(true);  _Boolx1 c(a or b); RETURN(c.is_true_and_not_null()); });
+    CHECK_RESULT_INLINE( true, bool(), { Boolx1 a(true);  _Boolx1 b(_Boolx1::Null()); _Boolx1 c(a or b); RETURN(c.is_true_and_not_null()); });
+    CHECK_RESULT_INLINE( true, bool(), { Boolx1 a(true);  _Boolx1 b(false); _Boolx1 c(a or b); RETURN(c.is_true_and_not_null()); });
+    CHECK_RESULT_INLINE( true, bool(), { Boolx1 a(true);  _Boolx1 b(true);  _Boolx1 c(a or b); RETURN(c.is_true_and_not_null()); });
 
     CHECK_RESULT_INLINE(std::to_array({ true, true }), Boolx2(), {
         _Boolx2 a(_Boolx2::Null()); _Boolx2 b(_Boolx2::Null()); _Boolx2 c(and_not(a, b)); RETURN(c.is_null());
@@ -947,31 +947,31 @@ TEST_CASE("Wasm/" BACKEND_NAME "/Expr/null_semantics", "[core][wasm]")
         Boolx2 a(true);  _Boolx2 b(true);  _Boolx2 c(and_not(a, b)); RETURN(c.is_false_and_not_null());
     });
 
-    CHECK_RESULT_INLINE( true, bool(), { _Bool a(_Bool::Null()); _Bool b(_Bool::Null()); _Bool c(a and b); RETURN(c.is_null()); });
-    CHECK_RESULT_INLINE( true, bool(), { _Bool a(_Bool::Null()); _Bool b(false); _Bool c(a and b); RETURN(c.is_false_and_not_null()); });
-    CHECK_RESULT_INLINE( true, bool(), { _Bool a(_Bool::Null()); _Bool b(true);  _Bool c(a and b); RETURN(c.is_null()); });
-    CHECK_RESULT_INLINE( true, bool(), { _Bool a(false); _Bool b(_Bool::Null()); _Bool c(a and b); RETURN(c.is_false_and_not_null()); });
-    CHECK_RESULT_INLINE( true, bool(), { _Bool a(false); _Bool b(false); _Bool c(a and b); RETURN(c.is_false_and_not_null()); });
-    CHECK_RESULT_INLINE( true, bool(), { _Bool a(false); _Bool b(true);  _Bool c(a and b); RETURN(c.is_false_and_not_null()); });
-    CHECK_RESULT_INLINE( true, bool(), { _Bool a(true);  _Bool b(_Bool::Null()); _Bool c(a and b); RETURN(c.is_null()); });
-    CHECK_RESULT_INLINE( true, bool(), { _Bool a(true);  _Bool b(false); _Bool c(a and b); RETURN(c.is_false_and_not_null()); });
-    CHECK_RESULT_INLINE( true, bool(), { _Bool a(true);  _Bool b(true);  _Bool c(a and b); RETURN(c.is_true_and_not_null()); });
-    CHECK_RESULT_INLINE( true, bool(), { _Bool a(_Bool::Null()); Bool b(false); _Bool c(a and b); RETURN(c.is_false_and_not_null()); });
-    CHECK_RESULT_INLINE( true, bool(), { _Bool a(_Bool::Null()); Bool b(true);  _Bool c(a and b); RETURN(c.is_null()); });
-    CHECK_RESULT_INLINE( true, bool(), { _Bool a(false); Bool b(false); _Bool c(a and b); RETURN(c.is_false_and_not_null()); });
-    CHECK_RESULT_INLINE( true, bool(), { _Bool a(false); Bool b(true);  _Bool c(a and b); RETURN(c.is_false_and_not_null()); });
-    CHECK_RESULT_INLINE( true, bool(), { _Bool a(true);  Bool b(false); _Bool c(a and b); RETURN(c.is_false_and_not_null()); });
-    CHECK_RESULT_INLINE( true, bool(), { _Bool a(true);  Bool b(true);  _Bool c(a and b); RETURN(c.is_true_and_not_null()); });
-    CHECK_RESULT_INLINE( true, bool(), { Bool a(false); _Bool b(_Bool::Null()); _Bool c(a and b); RETURN(c.is_false_and_not_null()); });
-    CHECK_RESULT_INLINE( true, bool(), { Bool a(false); _Bool b(false); _Bool c(a and b); RETURN(c.is_false_and_not_null()); });
-    CHECK_RESULT_INLINE( true, bool(), { Bool a(false); _Bool b(true);  _Bool c(a and b); RETURN(c.is_false_and_not_null()); });
-    CHECK_RESULT_INLINE( true, bool(), { Bool a(true);  _Bool b(_Bool::Null()); _Bool c(a and b); RETURN(c.is_null()); });
-    CHECK_RESULT_INLINE( true, bool(), { Bool a(true);  _Bool b(false); _Bool c(a and b); RETURN(c.is_false_and_not_null()); });
-    CHECK_RESULT_INLINE( true, bool(), { Bool a(true);  _Bool b(true);  _Bool c(a and b); RETURN(c.is_true_and_not_null()); });
+    CHECK_RESULT_INLINE( true, bool(), { _Boolx1 a(_Boolx1::Null()); _Boolx1 b(_Boolx1::Null()); _Boolx1 c(a and b); RETURN(c.is_null()); });
+    CHECK_RESULT_INLINE( true, bool(), { _Boolx1 a(_Boolx1::Null()); _Boolx1 b(false); _Boolx1 c(a and b); RETURN(c.is_false_and_not_null()); });
+    CHECK_RESULT_INLINE( true, bool(), { _Boolx1 a(_Boolx1::Null()); _Boolx1 b(true);  _Boolx1 c(a and b); RETURN(c.is_null()); });
+    CHECK_RESULT_INLINE( true, bool(), { _Boolx1 a(false); _Boolx1 b(_Boolx1::Null()); _Boolx1 c(a and b); RETURN(c.is_false_and_not_null()); });
+    CHECK_RESULT_INLINE( true, bool(), { _Boolx1 a(false); _Boolx1 b(false); _Boolx1 c(a and b); RETURN(c.is_false_and_not_null()); });
+    CHECK_RESULT_INLINE( true, bool(), { _Boolx1 a(false); _Boolx1 b(true);  _Boolx1 c(a and b); RETURN(c.is_false_and_not_null()); });
+    CHECK_RESULT_INLINE( true, bool(), { _Boolx1 a(true);  _Boolx1 b(_Boolx1::Null()); _Boolx1 c(a and b); RETURN(c.is_null()); });
+    CHECK_RESULT_INLINE( true, bool(), { _Boolx1 a(true);  _Boolx1 b(false); _Boolx1 c(a and b); RETURN(c.is_false_and_not_null()); });
+    CHECK_RESULT_INLINE( true, bool(), { _Boolx1 a(true);  _Boolx1 b(true);  _Boolx1 c(a and b); RETURN(c.is_true_and_not_null()); });
+    CHECK_RESULT_INLINE( true, bool(), { _Boolx1 a(_Boolx1::Null()); Boolx1 b(false); _Boolx1 c(a and b); RETURN(c.is_false_and_not_null()); });
+    CHECK_RESULT_INLINE( true, bool(), { _Boolx1 a(_Boolx1::Null()); Boolx1 b(true);  _Boolx1 c(a and b); RETURN(c.is_null()); });
+    CHECK_RESULT_INLINE( true, bool(), { _Boolx1 a(false); Boolx1 b(false); _Boolx1 c(a and b); RETURN(c.is_false_and_not_null()); });
+    CHECK_RESULT_INLINE( true, bool(), { _Boolx1 a(false); Boolx1 b(true);  _Boolx1 c(a and b); RETURN(c.is_false_and_not_null()); });
+    CHECK_RESULT_INLINE( true, bool(), { _Boolx1 a(true);  Boolx1 b(false); _Boolx1 c(a and b); RETURN(c.is_false_and_not_null()); });
+    CHECK_RESULT_INLINE( true, bool(), { _Boolx1 a(true);  Boolx1 b(true);  _Boolx1 c(a and b); RETURN(c.is_true_and_not_null()); });
+    CHECK_RESULT_INLINE( true, bool(), { Boolx1 a(false); _Boolx1 b(_Boolx1::Null()); _Boolx1 c(a and b); RETURN(c.is_false_and_not_null()); });
+    CHECK_RESULT_INLINE( true, bool(), { Boolx1 a(false); _Boolx1 b(false); _Boolx1 c(a and b); RETURN(c.is_false_and_not_null()); });
+    CHECK_RESULT_INLINE( true, bool(), { Boolx1 a(false); _Boolx1 b(true);  _Boolx1 c(a and b); RETURN(c.is_false_and_not_null()); });
+    CHECK_RESULT_INLINE( true, bool(), { Boolx1 a(true);  _Boolx1 b(_Boolx1::Null()); _Boolx1 c(a and b); RETURN(c.is_null()); });
+    CHECK_RESULT_INLINE( true, bool(), { Boolx1 a(true);  _Boolx1 b(false); _Boolx1 c(a and b); RETURN(c.is_false_and_not_null()); });
+    CHECK_RESULT_INLINE( true, bool(), { Boolx1 a(true);  _Boolx1 b(true);  _Boolx1 c(a and b); RETURN(c.is_true_and_not_null()); });
 
     /* with conversions */
-    CHECK_RESULT_INLINE( true, bool(), { _I8 a(_I8::Null()); _I32 b(a); RETURN(b.is_null()); });
-    CHECK_RESULT_INLINE( true, bool(), { _I32 a(_I32::Null()); _I8 b(a.to<int8_t>()); RETURN(b.is_null()); });
+    CHECK_RESULT_INLINE( true, bool(), { _I8x1 a(_I8x1::Null()); _I32x1 b(a); RETURN(b.is_null()); });
+    CHECK_RESULT_INLINE( true, bool(), { _I32x1 a(_I32x1::Null()); _I8x1 b(a.to<int8_t>()); RETURN(b.is_null()); });
 
     Module::Dispose();
 }
@@ -980,48 +980,48 @@ TEST_CASE("Wasm/" BACKEND_NAME "/Variable/operations/unary", "[core][wasm]")
 {
     Module::Init();
 
-    CHECK_RESULT_INLINE( 42, int(), { Var<I32> a(42); RETURN(+a); });
-    CHECK_RESULT_INLINE(-42, int(), { Var<I32> a(42); RETURN(-a); });
+    CHECK_RESULT_INLINE( 42, int(), { Var<I32x1> a(42); RETURN(+a); });
+    CHECK_RESULT_INLINE(-42, int(), { Var<I32x1> a(42); RETURN(-a); });
     // abs() not supported for integral types
     // ceil() not supported for integral types
     // floor() not supported for integral types
     // sqrt() not supported for integral types
-    CHECK_RESULT_INLINE(  ~42, int(),      { Var<I32> a(42); RETURN(~a); });
-    CHECK_RESULT_INLINE(   11, unsigned(), { Var<U32> a(0x00101010U); RETURN(a.clz()); });
-    CHECK_RESULT_INLINE(    1, unsigned(), { Var<U8>  a(0b00101010U); RETURN(a.ctz()); });
-    CHECK_RESULT_INLINE(    3, unsigned(), { Var<U8>  a(0b00101010U); RETURN(a.popcnt()); });
-    CHECK_RESULT_INLINE(false, bool(),     { Var<I32> a(42); RETURN(a.eqz()); });
-    CHECK_RESULT_INLINE( true, bool(),     { Var<I32> a(0);  RETURN(a.eqz()); });
-    CHECK_RESULT_INLINE(false, bool(),     { Var<Bool> a(true);  RETURN(not a); });
-    CHECK_RESULT_INLINE( true, bool(),     { Var<Bool> a(false); RETURN(not a); });
-    CHECK_RESULT_INLINE( true, bool(),     { Var<_I32> a(_I32::Null()); RETURN(a.is_null()); });
-    CHECK_RESULT_INLINE(false, bool(),     { Var<_I32> a(42); RETURN(a.is_null()); });
-    CHECK_RESULT_INLINE(false, bool(),     { Var<_I32> a(_I32::Null()); RETURN(a.not_null()); });
-    CHECK_RESULT_INLINE( true, bool(),     { Var<_I32> a(42); RETURN(a.not_null()); });
-    CHECK_RESULT_INLINE(false, bool(),     { Var<_Bool> a(_Bool::Null()); RETURN(a.is_true_and_not_null()); });
-    CHECK_RESULT_INLINE( true, bool(),     { Var<_Bool> a(true);               RETURN(a.is_true_and_not_null()); });
-    CHECK_RESULT_INLINE(false, bool(),     { Var<_Bool> a(false);              RETURN(a.is_true_and_not_null()); });
-    CHECK_RESULT_INLINE(false, bool(),     { Var<_Bool> a(_Bool::Null()); RETURN(a.is_false_and_not_null()); });
-    CHECK_RESULT_INLINE(false, bool(),     { Var<_Bool> a(true);               RETURN(a.is_false_and_not_null()); });
-    CHECK_RESULT_INLINE( true, bool(),     { Var<_Bool> a(false);              RETURN(a.is_false_and_not_null()); });
+    CHECK_RESULT_INLINE(  ~42, int(),      { Var<I32x1> a(42); RETURN(~a); });
+    CHECK_RESULT_INLINE(   11, unsigned(), { Var<U32x1> a(0x00101010U); RETURN(a.clz()); });
+    CHECK_RESULT_INLINE(    1, unsigned(), { Var<U8x1>  a(0b00101010U); RETURN(a.ctz()); });
+    CHECK_RESULT_INLINE(    3, unsigned(), { Var<U8x1>  a(0b00101010U); RETURN(a.popcnt()); });
+    CHECK_RESULT_INLINE(false, bool(),     { Var<I32x1> a(42); RETURN(a.eqz()); });
+    CHECK_RESULT_INLINE( true, bool(),     { Var<I32x1> a(0);  RETURN(a.eqz()); });
+    CHECK_RESULT_INLINE(false, bool(),     { Var<Boolx1> a(true);  RETURN(not a); });
+    CHECK_RESULT_INLINE( true, bool(),     { Var<Boolx1> a(false); RETURN(not a); });
+    CHECK_RESULT_INLINE( true, bool(),     { Var<_I32x1> a(_I32x1::Null()); RETURN(a.is_null()); });
+    CHECK_RESULT_INLINE(false, bool(),     { Var<_I32x1> a(42); RETURN(a.is_null()); });
+    CHECK_RESULT_INLINE(false, bool(),     { Var<_I32x1> a(_I32x1::Null()); RETURN(a.not_null()); });
+    CHECK_RESULT_INLINE( true, bool(),     { Var<_I32x1> a(42); RETURN(a.not_null()); });
+    CHECK_RESULT_INLINE(false, bool(),     { Var<_Boolx1> a(_Boolx1::Null()); RETURN(a.is_true_and_not_null()); });
+    CHECK_RESULT_INLINE( true, bool(),     { Var<_Boolx1> a(true);               RETURN(a.is_true_and_not_null()); });
+    CHECK_RESULT_INLINE(false, bool(),     { Var<_Boolx1> a(false);              RETURN(a.is_true_and_not_null()); });
+    CHECK_RESULT_INLINE(false, bool(),     { Var<_Boolx1> a(_Boolx1::Null()); RETURN(a.is_false_and_not_null()); });
+    CHECK_RESULT_INLINE(false, bool(),     { Var<_Boolx1> a(true);               RETURN(a.is_false_and_not_null()); });
+    CHECK_RESULT_INLINE( true, bool(),     { Var<_Boolx1> a(false);              RETURN(a.is_false_and_not_null()); });
 
-    CHECK_RESULT_INLINE( 3.14, double(), { Var<Double> a( 3.14); RETURN(+a); });
-    CHECK_RESULT_INLINE(-3.14, double(), { Var<Double> a( 3.14); RETURN(-a); });
-    CHECK_RESULT_INLINE( 3.14, double(), { Var<Double> a( 3.14); RETURN(a.abs()); });
-    CHECK_RESULT_INLINE( 3.14, double(), { Var<Double> a(-3.14); RETURN(a.abs()); });
-    CHECK_RESULT_INLINE( 4.0,  double(), { Var<Double> a( 3.14); RETURN(a.ceil()); });
-    CHECK_RESULT_INLINE( 3.0,  double(), { Var<Double> a( 3.14); RETURN(a.floor()); });
-    CHECK_RESULT_INLINE( 3.0,  double(), { Var<Double> a( 9.0);  RETURN(a.sqrt()); });
+    CHECK_RESULT_INLINE( 3.14, double(), { Var<Doublex1> a( 3.14); RETURN(+a); });
+    CHECK_RESULT_INLINE(-3.14, double(), { Var<Doublex1> a( 3.14); RETURN(-a); });
+    CHECK_RESULT_INLINE( 3.14, double(), { Var<Doublex1> a( 3.14); RETURN(a.abs()); });
+    CHECK_RESULT_INLINE( 3.14, double(), { Var<Doublex1> a(-3.14); RETURN(a.abs()); });
+    CHECK_RESULT_INLINE( 4.0,  double(), { Var<Doublex1> a( 3.14); RETURN(a.ceil()); });
+    CHECK_RESULT_INLINE( 3.0,  double(), { Var<Doublex1> a( 3.14); RETURN(a.floor()); });
+    CHECK_RESULT_INLINE( 3.0,  double(), { Var<Doublex1> a( 9.0);  RETURN(a.sqrt()); });
     // operator~ not supported for floating-point types
     // clz() not supported for floating-point types
     // ctz() not supported for floating-point types
     // popcnt() not supported for floating-point types
     // eqz() not supported for floating-point types
     // operator! not supported for floating-point types
-    CHECK_RESULT_INLINE( true, bool(), { Var<_Double> a(_Double::Null()); RETURN(a.is_null()); });
-    CHECK_RESULT_INLINE(false, bool(), { Var<_Double> a(3.14);                 RETURN(a.is_null()); });
-    CHECK_RESULT_INLINE(false, bool(), { Var<_Double> a(_Double::Null()); RETURN(a.not_null()); });
-    CHECK_RESULT_INLINE( true, bool(), { Var<_Double> a(3.14);                 RETURN(a.not_null()); });
+    CHECK_RESULT_INLINE( true, bool(), { Var<_Doublex1> a(_Doublex1::Null()); RETURN(a.is_null()); });
+    CHECK_RESULT_INLINE(false, bool(), { Var<_Doublex1> a(3.14);                 RETURN(a.is_null()); });
+    CHECK_RESULT_INLINE(false, bool(), { Var<_Doublex1> a(_Doublex1::Null()); RETURN(a.not_null()); });
+    CHECK_RESULT_INLINE( true, bool(), { Var<_Doublex1> a(3.14);                 RETURN(a.not_null()); });
     // is_true_and_not_null() not supported for floating-point types
     // is_false_and_not_null() not supported for floating-point types
 
@@ -1074,14 +1074,14 @@ TEST_CASE("Wasm/" BACKEND_NAME "/Variable/operations/binary", "[core][wasm]")
     CHECK_RESULT_INLINE(RES, RES_TYPE(), { \
         Var<VAL_A_TYPE> a(VAL_A); a OP##= VAL_B_TYPE::type(VAL_B); RETURN(a); \
     });
-#define TEST_OP_INT(RES, VALUE_A, VALUE_B, OP) TEST_OP(RES, I32, VALUE_A, I32, VALUE_B, I32, OP)
-#define TEST_OP_BOOL(RES, VALUE_A, VALUE_B, OP) TEST_OP(RES, Bool, VALUE_A, Bool, VALUE_B, Bool, OP)
-#define TEST_ASSIGN_INT(RES, VALUE_A, VALUE_B, OP) TEST_ASSIGN(RES, I32, VALUE_A, I32, VALUE_B, I32, OP)
-#define TEST_OP_INT_TO_BOOL(RES, VALUE_A, VALUE_B, OP) TEST_OP(RES, Bool, VALUE_A, I32, VALUE_B, I32, OP)
-#define TEST_OP_DOUBLE(RES, VALUE_A, VALUE_B, OP) TEST_OP(RES, Double, VALUE_A, Double, VALUE_B, Double, OP)
-#define TEST_FUNC_DOUBLE(RES, VALUE_A, VALUE_B, FUNC) TEST_FUNC(RES, Double, VALUE_A, Double, VALUE_B, Double, FUNC)
-#define TEST_ASSIGN_DOUBLE(RES, VALUE_A, VALUE_B, OP) TEST_ASSIGN(RES, Double, VALUE_A, Double, VALUE_B, Double, OP)
-#define TEST_OP_DOUBLE_TO_BOOL(RES, VALUE_A, VALUE_B, OP) TEST_OP(RES, Bool, VALUE_A, Double, VALUE_B, Double, OP)
+#define TEST_OP_INT(RES, VALUE_A, VALUE_B, OP) TEST_OP(RES, I32x1, VALUE_A, I32x1, VALUE_B, I32x1, OP)
+#define TEST_OP_BOOL(RES, VALUE_A, VALUE_B, OP) TEST_OP(RES, Boolx1, VALUE_A, Boolx1, VALUE_B, Boolx1, OP)
+#define TEST_ASSIGN_INT(RES, VALUE_A, VALUE_B, OP) TEST_ASSIGN(RES, I32x1, VALUE_A, I32x1, VALUE_B, I32x1, OP)
+#define TEST_OP_INT_TO_BOOL(RES, VALUE_A, VALUE_B, OP) TEST_OP(RES, Boolx1, VALUE_A, I32x1, VALUE_B, I32x1, OP)
+#define TEST_OP_DOUBLE(RES, VALUE_A, VALUE_B, OP) TEST_OP(RES, Doublex1, VALUE_A, Doublex1, VALUE_B, Doublex1, OP)
+#define TEST_FUNC_DOUBLE(RES, VALUE_A, VALUE_B, FUNC) TEST_FUNC(RES, Doublex1, VALUE_A, Doublex1, VALUE_B, Doublex1, FUNC)
+#define TEST_ASSIGN_DOUBLE(RES, VALUE_A, VALUE_B, OP) TEST_ASSIGN(RES, Doublex1, VALUE_A, Doublex1, VALUE_B, Doublex1, OP)
+#define TEST_OP_DOUBLE_TO_BOOL(RES, VALUE_A, VALUE_B, OP) TEST_OP(RES, Boolx1, VALUE_A, Doublex1, VALUE_B, Doublex1, OP)
 
     TEST_OP_INT( 59, 42, 17, +);
     TEST_OP_INT( 25, 42, 17, -);
@@ -1091,13 +1091,13 @@ TEST_CASE("Wasm/" BACKEND_NAME "/Variable/operations/binary", "[core][wasm]")
     // copy_sign() not supported for integral types
     // min() not supported for integral types
     // max() not supported for integral types
-    TEST_OP(0b00001000, I32, 0b00101010, I8,  0b00001001, I8, &);
-    TEST_OP(0b00101011, I32, 0b00101010, I8,  0b00001001, I8, |);
-    TEST_OP(0b00100011, I32, 0b00101010, I8,  0b00001001, I8, ^);
-    TEST_OP(0b10101000, I32, 0b00101010, I8,  2, I32, <<);
-    TEST_OP(0b00001010, I32, 0b00101010, I8,  2, I32, >>);
-    TEST_FUNC(0x01010001, I32, 0x00101010, I32, 12, I32, rotl);
-    TEST_FUNC(0x01000101, I32, 0x00101010, I32, 12, I32, rotr);
+    TEST_OP(0b00001000, I32x1, 0b00101010, I8x1,  0b00001001, I8x1, &);
+    TEST_OP(0b00101011, I32x1, 0b00101010, I8x1,  0b00001001, I8x1, |);
+    TEST_OP(0b00100011, I32x1, 0b00101010, I8x1,  0b00001001, I8x1, ^);
+    TEST_OP(0b10101000, I32x1, 0b00101010, I8x1,  2, I32x1, <<);
+    TEST_OP(0b00001010, I32x1, 0b00101010, I8x1,  2, I32x1, >>);
+    TEST_FUNC(0x01010001, I32x1, 0x00101010, I32x1, 12, I32x1, rotl);
+    TEST_FUNC(0x01000101, I32x1, 0x00101010, I32x1, 12, I32x1, rotr);
     TEST_OP_INT_TO_BOOL( true, 42, 42, ==);
     TEST_OP_INT_TO_BOOL(false, 42, 17, ==);
     TEST_OP_INT_TO_BOOL(false, 42, 42, !=);
@@ -1163,11 +1163,11 @@ TEST_CASE("Wasm/" BACKEND_NAME "/Variable/operations/binary", "[core][wasm]")
     TEST_ASSIGN_INT(714, 42, 17, *);
     TEST_ASSIGN_INT(  2, 42, 17, /);
     TEST_ASSIGN_INT(  8, 42, 17, %);
-    TEST_ASSIGN(0b00001000U, U32, 0b00101010U, U8,  0b00001001U, U8, &);
-    TEST_ASSIGN(0b00101011U, U32, 0b00101010U, U8,  0b00001001U, U8, |);
-    TEST_ASSIGN(0b00100011U, U32, 0b00101010U, U8,  0b00001001U, U8, ^);
-    TEST_ASSIGN(0b10101000, I32, 0b00101010, I8,  2, I8, <<);
-    TEST_ASSIGN(0b00001010, I32, 0b00101010, I8,  2, I8, >>);
+    TEST_ASSIGN(0b00001000U, U32x1, 0b00101010U, U8x1,  0b00001001U, U8x1, &);
+    TEST_ASSIGN(0b00101011U, U32x1, 0b00101010U, U8x1,  0b00001001U, U8x1, |);
+    TEST_ASSIGN(0b00100011U, U32x1, 0b00101010U, U8x1,  0b00001001U, U8x1, ^);
+    TEST_ASSIGN(0b10101000, I32x1, 0b00101010, I8x1,  2, I8x1, <<);
+    TEST_ASSIGN(0b00001010, I32x1, 0b00101010, I8x1,  2, I8x1, >>);
     TEST_ASSIGN_DOUBLE(Approx(5.85), 3.14, 2.71, +);
     TEST_ASSIGN_DOUBLE(Approx(0.43), 3.14, 2.71, -);
     TEST_ASSIGN_DOUBLE(Approx(1.57), 3.14, 0.5,  *);
@@ -1226,160 +1226,160 @@ TEST_CASE("Wasm/" BACKEND_NAME "/Variable/null_semantics", "[core][wasm]")
 
     /* with unary operations */
     CHECK_RESULT_INLINE(true, bool(), {
-        _Var<I32> a(_I32::Null()); _Var<I32> b(-a); /* b must allocate new NULL bit */
+        _Var<I32x1> a(_I32x1::Null()); _Var<I32x1> b(-a); /* b must allocate new NULL bit */
         RETURN(b.is_null());
     });
     CHECK_RESULT_INLINE(false, bool(), {
-        _Var<I32> a(_I32::Null()); _Var<I32> b(-a); /* b must allocate new NULL bit */ a = 42;
+        _Var<I32x1> a(_I32x1::Null()); _Var<I32x1> b(-a); /* b must allocate new NULL bit */ a = 42;
         b.val().discard(); /* artificial use of `b` to silence diagnostics */
         RETURN(a.is_null());
     });
     CHECK_RESULT_INLINE(true, bool(), {
-        _Var<I32> a(_I32::Null()); _Var<I32> b(-a); /* b must allocate new NULL bit */ a = 42;
+        _Var<I32x1> a(_I32x1::Null()); _Var<I32x1> b(-a); /* b must allocate new NULL bit */ a = 42;
         RETURN(b.is_null());
     });
     CHECK_RESULT_INLINE(true, bool(), {
-        _Var<I32> a(_I32::Null()); _Var<I32> b(-a); /* b must allocate new NULL bit */ b = 17;
+        _Var<I32x1> a(_I32x1::Null()); _Var<I32x1> b(-a); /* b must allocate new NULL bit */ b = 17;
         b.val().discard(); /* artificial use of `b` to silence diagnostics */
         RETURN(a.is_null());
     });
     CHECK_RESULT_INLINE(false, bool(), {
-        _Var<I32> a(_I32::Null()); _Var<I32> b(-a); /* b must allocate new NULL bit */ b = 17;
+        _Var<I32x1> a(_I32x1::Null()); _Var<I32x1> b(-a); /* b must allocate new NULL bit */ b = 17;
         RETURN(b.is_null());
     });
 
     /* with binary operations */
     CHECK_RESULT_INLINE( true, bool(), {
-        _Var<I32> a(_I32::Null()); _Var<I32> b(_I32::Null()); _Var<I32> c(a + b);
+        _Var<I32x1> a(_I32x1::Null()); _Var<I32x1> b(_I32x1::Null()); _Var<I32x1> c(a + b);
         /* a, b, and c must allocate their own NULL bit */
         RETURN(c.is_null());
     });
     CHECK_RESULT_INLINE( true, bool(), {
-        _Var<I32> a(_I32::Null()); Var<I32> b(17); _Var<I32> c(a + b);
+        _Var<I32x1> a(_I32x1::Null()); Var<I32x1> b(17); _Var<I32x1> c(a + b);
         /* a and c must allocate their own NULL bit */
         RETURN(c.is_null());
     });
     CHECK_RESULT_INLINE( true, bool(), {
-        Var<I32> a(42); _Var<I32> b(_I32::Null()); _Var<I32> c(a + b);
+        Var<I32x1> a(42); _Var<I32x1> b(_I32x1::Null()); _Var<I32x1> c(a + b);
         /* b and c must allocate their own NULL bit */
         RETURN(c.is_null());
     });
 
     CHECK_RESULT_INLINE(false, bool(), {
-        _Var<I32> a(_I32::Null()); _Var<I32> b(_I32::Null()); _Var<I32> c(a + b); a = 42;
+        _Var<I32x1> a(_I32x1::Null()); _Var<I32x1> b(_I32x1::Null()); _Var<I32x1> c(a + b); a = 42;
         /* a, b, and c must allocate their own NULL bit */
         c.val().discard(); /* artificial use of `c` to silence diagnostics */
         RETURN(a.is_null());
     });
     CHECK_RESULT_INLINE( true, bool(), {
-        _Var<I32> a(_I32::Null()); _Var<I32> b(_I32::Null()); _Var<I32> c(a + b); a = 42;
+        _Var<I32x1> a(_I32x1::Null()); _Var<I32x1> b(_I32x1::Null()); _Var<I32x1> c(a + b); a = 42;
         /* a, b, and c must allocate their own NULL bit */
         c.val().discard(); /* artificial use of `c` to silence diagnostics */
         RETURN(b.is_null());
     });
     CHECK_RESULT_INLINE( true, bool(), {
-        _Var<I32> a(_I32::Null()); _Var<I32> b(_I32::Null()); _Var<I32> c(a + b); a = 42;
+        _Var<I32x1> a(_I32x1::Null()); _Var<I32x1> b(_I32x1::Null()); _Var<I32x1> c(a + b); a = 42;
         /* a, b, and c must allocate their own NULL bit */
         RETURN(c.is_null());
     });
     CHECK_RESULT_INLINE( true, bool(), {
-        _Var<I32> a(_I32::Null()); _Var<I32> b(_I32::Null()); _Var<I32> c(a + b); b = 17;
+        _Var<I32x1> a(_I32x1::Null()); _Var<I32x1> b(_I32x1::Null()); _Var<I32x1> c(a + b); b = 17;
         /* a, b, and c must allocate their own NULL bit */
         c.val().discard(); /* artificial use of `c` to silence diagnostics */
         RETURN(a.is_null());
     });
     CHECK_RESULT_INLINE(false, bool(), {
-        _Var<I32> a(_I32::Null()); _Var<I32> b(_I32::Null()); _Var<I32> c(a + b); b = 17;
+        _Var<I32x1> a(_I32x1::Null()); _Var<I32x1> b(_I32x1::Null()); _Var<I32x1> c(a + b); b = 17;
         /* a, b, and c must allocate their own NULL bit */
         c.val().discard(); /* artificial use of `c` to silence diagnostics */
         RETURN(b.is_null());
     });
     CHECK_RESULT_INLINE( true, bool(), {
-        _Var<I32> a(_I32::Null()); _Var<I32> b(_I32::Null()); _Var<I32> c(a + b); b = 17;
+        _Var<I32x1> a(_I32x1::Null()); _Var<I32x1> b(_I32x1::Null()); _Var<I32x1> c(a + b); b = 17;
         /* a, b, and c must allocate their own NULL bit */
         RETURN(c.is_null());
     });
     CHECK_RESULT_INLINE( true, bool(), {
-        _Var<I32> a(_I32::Null()); _Var<I32> b(_I32::Null()); _Var<I32> c(a + b); c = 99;
+        _Var<I32x1> a(_I32x1::Null()); _Var<I32x1> b(_I32x1::Null()); _Var<I32x1> c(a + b); c = 99;
         /* a, b, and c must allocate their own NULL bit */
         c.val().discard(); /* artificial use of `c` to silence diagnostics */
         RETURN(a.is_null());
     });
     CHECK_RESULT_INLINE( true, bool(), {
-        _Var<I32> a(_I32::Null()); _Var<I32> b(_I32::Null()); _Var<I32> c(a + b); c = 99;
+        _Var<I32x1> a(_I32x1::Null()); _Var<I32x1> b(_I32x1::Null()); _Var<I32x1> c(a + b); c = 99;
         /* a, b, and c must allocate their own NULL bit */
         c.val().discard(); /* artificial use of `c` to silence diagnostics */
         RETURN(b.is_null());
     });
     CHECK_RESULT_INLINE(false, bool(), {
-        _Var<I32> a(_I32::Null()); _Var<I32> b(_I32::Null()); _Var<I32> c(a + b); c = 99;
+        _Var<I32x1> a(_I32x1::Null()); _Var<I32x1> b(_I32x1::Null()); _Var<I32x1> c(a + b); c = 99;
         /* a, b, and c must allocate their own NULL bit */
         RETURN(c.is_null());
     });
 
     /* special cases with logical `or` and `and` */
-    CHECK_RESULT_INLINE( true, bool(), { _Var<Bool> a(_Bool::Null()); _Var<Bool> b(_Bool::Null()); _Bool c(a or b); RETURN(c.is_null()); });
-    CHECK_RESULT_INLINE( true, bool(), { _Var<Bool> a(_Bool::Null()); _Var<Bool> b(false); _Bool c(a or b); RETURN(c.is_null()); });
-    CHECK_RESULT_INLINE( true, bool(), { _Var<Bool> a(_Bool::Null()); _Var<Bool> b(true);  _Bool c(a or b); RETURN(c.is_true_and_not_null()); });
-    CHECK_RESULT_INLINE( true, bool(), { _Var<Bool> a(false); _Var<Bool> b(_Bool::Null()); _Bool c(a or b); RETURN(c.is_null()); });
-    CHECK_RESULT_INLINE( true, bool(), { _Var<Bool> a(true);  _Var<Bool> b(_Bool::Null()); _Bool c(a or b); RETURN(c.is_true_and_not_null()); });
-    CHECK_RESULT_INLINE( true, bool(), { _Var<Bool> a(false); _Var<Bool> b(false); _Bool c(a or b); RETURN(c.is_false_and_not_null()); });
-    CHECK_RESULT_INLINE( true, bool(), { _Var<Bool> a(false); _Var<Bool> b(true);  _Bool c(a or b); RETURN(c.is_true_and_not_null()); });
-    CHECK_RESULT_INLINE( true, bool(), { _Var<Bool> a(true);  _Var<Bool> b(false); _Bool c(a or b); RETURN(c.is_true_and_not_null()); });
-    CHECK_RESULT_INLINE( true, bool(), { _Var<Bool> a(true);  _Var<Bool> b(true);  _Bool c(a or b); RETURN(c.is_true_and_not_null()); });
+    CHECK_RESULT_INLINE( true, bool(), { _Var<Boolx1> a(_Boolx1::Null()); _Var<Boolx1> b(_Boolx1::Null()); _Boolx1 c(a or b); RETURN(c.is_null()); });
+    CHECK_RESULT_INLINE( true, bool(), { _Var<Boolx1> a(_Boolx1::Null()); _Var<Boolx1> b(false); _Boolx1 c(a or b); RETURN(c.is_null()); });
+    CHECK_RESULT_INLINE( true, bool(), { _Var<Boolx1> a(_Boolx1::Null()); _Var<Boolx1> b(true);  _Boolx1 c(a or b); RETURN(c.is_true_and_not_null()); });
+    CHECK_RESULT_INLINE( true, bool(), { _Var<Boolx1> a(false); _Var<Boolx1> b(_Boolx1::Null()); _Boolx1 c(a or b); RETURN(c.is_null()); });
+    CHECK_RESULT_INLINE( true, bool(), { _Var<Boolx1> a(true);  _Var<Boolx1> b(_Boolx1::Null()); _Boolx1 c(a or b); RETURN(c.is_true_and_not_null()); });
+    CHECK_RESULT_INLINE( true, bool(), { _Var<Boolx1> a(false); _Var<Boolx1> b(false); _Boolx1 c(a or b); RETURN(c.is_false_and_not_null()); });
+    CHECK_RESULT_INLINE( true, bool(), { _Var<Boolx1> a(false); _Var<Boolx1> b(true);  _Boolx1 c(a or b); RETURN(c.is_true_and_not_null()); });
+    CHECK_RESULT_INLINE( true, bool(), { _Var<Boolx1> a(true);  _Var<Boolx1> b(false); _Boolx1 c(a or b); RETURN(c.is_true_and_not_null()); });
+    CHECK_RESULT_INLINE( true, bool(), { _Var<Boolx1> a(true);  _Var<Boolx1> b(true);  _Boolx1 c(a or b); RETURN(c.is_true_and_not_null()); });
 
-    CHECK_RESULT_INLINE( true, bool(), { _Var<Bool> a(_Bool::Null()); _Var<Bool> b(false); _Bool c(a or b); RETURN(c.is_null()); });
-    CHECK_RESULT_INLINE( true, bool(), { _Var<Bool> a(_Bool::Null()); _Var<Bool> b(true);  _Bool c(a or b); RETURN(c.is_true_and_not_null()); });
-    CHECK_RESULT_INLINE( true, bool(), { _Var<Bool> a(false); _Var<Bool> b(false); _Bool c(a or b); RETURN(c.is_false_and_not_null()); });
-    CHECK_RESULT_INLINE( true, bool(), { _Var<Bool> a(false); _Var<Bool> b(true);  _Bool c(a or b); RETURN(c.is_true_and_not_null()); });
-    CHECK_RESULT_INLINE( true, bool(), { _Var<Bool> a(true);  _Var<Bool> b(false); _Bool c(a or b); RETURN(c.is_true_and_not_null()); });
-    CHECK_RESULT_INLINE( true, bool(), { _Var<Bool> a(true);  _Var<Bool> b(true);  _Bool c(a or b); RETURN(c.is_true_and_not_null()); });
+    CHECK_RESULT_INLINE( true, bool(), { _Var<Boolx1> a(_Boolx1::Null()); _Var<Boolx1> b(false); _Boolx1 c(a or b); RETURN(c.is_null()); });
+    CHECK_RESULT_INLINE( true, bool(), { _Var<Boolx1> a(_Boolx1::Null()); _Var<Boolx1> b(true);  _Boolx1 c(a or b); RETURN(c.is_true_and_not_null()); });
+    CHECK_RESULT_INLINE( true, bool(), { _Var<Boolx1> a(false); _Var<Boolx1> b(false); _Boolx1 c(a or b); RETURN(c.is_false_and_not_null()); });
+    CHECK_RESULT_INLINE( true, bool(), { _Var<Boolx1> a(false); _Var<Boolx1> b(true);  _Boolx1 c(a or b); RETURN(c.is_true_and_not_null()); });
+    CHECK_RESULT_INLINE( true, bool(), { _Var<Boolx1> a(true);  _Var<Boolx1> b(false); _Boolx1 c(a or b); RETURN(c.is_true_and_not_null()); });
+    CHECK_RESULT_INLINE( true, bool(), { _Var<Boolx1> a(true);  _Var<Boolx1> b(true);  _Boolx1 c(a or b); RETURN(c.is_true_and_not_null()); });
 
-    CHECK_RESULT_INLINE( true, bool(), { _Var<Bool> a(false); _Var<Bool> b(_Bool::Null()); _Bool c(a or b); RETURN(c.is_null()); });
-    CHECK_RESULT_INLINE( true, bool(), { _Var<Bool> a(true);  _Var<Bool> b(_Bool::Null()); _Bool c(a or b); RETURN(c.is_true_and_not_null()); });
-    CHECK_RESULT_INLINE( true, bool(), { _Var<Bool> a(false); _Var<Bool> b(false); _Bool c(a or b); RETURN(c.is_false_and_not_null()); });
-    CHECK_RESULT_INLINE( true, bool(), { _Var<Bool> a(false); _Var<Bool> b(true);  _Bool c(a or b); RETURN(c.is_true_and_not_null()); });
-    CHECK_RESULT_INLINE( true, bool(), { _Var<Bool> a(true);  _Var<Bool> b(false); _Bool c(a or b); RETURN(c.is_true_and_not_null()); });
-    CHECK_RESULT_INLINE( true, bool(), { _Var<Bool> a(true);  _Var<Bool> b(true);  _Bool c(a or b); RETURN(c.is_true_and_not_null()); });
+    CHECK_RESULT_INLINE( true, bool(), { _Var<Boolx1> a(false); _Var<Boolx1> b(_Boolx1::Null()); _Boolx1 c(a or b); RETURN(c.is_null()); });
+    CHECK_RESULT_INLINE( true, bool(), { _Var<Boolx1> a(true);  _Var<Boolx1> b(_Boolx1::Null()); _Boolx1 c(a or b); RETURN(c.is_true_and_not_null()); });
+    CHECK_RESULT_INLINE( true, bool(), { _Var<Boolx1> a(false); _Var<Boolx1> b(false); _Boolx1 c(a or b); RETURN(c.is_false_and_not_null()); });
+    CHECK_RESULT_INLINE( true, bool(), { _Var<Boolx1> a(false); _Var<Boolx1> b(true);  _Boolx1 c(a or b); RETURN(c.is_true_and_not_null()); });
+    CHECK_RESULT_INLINE( true, bool(), { _Var<Boolx1> a(true);  _Var<Boolx1> b(false); _Boolx1 c(a or b); RETURN(c.is_true_and_not_null()); });
+    CHECK_RESULT_INLINE( true, bool(), { _Var<Boolx1> a(true);  _Var<Boolx1> b(true);  _Boolx1 c(a or b); RETURN(c.is_true_and_not_null()); });
 
-    CHECK_RESULT_INLINE( true, bool(), { _Var<Bool> a(_Bool::Null()); _Var<Bool> b(_Bool::Null()); _Bool c(a and b); RETURN(c.is_null()); });
-    CHECK_RESULT_INLINE( true, bool(), { _Var<Bool> a(_Bool::Null()); _Var<Bool> b(false); _Bool c(a and b); RETURN(c.is_false_and_not_null()); });
-    CHECK_RESULT_INLINE( true, bool(), { _Var<Bool> a(_Bool::Null()); _Var<Bool> b(true);  _Bool c(a and b); RETURN(c.is_null()); });
-    CHECK_RESULT_INLINE( true, bool(), { _Var<Bool> a(false); _Var<Bool> b(_Bool::Null()); _Bool c(a and b); RETURN(c.is_false_and_not_null()); });
-    CHECK_RESULT_INLINE( true, bool(), { _Var<Bool> a(true);  _Var<Bool> b(_Bool::Null()); _Bool c(a and b); RETURN(c.is_null()); });
-    CHECK_RESULT_INLINE( true, bool(), { _Var<Bool> a(false); _Var<Bool> b(false); _Bool c(a and b); RETURN(c.is_false_and_not_null()); });
-    CHECK_RESULT_INLINE( true, bool(), { _Var<Bool> a(false); _Var<Bool> b(true);  _Bool c(a and b); RETURN(c.is_false_and_not_null()); });
-    CHECK_RESULT_INLINE( true, bool(), { _Var<Bool> a(true);  _Var<Bool> b(false); _Bool c(a and b); RETURN(c.is_false_and_not_null()); });
-    CHECK_RESULT_INLINE( true, bool(), { _Var<Bool> a(true);  _Var<Bool> b(true);  _Bool c(a and b); RETURN(c.is_true_and_not_null()); });
+    CHECK_RESULT_INLINE( true, bool(), { _Var<Boolx1> a(_Boolx1::Null()); _Var<Boolx1> b(_Boolx1::Null()); _Boolx1 c(a and b); RETURN(c.is_null()); });
+    CHECK_RESULT_INLINE( true, bool(), { _Var<Boolx1> a(_Boolx1::Null()); _Var<Boolx1> b(false); _Boolx1 c(a and b); RETURN(c.is_false_and_not_null()); });
+    CHECK_RESULT_INLINE( true, bool(), { _Var<Boolx1> a(_Boolx1::Null()); _Var<Boolx1> b(true);  _Boolx1 c(a and b); RETURN(c.is_null()); });
+    CHECK_RESULT_INLINE( true, bool(), { _Var<Boolx1> a(false); _Var<Boolx1> b(_Boolx1::Null()); _Boolx1 c(a and b); RETURN(c.is_false_and_not_null()); });
+    CHECK_RESULT_INLINE( true, bool(), { _Var<Boolx1> a(true);  _Var<Boolx1> b(_Boolx1::Null()); _Boolx1 c(a and b); RETURN(c.is_null()); });
+    CHECK_RESULT_INLINE( true, bool(), { _Var<Boolx1> a(false); _Var<Boolx1> b(false); _Boolx1 c(a and b); RETURN(c.is_false_and_not_null()); });
+    CHECK_RESULT_INLINE( true, bool(), { _Var<Boolx1> a(false); _Var<Boolx1> b(true);  _Boolx1 c(a and b); RETURN(c.is_false_and_not_null()); });
+    CHECK_RESULT_INLINE( true, bool(), { _Var<Boolx1> a(true);  _Var<Boolx1> b(false); _Boolx1 c(a and b); RETURN(c.is_false_and_not_null()); });
+    CHECK_RESULT_INLINE( true, bool(), { _Var<Boolx1> a(true);  _Var<Boolx1> b(true);  _Boolx1 c(a and b); RETURN(c.is_true_and_not_null()); });
 
-    CHECK_RESULT_INLINE( true, bool(), { _Var<Bool> a(_Bool::Null()); _Var<Bool> b(false); _Bool c(a and b); RETURN(c.is_false_and_not_null()); });
-    CHECK_RESULT_INLINE( true, bool(), { _Var<Bool> a(_Bool::Null()); _Var<Bool> b(true);  _Bool c(a and b); RETURN(c.is_null()); });
-    CHECK_RESULT_INLINE( true, bool(), { _Var<Bool> a(false); _Var<Bool> b(false); _Bool c(a and b); RETURN(c.is_false_and_not_null()); });
-    CHECK_RESULT_INLINE( true, bool(), { _Var<Bool> a(false); _Var<Bool> b(true);  _Bool c(a and b); RETURN(c.is_false_and_not_null()); });
-    CHECK_RESULT_INLINE( true, bool(), { _Var<Bool> a(true);  _Var<Bool> b(false); _Bool c(a and b); RETURN(c.is_false_and_not_null()); });
-    CHECK_RESULT_INLINE( true, bool(), { _Var<Bool> a(true);  _Var<Bool> b(true);  _Bool c(a and b); RETURN(c.is_true_and_not_null()); });
+    CHECK_RESULT_INLINE( true, bool(), { _Var<Boolx1> a(_Boolx1::Null()); _Var<Boolx1> b(false); _Boolx1 c(a and b); RETURN(c.is_false_and_not_null()); });
+    CHECK_RESULT_INLINE( true, bool(), { _Var<Boolx1> a(_Boolx1::Null()); _Var<Boolx1> b(true);  _Boolx1 c(a and b); RETURN(c.is_null()); });
+    CHECK_RESULT_INLINE( true, bool(), { _Var<Boolx1> a(false); _Var<Boolx1> b(false); _Boolx1 c(a and b); RETURN(c.is_false_and_not_null()); });
+    CHECK_RESULT_INLINE( true, bool(), { _Var<Boolx1> a(false); _Var<Boolx1> b(true);  _Boolx1 c(a and b); RETURN(c.is_false_and_not_null()); });
+    CHECK_RESULT_INLINE( true, bool(), { _Var<Boolx1> a(true);  _Var<Boolx1> b(false); _Boolx1 c(a and b); RETURN(c.is_false_and_not_null()); });
+    CHECK_RESULT_INLINE( true, bool(), { _Var<Boolx1> a(true);  _Var<Boolx1> b(true);  _Boolx1 c(a and b); RETURN(c.is_true_and_not_null()); });
 
-    CHECK_RESULT_INLINE( true, bool(), { _Var<Bool> a(false); _Var<Bool> b(_Bool::Null()); _Bool c(a and b); RETURN(c.is_false_and_not_null()); });
-    CHECK_RESULT_INLINE( true, bool(), { _Var<Bool> a(true);  _Var<Bool> b(_Bool::Null()); _Bool c(a and b); RETURN(c.is_null()); });
-    CHECK_RESULT_INLINE( true, bool(), { _Var<Bool> a(false); _Var<Bool> b(false); _Bool c(a and b); RETURN(c.is_false_and_not_null()); });
-    CHECK_RESULT_INLINE( true, bool(), { _Var<Bool> a(false); _Var<Bool> b(true);  _Bool c(a and b); RETURN(c.is_false_and_not_null()); });
-    CHECK_RESULT_INLINE( true, bool(), { _Var<Bool> a(true);  _Var<Bool> b(false); _Bool c(a and b); RETURN(c.is_false_and_not_null()); });
-    CHECK_RESULT_INLINE( true, bool(), { _Var<Bool> a(true);  _Var<Bool> b(true);  _Bool c(a and b); RETURN(c.is_true_and_not_null()); });
+    CHECK_RESULT_INLINE( true, bool(), { _Var<Boolx1> a(false); _Var<Boolx1> b(_Boolx1::Null()); _Boolx1 c(a and b); RETURN(c.is_false_and_not_null()); });
+    CHECK_RESULT_INLINE( true, bool(), { _Var<Boolx1> a(true);  _Var<Boolx1> b(_Boolx1::Null()); _Boolx1 c(a and b); RETURN(c.is_null()); });
+    CHECK_RESULT_INLINE( true, bool(), { _Var<Boolx1> a(false); _Var<Boolx1> b(false); _Boolx1 c(a and b); RETURN(c.is_false_and_not_null()); });
+    CHECK_RESULT_INLINE( true, bool(), { _Var<Boolx1> a(false); _Var<Boolx1> b(true);  _Boolx1 c(a and b); RETURN(c.is_false_and_not_null()); });
+    CHECK_RESULT_INLINE( true, bool(), { _Var<Boolx1> a(true);  _Var<Boolx1> b(false); _Boolx1 c(a and b); RETURN(c.is_false_and_not_null()); });
+    CHECK_RESULT_INLINE( true, bool(), { _Var<Boolx1> a(true);  _Var<Boolx1> b(true);  _Boolx1 c(a and b); RETURN(c.is_true_and_not_null()); });
 
     /* with NULL bit reuse */
     CHECK_RESULT_INLINE(false, bool(), {
-        _Var<I32> a(_I32::Null()); // to make a nullable
+        _Var<I32x1> a(_I32x1::Null()); // to make a nullable
         a = 1; /* a's NULL bit is updated but no new NULL bit needed */
         RETURN(a.is_null());
     });
     CHECK_RESULT_INLINE(true, bool(), {
-        _Var<I32> a(_I32::Null()); { _Var<I32> b(_I32::Null()); _I32 c(a + b); c.discard(); }
-        _Var<I32> d(_I32::Null()); /* d should reuse b's NULL bit (i.e. offset 1) */ RETURN(d.is_null());
+        _Var<I32x1> a(_I32x1::Null()); { _Var<I32x1> b(_I32x1::Null()); _I32x1 c(a + b); c.discard(); }
+        _Var<I32x1> d(_I32x1::Null()); /* d should reuse b's NULL bit (i.e. offset 1) */ RETURN(d.is_null());
     });
 
     /* with conversions */
-    CHECK_RESULT_INLINE( true, bool(), { _Var<I8> a(_I8::Null()); _Var<I32> b(a.val()); RETURN(b.is_null()); });
-    CHECK_RESULT_INLINE( true, bool(), { _Var<I32> a(_I32::Null()); _Var<I8> b(a.to<int8_t>()); RETURN(b.is_null());
+    CHECK_RESULT_INLINE( true, bool(), { _Var<I8x1> a(_I8x1::Null()); _Var<I32x1> b(a.val()); RETURN(b.is_null()); });
+    CHECK_RESULT_INLINE( true, bool(), { _Var<I32x1> a(_I32x1::Null()); _Var<I8x1> b(a.to<int8_t>()); RETURN(b.is_null());
     });
 
     Module::Dispose();
@@ -1389,28 +1389,28 @@ TEST_CASE("Wasm/" BACKEND_NAME "/Select", "[core][wasm]")
 {
     Module::Init();
 
-    CHECK_RESULT_INLINE(0, int(), { Bool cond(true);  Var<I32> a(0); Var<I32> b(1); RETURN(Select(cond, a, b)); });
-    CHECK_RESULT_INLINE(1, int(), { Bool cond(false); Var<I32> a(0); Var<I32> b(1); RETURN(Select(cond, a, b)); });
-    CHECK_RESULT_INLINE(0, int(), { Bool cond(true);  Var<I32> a(0); I32 b(1); RETURN(Select(cond, a, b)); });
-    CHECK_RESULT_INLINE(1, int(), { Bool cond(false); Var<I32> a(0); I32 b(1); RETURN(Select(cond, a, b)); });
-    CHECK_RESULT_INLINE(0, int(), { Bool cond(true);  I32 a(0); Var<I32> b(1); RETURN(Select(cond, a, b)); });
-    CHECK_RESULT_INLINE(1, int(), { Bool cond(false); I32 a(0); Var<I32> b(1); RETURN(Select(cond, a, b)); });
-    CHECK_RESULT_INLINE(0, int(), { Bool cond(true);  I32 a(0); I32 b(1); RETURN(Select(cond, a, b)); });
-    CHECK_RESULT_INLINE(1, int(), { Bool cond(false); I32 a(0); I32 b(1); RETURN(Select(cond, a, b)); });
-    CHECK_RESULT_INLINE(0, int(), { Bool cond(true);  Var<I32> a(0); RETURN(Select(cond, a, 1)); });
-    CHECK_RESULT_INLINE(1, int(), { Bool cond(false); Var<I32> a(0); RETURN(Select(cond, a, 1)); });
-    CHECK_RESULT_INLINE(0, int(), { Bool cond(true);  Var<I32> b(1); RETURN(Select(cond, 0, b)); });
-    CHECK_RESULT_INLINE(1, int(), { Bool cond(false); Var<I32> b(1); RETURN(Select(cond, 0, b)); });
-    CHECK_RESULT_INLINE(0, int(), { Bool cond(true);  I32 a(0); RETURN(Select(cond, a, 1)); });
-    CHECK_RESULT_INLINE(1, int(), { Bool cond(false); I32 a(0); RETURN(Select(cond, a, 1)); });
-    CHECK_RESULT_INLINE(0, int(), { Bool cond(true);  I32 b(1); RETURN(Select(cond, 0, b)); });
-    CHECK_RESULT_INLINE(1, int(), { Bool cond(false); I32 b(1); RETURN(Select(cond, 0, b)); });
+    CHECK_RESULT_INLINE(0, int(), { Boolx1 cond(true);  Var<I32x1> a(0); Var<I32x1> b(1); RETURN(Select(cond, a, b)); });
+    CHECK_RESULT_INLINE(1, int(), { Boolx1 cond(false); Var<I32x1> a(0); Var<I32x1> b(1); RETURN(Select(cond, a, b)); });
+    CHECK_RESULT_INLINE(0, int(), { Boolx1 cond(true);  Var<I32x1> a(0); I32x1 b(1); RETURN(Select(cond, a, b)); });
+    CHECK_RESULT_INLINE(1, int(), { Boolx1 cond(false); Var<I32x1> a(0); I32x1 b(1); RETURN(Select(cond, a, b)); });
+    CHECK_RESULT_INLINE(0, int(), { Boolx1 cond(true);  I32x1 a(0); Var<I32x1> b(1); RETURN(Select(cond, a, b)); });
+    CHECK_RESULT_INLINE(1, int(), { Boolx1 cond(false); I32x1 a(0); Var<I32x1> b(1); RETURN(Select(cond, a, b)); });
+    CHECK_RESULT_INLINE(0, int(), { Boolx1 cond(true);  I32x1 a(0); I32x1 b(1); RETURN(Select(cond, a, b)); });
+    CHECK_RESULT_INLINE(1, int(), { Boolx1 cond(false); I32x1 a(0); I32x1 b(1); RETURN(Select(cond, a, b)); });
+    CHECK_RESULT_INLINE(0, int(), { Boolx1 cond(true);  Var<I32x1> a(0); RETURN(Select(cond, a, 1)); });
+    CHECK_RESULT_INLINE(1, int(), { Boolx1 cond(false); Var<I32x1> a(0); RETURN(Select(cond, a, 1)); });
+    CHECK_RESULT_INLINE(0, int(), { Boolx1 cond(true);  Var<I32x1> b(1); RETURN(Select(cond, 0, b)); });
+    CHECK_RESULT_INLINE(1, int(), { Boolx1 cond(false); Var<I32x1> b(1); RETURN(Select(cond, 0, b)); });
+    CHECK_RESULT_INLINE(0, int(), { Boolx1 cond(true);  I32x1 a(0); RETURN(Select(cond, a, 1)); });
+    CHECK_RESULT_INLINE(1, int(), { Boolx1 cond(false); I32x1 a(0); RETURN(Select(cond, a, 1)); });
+    CHECK_RESULT_INLINE(0, int(), { Boolx1 cond(true);  I32x1 b(1); RETURN(Select(cond, 0, b)); });
+    CHECK_RESULT_INLINE(1, int(), { Boolx1 cond(false); I32x1 b(1); RETURN(Select(cond, 0, b)); });
 
     CHECK_RESULT_INLINE(std::to_array({ 0, 1 }), I32x2(), {
-        Bool cond(true);  I32x2 a(0, 1); I32x2 b(2, 3); RETURN(Select(cond, a, b));
+        Boolx1 cond(true);  I32x2 a(0, 1); I32x2 b(2, 3); RETURN(Select(cond, a, b));
     });
     CHECK_RESULT_INLINE(std::to_array({ 2, 3 }), I32x2(), {
-        Bool cond(false); I32x2 a(0, 1); I32x2 b(2, 3); RETURN(Select(cond, a, b));
+        Boolx1 cond(false); I32x2 a(0, 1); I32x2 b(2, 3); RETURN(Select(cond, a, b));
     });
     CHECK_RESULT_INLINE(std::to_array<int32_t>({ 0x01234567, int32_t(0x9abcdef0) }), I32x2(), {
         Boolx2 cond(true, false); I32x2 a(0x01234567, 0x89abcdef); I32x2 b(0x12345678, 0x9abcdef0); RETURN(Select(cond, a, b));
@@ -1487,28 +1487,28 @@ TEST_CASE("Wasm/" BACKEND_NAME "/If", "[core][wasm]")
 
     /* side-effects */
     CHECK_RESULT_INLINE(1, int(), {
-        Var<I32> res(0);
-        Var<U32> test(2);
+        Var<I32x1> res(0);
+        Var<U32x1> test(2);
         IF ((test = 1U).to<bool>()) { res = 1; } ELSE { res = 2; };
         RETURN(res);
     });
     CHECK_RESULT_INLINE(1, unsigned(), {
-        Var<I32> res(0);
-        Var<U32> test(2);
+        Var<I32x1> res(0);
+        Var<U32x1> test(2);
         IF ((test = 1U).to<bool>()) { res = 1; } ELSE { res = 2; };
         res.val().discard(); /* artificial use of `res` to silence diagnostics */
         RETURN(test);
     });
 
     CHECK_RESULT_INLINE(2, int(), {
-        Var<I32> res(0);
-        Var<U32> test(2);
+        Var<I32x1> res(0);
+        Var<U32x1> test(2);
         IF ((test = 0U).to<bool>()) { res = 1; } ELSE { res = 2; };
         RETURN(res);
     });
     CHECK_RESULT_INLINE(0, unsigned(), {
-        Var<I32> res(0);
-        Var<U32> test(2);
+        Var<I32x1> res(0);
+        Var<U32x1> test(2);
         IF ((test = 0U).to<bool>()) { res = 1; } ELSE { res = 2; };
         res.val().discard(); /* artificial use of `res` to silence diagnostics */
         RETURN(test);
@@ -1550,7 +1550,7 @@ TEST_CASE("Wasm/" BACKEND_NAME "/Loop/Loop", "[core][wasm]")
 
     /* zero iterations */
     CHECK_RESULT_INLINE(0, int(), {
-        Var<I32> res(0);
+        Var<I32x1> res(0);
         LOOP() {
             BREAK();
             res += 1;
@@ -1559,7 +1559,7 @@ TEST_CASE("Wasm/" BACKEND_NAME "/Loop/Loop", "[core][wasm]")
         RETURN(res);
     });
     CHECK_RESULT_INLINE(0, int(), {
-        Var<I32> res(0);
+        Var<I32x1> res(0);
         LOOP() {
             BREAK(res == 0);
             res += 1;
@@ -1570,7 +1570,7 @@ TEST_CASE("Wasm/" BACKEND_NAME "/Loop/Loop", "[core][wasm]")
 
     /* one iteration */
     CHECK_RESULT_INLINE(1, int(), {
-        Var<I32> res(0);
+        Var<I32x1> res(0);
         LOOP() {
             BREAK(res == 1);
             res += 1;
@@ -1579,7 +1579,7 @@ TEST_CASE("Wasm/" BACKEND_NAME "/Loop/Loop", "[core][wasm]")
         RETURN(res);
     });
     CHECK_RESULT_INLINE(1, int(), {
-        Var<I32> res(0);
+        Var<I32x1> res(0);
         LOOP() {
             res += 1;
             BREAK(res == 1);
@@ -1588,7 +1588,7 @@ TEST_CASE("Wasm/" BACKEND_NAME "/Loop/Loop", "[core][wasm]")
         RETURN(res);
     });
     CHECK_RESULT_INLINE(1, int(), {
-        Var<I32> res(0);
+        Var<I32x1> res(0);
         LOOP() {
             res += 1;
         }
@@ -1597,7 +1597,7 @@ TEST_CASE("Wasm/" BACKEND_NAME "/Loop/Loop", "[core][wasm]")
 
     /* multiple iterations */
     CHECK_RESULT_INLINE(2, int(), {
-        Var<I32> res(0);
+        Var<I32x1> res(0);
         LOOP() {
             BREAK(res == 2);
             res += 1;
@@ -1606,7 +1606,7 @@ TEST_CASE("Wasm/" BACKEND_NAME "/Loop/Loop", "[core][wasm]")
         RETURN(res);
     });
     CHECK_RESULT_INLINE(2, int(), {
-        Var<I32> res(0);
+        Var<I32x1> res(0);
         LOOP() {
             res += 1;
             BREAK(res == 2);
@@ -1615,7 +1615,7 @@ TEST_CASE("Wasm/" BACKEND_NAME "/Loop/Loop", "[core][wasm]")
         RETURN(res);
     });
     CHECK_RESULT_INLINE(42, int(), {
-        Var<I32> res(0);
+        Var<I32x1> res(0);
         LOOP() {
             BREAK(res == 42);
             res += 1;
@@ -1626,8 +1626,8 @@ TEST_CASE("Wasm/" BACKEND_NAME "/Loop/Loop", "[core][wasm]")
 
     /* continue */
     CHECK_RESULT_INLINE(0, int(), {
-        Var<I32> res(0);
-        Var<I32> i(0);
+        Var<I32x1> res(0);
+        Var<I32x1> i(0);
         LOOP() {
             BREAK(i == 10);
             i += 1;
@@ -1638,8 +1638,8 @@ TEST_CASE("Wasm/" BACKEND_NAME "/Loop/Loop", "[core][wasm]")
         RETURN(res);
     });
     CHECK_RESULT_INLINE(5, int(), {
-        Var<I32> res(0);
-        Var<I32> i(0);
+        Var<I32x1> res(0);
+        Var<I32x1> i(0);
         LOOP() {
             BREAK(i == 10);
             i += 1;
@@ -1650,8 +1650,8 @@ TEST_CASE("Wasm/" BACKEND_NAME "/Loop/Loop", "[core][wasm]")
         RETURN(res);
     });
     CHECK_RESULT_INLINE(10, int(), {
-        Var<I32> res(0);
-        Var<I32> i(0);
+        Var<I32x1> res(0);
+        Var<I32x1> i(0);
         LOOP() {
             BREAK(i == 10);
             i += 1;
@@ -1664,11 +1664,11 @@ TEST_CASE("Wasm/" BACKEND_NAME "/Loop/Loop", "[core][wasm]")
 
     /* nested loop */
     CHECK_RESULT_INLINE(15, int(), {
-        Var<I32> res(0);
-        Var<I32> i(0);
+        Var<I32x1> res(0);
+        Var<I32x1> i(0);
         LOOP() {
             BREAK(i == 3);
-            Var<I32> j(0);
+            Var<I32x1> j(0);
             LOOP() {
                 BREAK(j == 5);
                 res += 1;
@@ -1681,11 +1681,11 @@ TEST_CASE("Wasm/" BACKEND_NAME "/Loop/Loop", "[core][wasm]")
         RETURN(res);
     });
     CHECK_RESULT_INLINE(5, int(), {
-        Var<I32> res(0);
-        Var<I32> i(0);
+        Var<I32x1> res(0);
+        Var<I32x1> i(0);
         LOOP() {
             BREAK(i == 3);
-            Var<I32> j(0);
+            Var<I32x1> j(0);
             LOOP() {
                 BREAK(j == 5, 2);
                 res += 1;
@@ -1698,12 +1698,12 @@ TEST_CASE("Wasm/" BACKEND_NAME "/Loop/Loop", "[core][wasm]")
         RETURN(res);
     });
     CHECK_RESULT_INLINE(3, int(), {
-        Var<I32> res(0);
-        Var<I32> i(0);
+        Var<I32x1> res(0);
+        Var<I32x1> i(0);
         LOOP() {                // <-- CONTINUE(2)
             BREAK(i == 3);
             i += 1;
-            Var<I32> j(0);
+            Var<I32x1> j(0);
             LOOP() {
                 BREAK(j == 5);
                 res += 1;
@@ -1724,7 +1724,7 @@ TEST_CASE("Wasm/" BACKEND_NAME "/Loop/Do_While", "[core][wasm]")
 
     /* one iteration */
     CHECK_RESULT_INLINE(1, int(), {
-        Var<I32> res(0);
+        Var<I32x1> res(0);
         DO_WHILE(res < 1) {
             res += 1;
         }
@@ -1733,14 +1733,14 @@ TEST_CASE("Wasm/" BACKEND_NAME "/Loop/Do_While", "[core][wasm]")
 
     /* multiple iterations */
     CHECK_RESULT_INLINE(2, int(), {
-        Var<I32> res(0);
+        Var<I32x1> res(0);
         DO_WHILE(res < 2) {
             res += 1;
         }
         RETURN(res);
     });
     CHECK_RESULT_INLINE(42, int(), {
-        Var<I32> res(0);
+        Var<I32x1> res(0);
         DO_WHILE(res < 42) {
             res += 1;
         }
@@ -1749,7 +1749,7 @@ TEST_CASE("Wasm/" BACKEND_NAME "/Loop/Do_While", "[core][wasm]")
 
     /* break */
     CHECK_RESULT_INLINE(0, int(), {
-        Var<I32> res(0);
+        Var<I32x1> res(0);
         DO_WHILE(res < 17) {
             BREAK();
             res += 1;
@@ -1757,7 +1757,7 @@ TEST_CASE("Wasm/" BACKEND_NAME "/Loop/Do_While", "[core][wasm]")
         RETURN(res);
     });
     CHECK_RESULT_INLINE(1, int(), {
-        Var<I32> res(0);
+        Var<I32x1> res(0);
         DO_WHILE(res < 17) {
             res += 1;
             BREAK();
@@ -1765,7 +1765,7 @@ TEST_CASE("Wasm/" BACKEND_NAME "/Loop/Do_While", "[core][wasm]")
         RETURN(res);
     });
     CHECK_RESULT_INLINE(5, int(), {
-        Var<I32> res(0);
+        Var<I32x1> res(0);
         DO_WHILE(res < 17) {
             BREAK(res == 5);
             res += 1;
@@ -1773,7 +1773,7 @@ TEST_CASE("Wasm/" BACKEND_NAME "/Loop/Do_While", "[core][wasm]")
         RETURN(res);
     });
     CHECK_RESULT_INLINE(5, int(), {
-        Var<I32> res(0);
+        Var<I32x1> res(0);
         DO_WHILE(res < 17) {
             res += 1;
             BREAK(res == 5);
@@ -1783,8 +1783,8 @@ TEST_CASE("Wasm/" BACKEND_NAME "/Loop/Do_While", "[core][wasm]")
 
     /* continue */
     CHECK_RESULT_INLINE(0, int(), {
-        Var<I32> res(0);
-        Var<I32> i(0);
+        Var<I32x1> res(0);
+        Var<I32x1> i(0);
         DO_WHILE(i != 10) {
             i += 1;
             CONTINUE();
@@ -1793,8 +1793,8 @@ TEST_CASE("Wasm/" BACKEND_NAME "/Loop/Do_While", "[core][wasm]")
         RETURN(res);
     });
     CHECK_RESULT_INLINE(5, int(), {
-        Var<I32> res(0);
-        Var<I32> i(0);
+        Var<I32x1> res(0);
+        Var<I32x1> i(0);
         DO_WHILE(i != 10) {
             i += 1;
             CONTINUE(i % 2 == 0);
@@ -1803,8 +1803,8 @@ TEST_CASE("Wasm/" BACKEND_NAME "/Loop/Do_While", "[core][wasm]")
         RETURN(res);
     });
     CHECK_RESULT_INLINE(10, int(), {
-        Var<I32> res(0);
-        Var<I32> i(0);
+        Var<I32x1> res(0);
+        Var<I32x1> i(0);
         DO_WHILE(i != 10) {
             i += 1;
             CONTINUE(i > 10);
@@ -1815,10 +1815,10 @@ TEST_CASE("Wasm/" BACKEND_NAME "/Loop/Do_While", "[core][wasm]")
 
     /* nested do while */
     CHECK_RESULT_INLINE(15, int(), {
-        Var<I32> res(0);
-        Var<I32> i(0);
+        Var<I32x1> res(0);
+        Var<I32x1> i(0);
         DO_WHILE(i != 3) {
-            Var<I32> j(0);
+            Var<I32x1> j(0);
             DO_WHILE(j != 5) {
                 res += 1;
                 j += 1;
@@ -1828,10 +1828,10 @@ TEST_CASE("Wasm/" BACKEND_NAME "/Loop/Do_While", "[core][wasm]")
         RETURN(res);
     });
     CHECK_RESULT_INLINE(12, int(), {
-        Var<I32> res(0);
-        Var<I32> i(0);
+        Var<I32x1> res(0);
+        Var<I32x1> i(0);
         DO_WHILE(i != 3) {
-            Var<I32> j(0);
+            Var<I32x1> j(0);
             DO_WHILE(j != 5) {
                 BREAK(j == 4);
                 res += 1;
@@ -1842,10 +1842,10 @@ TEST_CASE("Wasm/" BACKEND_NAME "/Loop/Do_While", "[core][wasm]")
         RETURN(res);
     });
     CHECK_RESULT_INLINE(4, int(), {
-        Var<I32> res(0);
-        Var<I32> i(0);
+        Var<I32x1> res(0);
+        Var<I32x1> i(0);
         DO_WHILE(i != 3) {
-            Var<I32> j(0);
+            Var<I32x1> j(0);
             DO_WHILE(j != 5) {
                 BREAK(j == 4, 2);
                 res += 1;
@@ -1856,10 +1856,10 @@ TEST_CASE("Wasm/" BACKEND_NAME "/Loop/Do_While", "[core][wasm]")
         RETURN(res);
     });
     CHECK_RESULT_INLINE(6, int(), {
-        Var<I32> res(0);
-        Var<I32> i(0);
+        Var<I32x1> res(0);
+        Var<I32x1> i(0);
         DO_WHILE(i != 3) {
-            Var<I32> j(0);
+            Var<I32x1> j(0);
             DO_WHILE(j != 5) {
                 j += 1;
                 CONTINUE(j > 2);
@@ -1870,11 +1870,11 @@ TEST_CASE("Wasm/" BACKEND_NAME "/Loop/Do_While", "[core][wasm]")
         RETURN(res);
     });
     CHECK_RESULT_INLINE(6, int(), {
-        Var<I32> res(0);
-        Var<I32> i(0);
+        Var<I32x1> res(0);
+        Var<I32x1> i(0);
         DO_WHILE(i != 3) {
             i += 1;
-            Var<I32> j(0);
+            Var<I32x1> j(0);
             DO_WHILE(j != 5) {
                 j += 1;
                 CONTINUE(j > 2, 2);
@@ -1893,7 +1893,7 @@ TEST_CASE("Wasm/" BACKEND_NAME "/Loop/While", "[core][wasm]")
 
     /* zero iterations */
     CHECK_RESULT_INLINE(0, int(), {
-        Var<I32> res(0);
+        Var<I32x1> res(0);
         WHILE(res < 0) {
             res += 1;
         }
@@ -1902,7 +1902,7 @@ TEST_CASE("Wasm/" BACKEND_NAME "/Loop/While", "[core][wasm]")
 
     /* one iteration */
     CHECK_RESULT_INLINE(1, int(), {
-        Var<I32> res(0);
+        Var<I32x1> res(0);
         WHILE(res < 1) {
             res += 1;
         }
@@ -1911,14 +1911,14 @@ TEST_CASE("Wasm/" BACKEND_NAME "/Loop/While", "[core][wasm]")
 
     /* multiple iterations */
     CHECK_RESULT_INLINE(2, int(), {
-        Var<I32> res(0);
+        Var<I32x1> res(0);
         WHILE(res < 2) {
             res += 1;
         }
         RETURN(res);
     });
     CHECK_RESULT_INLINE(42, int(), {
-        Var<I32> res(0);
+        Var<I32x1> res(0);
         WHILE(res < 42) {
             res += 1;
         }
@@ -1927,7 +1927,7 @@ TEST_CASE("Wasm/" BACKEND_NAME "/Loop/While", "[core][wasm]")
 
     /* break */
     CHECK_RESULT_INLINE(0, int(), {
-        Var<I32> res(0);
+        Var<I32x1> res(0);
         WHILE(res < 17) {
             BREAK();
             res += 1;
@@ -1935,7 +1935,7 @@ TEST_CASE("Wasm/" BACKEND_NAME "/Loop/While", "[core][wasm]")
         RETURN(res);
     });
     CHECK_RESULT_INLINE(1, int(), {
-        Var<I32> res(0);
+        Var<I32x1> res(0);
         WHILE(res < 17) {
             res += 1;
             BREAK();
@@ -1943,7 +1943,7 @@ TEST_CASE("Wasm/" BACKEND_NAME "/Loop/While", "[core][wasm]")
         RETURN(res);
     });
     CHECK_RESULT_INLINE(5, int(), {
-        Var<I32> res(0);
+        Var<I32x1> res(0);
         WHILE(res < 17) {
             BREAK(res == 5);
             res += 1;
@@ -1951,7 +1951,7 @@ TEST_CASE("Wasm/" BACKEND_NAME "/Loop/While", "[core][wasm]")
         RETURN(res);
     });
     CHECK_RESULT_INLINE(5, int(), {
-        Var<I32> res(0);
+        Var<I32x1> res(0);
         WHILE(res < 17) {
             res += 1;
             BREAK(res == 5);
@@ -1961,8 +1961,8 @@ TEST_CASE("Wasm/" BACKEND_NAME "/Loop/While", "[core][wasm]")
 
     /* continue */
     CHECK_RESULT_INLINE(0, int(), {
-        Var<I32> res(0);
-        Var<I32> i(0);
+        Var<I32x1> res(0);
+        Var<I32x1> i(0);
         WHILE(i != 10) {
             i += 1;
             CONTINUE();
@@ -1971,8 +1971,8 @@ TEST_CASE("Wasm/" BACKEND_NAME "/Loop/While", "[core][wasm]")
         RETURN(res);
     });
     CHECK_RESULT_INLINE(5, int(), {
-        Var<I32> res(0);
-        Var<I32> i(0);
+        Var<I32x1> res(0);
+        Var<I32x1> i(0);
         WHILE(i != 10) {
             i += 1;
             CONTINUE(i % 2 == 0);
@@ -1981,8 +1981,8 @@ TEST_CASE("Wasm/" BACKEND_NAME "/Loop/While", "[core][wasm]")
         RETURN(res);
     });
     CHECK_RESULT_INLINE(10, int(), {
-        Var<I32> res(0);
-        Var<I32> i(0);
+        Var<I32x1> res(0);
+        Var<I32x1> i(0);
         WHILE(i != 10) {
             i += 1;
             CONTINUE(i > 10);
@@ -1993,10 +1993,10 @@ TEST_CASE("Wasm/" BACKEND_NAME "/Loop/While", "[core][wasm]")
 
     /* nested while */
     CHECK_RESULT_INLINE(15, int(), {
-        Var<I32> res(0);
-        Var<I32> i(0);
+        Var<I32x1> res(0);
+        Var<I32x1> i(0);
         WHILE(i != 3) {
-            Var<I32> j(0);
+            Var<I32x1> j(0);
             WHILE(j != 5) {
                 res += 1;
                 j += 1;
@@ -2006,10 +2006,10 @@ TEST_CASE("Wasm/" BACKEND_NAME "/Loop/While", "[core][wasm]")
         RETURN(res);
     });
     CHECK_RESULT_INLINE(12, int(), {
-        Var<I32> res(0);
-        Var<I32> i(0);
+        Var<I32x1> res(0);
+        Var<I32x1> i(0);
         WHILE(i != 3) {
-            Var<I32> j(0);
+            Var<I32x1> j(0);
             WHILE(j != 5) {
                 BREAK(j == 4);
                 res += 1;
@@ -2020,10 +2020,10 @@ TEST_CASE("Wasm/" BACKEND_NAME "/Loop/While", "[core][wasm]")
         RETURN(res);
     });
     CHECK_RESULT_INLINE(4, int(), {
-        Var<I32> res(0);
-        Var<I32> i(0);
+        Var<I32x1> res(0);
+        Var<I32x1> i(0);
         WHILE(i != 3) {
-            Var<I32> j(0);
+            Var<I32x1> j(0);
             WHILE(j != 5) {
                 BREAK(j == 4, 2);
                 res += 1;
@@ -2034,10 +2034,10 @@ TEST_CASE("Wasm/" BACKEND_NAME "/Loop/While", "[core][wasm]")
         RETURN(res);
     });
     CHECK_RESULT_INLINE(6, int(), {
-        Var<I32> res(0);
-        Var<I32> i(0);
+        Var<I32x1> res(0);
+        Var<I32x1> i(0);
         WHILE(i != 3) {
-            Var<I32> j(0);
+            Var<I32x1> j(0);
             WHILE(j != 5) {
                 j += 1;
                 CONTINUE(j > 2);
@@ -2048,11 +2048,11 @@ TEST_CASE("Wasm/" BACKEND_NAME "/Loop/While", "[core][wasm]")
         RETURN(res);
     });
     CHECK_RESULT_INLINE(6, int(), {
-        Var<I32> res(0);
-        Var<I32> i(0);
+        Var<I32x1> res(0);
+        Var<I32x1> i(0);
         WHILE(i != 3) {
             i += 1;
-            Var<I32> j(0);
+            Var<I32x1> j(0);
             WHILE(j != 5) {
                 j += 1;
                 CONTINUE(j > 2, 2);
@@ -2070,30 +2070,30 @@ TEST_CASE("Wasm/" BACKEND_NAME "/Pointer/operators", "[core][wasm]")
     Module::Init();
 
     /* addition/subtraction */
-    CHECK_RESULT_INLINE( true, bool(), { Var<Ptr<I32>> a(Module::Allocator().malloc<int>()); RETURN((a + 1) - 1 == a); });
-    CHECK_RESULT_INLINE( true, bool(), { Var<Ptr<I32>> a(Module::Allocator().malloc<int>()); RETURN((a + 2) - 1 > a); });
+    CHECK_RESULT_INLINE( true, bool(), { Var<Ptr<I32x1>> a(Module::Allocator().malloc<int>()); RETURN((a + 1) - 1 == a); });
+    CHECK_RESULT_INLINE( true, bool(), { Var<Ptr<I32x1>> a(Module::Allocator().malloc<int>()); RETURN((a + 2) - 1 > a); });
 
     /* pointer difference */
-    CHECK_RESULT_INLINE(0, int32_t(), { Var<Ptr<I32>> a(Module::Allocator().malloc<int>()); RETURN(a - a); });
-    CHECK_RESULT_INLINE(4, int32_t(), { Var<Ptr<I32>> a(Module::Allocator().malloc<int>()); RETURN((a + 4) - a); });
+    CHECK_RESULT_INLINE(0, int32_t(), { Var<Ptr<I32x1>> a(Module::Allocator().malloc<int>()); RETURN(a - a); });
+    CHECK_RESULT_INLINE(4, int32_t(), { Var<Ptr<I32x1>> a(Module::Allocator().malloc<int>()); RETURN((a + 4) - a); });
 
     /* comparison */
-    CHECK_RESULT_INLINE( true, bool(), { Var<Ptr<I32>> a(Module::Allocator().malloc<int>()); RETURN(a == a); });
-    CHECK_RESULT_INLINE(false, bool(), { Var<Ptr<I32>> a(Module::Allocator().malloc<int>()); RETURN(a + 1 == a); });
-    CHECK_RESULT_INLINE(false, bool(), { Var<Ptr<I32>> a(Module::Allocator().malloc<int>()); RETURN(a != a); });
-    CHECK_RESULT_INLINE( true, bool(), { Var<Ptr<I32>> a(Module::Allocator().malloc<int>()); RETURN(a + 1 != a); });
-    CHECK_RESULT_INLINE(false, bool(), { Var<Ptr<I32>> a(Module::Allocator().malloc<int>()); RETURN(a < a); });
-    CHECK_RESULT_INLINE(false, bool(), { Var<Ptr<I32>> a(Module::Allocator().malloc<int>()); RETURN(a + 1 < a); });
-    CHECK_RESULT_INLINE( true, bool(), { Var<Ptr<I32>> a(Module::Allocator().malloc<int>()); RETURN(a < a + 1); });
-    CHECK_RESULT_INLINE( true, bool(), { Var<Ptr<I32>> a(Module::Allocator().malloc<int>()); RETURN(a <= a); });
-    CHECK_RESULT_INLINE(false, bool(), { Var<Ptr<I32>> a(Module::Allocator().malloc<int>()); RETURN(a + 1 <= a); });
-    CHECK_RESULT_INLINE( true, bool(), { Var<Ptr<I32>> a(Module::Allocator().malloc<int>()); RETURN(a <= a + 1); });
-    CHECK_RESULT_INLINE(false, bool(), { Var<Ptr<I32>> a(Module::Allocator().malloc<int>()); RETURN(a > a); });
-    CHECK_RESULT_INLINE( true, bool(), { Var<Ptr<I32>> a(Module::Allocator().malloc<int>()); RETURN(a + 1 > a); });
-    CHECK_RESULT_INLINE(false, bool(), { Var<Ptr<I32>> a(Module::Allocator().malloc<int>()); RETURN(a > a + 1); });
-    CHECK_RESULT_INLINE( true, bool(), { Var<Ptr<I32>> a(Module::Allocator().malloc<int>()); RETURN(a >= a); });
-    CHECK_RESULT_INLINE( true, bool(), { Var<Ptr<I32>> a(Module::Allocator().malloc<int>()); RETURN(a + 1 >= a); });
-    CHECK_RESULT_INLINE(false, bool(), { Var<Ptr<I32>> a(Module::Allocator().malloc<int>()); RETURN(a >= a + 1); });
+    CHECK_RESULT_INLINE( true, bool(), { Var<Ptr<I32x1>> a(Module::Allocator().malloc<int>()); RETURN(a == a); });
+    CHECK_RESULT_INLINE(false, bool(), { Var<Ptr<I32x1>> a(Module::Allocator().malloc<int>()); RETURN(a + 1 == a); });
+    CHECK_RESULT_INLINE(false, bool(), { Var<Ptr<I32x1>> a(Module::Allocator().malloc<int>()); RETURN(a != a); });
+    CHECK_RESULT_INLINE( true, bool(), { Var<Ptr<I32x1>> a(Module::Allocator().malloc<int>()); RETURN(a + 1 != a); });
+    CHECK_RESULT_INLINE(false, bool(), { Var<Ptr<I32x1>> a(Module::Allocator().malloc<int>()); RETURN(a < a); });
+    CHECK_RESULT_INLINE(false, bool(), { Var<Ptr<I32x1>> a(Module::Allocator().malloc<int>()); RETURN(a + 1 < a); });
+    CHECK_RESULT_INLINE( true, bool(), { Var<Ptr<I32x1>> a(Module::Allocator().malloc<int>()); RETURN(a < a + 1); });
+    CHECK_RESULT_INLINE( true, bool(), { Var<Ptr<I32x1>> a(Module::Allocator().malloc<int>()); RETURN(a <= a); });
+    CHECK_RESULT_INLINE(false, bool(), { Var<Ptr<I32x1>> a(Module::Allocator().malloc<int>()); RETURN(a + 1 <= a); });
+    CHECK_RESULT_INLINE( true, bool(), { Var<Ptr<I32x1>> a(Module::Allocator().malloc<int>()); RETURN(a <= a + 1); });
+    CHECK_RESULT_INLINE(false, bool(), { Var<Ptr<I32x1>> a(Module::Allocator().malloc<int>()); RETURN(a > a); });
+    CHECK_RESULT_INLINE( true, bool(), { Var<Ptr<I32x1>> a(Module::Allocator().malloc<int>()); RETURN(a + 1 > a); });
+    CHECK_RESULT_INLINE(false, bool(), { Var<Ptr<I32x1>> a(Module::Allocator().malloc<int>()); RETURN(a > a + 1); });
+    CHECK_RESULT_INLINE( true, bool(), { Var<Ptr<I32x1>> a(Module::Allocator().malloc<int>()); RETURN(a >= a); });
+    CHECK_RESULT_INLINE( true, bool(), { Var<Ptr<I32x1>> a(Module::Allocator().malloc<int>()); RETURN(a + 1 >= a); });
+    CHECK_RESULT_INLINE(false, bool(), { Var<Ptr<I32x1>> a(Module::Allocator().malloc<int>()); RETURN(a >= a + 1); });
 
     Module::Dispose();
 }
@@ -2104,17 +2104,17 @@ TEST_CASE("Wasm/" BACKEND_NAME "/Memory", "[core][wasm]")
 
     /* malloc<T>() */
     CHECK_RESULT_INLINE(3, char(void), {
-        Var<Ptr<Char>> ptr(Module::Allocator().malloc<char>());
+        Var<Ptr<Charx1>> ptr(Module::Allocator().malloc<char>());
         *ptr = char(3);
         RETURN(*ptr);
     });
     CHECK_RESULT_INLINE(42, int(void), {
-        Var<Ptr<I32>> ptr(Module::Allocator().malloc<int>());
+        Var<Ptr<I32x1>> ptr(Module::Allocator().malloc<int>());
         *ptr = 42;
         RETURN(*ptr);
     });
     CHECK_RESULT_INLINE(3.14, double(void), {
-        Var<Ptr<Double>> ptr(Module::Allocator().malloc<double>());
+        Var<Ptr<Doublex1>> ptr(Module::Allocator().malloc<double>());
         *ptr = 3.14;
         RETURN(*ptr);
     });
@@ -2126,7 +2126,7 @@ TEST_CASE("Wasm/" BACKEND_NAME "/Memory", "[core][wasm]")
 
     /* malloc<T>(length) */
     CHECK_RESULT_INLINE(-29, char(void), {
-        Var<Ptr<Char>> ptr(Module::Allocator().malloc<char>(5U));
+        Var<Ptr<Charx1>> ptr(Module::Allocator().malloc<char>(5U));
         *ptr = char(42);
         *(ptr + 1) = char(17);
         *(ptr + 2) = char(123);
@@ -2135,7 +2135,7 @@ TEST_CASE("Wasm/" BACKEND_NAME "/Memory", "[core][wasm]")
         RETURN(*(ptr + 3));
     });
     CHECK_RESULT_INLINE(123, int(void), {
-        Var<Ptr<I32>> ptr(Module::Allocator().malloc<int>(3U));
+        Var<Ptr<I32x1>> ptr(Module::Allocator().malloc<int>(3U));
         *ptr = 42;
         *(ptr + 1) = 17;
         *(ptr + 2) = 123;
@@ -2154,10 +2154,10 @@ TEST_CASE("Wasm/" BACKEND_NAME "/Memory", "[core][wasm]")
     /* free() */
     CHECK_RESULT_INLINE(true, bool(void), {
         Module::Allocator().malloc<uint16_t>().val().discard(); // to align to 2 bytes
-        Var<Ptr<U8>> ptr1(Module::Allocator().malloc<uint8_t>()); // byte 0
+        Var<Ptr<U8x1>> ptr1(Module::Allocator().malloc<uint8_t>()); // byte 0
         *ptr1 = uint8_t(0x12);
         Module::Allocator().free(ptr1);
-        Var<Ptr<U16>> ptr2(Module::Allocator().malloc<uint16_t>()); // reuses byte 0 and additionally uses byte 1
+        Var<Ptr<U16x1>> ptr2(Module::Allocator().malloc<uint16_t>()); // reuses byte 0 and additionally uses byte 1
         RETURN(ptr1.to<uint32_t>() == ptr2.to<uint32_t>());
     });
 
@@ -2167,7 +2167,7 @@ TEST_CASE("Wasm/" BACKEND_NAME "/Memory", "[core][wasm]")
         {
             RETURN(Module::Allocator().malloc<int>(PARAMETER(0)));
         }
-        Var<Ptr<I32>> ptr(alloc(1U));
+        Var<Ptr<I32x1>> ptr(alloc(1U));
         *ptr = 42;
         RETURN(*ptr);
     });
@@ -2178,7 +2178,7 @@ TEST_CASE("Wasm/" BACKEND_NAME "/Memory", "[core][wasm]")
         {
             *PARAMETER(0) = 42;
         }
-        Var<Ptr<I32>> ptr(Module::Allocator().malloc<int>());
+        Var<Ptr<I32x1>> ptr(Module::Allocator().malloc<int>());
         assign(ptr);
         RETURN(*ptr);
     });
@@ -2200,7 +2200,7 @@ TEST_CASE("Wasm/" BACKEND_NAME "/Wasm_insist", "[core][wasm]")
         INVOKE_INLINE(void(void), {
             FUNCTION(f, int(void))
             {
-                RETURN(_I32::Null());
+                RETURN(_I32x1::Null());
             }
             f().discard();
         });
@@ -2213,7 +2213,7 @@ TEST_CASE("Wasm/" BACKEND_NAME "/Wasm_insist", "[core][wasm]")
         INVOKE_INLINE(void(void), {
             FUNCTION(f, int(void))
             {
-                _Var<I32> res(_I32::Null());
+                _Var<I32x1> res(_I32x1::Null());
                 res = 1;
                 RETURN(res);
             }
@@ -2230,14 +2230,14 @@ TEST_CASE("Wasm/" BACKEND_NAME "/Wasm_insist", "[core][wasm]")
         {
             INVOKE_INLINE(void(void), {
                 FUNCTION(f, void(int)) { }
-                f(_I32::Null());
+                f(_I32x1::Null());
             });
         }
         SECTION("void return, multiple arguments")
         {
             INVOKE_INLINE(void(void), {
                 FUNCTION(f, void(int, double, float, char)) { }
-                f(1, _Double::Null(), 3.14f, 17);
+                f(1, _Doublex1::Null(), 3.14f, 17);
             });
         }
         SECTION("non-void return, single argument")
@@ -2247,7 +2247,7 @@ TEST_CASE("Wasm/" BACKEND_NAME "/Wasm_insist", "[core][wasm]")
                 {
                     RETURN(PARAMETER(0));
                 }
-                f(_I32::Null()).discard();
+                f(_I32x1::Null()).discard();
             });
         }
         SECTION("non-void return, multiple arguments")
@@ -2257,7 +2257,7 @@ TEST_CASE("Wasm/" BACKEND_NAME "/Wasm_insist", "[core][wasm]")
                 {
                     RETURN(PARAMETER(0));
                 }
-                f(1, _Double::Null(), 3.14f, 17).discard();
+                f(1, _Doublex1::Null(), 3.14f, 17).discard();
             });
         }
 
@@ -2272,7 +2272,7 @@ TEST_CASE("Wasm/" BACKEND_NAME "/Wasm_insist", "[core][wasm]")
         {
             INVOKE_INLINE(void(void), {
                 FUNCTION(f, void(int)) { }
-                Var<I32> param(_I32::Null()); // to make param nullable
+                Var<I32x1> param(_I32x1::Null()); // to make param nullable
                 param = 1;
                 f(param);
             });
@@ -2281,7 +2281,7 @@ TEST_CASE("Wasm/" BACKEND_NAME "/Wasm_insist", "[core][wasm]")
         {
             INVOKE_INLINE(void(void), {
                 FUNCTION(f, void(int, double, float, char)) { }
-                Var<Double> param(_Double::Null()); // to make param nullable
+                Var<Doublex1> param(_Doublex1::Null()); // to make param nullable
                 param = 1.23;
                 f(1, param, 3.14f, 17);
             });
@@ -2293,7 +2293,7 @@ TEST_CASE("Wasm/" BACKEND_NAME "/Wasm_insist", "[core][wasm]")
                 {
                     RETURN(PARAMETER(0));
                 }
-                Var<I32> param(_I32::Null()); // to make param nullable
+                Var<I32x1> param(_I32x1::Null()); // to make param nullable
                 param = 1;
                 f(param).discard();
             });
@@ -2305,7 +2305,7 @@ TEST_CASE("Wasm/" BACKEND_NAME "/Wasm_insist", "[core][wasm]")
                 {
                     RETURN(PARAMETER(0));
                 }
-                Var<Double> param(_Double::Null()); // to make param nullable
+                Var<Doublex1> param(_Doublex1::Null()); // to make param nullable
                 param = 1.23;
                 f(1, param, 3.14f, 17).discard();
             });

@@ -17,13 +17,13 @@ TEST_CASE("Wasm/" BACKEND_NAME "/setbit", "[core][wasm]")
     CHECK_RESULT_INLINE(0b10010100, uint8_t(void), {
         auto ptr = Module::Allocator().malloc<uint8_t>();
         *ptr = uint8_t(0b10000100);
-        setbit<U8>(ptr, Bool(true), 4);
+        setbit<U8x1>(ptr, Boolx1(true), 4);
         RETURN(*ptr);
     });
    CHECK_RESULT_INLINE(0b10000000, uint8_t(void), {
         auto ptr = Module::Allocator().malloc<uint8_t>();
         *ptr = uint8_t(0b10000100);
-        setbit<U8>(ptr, Bool(false), 2);
+        setbit<U8x1>(ptr, Boolx1(false), 2);
         RETURN(*ptr);
     });
 
@@ -31,13 +31,13 @@ TEST_CASE("Wasm/" BACKEND_NAME "/setbit", "[core][wasm]")
     CHECK_RESULT_INLINE(0b10010100, uint8_t(void), {
         auto ptr = Module::Allocator().malloc<uint8_t>();
         *ptr = uint8_t(0b10000100);
-        setbit(ptr, Bool(true), U8(0b10000));
+        setbit(ptr, Boolx1(true), U8x1(0b10000));
         RETURN(*ptr);
     });
    CHECK_RESULT_INLINE(0b10000000, uint8_t(void), {
         auto ptr = Module::Allocator().malloc<uint8_t>();
         *ptr = uint8_t(0b10000100);
-        setbit(ptr, Bool(false), U8(0b100));
+        setbit(ptr, Boolx1(false), U8x1(0b100));
         RETURN(*ptr);
     });
 
@@ -61,7 +61,7 @@ TEST_CASE("Wasm/" BACKEND_NAME "/string comparison", "[core][wasm]")
                 *left = 'T'; *(left + 1) = 'e'; *(left + 2) = 's'; *(left + 3) = 't';
                 auto right = Module::Allocator().malloc<char>(4);
                 *right = 'T'; *(right + 1) = 'e'; *(right + 2) = 's'; *(right + 3) = 't';
-                auto res = strncmp(NChar(left, false, cs), NChar(right, false, cs), U32(5));
+                auto res = strncmp(NChar(left, false, cs), NChar(right, false, cs), U32x1(5));
                 WASM_CHECK(res == 0, "result mismatch");
             }
             REQUIRE_NOTHROW(INVOKE(test));
@@ -74,7 +74,7 @@ TEST_CASE("Wasm/" BACKEND_NAME "/string comparison", "[core][wasm]")
                 *left = 'T'; *(left + 1) = 'e'; *(left + 2) = 'a'; *(left + 3) = 't';
                 auto right = Module::Allocator().malloc<char>(4);
                 *right = 'T'; *(right + 1) = 'e'; *(right + 2) = 's'; *(right + 3) = 't';
-                auto res = strncmp(NChar(left, false, cs), NChar(right, false, cs), U32(5));
+                auto res = strncmp(NChar(left, false, cs), NChar(right, false, cs), U32x1(5));
                 WASM_CHECK(res < 0, "result mismatch");
             }
             REQUIRE_NOTHROW(INVOKE(test));
@@ -87,7 +87,7 @@ TEST_CASE("Wasm/" BACKEND_NAME "/string comparison", "[core][wasm]")
                 *left = 'T'; *(left + 1) = 'e'; *(left + 2) = 's'; *(left + 3) = 't';
                 auto right = Module::Allocator().malloc<char>(4);
                 *right = 'T'; *(right + 1) = 'e'; *(right + 2) = 's'; *(right + 3) = 'a';
-                auto res = strncmp(NChar(left, false, cs), NChar(right, false, cs), U32(5));
+                auto res = strncmp(NChar(left, false, cs), NChar(right, false, cs), U32x1(5));
                 WASM_CHECK(res > 0, "result mismatch");
             }
             REQUIRE_NOTHROW(INVOKE(test));
@@ -100,7 +100,7 @@ TEST_CASE("Wasm/" BACKEND_NAME "/string comparison", "[core][wasm]")
                 *left = 'T'; *(left + 1) = 'e'; *(left + 2) = 's'; *(left + 3) = 'a';
                 auto right = Module::Allocator().malloc<char>(4);
                 *right = 'T'; *(right + 1) = 'e'; *(right + 2) = 's'; *(right + 3) = 't';
-                auto res = strncmp(NChar(left, false, cs), NChar(right, false, cs), U32(3));
+                auto res = strncmp(NChar(left, false, cs), NChar(right, false, cs), U32x1(3));
                 WASM_CHECK(res == 0, "result mismatch");
             }
             REQUIRE_NOTHROW(INVOKE(test));
@@ -113,7 +113,7 @@ TEST_CASE("Wasm/" BACKEND_NAME "/string comparison", "[core][wasm]")
                 *left = 'T'; *(left + 1) = '\0'; *(left + 2) = 's'; *(left + 3) = 'a';
                 auto right = Module::Allocator().malloc<char>(4);
                 *right = 'T'; *(right + 1) = '\0'; *(right + 2) = 's'; *(right + 3) = 't';
-                auto res = strncmp(NChar(left, false, cs), NChar(right, false, cs), U32(5));
+                auto res = strncmp(NChar(left, false, cs), NChar(right, false, cs), U32x1(5));
                 WASM_CHECK(res == 0, "result mismatch");
             }
             REQUIRE_NOTHROW(INVOKE(test));
@@ -126,7 +126,7 @@ TEST_CASE("Wasm/" BACKEND_NAME "/string comparison", "[core][wasm]")
                 *left = 'T'; *(left + 1) = 'e'; *(left + 2) = 'a'; *(left + 3) = 't';
                 auto right = Module::Allocator().malloc<char>(4);
                 *right = 'T'; *(right + 1) = 'e'; *(right + 2) = 's'; *(right + 3) = 'a';
-                auto res = strncmp(NChar(left, false, cs), NChar(right, false, cs), U32(3));
+                auto res = strncmp(NChar(left, false, cs), NChar(right, false, cs), U32x1(3));
                 WASM_CHECK(res < 0, "result mismatch");
             }
             REQUIRE_NOTHROW(INVOKE(test));
@@ -139,7 +139,7 @@ TEST_CASE("Wasm/" BACKEND_NAME "/string comparison", "[core][wasm]")
                 *left = 'T'; *(left + 1) = 'e'; *(left + 2) = 's'; *(left + 3) = '\0';
                 auto right = Module::Allocator().malloc<char>(4);
                 *right = 'T'; *(right + 1) = 'e'; *(right + 2) = 's'; *(right + 3) = 't';
-                auto res = strncmp(NChar(left, false, cs), NChar(right, false, cs), U32(5));
+                auto res = strncmp(NChar(left, false, cs), NChar(right, false, cs), U32x1(5));
                 WASM_CHECK(res < 0, "result mismatch");
             }
             REQUIRE_NOTHROW(INVOKE(test));
@@ -152,7 +152,7 @@ TEST_CASE("Wasm/" BACKEND_NAME "/string comparison", "[core][wasm]")
                 *left = 'T'; *(left + 1) = 'e'; *(left + 2) = 's'; *(left + 3) = 'a';
                 auto right = Module::Allocator().malloc<char>(4);
                 *right = 'T'; *(right + 1) = 'e'; *(right + 2) = 'a'; *(right + 3) = 't';
-                auto res = strncmp(NChar(left, false, cs), NChar(right, false, cs), U32(3));
+                auto res = strncmp(NChar(left, false, cs), NChar(right, false, cs), U32x1(3));
                 WASM_CHECK(res > 0, "result mismatch");
             }
             REQUIRE_NOTHROW(INVOKE(test));
@@ -165,7 +165,7 @@ TEST_CASE("Wasm/" BACKEND_NAME "/string comparison", "[core][wasm]")
                 *left = 'T'; *(left + 1) = 'e'; *(left + 2) = 's'; *(left + 3) = 't';
                 auto right = Module::Allocator().malloc<char>(4);
                 *right = 'T'; *(right + 1) = 'e'; *(right + 2) = '\0'; *(right + 3) = 't';
-                auto res = strncmp(NChar(left, false, cs), NChar(right, false, cs), U32(5));
+                auto res = strncmp(NChar(left, false, cs), NChar(right, false, cs), U32x1(5));
                 WASM_CHECK(res > 0, "result mismatch");
             }
             REQUIRE_NOTHROW(INVOKE(test));
@@ -184,7 +184,7 @@ TEST_CASE("Wasm/" BACKEND_NAME "/string comparison", "[core][wasm]")
                 *left = 'T'; *(left + 1) = 'e'; *(left + 2) = 's';
                 auto right = Module::Allocator().malloc<char>(4);
                 *right = 'T'; *(right + 1) = 'e'; *(right + 2) = 's'; *(right + 3) = '\0';
-                auto res = strncmp(NChar(left, false, cs_left), NChar(right, false, cs_right), U32(5));
+                auto res = strncmp(NChar(left, false, cs_left), NChar(right, false, cs_right), U32x1(5));
                 WASM_CHECK(res == 0, "result mismatch");
             }
             REQUIRE_NOTHROW(INVOKE(test));
@@ -197,7 +197,7 @@ TEST_CASE("Wasm/" BACKEND_NAME "/string comparison", "[core][wasm]")
                 *left = 'T'; *(left + 1) = 'e'; *(left + 2) = 's';
                 auto right = Module::Allocator().malloc<char>(4);
                 *right = 'T'; *(right + 1) = 'e'; *(right + 2) = 's'; *(right + 3) = 't';
-                auto res = strncmp(NChar(left, false, cs_left), NChar(right, false, cs_right), U32(5));
+                auto res = strncmp(NChar(left, false, cs_left), NChar(right, false, cs_right), U32x1(5));
                 WASM_CHECK(res < 0, "result mismatch");
             }
             REQUIRE_NOTHROW(INVOKE(test));
@@ -210,7 +210,7 @@ TEST_CASE("Wasm/" BACKEND_NAME "/string comparison", "[core][wasm]")
                 *left = 'T'; *(left + 1) = 'e'; *(left + 2) = 's'; *(left + 3) = 't';
                 auto right = Module::Allocator().malloc<char>(3);
                 *right = 'T'; *(right + 1) = 'e'; *(right + 2) = 's';
-                auto res = strncmp(NChar(left, false, cs_right), NChar(right, false, cs_left), U32(5));
+                auto res = strncmp(NChar(left, false, cs_right), NChar(right, false, cs_left), U32x1(5));
                 WASM_CHECK(res > 0, "result mismatch");
             }
             REQUIRE_NOTHROW(INVOKE(test));
@@ -228,7 +228,7 @@ TEST_CASE("Wasm/" BACKEND_NAME "/string comparison", "[core][wasm]")
                 *left = 'T'; *(left + 1) = 'e'; *(left + 2) = 's'; *(left + 3) = '\0';
                 auto right = Module::Allocator().malloc<char>(4);
                 *right = 'T'; *(right + 1) = 'e'; *(right + 2) = 's'; *(right + 3) = '\0';
-                auto res = strncmp(NChar(left, false, cs), NChar(right, false, cs), U32(5));
+                auto res = strncmp(NChar(left, false, cs), NChar(right, false, cs), U32x1(5));
                 WASM_CHECK(res == 0, "result mismatch");
             }
             REQUIRE_NOTHROW(INVOKE(test));
@@ -241,7 +241,7 @@ TEST_CASE("Wasm/" BACKEND_NAME "/string comparison", "[core][wasm]")
                 *left = 'T'; *(left + 1) = 'e'; *(left + 2) = 'a'; *(left + 3) = '\0';
                 auto right = Module::Allocator().malloc<char>(4);
                 *right = 'T'; *(right + 1) = 'e'; *(right + 2) = 's'; *(right + 3) = '\0';
-                auto res = strncmp(NChar(left, false, cs), NChar(right, false, cs), U32(5));
+                auto res = strncmp(NChar(left, false, cs), NChar(right, false, cs), U32x1(5));
                 WASM_CHECK(res < 0, "result mismatch");
             }
             REQUIRE_NOTHROW(INVOKE(test));
@@ -254,7 +254,7 @@ TEST_CASE("Wasm/" BACKEND_NAME "/string comparison", "[core][wasm]")
                 *left = 'T'; *(left + 1) = 'e'; *(left + 2) = 't'; *(left + 3) = '\0';
                 auto right = Module::Allocator().malloc<char>(4);
                 *right = 'T'; *(right + 1) = 'e'; *(right + 2) = 's'; *(right + 3) = '\0';
-                auto res = strncmp(NChar(left, false, cs), NChar(right, false, cs), U32(5));
+                auto res = strncmp(NChar(left, false, cs), NChar(right, false, cs), U32x1(5));
                 WASM_CHECK(res > 0, "result mismatch");
             }
             REQUIRE_NOTHROW(INVOKE(test));
@@ -267,7 +267,7 @@ TEST_CASE("Wasm/" BACKEND_NAME "/string comparison", "[core][wasm]")
                 *left = 'T'; *(left + 1) = 'e'; *(left + 2) = 'a'; *(left + 3) = '\0';
                 auto right = Module::Allocator().malloc<char>(4);
                 *right = 'T'; *(right + 1) = 'e'; *(right + 2) = 's'; *(right + 3) = '\0';
-                auto res = strncmp(NChar(left, false, cs), NChar(right, false, cs), U32(2));
+                auto res = strncmp(NChar(left, false, cs), NChar(right, false, cs), U32x1(2));
                 WASM_CHECK(res == 0, "result mismatch");
             }
             REQUIRE_NOTHROW(INVOKE(test));
@@ -280,7 +280,7 @@ TEST_CASE("Wasm/" BACKEND_NAME "/string comparison", "[core][wasm]")
                 *left = 'T'; *(left + 1) = '\0'; *(left + 2) = 's'; *(left + 3) = 'a';
                 auto right = Module::Allocator().malloc<char>(4);
                 *right = 'T'; *(right + 1) = '\0'; *(right + 2) = 's'; *(right + 3) = 't';
-                auto res = strncmp(NChar(left, false, cs), NChar(right, false, cs), U32(5));
+                auto res = strncmp(NChar(left, false, cs), NChar(right, false, cs), U32x1(5));
                 WASM_CHECK(res == 0, "result mismatch");
             }
             REQUIRE_NOTHROW(INVOKE(test));
@@ -293,7 +293,7 @@ TEST_CASE("Wasm/" BACKEND_NAME "/string comparison", "[core][wasm]")
                 *left = 'T'; *(left + 1) = 'e'; *(left + 2) = 's'; *(left + 3) = '\0';
                 auto right = Module::Allocator().malloc<char>(4);
                 *right = 'T'; *(right + 1) = 's'; *(right + 2) = 's'; *(right + 3) = '\0';
-                auto res = strncmp(NChar(left, false, cs), NChar(right, false, cs), U32(2));
+                auto res = strncmp(NChar(left, false, cs), NChar(right, false, cs), U32x1(2));
                 WASM_CHECK(res < 0, "result mismatch");
             }
             REQUIRE_NOTHROW(INVOKE(test));
@@ -306,7 +306,7 @@ TEST_CASE("Wasm/" BACKEND_NAME "/string comparison", "[core][wasm]")
                 *left = 'T'; *(left + 1) = 'e'; *(left + 2) = '\0'; *(left + 3) = 'a';
                 auto right = Module::Allocator().malloc<char>(4);
                 *right = 'T'; *(right + 1) = 'e'; *(right + 2) = 's'; *(right + 3) = '\0';
-                auto res = strncmp(NChar(left, false, cs), NChar(right, false, cs), U32(5));
+                auto res = strncmp(NChar(left, false, cs), NChar(right, false, cs), U32x1(5));
                 WASM_CHECK(res < 0, "result mismatch");
             }
             REQUIRE_NOTHROW(INVOKE(test));
@@ -319,7 +319,7 @@ TEST_CASE("Wasm/" BACKEND_NAME "/string comparison", "[core][wasm]")
                 *left = 'T'; *(left + 1) = 'e'; *(left + 2) = 's'; *(left + 3) = '\0';
                 auto right = Module::Allocator().malloc<char>(4);
                 *right = 'T'; *(right + 1) = 'a'; *(right + 2) = 's'; *(right + 3) = '\0';
-                auto res = strncmp(NChar(left, false, cs), NChar(right, false, cs), U32(2));
+                auto res = strncmp(NChar(left, false, cs), NChar(right, false, cs), U32x1(2));
                 WASM_CHECK(res > 0, "result mismatch");
             }
             REQUIRE_NOTHROW(INVOKE(test));
@@ -332,7 +332,7 @@ TEST_CASE("Wasm/" BACKEND_NAME "/string comparison", "[core][wasm]")
                 *left = 'T'; *(left + 1) = 'e'; *(left + 2) = 's'; *(left + 3) = '\0';
                 auto right = Module::Allocator().malloc<char>(4);
                 *right = 'T'; *(right + 1) = 'e'; *(right + 2) = '\0'; *(right + 3) = 't';
-                auto res = strncmp(NChar(left, false, cs), NChar(right, false, cs), U32(5));
+                auto res = strncmp(NChar(left, false, cs), NChar(right, false, cs), U32x1(5));
                 WASM_CHECK(res > 0, "result mismatch");
             }
             REQUIRE_NOTHROW(INVOKE(test));
@@ -439,7 +439,7 @@ TEST_CASE("Wasm/" BACKEND_NAME "/strncpy", "[core][wasm]")
             *src = 'T'; *(src + 1) = 'e'; *(src + 2) = 's'; *(src + 3) = 't'; *(src + 4) = '\0';
             auto dst = Module::Allocator().malloc<char>(5);
             *dst = 'f'; *(dst + 1) = 'a'; *(dst + 2) = 'i'; *(dst + 3) = 'l'; *(dst + 4) = '!';
-            auto res = strncpy(dst, src, U32(5));
+            auto res = strncpy(dst, src, U32x1(5));
             WASM_CHECK(res == dst + 4, "result mismatch");
             check_string("Test", dst, 5, "string mismatch");
         }
@@ -453,7 +453,7 @@ TEST_CASE("Wasm/" BACKEND_NAME "/strncpy", "[core][wasm]")
             *src = 'T'; *(src + 1) = 'e'; *(src + 2) = 's'; *(src + 3) = 't';
             auto dst = Module::Allocator().malloc<char>(5);
             *dst = 'f'; *(dst + 1) = 'a'; *(dst + 2) = 'i'; *(dst + 3) = 'l'; *(dst + 4) = '!';
-            auto res = strncpy(dst, src, U32(4));
+            auto res = strncpy(dst, src, U32x1(4));
             WASM_CHECK(res == dst + 4, "result mismatch");
             check_string("Test!", dst, 5, "string mismatch");
         }
@@ -467,7 +467,7 @@ TEST_CASE("Wasm/" BACKEND_NAME "/strncpy", "[core][wasm]")
             *src = 'T'; *(src + 1) = 'e'; *(src + 2) = 's'; *(src + 3) = 't'; *(src + 4) = '\0';
             auto dst = Module::Allocator().malloc<char>(5);
             *dst = 'f'; *(dst + 1) = 'a'; *(dst + 2) = 'i'; *(dst + 3) = 'l'; *(dst + 4) = '!';
-            auto res = strncpy(dst, src, U32(3));
+            auto res = strncpy(dst, src, U32x1(3));
             WASM_CHECK(res == dst + 3, "result mismatch");
             check_string("Tesl!", dst, 5, "string mismatch");
         }
@@ -481,7 +481,7 @@ TEST_CASE("Wasm/" BACKEND_NAME "/strncpy", "[core][wasm]")
             *src = 'T'; *(src + 1) = 'e'; *(src + 2) = 's'; *(src + 3) = 't'; *(src + 4) = '\0';
             auto dst = Module::Allocator().malloc<char>(5);
             *dst = 'f'; *(dst + 1) = 'a'; *(dst + 2) = 'i'; *(dst + 3) = 'l'; *(dst + 4) = '!';
-            auto res = strncpy(dst, src, U32(0));
+            auto res = strncpy(dst, src, U32x1(0));
             WASM_CHECK(res == dst, "result mismatch");
             check_string("fail!", dst, 5, "string mismatch");
         }

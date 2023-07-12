@@ -322,6 +322,7 @@ U64x1 m::wasm::murmur3_64a_hash(std::vector<std::pair<const Type*, SQL_t>> value
         return std::visit(overloaded {
             [&]<typename T>(Expr<T> val) -> U64x1 { return murmur3_bit_mix(val.hash()); },
             [&](NChar val) -> U64x1 { return str_hash(val); },
+            [](auto) -> U64x1 { M_unreachable("SIMDfication currently not supported"); },
             [](std::monostate) -> U64x1 { M_unreachable("invalid variant"); }
         }, values.front().second);
     }
@@ -332,7 +333,8 @@ U64x1 m::wasm::murmur3_64a_hash(std::vector<std::pair<const Type*, SQL_t>> value
         std::visit(overloaded {
             [&]<typename T>(const Expr<T> &val) -> void { total_size_in_bits += p.first->size(); },
             [&](const NChar &val) -> void { total_size_in_bits += 8 * val.length(); },
-            [](std::monostate) -> void { M_unreachable("invalid variant"); }
+            [](auto&) -> void { M_unreachable("SIMDfication currently not supported"); },
+            [](std::monostate&) -> void { M_unreachable("invalid variant"); }
         }, p.second);
     }
 
@@ -370,6 +372,7 @@ U64x1 m::wasm::murmur3_64a_hash(std::vector<std::pair<const Type*, SQL_t>> value
                         }
                     };
                 },
+                [](auto) -> void { M_unreachable("SIMDfication currently not supported"); },
                 [](std::monostate) -> void { M_unreachable("invalid variant"); }
             }, p.second);
         }
@@ -393,6 +396,7 @@ U64x1 m::wasm::murmur3_64a_hash(std::vector<std::pair<const Type*, SQL_t>> value
                 h  = h * uint64_t(5UL) + uint64_t(0xe6546b64UL);
             },
             [&](NChar val) -> void { h ^= str_hash(val); },
+            [](auto) -> void { M_unreachable("SIMDfication currently not supported"); },
             [](std::monostate) -> void { M_unreachable("invalid variant"); }
         }, p.second);
     }

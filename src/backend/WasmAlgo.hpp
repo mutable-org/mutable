@@ -65,7 +65,7 @@ struct HashTable
     struct the_reference;
 
     template<sql_type T, bool IsConst>
-    requires (not std::same_as<T, NChar>)
+    requires (not std::same_as<T, NChar>) and (T::num_simd_lanes == 1)
     struct the_reference<T, IsConst>
     {
         friend struct the_entry<false>;
@@ -342,7 +342,7 @@ struct HashTable
         using value_t = std::variant<
             std::monostate
 #define ADD_TYPE(TYPE) , the_reference<TYPE, IsConst>
-            SQL_TYPES(ADD_TYPE)
+            SQL_TYPES_SCALAR(ADD_TYPE)
 #undef ADD_TYPE
         >;
 

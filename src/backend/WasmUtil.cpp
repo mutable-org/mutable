@@ -21,12 +21,12 @@ template<arithmetic T>
 void convert_in_place(SQL_t &operand)
 {
     std::visit(overloaded {
-        [&operand](auto &&actual) -> void requires requires { actual.template to<T>(); } {
+        [&operand](auto &&actual) -> void requires requires { { actual.template to<T>() } -> sql_type; } {
             auto v = actual.template to<T>();
             operand.~SQL_t();
             new (&operand) SQL_t(v);
         },
-        [](auto &actual) -> void requires (not requires { actual.template to<T>(); }) {
+        [](auto &actual) -> void requires (not requires { { actual.template to<T>() } -> sql_type; }) {
             M_unreachable("illegal conversion");
         },
         [](std::monostate) -> void { M_unreachable("invalid variant"); },
@@ -179,8 +179,12 @@ void ExprCompiler::operator()(const ast::UnaryExpr &e)
         (*this)(*e.expr);
         std::visit(overloaded {
             [](std::monostate&&) -> void { M_unreachable("illegal value"); },
-            [this, &unop](auto &&expr) -> void requires requires { unop(expr); } { set(unop(expr)); },
-            [](auto &&expr) -> void requires (not requires { unop(expr); }) { M_unreachable("illegal operation"); },
+            [this, &unop](auto &&expr) -> void requires requires { { unop(expr) } -> sql_type; } {
+                set(unop(expr));
+            },
+            [](auto &&expr) -> void requires (not requires { { unop(expr) } -> sql_type; }) {
+                M_unreachable("illegal operation");
+            },
         }, get());
     };
 
@@ -223,13 +227,11 @@ void ExprCompiler::operator()(const ast::BinaryExpr &e)
                 std::visit(overloaded {
                     [](std::monostate&&) -> void { M_unreachable("illegal value"); },
                     [this, expr_lhs, &binop](auto &&expr_rhs) mutable -> void
-                    requires requires { binop(expr_lhs, expr_rhs); }
-                    {
+                    requires requires { { binop(expr_lhs, expr_rhs) } -> sql_type; } {
                         set(binop(expr_lhs, expr_rhs));
                     },
                     [](auto &&expr_rhs) -> void
-                    requires (not requires { binop(expr_lhs, expr_rhs); })
-                    {
+                    requires (not requires { { binop(expr_lhs, expr_rhs) } -> sql_type; }) {
                         M_unreachable("illegal operation");
                     },
                 }, rhs);
@@ -1892,6 +1894,7 @@ void compile_data_layout_point_access(const Schema &tuple_schema, Ptr<void> base
                                                       value.guarantees_terminating_nul()));
                     }
                 },
+                [](auto) { M_unreachable("SIMDfication currently not supported"); },
                 [](std::monostate) { M_unreachable("value must be loaded beforehand"); },
             }, values[idx]);
         }
@@ -2320,7 +2323,8 @@ void buffer_swap_proxy_t<IsGlobal>::operator()(U32x1 first, U32x1 second, const 
                     _env_first.add(e.id, Expr<T>(var));
                 }
             },
-            [](std::monostate) -> void { M_unreachable("value must be loaded beforehand"); }
+            [](auto) -> void { M_unreachable("SIMDfication currently not supported"); },
+            [](std::monostate) -> void { M_unreachable("value must be loaded beforehand"); },
         }, env_first.get(e.id));
     }
 
@@ -2368,6 +2372,7 @@ void buffer_swap_proxy_t<IsGlobal>::operator()(U32x1 first, U32x1 second, const 
                     _env_first.add(e.id, Expr<T>(var));
                 }
             },
+            [](auto) -> void { M_unreachable("SIMDfication currently not supported"); },
             [](std::monostate) -> void { M_unreachable("value must be loaded beforehand"); }
         }, env_first.get(e.id));
     }
@@ -2905,6 +2910,7 @@ I32x1 m::wasm::compare(const Environment &env_left, const Environment &env_right
                     result += delta; // add current comparison to result
                 }
             },
+            [](auto) -> void { M_unreachable("SIMDfication currently not supported"); },
             [](std::monostate) -> void { M_unreachable("invalid expression"); }
         }, _val_left);
     }

@@ -286,7 +286,7 @@ using Decimal64 = Decimal<int64_t>;
 template<typename>
 struct is_sql_type;
 
-#define SQL_TYPES(X) \
+#define SQL_TYPES_SCALAR(X) \
     X(_Boolx1) \
     X(_I8x1) \
     X(_I16x1) \
@@ -295,6 +295,27 @@ struct is_sql_type;
     X(_Floatx1) \
     X(_Doublex1) \
     X(NChar)
+
+#define SQL_TYPES(X) \
+    SQL_TYPES_SCALAR(X) \
+    X(_Boolx16) \
+    X(_I8x16) \
+    X(_I16x8) \
+    X(_I16x16) \
+    X(_I32x4) \
+    X(_I32x8) \
+    X(_I32x16) \
+    X(_I64x2) \
+    X(_I64x4) \
+    X(_I64x8) \
+    X(_I64x16) \
+    X(_Floatx4) \
+    X(_Floatx8) \
+    X(_Floatx16) \
+    X(_Doublex2) \
+    X(_Doublex4) \
+    X(_Doublex8) \
+    X(_Doublex16)
 
 #define ADD_EXPR_SQL_TYPE(TYPE) template<> struct is_sql_type<TYPE>{};
 SQL_TYPES(ADD_EXPR_SQL_TYPE)
@@ -327,10 +348,13 @@ template<sql_type To>
 inline To convert(SQL_t &variant)
 {
     using type = typename To::type;
+    static constexpr std::size_t num_simd_lanes = To::num_simd_lanes;
 
     return std::visit(overloaded {
-        [](auto actual) -> To requires requires { actual.template to<type>(); } { return actual.template to<type>(); },
-        [](auto actual) -> To requires (not requires { actual.template to<type>(); }) {
+        [](auto actual) -> To requires requires { actual.template to<type, num_simd_lanes>(); } {
+            return actual.template to<type, num_simd_lanes>();
+        },
+        [](auto actual) -> To requires (not requires { actual.template to<type, num_simd_lanes>(); }) {
             M_unreachable("illegal conversion");
         },
         [](std::monostate) -> To { M_unreachable("invalid variant"); },
@@ -348,7 +372,10 @@ inline bool can_be_null(const SQL_t &variant)
 inline Boolx1 is_null(SQL_t &variant)
 {
     return std::visit(overloaded {
-        []<sql_type T>(T actual) -> Boolx1 { return actual.is_null(); },
+        []<sql_type T>(T actual) -> Boolx1 requires (T::num_simd_lanes == 1) { return actual.is_null(); },
+        []<sql_type T>(T) -> Boolx1 requires (T::num_simd_lanes > 1) {
+            M_unreachable("SIMDfication currently not supported");
+        },
         [](std::monostate) -> Boolx1 { M_unreachable("invalid variant"); },
     }, variant);
 }
@@ -356,7 +383,10 @@ inline Boolx1 is_null(SQL_t &variant)
 inline Boolx1 not_null(SQL_t &variant)
 {
     return std::visit(overloaded {
-        []<sql_type T>(T actual) -> Boolx1 { return actual.not_null(); },
+        []<sql_type T>(T actual) -> Boolx1 requires (T::num_simd_lanes == 1) { return actual.not_null(); },
+        []<sql_type T>(T) -> Boolx1 requires (T::num_simd_lanes > 1) {
+            M_unreachable("SIMDfication currently not supported");
+        },
         [](std::monostate) -> Boolx1 { M_unreachable("invalid variant"); },
     }, variant);
 }

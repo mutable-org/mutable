@@ -653,6 +653,7 @@ void Projection::execute(const Match<Projection> &M, setup_t setup, pipeline_t p
                             new_env.add(e.id, NChar(var, value.can_be_null(), value.length(),
                                                     value.guarantees_terminating_nul()));
                         },
+                        [](auto) -> void { M_unreachable("SIMDfication currently not supported"); },
                         [](std::monostate) -> void { M_unreachable("invalid expression"); },
                     }, old_env.compile(p->first));
                 }
@@ -1941,6 +1942,7 @@ void OrderedGrouping::execute(const Match<OrderedGrouping> &M, setup_t setup, pi
                             key = value.val();
                         }
                     },
+                    [](auto) -> void { M_unreachable("SIMDfication currently not supported"); },
                     [](std::monostate) -> void { M_unreachable("invalid expression"); },
                 }, env.compile(M.grouping.group_by()[idx].first.get()));
             }
@@ -2031,6 +2033,7 @@ void OrderedGrouping::execute(const Match<OrderedGrouping> &M, setup_t setup, pi
                         env.add(e.id, NChar(var, value.can_be_null(), value.length(),
                                             value.guarantees_terminating_nul()));
                     },
+                    [](auto) -> void { M_unreachable("SIMDfication currently not supported"); },
                     [](std::monostate) -> void { M_unreachable("invalid reference"); },
                 }, results.get(e.id)); // do not extract to be able to access for not-yet-computed AVG aggregates
             }
@@ -2596,6 +2599,7 @@ void Aggregation::execute(const Match<Aggregation> &M, setup_t setup, pipeline_t
                     Var<Ptr<Charx1>> var(value.val()); // introduce variable s.t. uses only load from it
                     env.add(e.id, NChar(var, value.can_be_null(), value.length(), value.guarantees_terminating_nul()));
                 },
+                [](auto) -> void { M_unreachable("SIMDfication currently not supported"); },
                 [](std::monostate) -> void { M_unreachable("invalid reference"); },
             }, results.get(e.id)); // do not extract to be able to access for not-yet-computed AVG aggregates
         }

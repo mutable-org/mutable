@@ -1437,11 +1437,11 @@ struct PrimitiveExpr<T>
                         return unary<To>(::wasm::TruncSFloat64ToInt64);
                 } else {                                                                                //   unsigned
                     if constexpr (sizeof(From) == 4 and sizeof(To) <= 4)                                //    f32 -> u32
-                        return unary<int32_t>(::wasm::TruncUFloat32ToInt32).template to<To>();
+                        return unary<uint32_t>(::wasm::TruncUFloat32ToInt32).template to<To>();
                     if constexpr (sizeof(From) == 4 and sizeof(To) == 8)                                //    f32 -> u64
                         return unary<To>(::wasm::TruncUFloat32ToInt64);
                     if constexpr (sizeof(From) == 8 and sizeof(To) <= 4)                                //    f64 -> u32
-                        return unary<int32_t>(::wasm::TruncUFloat64ToInt32).template to<To>();
+                        return unary<uint32_t>(::wasm::TruncUFloat64ToInt32).template to<To>();
                     if constexpr (sizeof(From) == 8 and sizeof(To) == 8)                                //    f64 -> u64
                         return unary<To>(::wasm::TruncUFloat64ToInt64);
                 }

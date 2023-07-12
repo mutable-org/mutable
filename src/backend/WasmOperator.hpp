@@ -8,6 +8,10 @@
 namespace m {
 
 #define M_WASM_OPERATOR_LIST_TEMPLATED(X) \
+    X(Callback<false>) \
+    X(Callback<true>) \
+    X(Print<false>) \
+    X(Print<true>) \
     X(Scan<false>) \
     X(Scan<true>) \
     X(Filter<false>) \
@@ -29,8 +33,6 @@ namespace m {
 
 #define M_WASM_OPERATOR_LIST(X) \
     X(NoOp) \
-    X(Callback) \
-    X(Print) \
     X(LazyDisjunctiveFilter) \
     X(Projection) \
     X(HashBasedGrouping) \
@@ -46,8 +48,6 @@ namespace m {
 // forward declarations
 #define M_WASM_OPERATOR_DECLARATION_LIST(X) \
     X(NoOp) \
-    X(Callback) \
-    X(Print) \
     X(LazyDisjunctiveFilter) \
     X(Projection) \
     X(HashBasedGrouping) \
@@ -63,6 +63,12 @@ namespace m {
     M_WASM_OPERATOR_DECLARATION_LIST(DECLARE)
 #undef DECLARE
 #undef M_WASM_OPERATOR_DECLARATION_LIST
+
+namespace wasm { template<bool SIMDfied> struct Callback; }
+template<bool SIMDfied> struct Match<wasm::Callback<SIMDfied>>;
+
+namespace wasm { template<bool SIMDfied> struct Print; }
+template<bool SIMDfied> struct Match<wasm::Print<SIMDfied>>;
 
 namespace wasm { template<bool SIMDfied> struct Scan; }
 template<bool SIMDfied> struct Match<wasm::Scan<SIMDfied>>;
@@ -89,7 +95,8 @@ struct NoOp : PhysicalOperator<NoOp, NoOpOperator>
     static double cost(const Match<NoOp>&) { return 1.0; }
 };
 
-struct Callback : PhysicalOperator<Callback, CallbackOperator>
+template<bool SIMDfied>
+struct Callback : PhysicalOperator<Callback<SIMDfied>, CallbackOperator>
 {
     static void execute(const Match<Callback> &M, setup_t setup, pipeline_t pipeline, teardown_t teardown);
     static double cost(const Match<Callback>&) { return 1.0; }
@@ -97,7 +104,8 @@ struct Callback : PhysicalOperator<Callback, CallbackOperator>
                                       const std::tuple<const CallbackOperator*> &partial_inner_nodes);
 };
 
-struct Print : PhysicalOperator<Print, PrintOperator>
+template<bool SIMDfied>
+struct Print : PhysicalOperator<Print<SIMDfied>, PrintOperator>
 {
     static void execute(const Match<Print> &M, setup_t setup, pipeline_t pipeline, teardown_t teardown);
     static double cost(const Match<Print>&) { return 1.0; }
@@ -334,8 +342,8 @@ struct Match<wasm::NoOp> : MatchBase
     void print(std::ostream &out, unsigned level) const override;
 };
 
-template<>
-struct Match<wasm::Callback> : MatchBase
+template<bool SIMDfied>
+struct Match<wasm::Callback<SIMDfied>> : MatchBase
 {
     const CallbackOperator &callback;
     const MatchBase &child;
@@ -345,13 +353,16 @@ struct Match<wasm::Callback> : MatchBase
     Match(const CallbackOperator *Callback, std::vector<std::reference_wrapper<const MatchBase>> &&children)
         : callback(*Callback)
         , child(children[0])
-        , result_set_factory(std::make_unique<storage::RowLayoutFactory>()) // TODO: let optimizer decide this
+        , result_set_factory(M_CONSTEXPR_COND_UNCAPTURED(SIMDfied,
+             std::make_unique<storage::PAXLayoutFactory>(storage::PAXLayoutFactory::NTuples, 128),
+             std::make_unique<storage::RowLayoutFactory>()
+        )) // TODO: let optimizer decide this
     {
         M_insist(children.size() == 1);
     }
 
     void execute(setup_t setup, pipeline_t pipeline, teardown_t teardown) const override {
-        wasm::Callback::execute(*this, std::move(setup), std::move(pipeline), std::move(teardown));
+        wasm::Callback<SIMDfied>::execute(*this, std::move(setup), std::move(pipeline), std::move(teardown));
     }
     std::string name() const override { return "wasm::Callback"; }
 
@@ -359,8 +370,8 @@ struct Match<wasm::Callback> : MatchBase
     void print(std::ostream &out, unsigned level) const override;
 };
 
-template<>
-struct Match<wasm::Print> : MatchBase
+template<bool SIMDfied>
+struct Match<wasm::Print<SIMDfied>> : MatchBase
 {
     const PrintOperator &print_;
     const MatchBase &child;
@@ -370,13 +381,16 @@ struct Match<wasm::Print> : MatchBase
     Match(const PrintOperator *print, std::vector<std::reference_wrapper<const MatchBase>> &&children)
         : print_(*print)
         , child(children[0])
-        , result_set_factory(std::make_unique<storage::RowLayoutFactory>()) // TODO: let optimizer decide this
+        , result_set_factory(M_CONSTEXPR_COND_UNCAPTURED(SIMDfied,
+             std::make_unique<storage::PAXLayoutFactory>(storage::PAXLayoutFactory::NTuples, 128),
+             std::make_unique<storage::RowLayoutFactory>()
+        )) // TODO: let optimizer decide this
     {
         M_insist(children.size() == 1);
     }
 
     void execute(setup_t setup, pipeline_t pipeline, teardown_t teardown) const override {
-        wasm::Print::execute(*this, std::move(setup), std::move(pipeline), std::move(teardown));
+        wasm::Print<SIMDfied>::execute(*this, std::move(setup), std::move(pipeline), std::move(teardown));
     }
     std::string name() const override { return "wasm::Print"; }
 

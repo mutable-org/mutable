@@ -16,13 +16,21 @@ using namespace m::wasm;
  * Helper structs and functions
  *====================================================================================================================*/
 
-void write_result_set(const Schema &schema, const storage::DataLayoutFactory &factory,
+void write_result_set(const Schema &schema, const DataLayoutFactory &factory,
                       const std::optional<uint32_t> &window_size, const MatchBase &child)
 {
-    M_insist(CodeGenContext::Get().env().empty());
+    M_insist(schema == schema.drop_constants().deduplicate(), "schema must not contain constants or duplicates");
+    M_insist(CodeGenContext::Get().env().empty(), "all environment entries must be used");
+
+    /*----- Set data layout factory used for the result set. -----*/
+    auto &context = WasmEngine::Get_Wasm_Context_By_ID(Module::ID());
+    context.result_set_factory = factory.clone();
 
     if (schema.num_entries() == 0) { // result set contains only NULL constants
         if (window_size) {
+            M_insist(*window_size >= CodeGenContext::Get().num_simd_lanes());
+            M_insist(*window_size % CodeGenContext::Get().num_simd_lanes() == 0);
+
             std::optional<Var<U32x1>> counter; ///< variable to *locally* count
             ///> *global* counter backup since the following code may be called multiple times
             Global<U32x1> counter_backup; // default initialized to 0
@@ -38,10 +46,13 @@ void write_result_set(const Schema &schema, const storage::DataLayoutFactory &fa
                         M_insist(bool(counter));
 
                         /*----- Increment tuple ID. -----*/
-                        if (auto &env = CodeGenContext::Get().env(); env.predicated())
+                        if (auto &env = CodeGenContext::Get().env(); env.predicated()) {
+                            M_insist(CodeGenContext::Get().num_simd_lanes() == 1,
+                                     "SIMDfication with predication not supported");
                             *counter += env.extract_predicate().is_true_and_not_null().to<uint32_t>();
-                        else
-                            *counter += 1U;
+                        } else {
+                            *counter += uint32_t(CodeGenContext::Get().num_simd_lanes());
+                        }
 
                         /*----- If window size is reached, update result size, extract current results, and reset tuple ID. */
                         IF (*counter == *window_size) {
@@ -78,10 +89,13 @@ void write_result_set(const Schema &schema, const storage::DataLayoutFactory &fa
                     }),
                     /* pipeline= */ [&](){
                         M_insist(bool(num_tuples));
-                        if (auto &env = CodeGenContext::Get().env(); env.predicated())
+                        if (auto &env = CodeGenContext::Get().env(); env.predicated()) {
+                            M_insist(CodeGenContext::Get().num_simd_lanes() == 1,
+                                     "SIMDfication with predication not supported");
                             *num_tuples += env.extract_predicate().is_true_and_not_null().to<uint32_t>();
-                        else
-                            *num_tuples += 1U;
+                        } else {
+                            *num_tuples += uint32_t(CodeGenContext::Get().num_simd_lanes());
+                        }
                     },
                     /* teardown= */ teardown_t::Make_Without_Parent([&](){
                         M_insist(bool(num_tuples));
@@ -97,10 +111,11 @@ void write_result_set(const Schema &schema, const storage::DataLayoutFactory &fa
         }
     } else { // result set contains contains actual values
         if (window_size) {
-            M_insist(*window_size > 1U);
+            M_insist(*window_size > CodeGenContext::Get().num_simd_lanes());
+            M_insist(*window_size % CodeGenContext::Get().num_simd_lanes() == 0);
 
             /*----- Create finite global buffer (without `pipeline`-callback) used as reusable result set. -----*/
-            GlobalBuffer result_set(schema, factory, false, *window_size); // no callback to extract results all at once
+            GlobalBuffer result_set(schema, factory, false, *window_size); // no callback to extract windows manually
 
             /*----- Create child function s.t. result set is extracted in case of returns (e.g. due to `Limit`). -----*/
             FUNCTION(child_pipeline, void(void))
@@ -111,7 +126,9 @@ void write_result_set(const Schema &schema, const storage::DataLayoutFactory &fa
                     /* setup=    */ setup_t::Make_Without_Parent([&](){ result_set.setup(); }),
                     /* pipeline= */ [&](){
                         /*----- Store whether only a single slot is free to not extract result for empty buffer. -----*/
-                        const Var<Boolx1> single_slot_free(result_set.size() == *window_size - 1U);
+                        const Var<Boolx1> single_slot_free(
+                            result_set.size() == *window_size - uint32_t(CodeGenContext::Get().num_simd_lanes())
+                        );
 
                         /*----- Write the result. -----*/
                         result_set.consume(); // also resets size to 0 in case buffer has reached window size
@@ -333,10 +350,13 @@ void NoOp::execute(const Match<NoOp> &M, setup_t, pipeline_t, teardown_t)
         /* setup=    */ setup_t::Make_Without_Parent([&](){ num_tuples.emplace(CodeGenContext::Get().num_tuples()); }),
         /* pipeline= */ [&](){
             M_insist(bool(num_tuples));
-            if (auto &env = CodeGenContext::Get().env(); env.predicated())
+            if (auto &env = CodeGenContext::Get().env(); env.predicated()) {
+                M_insist(CodeGenContext::Get().num_simd_lanes() == 1,
+                         "SIMDfication with predication currently not supported");
                 *num_tuples += env.extract_predicate().is_true_and_not_null().to<uint32_t>();
-            else
-                *num_tuples += 1U;
+            } else {
+                *num_tuples += uint32_t(CodeGenContext::Get().num_simd_lanes());
+            }
         },
         /* teardown= */ teardown_t::Make_Without_Parent([&](){
             M_insist(bool(num_tuples));
@@ -351,19 +371,26 @@ void NoOp::execute(const Match<NoOp> &M, setup_t, pipeline_t, teardown_t)
  * Callback
  *====================================================================================================================*/
 
-ConditionSet Callback::pre_condition(std::size_t child_idx, const std::tuple<const CallbackOperator*>&)
+template<bool SIMDfied>
+ConditionSet Callback<SIMDfied>::pre_condition(std::size_t child_idx, const std::tuple<const CallbackOperator*>&)
 {
      M_insist(child_idx == 0);
 
     ConditionSet pre_cond;
 
-    /*----- Callback does not support SIMD. -----*/
-    pre_cond.add_condition(NoSIMD());
+    if constexpr (SIMDfied) {
+        /*----- SIMDfied callback supports SIMD but not predication. -----*/
+        pre_cond.add_condition(Predicated(false));
+    } else {
+        /*----- Non-SIMDfied callback does not support SIMD. -----*/
+        pre_cond.add_condition(NoSIMD());
+    }
 
     return pre_cond;
 }
 
-void Callback::execute(const Match<Callback> &M, setup_t, pipeline_t, teardown_t)
+template<bool SIMDfied>
+void Callback<SIMDfied>::execute(const Match<Callback> &M, setup_t, pipeline_t, teardown_t)
 {
     M_insist(bool(M.result_set_factory), "`wasm::Callback` must have a factory for the result set");
 
@@ -376,19 +403,26 @@ void Callback::execute(const Match<Callback> &M, setup_t, pipeline_t, teardown_t
  * Print
  *====================================================================================================================*/
 
-ConditionSet Print::pre_condition(std::size_t child_idx, const std::tuple<const PrintOperator*>&)
+template<bool SIMDfied>
+ConditionSet Print<SIMDfied>::pre_condition(std::size_t child_idx, const std::tuple<const PrintOperator*>&)
 {
      M_insist(child_idx == 0);
 
     ConditionSet pre_cond;
 
-    /*----- Print does not support SIMD. -----*/
-    pre_cond.add_condition(NoSIMD());
+    if constexpr (SIMDfied) {
+        /*----- SIMDfied print supports SIMD but not predication. -----*/
+        pre_cond.add_condition(Predicated(false));
+    } else {
+        /*----- Non-SIMDfied print does not support SIMD. -----*/
+        pre_cond.add_condition(NoSIMD());
+    }
 
     return pre_cond;
 }
 
-void Print::execute(const Match<Print> &M, setup_t, pipeline_t, teardown_t)
+template<bool SIMDfied>
+void Print<SIMDfied>::execute(const Match<Print> &M, setup_t, pipeline_t, teardown_t)
 {
     M_insist(bool(M.result_set_factory), "`wasm::Print` must have a factory for the result set");
 
@@ -657,6 +691,14 @@ ConditionSet Projection::adapt_post_condition(const Match<Projection> &M, const 
     }
     post_cond.project_and_rename(old2new);
 
+    if (not M.child) {
+        /*----- Leaf projection does not introduce predication. -----*/
+        post_cond.add_condition(Predicated(false));
+
+        /*----- Leaf projection does not introduce SIMD. -----*/
+        post_cond.add_condition(NoSIMD());
+    }
+
     return post_cond;
 }
 
@@ -745,6 +787,9 @@ ConditionSet HashBasedGrouping::post_condition(const Match<HashBasedGrouping>&)
 
     /*----- Hash-based grouping does not introduce predication (it is already handled by the hash table). -----*/
     post_cond.add_condition(Predicated(false));
+
+    /*----- Hash-based grouping does not introduce SIMD. -----*/
+    post_cond.add_condition(NoSIMD());
 
     return post_cond;
 }
@@ -1220,6 +1265,9 @@ ConditionSet OrderedGrouping::adapt_post_condition(const Match<OrderedGrouping> 
             orders.add(id, it->second); // drop duplicate since it must not be used afterwards
     }
     post_cond.add_condition(Sortedness(std::move(orders)));
+
+    /*----- Ordered grouping does not introduce SIMD. -----*/
+    post_cond.add_condition(NoSIMD());
 
     return post_cond;
 }
@@ -2122,6 +2170,9 @@ ConditionSet Aggregation::post_condition(const Match<Aggregation> &M)
         orders.add(e.id, Sortedness::O_UNDEF);
     post_cond.add_condition(Sortedness(std::move(orders)));
 
+    /*----- Aggregation does not introduce SIMD since only one tuple is produced. -----*/
+    post_cond.add_condition(NoSIMD());
+
     return post_cond;
 }
 
@@ -2689,6 +2740,9 @@ ConditionSet Sorting::post_condition(const Match<Sorting> &M)
             orders.add(id, o.second ? Sortedness::O_ASC : Sortedness::O_DESC);
     }
     post_cond.add_condition(Sortedness(std::move(orders)));
+
+    /*----- Sorting does not introduce SIMD. -----*/
+    post_cond.add_condition(NoSIMD());
 
     return post_cond;
 }
@@ -3496,6 +3550,9 @@ ConditionSet HashBasedGroupJoin::post_condition(const Match<HashBasedGroupJoin>&
     /*----- Hash-based group-join does not introduce predication (it is already handled by the hash table). -----*/
     post_cond.add_condition(Predicated(false));
 
+    /*----- Hash-based group-join does not introduce SIMD. -----*/
+    post_cond.add_condition(NoSIMD());
+
     return post_cond;
 }
 
@@ -4181,13 +4238,16 @@ void Match<m::wasm::NoOp>::print(std::ostream &out, unsigned level) const
     indent(out, level) << "wasm::NoOp (cumulative cost " << cost() << ')';
     this->child.print(out, level + 1);
 }
-void Match<m::wasm::Callback>::print(std::ostream &out, unsigned level) const
+
+template<bool SIMDfied>
+void Match<m::wasm::Callback<SIMDfied>>::print(std::ostream &out, unsigned level) const
 {
     indent(out, level) << "wasm::Callback (cumulative cost " << cost() << ')';
     this->child.print(out, level + 1);
 }
 
-void Match<m::wasm::Print>::print(std::ostream &out, unsigned level) const
+template<bool SIMDfied>
+void Match<m::wasm::Print<SIMDfied>>::print(std::ostream &out, unsigned level) const
 {
     indent(out, level) << "wasm::Print " << print_.schema() << " (cumulative cost " << cost() << ')';
     this->child.print(out, level + 1);

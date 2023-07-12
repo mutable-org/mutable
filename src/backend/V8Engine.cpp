@@ -415,7 +415,8 @@ void m::wasm::detail::read_result_set(const v8::FunctionCallbackInfo<v8::Value> 
     }
 
     /* Create data layout (without constants and duplicates). */
-    auto layout = RowLayoutFactory().make(deduplicated_schema_without_constants);
+    M_insist(bool(context.result_set_factory), "result set factory must be set");
+    auto layout = context.result_set_factory->make(deduplicated_schema_without_constants);
 
     /* Extract results. */
     if (auto callback_op = cast<const CallbackOperator>(&context.plan)) {

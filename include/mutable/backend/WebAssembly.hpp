@@ -3,6 +3,7 @@
 #include <memory>
 #include <mutable/backend/Backend.hpp>
 #include <mutable/IR/Operator.hpp>
+#include <mutable/storage/DataLayoutFactory.hpp>
 #include <mutable/util/macro.hpp>
 #include <mutable/util/memory.hpp>
 #include <unordered_map>
@@ -34,6 +35,8 @@ struct WasmEngine
         public:
         unsigned id; ///< a unique ID
         const Operator &plan; ///< current plan
+        ///> factory used to create the result set data layout
+        std::unique_ptr<const storage::DataLayoutFactory> result_set_factory;
         memory::AddressSpace vm; ///<  WebAssembly module instance's virtual address space aka.\ *linear memory*
         uint32_t heap = 0; ///< beginning of the heap, encoded as offset from the beginning of the virtual address space
 

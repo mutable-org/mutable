@@ -82,7 +82,7 @@ TEST_CASE("Wasm/" BACKEND_NAME "/Scan", "[core][wasm]")
     auto invoke = [&](){
         /* Create match for the scan operator for the table. */
         m::ScanOperator scan(table.store(), table.name);
-        m::Match<Scan> M(&scan, {});
+        m::Match<Scan<false>> M(&scan, {});
 
         /* Map table into wasm memory and add the mapped address and the number of rows as global variables. */
         auto off = wasm_context.map_table(table); // without faulting guard pages
@@ -136,7 +136,7 @@ TEST_CASE("Wasm/" BACKEND_NAME "/Scan", "[core][wasm]")
             };
 
             /* Execute the scan operator. */
-            Scan::execute(M, setup_t::Make_Without_Parent(), Return, teardown_t::Make_Without_Parent());
+            Scan<false>::execute(M, setup_t::Make_Without_Parent(), Return, teardown_t::Make_Without_Parent());
 
         }
         CodeGenContext::Dispose(); // dispose codegen context

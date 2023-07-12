@@ -8,6 +8,8 @@
 namespace m {
 
 #define M_WASM_OPERATOR_LIST_TEMPLATED(X) \
+    X(Scan<false>) \
+    X(Scan<true>) \
     X(Filter<false>) \
     X(Filter<true>) \
     X(NestedLoopsJoin<false>) \
@@ -29,7 +31,6 @@ namespace m {
     X(NoOp) \
     X(Callback) \
     X(Print) \
-    X(Scan) \
     X(LazyDisjunctiveFilter) \
     X(Projection) \
     X(HashBasedGrouping) \
@@ -47,7 +48,6 @@ namespace m {
     X(NoOp) \
     X(Callback) \
     X(Print) \
-    X(Scan) \
     X(LazyDisjunctiveFilter) \
     X(Projection) \
     X(HashBasedGrouping) \
@@ -63,6 +63,9 @@ namespace m {
     M_WASM_OPERATOR_DECLARATION_LIST(DECLARE)
 #undef DECLARE
 #undef M_WASM_OPERATOR_DECLARATION_LIST
+
+namespace wasm { template<bool SIMDfied> struct Scan; }
+template<bool SIMDfied> struct Match<wasm::Scan<SIMDfied>>;
 
 namespace wasm { template<bool Predicated> struct Filter; }
 template<bool Predicated> struct Match<wasm::Filter<Predicated>>;
@@ -102,10 +105,13 @@ struct Print : PhysicalOperator<Print, PrintOperator>
                                       const std::tuple<const PrintOperator*> &partial_inner_nodes);
 };
 
-struct Scan : PhysicalOperator<Scan, ScanOperator>
+template<bool SIMDfied>
+struct Scan : PhysicalOperator<Scan<SIMDfied>, ScanOperator>
 {
     static void execute(const Match<Scan> &M, setup_t setup, pipeline_t pipeline, teardown_t teardown);
-    static double cost(const Match<Scan>&) { return 1.0; }
+    static double cost(const Match<Scan>&) { return M_CONSTEXPR_COND(SIMDfied, 1.0, 2.0); }
+    static ConditionSet pre_condition(std::size_t child_idx,
+                                      const std::tuple<const ScanOperator*> &partial_inner_nodes);
     static ConditionSet post_condition(const Match<Scan> &M);
 };
 
@@ -378,8 +384,8 @@ struct Match<wasm::Print> : MatchBase
     void print(std::ostream &out, unsigned level) const override;
 };
 
-template<>
-struct Match<wasm::Scan> : MatchBase
+template<bool SIMDfied>
+struct Match<wasm::Scan<SIMDfied>> : MatchBase
 {
     private:
     std::unique_ptr<const storage::DataLayoutFactory> buffer_factory_;
@@ -398,9 +404,9 @@ struct Match<wasm::Scan> : MatchBase
             auto buffer_schema = scan.schema().drop_constants().deduplicate();
             if (buffer_schema.num_entries()) {
                 /* Use local buffer since scan loop will not be executed partially in multiple function calls. */
-                wasm::LocalBuffer buffer(buffer_schema, *buffer_factory_, false, buffer_num_tuples_,
+                wasm::LocalBuffer buffer(buffer_schema, *buffer_factory_, SIMDfied, buffer_num_tuples_,
                                          std::move(setup), std::move(pipeline), std::move(teardown));
-                wasm::Scan::execute(
+                wasm::Scan<SIMDfied>::execute(
                     /* M=        */ *this,
                     /* setup=    */ setup_t::Make_Without_Parent([&buffer](){ buffer.setup(); }),
                     /* pipeline= */ [&buffer](){ buffer.consume(); },
@@ -410,16 +416,16 @@ struct Match<wasm::Scan> : MatchBase
                     })
                 );
             } else {
-                wasm::Scan::execute(*this, std::move(setup), std::move(pipeline), std::move(teardown));
+                wasm::Scan<SIMDfied>::execute(*this, std::move(setup), std::move(pipeline), std::move(teardown));
             }
         } else {
-            wasm::Scan::execute(*this, std::move(setup), std::move(pipeline), std::move(teardown));
+            wasm::Scan<SIMDfied>::execute(*this, std::move(setup), std::move(pipeline), std::move(teardown));
         }
     }
 
     std::string name() const override {
         std::ostringstream oss;
-        oss << "wasm::Scan(" << scan.alias() << ')';
+        oss << M_CONSTEXPR_COND(SIMDfied, "wasm::SIMDScan(", "wasm::Scan(") << scan.alias() << ')';
         return oss.str();
     }
 

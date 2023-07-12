@@ -401,20 +401,55 @@ void Print::execute(const Match<Print> &M, setup_t, pipeline_t, teardown_t)
  * Scan
  *====================================================================================================================*/
 
-ConditionSet Scan::post_condition(const Match<Scan>&)
+template<bool SIMDfied>
+ConditionSet Scan<SIMDfied>::pre_condition(std::size_t child_idx,
+                                           const std::tuple<const ScanOperator*> &partial_inner_nodes)
+{
+     M_insist(child_idx == 0);
+
+    ConditionSet pre_cond;
+
+    if constexpr (SIMDfied) {
+        auto &scan = *std::get<0>(partial_inner_nodes);
+        auto &table = scan.store().table();
+
+        /*----- SIMDfied scan needs the data layout to support SIMD. -----*/
+        if (not supports_simd(table.layout(), table.schema(scan.alias()), scan.schema())) {
+            pre_cond.add_condition(Unsatisfiable());
+            return pre_cond;
+        }
+
+        /*----- SIMDfied scan needs the number of rows to load be a whole multiple of the number of SIMD lanes used. -*/
+        if (scan.store().num_rows() % get_num_simd_lanes(table.layout(), table.schema(scan.alias()), scan.schema()) != 0)
+            pre_cond.add_condition(Unsatisfiable());
+    }
+
+    return pre_cond;
+}
+
+template<bool SIMDfied>
+ConditionSet Scan<SIMDfied>::post_condition(const Match<Scan> &M)
 {
     ConditionSet post_cond;
 
     /*----- Scan does not introduce predication. -----*/
     post_cond.add_condition(Predicated(false));
 
-    /*----- Add SIMD widths for scanned values. -----*/
-    // TODO: implement
+    if constexpr (SIMDfied) {
+        /*----- SIMDfied scan introduces SIMD vectors with respective number of lanes. -----*/
+        auto &table = M.scan.store().table();
+        const auto num_simd_lanes = get_num_simd_lanes(table.layout(), table.schema(M.scan.alias()), M.scan.schema());
+        post_cond.add_condition(SIMD(num_simd_lanes));
+    } else {
+        /*----- Non-SIMDfied scan does not introduce SIMD. -----*/
+        post_cond.add_condition(NoSIMD());
+    }
 
     return post_cond;
 }
 
-void Scan::execute(const Match<Scan> &M, setup_t setup, pipeline_t pipeline, teardown_t teardown)
+template<bool SIMDfied>
+void Scan<SIMDfied>::execute(const Match<Scan> &M, setup_t setup, pipeline_t pipeline, teardown_t teardown)
 {
     auto &schema = M.scan.schema();
     auto &table = M.scan.store().table();
@@ -423,6 +458,16 @@ void Scan::execute(const Match<Scan> &M, setup_t setup, pipeline_t pipeline, tea
     M_insist(not table.layout().is_finite(), "layout for `wasm::Scan` must be infinite");
 
     Var<U32x1> tuple_id; // default initialized to 0
+
+    /*----- Compute possible number of SIMD lanes and decide which to use with regard to other operators preferences. */
+    const auto layout_schema = table.schema(M.scan.alias());
+    const auto num_simd_lanes_preferred =
+        CodeGenContext::Get().num_simd_lanes_preferred(); // get other operators preferences
+    const std::size_t num_simd_lanes =
+        M_CONSTEXPR_COND(SIMDfied,
+                         std::max(num_simd_lanes_preferred, get_num_simd_lanes(table.layout(), layout_schema, schema)),
+                         1);
+    CodeGenContext::Get().set_num_simd_lanes(num_simd_lanes);
 
     /*----- Import the number of rows of `table`. -----*/
     std::ostringstream oss;
@@ -433,7 +478,7 @@ void Scan::execute(const Match<Scan> &M, setup_t setup, pipeline_t pipeline, tea
     if (schema.num_entries() == 0) {
         setup();
         WHILE (tuple_id < num_rows) {
-            tuple_id += 1U;
+            tuple_id += uint32_t(num_simd_lanes);
             pipeline();
         }
         teardown();
@@ -449,8 +494,8 @@ void Scan::execute(const Match<Scan> &M, setup_t setup, pipeline_t pipeline, tea
     setup();
 
     /*----- Compile data layout to generate sequential load from table. -----*/
-    auto [inits, loads, jumps] = compile_load_sequential(schema, base_address, table.layout(), 1,
-                                                         table.schema(M.scan.alias()), tuple_id);
+    auto [inits, loads, jumps] = compile_load_sequential(schema, base_address, table.layout(), num_simd_lanes,
+                                                         layout_schema, tuple_id);
 
     /*----- Generate the loop for the actual scan, with the pipeline emitted into the loop body. -----*/
     inits.attach_to_current();
@@ -4148,10 +4193,11 @@ void Match<m::wasm::Print>::print(std::ostream &out, unsigned level) const
     this->child.print(out, level + 1);
 }
 
-void Match<m::wasm::Scan>::print(std::ostream &out, unsigned level) const
+template<bool SIMDfied>
+void Match<m::wasm::Scan<SIMDfied>>::print(std::ostream &out, unsigned level) const
 {
-    indent(out, level) << "wasm::Scan(" << M_notnull(scan.alias()) << ") " << scan.schema()
-                       << " (cumulative cost " << cost() << ')';
+    indent(out, level) << M_CONSTEXPR_COND(SIMDfied, "wasm::SIMDScan(", "wasm::Scan(") << M_notnull(scan.alias())
+                       << ") " << scan.schema() << " (cumulative cost " << cost() << ')';
 }
 
 template<bool Predicated>

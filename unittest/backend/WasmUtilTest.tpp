@@ -491,3 +491,136 @@ TEST_CASE("Wasm/" BACKEND_NAME "/strncpy", "[core][wasm]")
     CodeGenContext::Dispose();
     Module::Dispose();
 }
+
+TEMPLATE_TEST_CASE("Wasm/" BACKEND_NAME "/Decimal", "[core][wasm]",
+    Decimal32, Decimal64)
+{
+    Module::Init();
+
+    using decimal = TestType;
+    using arithmetic_type = typename decimal::arithmetic_type;
+
+#define A decimal( 142, 2)
+#define B decimal(1337, 2)
+#define C decimal(-256, 2)
+#define D decimal( 113, 3)
+#define E decimal(  12, 1)
+
+#define I PrimitiveExpr<arithmetic_type>(13)
+
+    SECTION("add")
+    {
+        CHECK_RESULT_INLINE(1479, arithmetic_type(void), { RETURN((A + B).val()); });
+        CHECK_RESULT_INLINE(1479, arithmetic_type(void), { RETURN((B + A).val()); });
+
+        CHECK_RESULT_INLINE(-114, arithmetic_type(void), { RETURN((A + C).val()); });
+        CHECK_RESULT_INLINE(-114, arithmetic_type(void), { RETURN((C + A).val()); });
+
+        CHECK_RESULT_INLINE(1533, arithmetic_type(void), { RETURN((A + D).val()); });
+        CHECK_RESULT_INLINE(1533, arithmetic_type(void), { RETURN((D + A).val()); });
+
+        CHECK_RESULT_INLINE(262, arithmetic_type(void), { RETURN((A + E).val()); });
+        CHECK_RESULT_INLINE(262, arithmetic_type(void), { RETURN((E + A).val()); });
+
+        CHECK_RESULT_INLINE(1313, arithmetic_type(void), { RETURN((D + E).val()); });
+        CHECK_RESULT_INLINE(1313, arithmetic_type(void), { RETURN((E + D).val()); });
+
+        CHECK_RESULT_INLINE(-2447, arithmetic_type(void), { RETURN((C + D).val()); });
+        CHECK_RESULT_INLINE(-2447, arithmetic_type(void), { RETURN((D + C).val()); });
+
+        CHECK_RESULT_INLINE(-136, arithmetic_type(void), { RETURN((C + E).val()); });
+        CHECK_RESULT_INLINE(-136, arithmetic_type(void), { RETURN((E + C).val()); });
+
+        CHECK_RESULT_INLINE(1442, arithmetic_type(void), { RETURN((A + I).val()); });
+        CHECK_RESULT_INLINE(1442, arithmetic_type(void), { RETURN((I + A).val()); });
+    }
+
+    SECTION("subtract")
+    {
+        CHECK_RESULT_INLINE(-1195, arithmetic_type(void), { RETURN((A - B).val()); });
+        CHECK_RESULT_INLINE(1195, arithmetic_type(void), { RETURN((B - A).val()); });
+
+        CHECK_RESULT_INLINE(398, arithmetic_type(void), { RETURN((A - C).val()); });
+        CHECK_RESULT_INLINE(-398, arithmetic_type(void), { RETURN((C - A).val()); });
+
+        CHECK_RESULT_INLINE(1307, arithmetic_type(void), { RETURN((A - D).val()); });
+        CHECK_RESULT_INLINE(-1307, arithmetic_type(void), { RETURN((D - A).val()); });
+
+        CHECK_RESULT_INLINE(22, arithmetic_type(void), { RETURN((A - E).val()); });
+        CHECK_RESULT_INLINE(-22, arithmetic_type(void), { RETURN((E - A).val()); });
+
+        CHECK_RESULT_INLINE(-1087, arithmetic_type(void), { RETURN((D - E).val()); });
+        CHECK_RESULT_INLINE(1087, arithmetic_type(void), { RETURN((E - D).val()); });
+
+        CHECK_RESULT_INLINE(-2673, arithmetic_type(void), { RETURN((C - D).val()); });
+        CHECK_RESULT_INLINE(2673, arithmetic_type(void), { RETURN((D - C).val()); });
+
+        CHECK_RESULT_INLINE(-376, arithmetic_type(void), { RETURN((C - E).val()); });
+        CHECK_RESULT_INLINE(376, arithmetic_type(void), { RETURN((E - C).val()); });
+
+        CHECK_RESULT_INLINE(-1158, arithmetic_type(void), { RETURN((A - I).val()); });
+        CHECK_RESULT_INLINE(1158, arithmetic_type(void), { RETURN((I - A).val()); });
+    }
+
+    SECTION("multiply")
+    {
+        CHECK_RESULT_INLINE(1898, arithmetic_type(void), { RETURN((A * B).val()); });
+        CHECK_RESULT_INLINE(1898, arithmetic_type(void), { RETURN((B * A).val()); });
+
+        CHECK_RESULT_INLINE(-363, arithmetic_type(void), { RETURN((A * C).val()); });
+        CHECK_RESULT_INLINE(-363, arithmetic_type(void), { RETURN((C * A).val()); });
+
+        CHECK_RESULT_INLINE(160, arithmetic_type(void), { RETURN((A * D).val()); });
+        CHECK_RESULT_INLINE(160, arithmetic_type(void), { RETURN((D * A).val()); });
+
+        CHECK_RESULT_INLINE(170, arithmetic_type(void), { RETURN((A * E).val()); });
+        CHECK_RESULT_INLINE(170, arithmetic_type(void), { RETURN((E * A).val()); });
+
+        CHECK_RESULT_INLINE(135, arithmetic_type(void), { RETURN((D * E).val()); });
+        CHECK_RESULT_INLINE(135, arithmetic_type(void), { RETURN((E * D).val()); });
+
+        CHECK_RESULT_INLINE(-289, arithmetic_type(void), { RETURN((C * D).val()); });
+        CHECK_RESULT_INLINE(-289, arithmetic_type(void), { RETURN((D * C).val()); });
+
+        CHECK_RESULT_INLINE(-307, arithmetic_type(void), { RETURN((C * E).val()); });
+        CHECK_RESULT_INLINE(-307, arithmetic_type(void), { RETURN((E * C).val()); });
+
+        CHECK_RESULT_INLINE(1846, arithmetic_type(void), { RETURN((A * I).val()); });
+        CHECK_RESULT_INLINE(1846, arithmetic_type(void), { RETURN((I * A).val()); });
+    }
+
+    SECTION("divide")
+    {
+        CHECK_RESULT_INLINE(10, arithmetic_type(void), { RETURN((A / B).val()); });
+        CHECK_RESULT_INLINE(941, arithmetic_type(void), { RETURN((B / A).val()); });
+
+        CHECK_RESULT_INLINE(-55, arithmetic_type(void), { RETURN((A / C).val()); });
+        CHECK_RESULT_INLINE(-180, arithmetic_type(void), { RETURN((C / A).val()); });
+
+        CHECK_RESULT_INLINE(12566, arithmetic_type(void), { RETURN((A / D).val()); });
+        CHECK_RESULT_INLINE(79, arithmetic_type(void), { RETURN((D / A).val()); });
+
+        CHECK_RESULT_INLINE(118, arithmetic_type(void), { RETURN((A / E).val()); });
+        CHECK_RESULT_INLINE(84, arithmetic_type(void), { RETURN((E / A).val()); });
+
+        CHECK_RESULT_INLINE(94, arithmetic_type(void), { RETURN((D / E).val()); });
+        CHECK_RESULT_INLINE(10619, arithmetic_type(void), { RETURN((E / D).val()); });
+
+        CHECK_RESULT_INLINE(-22654, arithmetic_type(void), { RETURN((C / D).val()); });
+        CHECK_RESULT_INLINE(-44, arithmetic_type(void), { RETURN((D / C).val()); });
+
+        CHECK_RESULT_INLINE(-213, arithmetic_type(void), { RETURN((C / E).val()); });
+        CHECK_RESULT_INLINE(-46, arithmetic_type(void), { RETURN((E / C).val()); });
+
+        CHECK_RESULT_INLINE(10, arithmetic_type(void), { RETURN((A / I).val()); });
+        CHECK_RESULT_INLINE(915, arithmetic_type(void), { RETURN((I / A).val()); });
+    }
+
+#undef A
+#undef B
+#undef C
+#undef D
+#undef E
+#undef I
+    Module::Dispose();
+}

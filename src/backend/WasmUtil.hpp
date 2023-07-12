@@ -2,9 +2,10 @@
 
 #include "backend/PhysicalOperator.hpp"
 #include "backend/WasmDSL.hpp"
+#include <functional>
 #include <mutable/catalog/Schema.hpp>
 #include <mutable/parse/AST.hpp>
-#include <functional>
+#include <mutable/util/concepts.hpp>
 #include <optional>
 #include <variant>
 
@@ -71,6 +72,188 @@ struct NChar : Ptr<Char>
     uint64_t size_in_bytes() const { return type_->size() / 8; }
     bool guarantees_terminating_nul() const { return type_->is_varying; }
 };
+
+
+/*======================================================================================================================
+ * Decimal
+ *====================================================================================================================*/
+
+template<signed_integral Base>
+struct Decimal : Expr<Base>
+{
+    using expr_type = Expr<Base>;
+    using arithmetic_type = Base;
+
+    private:
+    ///> the number of decimal digits right of the decimal point
+    uint32_t scale_;
+
+    public:
+    /** Constructs a `Decimal` from a given \p value at the given \p scale.  For example, a \p value of `142` at a \p
+     * scale of `2` would represent `1.42`. */
+    Decimal(Base value, uint32_t scale) : expr_type(value), scale_(scale) {
+        M_insist(scale != 0);
+    }
+
+    /** Constructs a `Decimal` from a given \p value at the given \p scale.  For example, a \p value of `142` at a \p
+     * scale of `2` would represent `1.42`. */
+    Decimal(expr_type value, uint32_t scale) : expr_type(value), scale_(scale) { }
+
+    Decimal(Decimal &other) : Decimal(other.val(), other.scale_) { }
+    Decimal(Decimal &&other) : Decimal(other.val(), other.scale_) { }
+
+    /** Constructs a `Decimal` from a given \p value at the given \p scale.  For example, a \p value of `142` at a \p
+     * scale of `2` would represent `142.00`. */
+    static Decimal Scaled(expr_type value, uint32_t scale) {
+        const arithmetic_type scaling_factor = powi(arithmetic_type(10), scale);
+        return Decimal(value * scaling_factor, scale);
+    }
+
+
+    public:
+    expr_type val() { return *this; }
+
+    uint32_t scale() const { return scale_; }
+
+    template<signed_integral To>
+    Expr<To> to() { return val().template to<To>() / powi(To(10), To(scale_)); }
+
+    Decimal clone() const { return Decimal(expr_type::clone(), scale_); }
+    bool can_be_null() const { return expr_type::can_be_null(); }
+    Bool is_null() {
+        if (can_be_null()) {
+            return expr_type::is_null();
+        } else {
+            expr_type::discard();
+            return Bool(false);
+        }
+    }
+    Bool not_null() {
+        if (can_be_null()) {
+            return expr_type::not_null();
+        } else {
+            expr_type::discard();
+            return Bool(true);
+        }
+    }
+
+
+    /*------------------------------------------------------------------------------------------------------------------
+     * Unary operations
+     *----------------------------------------------------------------------------------------------------------------*/
+
+
+    /*------------------------------------------------------------------------------------------------------------------
+     * Binary operations
+     *----------------------------------------------------------------------------------------------------------------*/
+
+    Decimal operator+(Decimal other) {
+        if (this->scale_ == other.scale_)
+            return Decimal(this->val() + other.val(), scale_); // fall back to regular integer arithmetic
+
+        if (this->scale() > other.scale()) {
+            const arithmetic_type scaling_factor = powi(arithmetic_type(10), this->scale() - other.scale());
+            return Decimal(this->val() + (other * scaling_factor).val() , this->scale());
+        } else {
+            const arithmetic_type scaling_factor = powi(arithmetic_type(10), other.scale() - this->scale());
+            return Decimal((*this * scaling_factor).val() + other.val() , other.scale());
+        }
+    }
+
+    template<typename T>
+    requires expr_convertible<T> and signed_integral<typename expr_t<T>::type>
+    Decimal operator+(T &&other) { return Decimal(*this + Scaled(expr_t<T>(other), scale_)); }
+
+    Decimal operator-(Decimal other) {
+        if (this->scale_ == other.scale_)
+            return Decimal(this->val() - other.val(), scale_); // fall back to regular integer arithmetic
+
+        if (this->scale() > other.scale()) {
+            const arithmetic_type scaling_factor = powi(arithmetic_type(10), this->scale() - other.scale());
+            return Decimal(this->val() - (other * scaling_factor).val() , this->scale());
+        } else {
+            const arithmetic_type scaling_factor = powi(arithmetic_type(10), other.scale() - this->scale());
+            return Decimal((*this * scaling_factor).val() - other.val() , other.scale());
+        }
+    }
+
+    template<typename T>
+    requires expr_convertible<T> and signed_integral<typename expr_t<T>::type>
+    Decimal operator-(T &&other) { return Decimal(*this - Scaled(expr_t<T>(other), scale_)); }
+
+    Decimal operator*(Decimal other) {
+        uint32_t smaller_scale = this->scale();
+        uint32_t higher_scale = other.scale();
+        if (smaller_scale > higher_scale)
+            std::swap(smaller_scale, higher_scale);
+        M_insist(smaller_scale <= higher_scale);
+        const arithmetic_type scaling_factor = powi(arithmetic_type(10), smaller_scale);
+        return Decimal((this->val() * other.val()) / scaling_factor, higher_scale);
+    }
+
+    template<typename T>
+    requires expr_convertible<T> and signed_integral<typename expr_t<T>::type>
+    Decimal operator*(T &&other) { return Decimal(this->val() * expr_t<T>(other), scale()); }
+
+    Decimal operator/(Decimal other) {
+        const uint32_t scale_res = std::max(this->scale(), other.scale());
+        const arithmetic_type scaling_factor = powi(arithmetic_type(10), scale_res + other.scale() - this->scale());
+        return Decimal((this->val() * scaling_factor) / other.val(), scale_res);
+    }
+
+    template<typename T>
+    requires expr_convertible<T> and signed_integral<typename expr_t<T>::type>
+    Decimal operator/(T &&other) { return Decimal(this->val() / expr_t<T>(other), scale()); }
+
+    /** Modulo division is not supported by `Decimal` type. */
+    template<typename T>
+    requires false
+    Decimal operator%(T&&) { M_unreachable("modulo division on decimals is not defined"); }
+
+    friend std::ostream & operator<<(std::ostream &out, const Decimal &d) {
+        return out << "Decimal: " << static_cast<const expr_type&>(d) << ", scale = " << d.scale_;
+    }
+
+    void dump(std::ostream &out) const { out << *this << std::endl; }
+    void dump() const { dump(std::cerr); }
+};
+
+/*----------------------------------------------------------------------------------------------------------------------
+ * Binary operations
+ *--------------------------------------------------------------------------------------------------------------------*/
+
+template<typename Base>
+requires expr_convertible<Base> and signed_integral<typename expr_t<Base>::type>
+Decimal<typename expr_t<Base>::type> operator+(Base &&left, Decimal<typename expr_t<Base>::type> right)
+{
+    return right + left;
+}
+
+template<typename Base>
+requires expr_convertible<Base> and signed_integral<typename expr_t<Base>::type>
+Decimal<typename expr_t<Base>::type> operator-(Base &&left, Decimal<typename expr_t<Base>::type> right)
+{
+    return Decimal<typename expr_t<Base>::type>::Scaled(expr_t<Base>(left), right.scale()) - right;
+}
+
+template<typename Base>
+requires expr_convertible<Base> and signed_integral<typename expr_t<Base>::type>
+Decimal<typename expr_t<Base>::type> operator*(Base &&left, Decimal<typename expr_t<Base>::type> right)
+{
+    return right * left;
+}
+
+template<typename Base>
+requires expr_convertible<Base> and signed_integral<typename expr_t<Base>::type>
+Decimal<typename expr_t<Base>::type> operator/(Base &&left, Decimal<typename expr_t<Base>::type> right)
+{
+    return Decimal<typename expr_t<Base>::type>(expr_t<Base>(left), 0) / right;
+}
+
+using Decimal32 = Decimal<int32_t>;
+using Decimal64 = Decimal<int64_t>;
+
+
 
 /*======================================================================================================================
  * Declare valid SQL types

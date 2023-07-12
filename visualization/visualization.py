@@ -13,13 +13,20 @@ target_list = ['cost', 'time']
 # target_list = ['time'] # Time is what we concered most
 
 focus_method = ["DPccp",
+                "IKKBZ",
+                "BU-hanwen-layered-zero",
+                "BU-hanwen-layered2-zero",
+                "BU-hanwen-layered3-zero",
+                "BU-hanwen-layered-sorted-zero",
+                "BU-hanwen-layered-sorted-zero",
+                "BU-hanwen-layered-sorted-zero"
                 # 'BU-A*-zero', "TD-A*-sum",
                 # "BU-beam-zero",
                 # "TD-beam-zero",
                 # "BU-beam-hanwen-zero",
                 # "TD-beam-hanwen-zero",
-                "BU-BIDIRECTIONAL-zero",
-                "BU-LAYEREDBIDIRECTIONAL-zero"
+                # "BU-BIDIRECTIONAL-zero",
+                # "BU-LAYEREDBIDIRECTIONAL-zero"
                 ]
 
 for topology in topology_list:
@@ -30,7 +37,8 @@ for topology in topology_list:
         for method in focus_method:
             sub_data = data[(data['planner'] == method) & (data['cost'].notnull())]
             marker = 'x' if method not in ["DPccp", "BU-BIDIRECTIONAL-zero"] else 'o'
-            if "hanwen" in method: marker = '^'
+
+            if "sorted" in method: marker = '^'
             ax.plot(sub_data['size'], sub_data[target], marker=marker, label='{}'.format(method))
             for i in range(len(sub_data)):
                 ax.text(sub_data['size'].iloc[i], sub_data[target].iloc[i], str(sub_data[target].iloc[i]),

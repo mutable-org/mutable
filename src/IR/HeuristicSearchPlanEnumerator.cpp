@@ -1311,9 +1311,7 @@ struct BottomUpComplete : BottomUp
                     /* Compute new subproblems after join */
                     Subproblem *subproblems = state.get_allocator().allocate(state.size() - 1);
                     Subproblem *ptr = subproblems;
-                    int hanwen_counter = 0;
                     for (auto it = state.cbegin(); it != state.cend(); ++it) {
-                        hanwen_counter += 1;
                         if (it == outer_it) continue; // skip outer
                         else if (it == inner_it) new(ptr++) Subproblem(joined); // replace inner
                         else new(ptr++) Subproblem(*it);

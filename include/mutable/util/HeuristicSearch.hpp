@@ -2524,7 +2524,21 @@ std::size_t num_##NAME() const { return 0; }
                     it->second.handle = Q.push(&*it);
                     inc_new();
                 } else {
-                    std::cout << "Duplicate happenes???" << std::endl;
+//                    std::cout << "Duplicate happenes???Start process duplicates" << std::endl;
+                    if (state.g() >= it->first.g())[[likely]] {
+                        inc_discarded();
+                        return;
+                    } else {
+                        inc_cheaper();
+                        it->first.decrease_g(state.parent(), state.g());
+                        if(it->second.queue==nullptr){
+                            it->second.handle=Q.push(&*it);
+                            it->second.queue=&Q;
+                        }else{
+                            Q.increase(it->second.handle);
+                            inc_decrease_key();
+                        }
+                    }
                 }
             }
 
@@ -2537,27 +2551,10 @@ std::size_t num_##NAME() const { return 0; }
                 return {entry.first, entry.second.h};
             }
 
+
             bool queues_empty() const{return beam_queue_.empty();}
             unsigned queues_size() const{return beam_queue_.size();}
 
-
-
-// Considering we use candidates in the main function, rather in the stateManager
-
-//            std::pair<const state_type &, double> layer_candidates_pop() {
-//                M_insist(not layer_candidates_empty());
-//                pointer_type ptr = layer_candidates_.top();
-//                layer_candidates_.pop();
-//                M_insist(ptr, "ptr must have been set, the queues must not have been empty");
-//
-//                auto &entry = *static_cast<typename map_type::value_type *>(ptr);
-//                entry.second.queue = nullptr; // remove from queue
-//                return {entry.first, entry.second.h};
-//            }
-//
-//            size_t layer_candidates_size(){
-//                return layer_candidates_.size();
-//            }
 
 
 
@@ -2688,15 +2685,6 @@ std::size_t num_##NAME() const { return 0; }
 
 
 
-//    void clear() {
-//        if constexpr (HasRegularQueue)
-//            regular_queue_.clear();
-//        if constexpr (HasBeamQueue)
-//            beam_queue_.clear();
-//        // states_.clear();
-//        partitions_.clear();
-//    }
-
             void print_counters(std::ostream &out) const {
 #define X(NAME) num_##NAME() << " " #NAME
                 out << X(new) ", " << X(duplicates) ", ";
@@ -2810,6 +2798,7 @@ std::size_t num_##NAME() const { return 0; }
                     > state_manager_;
 
             std::deque<weighted_state> layer_candidates;
+            std::deque<weighted_state> goal_candidates;
             std::vector<weighted_state> curr_layer_candidates;
 
 
@@ -2845,56 +2834,37 @@ std::size_t num_##NAME() const { return 0; }
             template<typename T>
             using has_mark = decltype(std::declval<T>().mark(Subproblem()));
 
-//            void push_candidates(state_type state, double h, Context &... context) {
-//                /// Still maintain the original structure - Using a max heap, easy to deal with the replicates
-//                auto &top = layer_candidates.front();
-//                if (layer_candidates.size() < beam_width) {
-//                    /* There is still space in the candidates, so simply add the state to the heap. */
-//                    layer_candidates.emplace_back(std::move(state), h);
-//                    if (layer_candidates.size() == beam_width) // heapify when filled
-//                        std::make_heap(layer_candidates.begin(), layer_candidates.end());
-//                } else if (state.g() + h >= top.state.g() + top.h) {
-//                    /* The state has higher g+h than the top of the candidates heap, so bypass the candidates immediately. */
-//                    //            state_manager_.push_regular_queue(std::move(state), h, context...);
-//                } else {
-//                    /* The state has less g+h than the top of candidates heap.  Pop the current top and insert the state into
-//                     * the candidates heap. */
-//                    M_insist(layer_candidates.size() == beam_width);
-//                    M_insist(std::is_heap(layer_candidates.begin(), layer_candidates.end()));
-//                    layer_candidates.emplace_back(std::move(state), h);
-//                    std::pop_heap(layer_candidates.begin(), layer_candidates.end());
-//                    weighted_state worst_candidate = std::move(layer_candidates.back()); // extract worst candidate
-//                    layer_candidates.pop_back();
-//                    M_insist(std::is_heap(layer_candidates.begin(), layer_candidates.end()));
-//                    M_insist(layer_candidates.size() == beam_width);
-//#ifndef NDEBUG
-//                    for (auto &elem: layer_candidates)
-//                        M_insist(worst_candidate >= elem, "worst candidate must be no less than any other candidate");
-//#endif
-//                    // state_manager_.push_regular_queue(std::move(worst_candidate.state), worst_candidate.h, context...); // move to regular
-//                }
-//            }
-
             void push_candidates(state_type state, double h, Context &... context) {
                 /// We can not keep the states safely, so not in the heap shape
-                if (layer_candidates.size() < beam_width) {
-                    /* There is still space in the candidates, so simply add the state to the heap. */
+                if (state.size() == 1) {
                     layer_candidates.emplace_back(std::move(state), h);
-                    if (layer_candidates.size() == beam_width) {
-                        std::make_heap(layer_candidates.begin(), layer_candidates.end());
-                    }
-                } else {
-                    if constexpr (!sorted_candidates) { return; }
-                    M_insist(layer_candidates.size() == beam_width);
-                    auto &top = layer_candidates.front();
-                    if (state.g() + h >= top.state.g() + top.h) {
-                        /// Larger than largest value
-                        return;
-                    }
-                    layer_candidates.emplace_back(std::move(state), h);
-                    std::pop_heap(layer_candidates.begin(), layer_candidates.end());
-                    layer_candidates.pop_back();
+                    std::make_heap(layer_candidates.begin(), layer_candidates.end());
                 }
+                else {
+                    if (layer_candidates.size() < beam_width) {
+                        /* There is still space in the candidates, so simply add the state to the heap. */
+                        layer_candidates.emplace_back(std::move(state), h);
+                        if (layer_candidates.size() == beam_width ) {
+                            std::make_heap(layer_candidates.begin(), layer_candidates.end());
+                        }
+                    } else {
+                        if constexpr (!sorted_candidates) { return; }
+                        M_insist(layer_candidates.size() == beam_width);
+                        auto &top = layer_candidates.front();
+                        if (state.g() + h >= top.state.g() + top.h) {
+                            /// Larger than largest value
+                            return;
+                        }
+                        layer_candidates.emplace_back(std::move(state), h);
+                        std::pop_heap(layer_candidates.begin(), layer_candidates.end());
+                        layer_candidates.pop_back();
+                    }
+                }
+            }
+
+            void push_goals(state_type state, double h) {
+                /// We can not keep the states safely, so not in the heap shape
+                layer_candidates.emplace_back(std::move(state), h);
             }
 
 
@@ -2956,22 +2926,23 @@ std::size_t num_##NAME() const { return 0; }
             while (!state_manager_.queues_empty()) {
                 /// 2.1. Init the current_layer_candidates for further usage
 
-                size_t layer_candidates_size = std::min(beam_width,state_manager_.queues_size());
+                size_t layer_candidates_size = std::min(beam_width, state_manager_.queues_size());
                 layer_candidates.clear();
 
                 /// 2.2. foreach state in layer candidates -> explore_state()
                 for (size_t i{0}; i < layer_candidates_size; i++) {
                     auto curr = state_manager_.pop();
                     const state_type &state = curr.first;
-                    //   std::cout << "Current state.size()" << state.size() << std::endl; // Same size in same for-loop
+//                    std::cout << "Current state.size()" << state.size() << std::endl; // Same size in same for-loop
 
                     if (expand.is_goal(state, context...)) return state;
+
                     explore_state(state, heuristic, expand, context...);
-                    /// 2.3. Important!!! Or we will lose it!!!
-                    //state_manager_.persist_state(std::move(state), curr.h, context...);
+
                 }
 
-                for (auto &s: layer_candidates) {
+                for (auto it = layer_candidates.rbegin(); it != layer_candidates.rend(); ++it) {
+                    auto &s = *it;
                     state_manager_.push(std::move(s.state), s.h, context...);
                 }
 

@@ -2160,10 +2160,11 @@ void m::wasm::compile_load_point_access(const Schema &tuple_schema, Ptr<void> ba
  *====================================================================================================================*/
 
 template<bool IsGlobal>
-Buffer<IsGlobal>::Buffer(const Schema &schema, const DataLayoutFactory &factory, std::size_t num_tuples,
-                         setup_t setup, pipeline_t pipeline, teardown_t teardown)
+Buffer<IsGlobal>::Buffer(const Schema &schema, const DataLayoutFactory &factory, bool load_simdfied,
+                         std::size_t num_tuples, setup_t setup, pipeline_t pipeline, teardown_t teardown)
     : schema_(std::cref(schema))
     , layout_(factory.make(schema, num_tuples))
+    , load_simdfied_(load_simdfied)
     , setup_(std::move(setup))
     , pipeline_(std::move(pipeline))
     , teardown_(std::move(teardown))
@@ -2358,13 +2359,21 @@ void Buffer<IsGlobal>::resume_pipeline(param_t tuple_schema_)
             Ptr<void> base_address = PARAMETER(0);
             U32x1 size = PARAMETER(1);
 
+            /*----- Compute poss. number of SIMD lanes and decide which to use with regard to other ops. preferences. */
+            const auto num_simd_lanes_preferred =
+                CodeGenContext::Get().num_simd_lanes_preferred(); // get other operators preferences
+            const std::size_t num_simd_lanes =
+                load_simdfied_ ? std::max(num_simd_lanes_preferred, get_num_simd_lanes(layout_, schema_, tuple_schema))
+                               : 1;
+            CodeGenContext::Get().set_num_simd_lanes(num_simd_lanes);
+
             /*----- Emit setup code *before* compiling data layout to not overwrite its temporary boolean variables. -*/
             setup_();
 
             /*----- Compile data layout to generate sequential load from buffer. -----*/
             Var<U32x1> load_tuple_id; // default initialized to 0
             auto [load_inits, loads, load_jumps] =
-                compile_load_sequential(tuple_schema, base_address, layout_, schema_, load_tuple_id);
+                compile_load_sequential(tuple_schema, base_address, layout_, num_simd_lanes, schema_, load_tuple_id);
 
             /*----- Generate loop for loading entire buffer, with the pipeline emitted into the loop body. -----*/
             load_inits.attach_to_current();
@@ -2414,13 +2423,20 @@ void Buffer<IsGlobal>::resume_pipeline_inline(param_t tuple_schema_) const
         pred = env.extract_predicate().is_true_and_not_null();
     U32x1 num_tuples = pred ? Select(*pred, size, 0U) : size;
 
+    /*----- Compute possible number of SIMD lanes and decide which to use with regard to other operators preferences. */
+    const auto num_simd_lanes_preferred =
+        CodeGenContext::Get().num_simd_lanes_preferred(); // get other operators preferences
+    const std::size_t num_simd_lanes =
+        load_simdfied_ ? std::max(num_simd_lanes_preferred, get_num_simd_lanes(layout_, schema_, tuple_schema)) : 1;
+    CodeGenContext::Get().set_num_simd_lanes(num_simd_lanes);
+
     /*----- Emit setup code *before* compiling data layout to not overwrite its temporary boolean variables. -----*/
     setup_();
 
     /*----- Compile data layout to generate sequential load from buffer. -----*/
     Var<U32x1> load_tuple_id(0); // explicitly (re-)set tuple ID to 0
     auto [load_inits, loads, load_jumps] =
-        compile_load_sequential(tuple_schema, base_address, layout_, schema_, load_tuple_id);
+        compile_load_sequential(tuple_schema, base_address, layout_, num_simd_lanes, schema_, load_tuple_id);
 
     /*----- Generate loop for loading entire buffer, with the pipeline emitted into the loop body. -----*/
     load_inits.attach_to_current();
@@ -2447,7 +2463,8 @@ void Buffer<IsGlobal>::consume()
      * variables, i.e. base address and size, using *global* backups and restore them before performing the actual
      * store in the case of global buffers.  For local buffers, stores must be done in a single pass anyway. */
     auto [_store_inits, stores, _store_jumps] =
-        compile_store_sequential_single_pass(schema_, *base_address_, layout_, schema_, *size_);
+        compile_store_sequential_single_pass(schema_, *base_address_, layout_, CodeGenContext::Get().num_simd_lanes(),
+                                             schema_, *size_);
     Block store_inits(std::move(_store_inits)), store_jumps(std::move(_store_jumps));
 
     if (layout_.is_finite()) {
@@ -2478,7 +2495,7 @@ void Buffer<IsGlobal>::consume()
     stores.attach_to_current();
 
     if (layout_.is_finite()) {
-        IF (*size_ == uint32_t(layout_.num_tuples()) - 1U) { // buffer full
+        IF (*size_ == uint32_t(layout_.num_tuples() - CodeGenContext::Get().num_simd_lanes())) { // buffer full
             /*----- Resume pipeline for each tuple in buffer and reset size of buffer to 0. -----*/
             *size_ = uint32_t(layout_.num_tuples()); // increment size of buffer to resume pipeline even for last tuple
             resume_pipeline();

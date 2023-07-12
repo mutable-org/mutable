@@ -835,6 +835,7 @@ struct Buffer
 
     std::reference_wrapper<const Schema> schema_; ///< schema of buffer
     storage::DataLayout layout_; ///< data layout of buffer
+    bool load_simdfied_ = false; ///< flag whether to load from the buffer in SIMDfied manner
     std::optional<Var<Ptr<void>>> base_address_; ///< base address of buffer
     std::optional<Var<U32x1>> size_; ///< current size of buffer, default initialized to 0
     std::optional<Var<U32x1>> capacity_; ///< dynamic capacity of infinite buffer, default initialized to 0
@@ -851,9 +852,9 @@ struct Buffer
      * created by \p factory to temporarily materialize tuples before resuming with the remaining pipeline
      * initializations \p setup, the actual pipeline \p pipeline, and the post-processing \p teardown.  For global
      * finite buffers, emits code to pre-allocate entire buffer into the **current** block. */
-    Buffer(const Schema &schema, const storage::DataLayoutFactory &factory, std::size_t num_tuples = 0,
-           setup_t setup = setup_t::Make_Without_Parent(), pipeline_t pipeline = pipeline_t(),
-           teardown_t teardown = teardown_t::Make_Without_Parent());
+    Buffer(const Schema &schema, const storage::DataLayoutFactory &factory, bool load_simdfied = false,
+           std::size_t num_tuples = 0, setup_t setup = setup_t::Make_Without_Parent(),
+           pipeline_t pipeline = pipeline_t(), teardown_t teardown = teardown_t::Make_Without_Parent());
 
     Buffer(const Buffer&) = delete;
     Buffer(Buffer&&) = default;
@@ -1135,31 +1136,34 @@ I32x1 compare(const Environment &env_left, const Environment &env_right,
  *====================================================================================================================*/
 
 extern template std::tuple<Block, Block, Block> compile_store_sequential(
-    const Schema&, Ptr<void>, const storage::DataLayout&, const Schema&, Var<U32x1>&
+    const Schema&, Ptr<void>, const storage::DataLayout&, std::size_t, const Schema&, Var<U32x1>&
 );
 extern template std::tuple<Block, Block, Block> compile_store_sequential(
-    const Schema&, Ptr<void>, const storage::DataLayout&, const Schema&, Global<U32x1>&
+    const Schema&, Ptr<void>, const storage::DataLayout&, std::size_t, const Schema&, Global<U32x1>&
 );
 extern template std::tuple<Block, Block, Block> compile_store_sequential(
-    const Schema&, Ptr<void>, const storage::DataLayout&, const Schema&, Variable<uint32_t, VariableKind::Param, false>&
+    const Schema&, Ptr<void>, const storage::DataLayout&, std::size_t, const Schema&,
+    Variable<uint32_t, VariableKind::Param, false>&
 );
 extern template std::tuple<Block, Block, Block> compile_store_sequential_single_pass(
-    const Schema&, Ptr<void>, const storage::DataLayout&, const Schema&, Var<U32x1>&
+    const Schema&, Ptr<void>, const storage::DataLayout&, std::size_t, const Schema&, Var<U32x1>&
 );
 extern template std::tuple<Block, Block, Block> compile_store_sequential_single_pass(
-    const Schema&, Ptr<void>, const storage::DataLayout&, const Schema&, Global<U32x1>&
+    const Schema&, Ptr<void>, const storage::DataLayout&, std::size_t, const Schema&, Global<U32x1>&
 );
 extern template std::tuple<Block, Block, Block> compile_store_sequential_single_pass(
-    const Schema&, Ptr<void>, const storage::DataLayout&, const Schema&, Variable<uint32_t, VariableKind::Param, false>&
+    const Schema&, Ptr<void>, const storage::DataLayout&, std::size_t, const Schema&,
+    Variable<uint32_t, VariableKind::Param, false>&
 );
 extern template std::tuple<Block, Block, Block> compile_load_sequential(
-    const Schema&, Ptr<void>, const storage::DataLayout&, const Schema&, Var<U32x1>&
+    const Schema&, Ptr<void>, const storage::DataLayout&, std::size_t, const Schema&, Var<U32x1>&
 );
 extern template std::tuple<Block, Block, Block> compile_load_sequential(
-    const Schema&, Ptr<void>, const storage::DataLayout&, const Schema&, Global<U32x1>&
+    const Schema&, Ptr<void>, const storage::DataLayout&, std::size_t, const Schema&, Global<U32x1>&
 );
 extern template std::tuple<Block, Block, Block> compile_load_sequential(
-    const Schema&, Ptr<void>, const storage::DataLayout&, const Schema&, Variable<uint32_t, VariableKind::Param, false>&
+    const Schema&, Ptr<void>, const storage::DataLayout&, std::size_t, const Schema&,
+    Variable<uint32_t, VariableKind::Param, false>&
 );
 extern template struct Buffer<false>;
 extern template struct Buffer<true>;

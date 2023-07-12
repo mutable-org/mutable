@@ -291,8 +291,8 @@ void execute_buffered(const Match<T> &M, const Schema &schema,
         auto buffer_schema = schema.drop_constants().deduplicate();
         if (buffer_schema.num_entries()) {
             /* Use global buffer since own operator may be executed partially in multiple function calls. */
-            wasm::GlobalBuffer buffer(buffer_schema, *buffer_factory, buffer_num_tuples,
-                                     std::move(setup), std::move(pipeline), std::move(teardown));
+            wasm::GlobalBuffer buffer(buffer_schema, *buffer_factory, wasm::CodeGenContext::Get().num_simd_lanes() > 1,
+                                      buffer_num_tuples, std::move(setup), std::move(pipeline), std::move(teardown));
             T::execute(
                 /* M=        */ M,
                 /* setup=    */ setup_t::Make_Without_Parent([&buffer](){ buffer.setup(); }),
@@ -398,7 +398,7 @@ struct Match<wasm::Scan> : MatchBase
             auto buffer_schema = scan.schema().drop_constants().deduplicate();
             if (buffer_schema.num_entries()) {
                 /* Use local buffer since scan loop will not be executed partially in multiple function calls. */
-                wasm::LocalBuffer buffer(buffer_schema, *buffer_factory_, buffer_num_tuples_,
+                wasm::LocalBuffer buffer(buffer_schema, *buffer_factory_, false, buffer_num_tuples_,
                                          std::move(setup), std::move(pipeline), std::move(teardown));
                 wasm::Scan::execute(
                     /* M=        */ *this,

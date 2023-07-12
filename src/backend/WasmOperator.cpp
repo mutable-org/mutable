@@ -100,7 +100,7 @@ void write_result_set(const Schema &schema, const storage::DataLayoutFactory &fa
             M_insist(*window_size > 1U);
 
             /*----- Create finite global buffer (without `pipeline`-callback) used as reusable result set. -----*/
-            GlobalBuffer result_set(schema, factory, *window_size); // no callback to extract results all at once
+            GlobalBuffer result_set(schema, factory, false, *window_size); // no callback to extract results all at once
 
             /*----- Create child function s.t. result set is extracted in case of returns (e.g. due to `Limit`). -----*/
             FUNCTION(child_pipeline, void(void))
@@ -2655,7 +2655,7 @@ void Sorting::execute(const Match<Sorting> &M, setup_t setup, pipeline_t pipelin
     const auto buffer_schema = M.sorting.child(0)->schema().drop_constants().deduplicate();
     const auto sorting_schema = M.sorting.schema().drop_constants().deduplicate();
     GlobalBuffer buffer(
-        buffer_schema, *M.materializing_factory, 0, std::move(setup), std::move(pipeline), std::move(teardown)
+        buffer_schema, *M.materializing_factory, false, 0, std::move(setup), std::move(pipeline), std::move(teardown)
     );
 
     /*----- Create child function. -----*/
@@ -2771,11 +2771,12 @@ void NestedLoopsJoin<Predicated>::execute(const Match<NestedLoopsJoin> &M, setup
             if (i == 0) {
                 /*----- Exactly one child (here left-most one) checks join predicate and resumes pipeline. -----*/
                 buffers.emplace_back(
-                    /* schema=     */ schema,
-                    /* factory=    */ *M.materializing_factories_[i],
-                    /* num_tuples= */ 0, // i.e. infinite
-                    /* setup=      */ setup_t::Make_Without_Parent(),
-                    /* pipeline=   */ [&, pipeline=std::move(pipeline)](){
+                    /* schema=        */ schema,
+                    /* factory=       */ *M.materializing_factories_[i],
+                    /* load_simdfied= */ false,
+                    /* num_tuples=    */ 0, // i.e. infinite
+                    /* setup=         */ setup_t::Make_Without_Parent(),
+                    /* pipeline=      */ [&, pipeline=std::move(pipeline)](){
                         if constexpr (Predicated) {
                             CodeGenContext::Get().env().add_predicate(M.join.predicate());
                             pipeline();
@@ -2785,7 +2786,7 @@ void NestedLoopsJoin<Predicated>::execute(const Match<NestedLoopsJoin> &M, setup
                             };
                         }
                     },
-                    /* teardown=   */ teardown_t::Make_Without_Parent()
+                    /* teardown=      */ teardown_t::Make_Without_Parent()
                 );
             } else {
                 /*----- All but exactly one child (here left-most one) load lastly inserted buffer again. -----*/
@@ -2797,12 +2798,13 @@ void NestedLoopsJoin<Predicated>::execute(const Match<NestedLoopsJoin> &M, setup
                  * of its tuples and check the join predicate for this one cartesian-product-combination of result
                  * tuples. */
                 buffers.emplace_back(
-                    /* schema=     */ schema,
-                    /* factory=    */ *M.materializing_factories_[i],
-                    /* num_tuples= */ 0, // i.e. infinite
-                    /* setup=      */ setup_t::Make_Without_Parent(),
-                    /* pipeline=   */ [&](){ buffers.back().resume_pipeline_inline(); },
-                    /* teardown=   */ teardown_t::Make_Without_Parent()
+                    /* schema=        */ schema,
+                    /* factory=       */ *M.materializing_factories_[i],
+                    /* load_simdfied= */ false,
+                    /* num_tuples=    */ 0, // i.e. infinite
+                    /* setup=         */ setup_t::Make_Without_Parent(),
+                    /* pipeline=      */ [&](){ buffers.back().resume_pipeline_inline(); },
+                    /* teardown=      */ teardown_t::Make_Without_Parent()
                 );
             }
 

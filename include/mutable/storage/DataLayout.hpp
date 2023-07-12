@@ -12,9 +12,15 @@
 
 namespace m {
 
+// forward declarations
+struct Schema;
 struct Type;
 
 namespace storage {
+
+/*======================================================================================================================
+ * DataLayout
+ *====================================================================================================================*/
 
 struct ConstDataLayoutVisitor;
 
@@ -238,6 +244,19 @@ M_LCOV_EXCL_STOP
     X(DataLayout::Leaf) \
     X(DataLayout)
 M_DECLARE_VISITOR(ConstDataLayoutVisitor, const DataLayout::Node, M_DATA_LAYOUT_CLASSES)
+
+
+/*======================================================================================================================
+ * Helper functions for SIMD support
+ *====================================================================================================================*/
+
+/** Returns `true` iff tuples of schema \p tuple_schema can be accesses in SIMDfied manner from the data layout
+ * \p layout containing tuples of schema \p layout_schema. */
+bool supports_simd(const DataLayout &layout, const Schema &layout_schema, const Schema &tuple_schema);
+
+/** Returns the number of SIMD lanes used for accessing tuples of schema \p tuple_schema in SIMDfied manner from the
+ * data layout \p layout containing tuples of schema \p layout_schema.*/
+std::size_t get_num_simd_lanes(const DataLayout &layout, const Schema &layout_schema, const Schema &tuple_schema);
 
 }
 

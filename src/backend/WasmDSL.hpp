@@ -2340,6 +2340,10 @@ struct Expr<T>
     }
 
     public:
+    /** Returns `true` if this `Expr` actually holds a value (Binaryen AST), `false` otherwise. Can be used to test
+     * whether this `Expr` has already been used. */
+    explicit operator bool() const { return bool(value_); }
+
     /** *Moves* the current `value_` out of `this`.  Requires (and insists) that `this` cannot be `NULL`. */
     PrimitiveExpr<T> insist_not_null() {
         M_insist(bool(value_), "`Expr` has already been moved");

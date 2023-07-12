@@ -338,7 +338,7 @@ TEST_CASE("Wasm/" BACKEND_NAME "/Scan", "[core][wasm]")
             uint8_t :0; // padding to next byte
             uint8_t b2:(1 * num_tuples_per_block); // alignment 8 bits
             uint8_t :0; // padding to next byte
-            uint64_t is_null:(6 * num_tuples_per_block); // alignment 64 bits
+            uint8_t is_null[num_tuples_per_block]; // alignment 8 bits
         };
 
         /* Create data layout (using our standard PAX layout factory). */
@@ -365,8 +365,7 @@ TEST_CASE("Wasm/" BACKEND_NAME "/Scan", "[core][wasm]")
             block_ptr->b2 ^= (-uint16_t(data.b2.at(idx)) ^ block_ptr->b2) & (uint16_t(1) << idx_in_block);
             strncpy(block_ptr->c[idx_in_block], data.c.at(idx), max_string_length);
             block_ptr->i8[idx_in_block] = data.i8.at(idx);
-            block_ptr->is_null = (block_ptr->is_null & ~(uint64_t(0b111111) << (idx_in_block * 6))) |
-                                 (data.is_null.at(idx) << (idx_in_block * 6));
+            block_ptr->is_null[idx_in_block] = data.is_null.at(idx);
             table.store().append();
         }
 

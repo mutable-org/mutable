@@ -124,8 +124,10 @@ DataLayout PAXLayoutFactory::make(std::vector<const Type*> types, std::size_t nu
     }
 
     /*----- Compute NULL bitmap offset in a virtual row. -----*/
+    const uint64_t null_bitmap_size_in_bits =
+        std::max(ceil_to_pow_2(types.size()), 8UL); // add padding to support SIMDfication
     offsets[types.size()] = offset_in_bits;
-    if (types.size() % 8)
+    if (null_bitmap_size_in_bits % 8)
         ++num_not_byte_aligned;
 
     /*----- Compute number of rows per block and number of blocks per row. -----*/
@@ -134,7 +136,7 @@ DataLayout PAXLayoutFactory::make(std::vector<const Type*> types, std::size_t nu
         num_rows_per_block = num_tuples_;
         num_blocks_per_row = 1;
     } else {
-        const uint64_t row_size_in_bits = offsets[types.size()] + types.size(); // space for NULL bitmap
+        const uint64_t row_size_in_bits = offsets[types.size()] + null_bitmap_size_in_bits; // space for NULL bitmap
         /* Compute number of rows within a PAX block. Consider worst case padding of 7 bits (because each column within
          * a PAX block must be byte aligned) for every possibly not byte-aligned attribute column. Null bitmap column is
          * ignored since it is the last column. */
@@ -156,7 +158,7 @@ DataLayout PAXLayoutFactory::make(std::vector<const Type*> types, std::size_t nu
     /*----- Compute block size. -----*/
     uint64_t block_size_in_bits;
     if (NTuples == option_) {
-        block_size_in_bits = offsets[types.size()] + types.size() * num_rows_per_block;
+        block_size_in_bits = offsets[types.size()] + null_bitmap_size_in_bits * num_rows_per_block;
         if (uint64_t alignment_offset = block_size_in_bits % alignment_in_bits)
             block_size_in_bits += alignment_in_bits - alignment_offset;
     } else {
@@ -164,7 +166,8 @@ DataLayout PAXLayoutFactory::make(std::vector<const Type*> types, std::size_t nu
     }
 
     M_insist(offsets[types.size()] % 8 == 0, "NULL bitmap column must be byte aligned");
-    M_insist(offsets[types.size()] + types.size() * num_rows_per_block <= block_size_in_bits * num_blocks_per_row,
+    M_insist(offsets[types.size()] + null_bitmap_size_in_bits * num_rows_per_block <=
+             block_size_in_bits * num_blocks_per_row,
              "computed block layout must not exceed block size");
 
     /*----- Construct DataLayout. -----*/
@@ -176,7 +179,7 @@ DataLayout PAXLayoutFactory::make(std::vector<const Type*> types, std::size_t nu
         /* type=           */ Type::Get_Bitmap(Type::TY_Vector, types.size()),
         /* idx=            */ types.size(),
         /* offset_in_bits= */ offsets[types.size()],
-        /* stride_in_bits= */ types.size()
+        /* stride_in_bits= */ null_bitmap_size_in_bits
     );
 
     return layout;
@@ -186,13 +189,18 @@ __attribute__((constructor(202)))
 static void register_data_layouts()
 {
     Catalog &C = Catalog::Get();
-#define REGISTER_PAX(NAME, BLOCK_SIZE, DESCRIPTION) \
+#define REGISTER_PAX_BYTES(NAME, BLOCK_SIZE, DESCRIPTION) \
     C.register_data_layout(#NAME, std::make_unique<PAXLayoutFactory>(PAXLayoutFactory::NBytes, BLOCK_SIZE), DESCRIPTION)
-    REGISTER_PAX(PAX4M, 1UL << 22, "stores attributes using PAX layout with 4MiB blocks"); // default
-    REGISTER_PAX(PAX4K, 1UL << 12, "stores attributes using PAX layout with 4KiB blocks");
-    REGISTER_PAX(PAX64K, 1UL << 16, "stores attributes using PAX layout with 64KiB blocks");
-    REGISTER_PAX(PAX512K, 1UL << 19, "stores attributes using PAX layout with 512KiB blocks");
-    REGISTER_PAX(PAX64M, 1UL << 26, "stores attributes using PAX layout with 64MiB blocks");
+#define REGISTER_PAX_TUPLES(NAME, BLOCK_SIZE, DESCRIPTION) \
+    C.register_data_layout(#NAME, std::make_unique<PAXLayoutFactory>(PAXLayoutFactory::NTuples, BLOCK_SIZE), DESCRIPTION)
+    REGISTER_PAX_BYTES(PAX4M, 1UL << 22, "stores attributes using PAX layout with 4MiB blocks"); // default
+    REGISTER_PAX_BYTES(PAX4K, 1UL << 12, "stores attributes using PAX layout with 4KiB blocks");
+    REGISTER_PAX_BYTES(PAX64K, 1UL << 16, "stores attributes using PAX layout with 64KiB blocks");
+    REGISTER_PAX_BYTES(PAX512K, 1UL << 19, "stores attributes using PAX layout with 512KiB blocks");
+    REGISTER_PAX_BYTES(PAX64M, 1UL << 26, "stores attributes using PAX layout with 64MiB blocks");
+    REGISTER_PAX_TUPLES(PAX16Tup, 16, "stores attributes using PAX layout with blocks for 16 tuples");
+    REGISTER_PAX_TUPLES(PAX128Tup, 128, "stores attributes using PAX layout with blocks for 128 tuples");
+    REGISTER_PAX_TUPLES(PAX1024Tup, 1024, "stores attributes using PAX layout with blocks for 1024 tuples");
     C.register_data_layout("Row", std::make_unique<RowLayoutFactory>(), "stores attributes in row-major order");
 #undef REGISTER_PAX
 }

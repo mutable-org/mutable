@@ -629,6 +629,7 @@ struct Scope
  * - an `Environment` of named values, e.g. SQL attribute values
  * - an `ExprCompiler` to compile expressions within the current `Environment`
  * - the number of tuples written to the result set
+ * / the number of SIMD lanes currently used
  */
 struct CodeGenContext
 {
@@ -638,6 +639,10 @@ struct CodeGenContext
     Environment *env_ = nullptr; ///< environment for locally bound identifiers
     Global<U32x1> num_tuples_; ///< variable to hold the number of result tuples produced
     std::unordered_map<const char*, NChar> literals_; ///< maps each literal to its address at which it is stored
+    ///> number of SIMD lanes currently used, i.e. 1 for scalar and at least 2 for vectorial values
+    std::size_t num_simd_lanes_ = 1;
+    ///> number of SIMD lanes currently preferred, i.e. 1 for scalar and at least 2 for vectorial values
+    std::size_t num_simd_lanes_preferred_ = 1;
 
     public:
     CodeGenContext() = default;
@@ -701,6 +706,18 @@ struct CodeGenContext
         auto it = literals_.find(literal);
         M_insist(it != literals_.end(), "unknown literal");
         return it->second.clone();
+    }
+
+    /** Returns the number of SIMD lanes used. */
+    std::size_t num_simd_lanes() const { return num_simd_lanes_; }
+    /** Sets the number of SIMD lanes used to `n`. */
+    void set_num_simd_lanes(std::size_t n) { num_simd_lanes_ = n; }
+
+    /** Returns the number of SIMD lanes preferred by other operators. */
+    std::size_t num_simd_lanes_preferred() const { return num_simd_lanes_preferred_; }
+    /** Updates the number of SIMD lanes preferred by `n`. */
+    void update_num_simd_lanes_preferred(std::size_t n) {
+        num_simd_lanes_preferred_ = std::max(num_simd_lanes_preferred_, n);
     }
 };
 

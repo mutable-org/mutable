@@ -14,6 +14,8 @@ using namespace m::wasm;
  * Helper functions
  *====================================================================================================================*/
 
+/** Convert \p operand of some `SQL_t` type to the target type \tparam T.  \tparam T must be a `SQL_t` type.  Conversion
+ * is done *in place*, i.e. the `SQL_t` instance is directly modified. */
 template<typename T>
 void convert_in_place(SQL_t &operand)
 {
@@ -35,6 +37,8 @@ void convert_in_place(SQL_t &operand)
     }, operand);
 }
 
+/** Convert \p operand to runtime type \p to_type.  This is done by delegating to `convert_in_place<T>` through a
+ * dynamic dispatch based on \p to_type. */
 void convert_in_place(SQL_t &operand, const Type *to_type)
 {
     visit(overloaded {

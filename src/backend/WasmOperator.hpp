@@ -90,12 +90,16 @@ struct Callback : PhysicalOperator<Callback, CallbackOperator>
 {
     static void execute(const Match<Callback> &M, setup_t setup, pipeline_t pipeline, teardown_t teardown);
     static double cost(const Match<Callback>&) { return 1.0; }
+    static ConditionSet pre_condition(std::size_t child_idx,
+                                      const std::tuple<const CallbackOperator*> &partial_inner_nodes);
 };
 
 struct Print : PhysicalOperator<Print, PrintOperator>
 {
     static void execute(const Match<Print> &M, setup_t setup, pipeline_t pipeline, teardown_t teardown);
     static double cost(const Match<Print>&) { return 1.0; }
+    static ConditionSet pre_condition(std::size_t child_idx,
+                                      const std::tuple<const PrintOperator*> &partial_inner_nodes);
 };
 
 struct Scan : PhysicalOperator<Scan, ScanOperator>
@@ -110,6 +114,8 @@ struct Filter : PhysicalOperator<Filter<Predicated>, FilterOperator>
 {
     static void execute(const Match<Filter> &M, setup_t setup, pipeline_t pipeline, teardown_t teardown);
     static double cost(const Match<Filter>&);
+    static ConditionSet pre_condition(std::size_t child_idx,
+                                      const std::tuple<const FilterOperator*> &partial_inner_nodes);
     static ConditionSet adapt_post_condition(const Match<Filter> &M, const ConditionSet &post_cond_child);
 };
 
@@ -117,12 +123,16 @@ struct LazyDisjunctiveFilter : PhysicalOperator<LazyDisjunctiveFilter, Disjuncti
 {
     static void execute(const Match<LazyDisjunctiveFilter> &M, setup_t setup, pipeline_t pipeline, teardown_t teardown);
     static double cost(const Match<LazyDisjunctiveFilter> &M);
+    static ConditionSet pre_condition(std::size_t child_idx,
+                                      const std::tuple<const FilterOperator*> &partial_inner_nodes);
 };
 
 struct Projection : PhysicalOperator<Projection, ProjectionOperator>
 {
     static void execute(const Match<Projection> &M, setup_t setup, pipeline_t pipeline, teardown_t teardown);
     static double cost(const Match<Projection>&) { return 1.0; }
+    static ConditionSet pre_condition(std::size_t child_idx,
+                                      const std::tuple<const ProjectionOperator*> &partial_inner_nodes);
     static ConditionSet adapt_post_condition(const Match<Projection> &M, const ConditionSet &post_cond_child);
 };
 
@@ -130,6 +140,8 @@ struct HashBasedGrouping : PhysicalOperator<HashBasedGrouping, GroupingOperator>
 {
     static void execute(const Match<HashBasedGrouping> &M, setup_t setup, pipeline_t pipeline, teardown_t teardown);
     static double cost(const Match<HashBasedGrouping>&) { return 2.0; }
+    static ConditionSet pre_condition(std::size_t child_idx,
+                                      const std::tuple<const GroupingOperator*> &partial_inner_nodes);
     static ConditionSet post_condition(const Match<HashBasedGrouping> &M);
 };
 
@@ -187,6 +199,8 @@ struct Aggregation : PhysicalOperator<Aggregation, AggregationOperator>
     public:
     static void execute(const Match<Aggregation> &M, setup_t setup, pipeline_t pipeline, teardown_t teardown);
     static double cost(const Match<Aggregation>&) { return 1.0; }
+    static ConditionSet pre_condition(std::size_t child_idx,
+                                      const std::tuple<const AggregationOperator*> &partial_inner_nodes);
     static ConditionSet post_condition(const Match<Aggregation> &M);
 };
 
@@ -194,6 +208,8 @@ struct Sorting : PhysicalOperator<Sorting, SortingOperator>
 {
     static void execute(const Match<Sorting> &M, setup_t setup, pipeline_t pipeline, teardown_t teardown);
     static double cost(const Match<Sorting>&) { return 1.0; }
+    static ConditionSet pre_condition(std::size_t child_idx,
+                                      const std::tuple<const SortingOperator*> &partial_inner_nodes);
     static ConditionSet post_condition(const Match<Sorting> &M);
 };
 
@@ -210,6 +226,7 @@ struct NestedLoopsJoin : PhysicalOperator<NestedLoopsJoin<Predicated>, JoinOpera
 {
     static void execute(const Match<NestedLoopsJoin> &M, setup_t setup, pipeline_t pipeline, teardown_t teardown);
     static double cost(const Match<NestedLoopsJoin> &M);
+    static ConditionSet pre_condition(std::size_t child_idx, const std::tuple<const JoinOperator*> &partial_inner_nodes);
     static ConditionSet
     adapt_post_conditions(const Match<NestedLoopsJoin> &M,
                           std::vector<std::reference_wrapper<const ConditionSet>> &&post_cond_children);
@@ -247,6 +264,8 @@ struct Limit : PhysicalOperator<Limit, LimitOperator>
 {
     static void execute(const Match<Limit> &M, setup_t setup, pipeline_t pipeline, teardown_t teardown);
     static double cost(const Match<Limit>&) { return 1.0; }
+    static ConditionSet pre_condition(std::size_t child_idx,
+                                      const std::tuple<const LimitOperator*> &partial_inner_nodes);
 };
 
 struct HashBasedGroupJoin

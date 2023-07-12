@@ -193,50 +193,42 @@ struct Sortedness final : Condition
     }
 };
 
-struct SIMD_Width final : Condition
+struct SIMD : Condition
 {
-    using width_t = ConditionPropertyUnorderedMap<unsigned>;
-
     private:
-    width_t simd_widths_; ///< as log_2
+    std::size_t num_simd_lanes_;
 
     public:
-    explicit SIMD_Width(width_t simd_width) : simd_widths_(simd_width) { }
+    explicit SIMD(std::size_t num_simd_lanes) : num_simd_lanes_(num_simd_lanes) { }
 
-    SIMD_Width() = default;
-    explicit SIMD_Width(const SIMD_Width&) = default;
-    SIMD_Width(SIMD_Width&&) = default;
+    SIMD() = default;
+    explicit SIMD(const SIMD&) = default;
+    SIMD(SIMD&&) = default;
 
     private:
-    std::unique_ptr<Condition> clone() const override { return std::make_unique<SIMD_Width>(simd_widths_); }
+    std::unique_ptr<Condition> clone() const override { return std::make_unique<SIMD>(num_simd_lanes_); }
 
     public:
-    width_t & simd_widths() { return simd_widths_; }
-    const width_t & simd_widths() const { return simd_widths_; }
+    std::size_t num_simd_lanes() const { return num_simd_lanes_; }
 
     bool implied_by(const Condition &o) const override {
-        auto other = cast<const SIMD_Width>(&o);
+        auto other = cast<const SIMD>(&o);
         if (not other) return false;
-
-        for (auto &this_entry : this->simd_widths_) {
-            auto it = other->simd_widths_.find(this_entry.first);
-            if (it == other->simd_widths_.cend())
-                return false; // attribute not found
-            if (this_entry.second != it->second)
-                return false; // different vector size
-        }
-        return true;
+        return this->num_simd_lanes_ == other->num_simd_lanes_;
     }
 
-    void project_and_rename(const std::vector<std::pair<Schema::Identifier, Schema::Identifier>> &old2new) override {
-        simd_widths_.project_and_rename(old2new);
-    }
+    void project_and_rename(const std::vector<std::pair<Schema::Identifier, Schema::Identifier>>&) override { }
 
     bool operator==(const Condition &o) const override {
-        auto other = cast<const SIMD_Width>(&o);
+        auto other = cast<const SIMD>(&o);
         if (not other) return false;
-        return this->simd_widths_ == other->simd_widths_;
+        return this->num_simd_lanes_ == other->num_simd_lanes_;
     }
+};
+
+struct NoSIMD final : SIMD
+{
+    explicit NoSIMD() : SIMD(1) { }
 };
 
 struct Predicated final : Condition
@@ -289,7 +281,7 @@ struct ConditionSet
     ConditionSet & operator=(ConditionSet&&) = default;
 
     template<typename Cond>
-    requires std::is_base_of_v<Condition, Cond> and std::is_final_v<Cond>
+    requires std::is_base_of_v<Condition, Cond>
     void add_condition(Cond &&cond) {
         auto p = std::make_unique<Cond>(std::forward<Cond>(cond)); // move-construct on heap
         auto [it, res] = type2cond_.try_emplace(typeid(Cond), std::move(p));
@@ -298,21 +290,21 @@ struct ConditionSet
     }
 
     template<typename Cond>
-    requires std::is_base_of_v<Condition, Cond> and std::is_final_v<Cond>
+    requires std::is_base_of_v<Condition, Cond>
     void add_or_replace_condition(Cond &&cond) {
         auto p = std::make_unique<Cond>(std::forward<Cond>(cond)); // move-construct on heap
         type2cond_.insert_or_assign(typeid(Cond), std::move(p));
     }
 
     template<typename Cond>
-    requires std::is_base_of_v<Condition, Cond> and std::is_final_v<Cond>
+    requires std::is_base_of_v<Condition, Cond>
     Cond & get_condition() {
         auto it = type2cond_.find(typeid(Cond));
         M_insist(it != type2cond_.cend(), "condition not found");
         return as<Cond>(*it->second);
     }
     template<typename Cond>
-    requires std::is_base_of_v<Condition, Cond> and std::is_final_v<Cond>
+    requires std::is_base_of_v<Condition, Cond>
     const Cond & get_condition() const { return const_cast<ConditionSet*>(this)->get_condition<Cond>(); }
 
     bool empty() const { return type2cond_.empty(); }

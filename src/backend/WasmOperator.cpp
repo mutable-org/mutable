@@ -351,6 +351,18 @@ void NoOp::execute(const Match<NoOp> &M, setup_t, pipeline_t, teardown_t)
  * Callback
  *====================================================================================================================*/
 
+ConditionSet Callback::pre_condition(std::size_t child_idx, const std::tuple<const CallbackOperator*>&)
+{
+     M_insist(child_idx == 0);
+
+    ConditionSet pre_cond;
+
+    /*----- Callback does not support SIMD. -----*/
+    pre_cond.add_condition(NoSIMD());
+
+    return pre_cond;
+}
+
 void Callback::execute(const Match<Callback> &M, setup_t, pipeline_t, teardown_t)
 {
     M_insist(bool(M.result_set_factory), "`wasm::Callback` must have a factory for the result set");
@@ -363,6 +375,18 @@ void Callback::execute(const Match<Callback> &M, setup_t, pipeline_t, teardown_t
 /*======================================================================================================================
  * Print
  *====================================================================================================================*/
+
+ConditionSet Print::pre_condition(std::size_t child_idx, const std::tuple<const PrintOperator*>&)
+{
+     M_insist(child_idx == 0);
+
+    ConditionSet pre_cond;
+
+    /*----- Print does not support SIMD. -----*/
+    pre_cond.add_condition(NoSIMD());
+
+    return pre_cond;
+}
 
 void Print::execute(const Match<Print> &M, setup_t, pipeline_t, teardown_t)
 {
@@ -446,6 +470,19 @@ void Scan::execute(const Match<Scan> &M, setup_t setup, pipeline_t pipeline, tea
  *====================================================================================================================*/
 
 template<bool Predicated>
+ConditionSet Filter<Predicated>::pre_condition(std::size_t child_idx, const std::tuple<const FilterOperator*>&)
+{
+     M_insist(child_idx == 0);
+
+    ConditionSet pre_cond;
+
+    /*----- Filter does not support SIMD. -----*/
+    pre_cond.add_condition(NoSIMD());
+
+    return pre_cond;
+}
+
+template<bool Predicated>
 ConditionSet Filter<Predicated>::adapt_post_condition(const Match<Filter>&, const ConditionSet &post_cond_child)
 {
     ConditionSet post_cond(post_cond_child);
@@ -492,6 +529,18 @@ void Filter<Predicated>::execute(const Match<Filter> &M, setup_t setup, pipeline
  * LazyDisjunctiveFilter
  *====================================================================================================================*/
 
+ConditionSet LazyDisjunctiveFilter::pre_condition(std::size_t child_idx, const std::tuple<const FilterOperator*>&)
+{
+     M_insist(child_idx == 0);
+
+    ConditionSet pre_cond;
+
+    /*----- Lazy disjunctive filter does not support SIMD. -----*/
+    pre_cond.add_condition(NoSIMD());
+
+    return pre_cond;
+}
+
 double LazyDisjunctiveFilter::cost(const Match<LazyDisjunctiveFilter> &M)
 {
     const cnf::CNF &cond = M.filter.filter();
@@ -532,6 +581,18 @@ void LazyDisjunctiveFilter::execute(const Match<LazyDisjunctiveFilter> &M, setup
  * Projection
  *====================================================================================================================*/
 
+ConditionSet Projection::pre_condition(std::size_t child_idx, const std::tuple<const ProjectionOperator*>&)
+{
+     M_insist(child_idx == 0);
+
+    ConditionSet pre_cond;
+
+    /*----- Projection does not support SIMD. -----*/
+    pre_cond.add_condition(NoSIMD());
+
+    return pre_cond;
+}
+
 ConditionSet Projection::adapt_post_condition(const Match<Projection> &M, const ConditionSet &post_cond_child)
 {
     ConditionSet post_cond(post_cond_child);
@@ -550,9 +611,6 @@ ConditionSet Projection::adapt_post_condition(const Match<Projection> &M, const 
         ++p;
     }
     post_cond.project_and_rename(old2new);
-
-    /*----- Add SIMD widths for projected values. -----*/
-    // TODO: implement
 
     return post_cond;
 }
@@ -623,14 +681,24 @@ void Projection::execute(const Match<Projection> &M, setup_t setup, pipeline_t p
  * Grouping
  *====================================================================================================================*/
 
+ConditionSet HashBasedGrouping::pre_condition(std::size_t child_idx, const std::tuple<const GroupingOperator*>&)
+{
+     M_insist(child_idx == 0);
+
+    ConditionSet pre_cond;
+
+    /*----- Hash-based grouping does not support SIMD. -----*/
+    pre_cond.add_condition(NoSIMD());
+
+    return pre_cond;
+}
+
 ConditionSet HashBasedGrouping::post_condition(const Match<HashBasedGrouping>&)
 {
     ConditionSet post_cond;
 
     /*----- Hash-based grouping does not introduce predication (it is already handled by the hash table). -----*/
     post_cond.add_condition(Predicated(false));
-
-    // TODO: SIMD width if hash table supports this
 
     return post_cond;
 }
@@ -1082,6 +1150,9 @@ ConditionSet OrderedGrouping::pre_condition(
     }
     pre_cond.add_condition(Sortedness(std::move(orders)));
 
+    /*----- Ordered grouping does not support SIMD. -----*/
+    pre_cond.add_condition(NoSIMD());
+
     return pre_cond;
 }
 
@@ -1103,8 +1174,6 @@ ConditionSet OrderedGrouping::adapt_post_condition(const Match<OrderedGrouping> 
             orders.add(id, it->second); // drop duplicate since it must not be used afterwards
     }
     post_cond.add_condition(Sortedness(std::move(orders)));
-
-    // TODO: SIMD widths if intermediate materialization took place?
 
     return post_cond;
 }
@@ -1980,6 +2049,18 @@ void OrderedGrouping::execute(const Match<OrderedGrouping> &M, setup_t setup, pi
  * Aggregation
  *====================================================================================================================*/
 
+ConditionSet Aggregation::pre_condition(std::size_t child_idx, const std::tuple<const AggregationOperator*>&)
+{
+     M_insist(child_idx == 0);
+
+    ConditionSet pre_cond;
+
+    /*----- Aggregation does not support SIMD. -----*/
+    pre_cond.add_condition(NoSIMD());
+
+    return pre_cond;
+}
+
 ConditionSet Aggregation::post_condition(const Match<Aggregation> &M)
 {
     ConditionSet post_cond;
@@ -2532,6 +2613,18 @@ void Aggregation::execute(const Match<Aggregation> &M, setup_t setup, pipeline_t
  * Sorting
  *====================================================================================================================*/
 
+ConditionSet Sorting::pre_condition(std::size_t child_idx, const std::tuple<const SortingOperator*>&)
+{
+     M_insist(child_idx == 0);
+
+    ConditionSet pre_cond;
+
+    /*----- Sorting does not support SIMD. -----*/
+    pre_cond.add_condition(NoSIMD());
+
+    return pre_cond;
+}
+
 ConditionSet Sorting::post_condition(const Match<Sorting> &M)
 {
     ConditionSet post_cond;
@@ -2547,9 +2640,6 @@ ConditionSet Sorting::post_condition(const Match<Sorting> &M)
             orders.add(id, o.second ? Sortedness::O_ASC : Sortedness::O_DESC);
     }
     post_cond.add_condition(Sortedness(std::move(orders)));
-
-    /*----- Add SIMD widths for sorted values. -----*/
-    // TODO: implement (dependent on materializing buffer's data layout)
 
     return post_cond;
 }
@@ -2614,6 +2704,19 @@ void NoOpSorting::execute(const Match<NoOpSorting> &M, setup_t setup, pipeline_t
  *====================================================================================================================*/
 
 template<bool Predicated>
+ConditionSet NestedLoopsJoin<Predicated>::pre_condition(std::size_t child_idx, const std::tuple<const JoinOperator*>&)
+{
+     M_insist(child_idx == 0);
+
+    ConditionSet pre_cond;
+
+    /*----- Nested-loops join does not support SIMD. -----*/
+    pre_cond.add_condition(NoSIMD());
+
+    return pre_cond;
+}
+
+template<bool Predicated>
 ConditionSet NestedLoopsJoin<Predicated>::adapt_post_conditions(
     const Match<NestedLoopsJoin> &M,
     std::vector<std::reference_wrapper<const ConditionSet>> &&post_cond_children)
@@ -2626,9 +2729,6 @@ ConditionSet NestedLoopsJoin<Predicated>::adapt_post_conditions(
         /*----- Predicated nested-loops join introduces predication. -----*/
         post_cond.add_or_replace_condition(m::Predicated(true));
     }
-
-    /*----- Add SIMD widths for materialized left values. -----*/
-    // TODO: implement
 
     return post_cond;
 }
@@ -2757,6 +2857,9 @@ ConditionSet SimpleHashJoin<UniqueBuild, Predicated>::pre_condition(
         }
     }
 
+    /*----- Simple hash join does not support SIMD. -----*/
+    pre_cond.add_condition(NoSIMD());
+
     return pre_cond;
 }
 
@@ -2776,8 +2879,6 @@ ConditionSet SimpleHashJoin<UniqueBuild, Predicated>::adapt_post_conditions(
         /*----- Branching simple hash join does not introduce predication (it is already handled by the hash table). -*/
         post_cond.add_or_replace_condition(m::Predicated(false));
     }
-
-    // TODO: SIMD width if hash table supports this
 
     return post_cond;
 }
@@ -3024,6 +3125,9 @@ ConditionSet SortMergeJoin<SortLeft, SortRight, Predicated>::pre_condition(
         pre_cond.add_condition(Sortedness(std::move(orders)));
     }
 
+    /*----- Sort merge join does not support SIMD. -----*/
+    pre_cond.add_condition(NoSIMD());
+
     return pre_cond;
 }
 
@@ -3069,8 +3173,6 @@ ConditionSet SortMergeJoin<SortLeft, SortRight, Predicated>::adapt_post_conditio
         }
     }
     post_cond.add_condition(Sortedness(std::move(orders)));
-
-    // TODO: SIMD widths if materialization took place for sorting
 
     return post_cond;
 }
@@ -3216,6 +3318,18 @@ void SortMergeJoin<SortLeft, SortRight, Predicated>::execute(const Match<SortMer
  * Limit
  *====================================================================================================================*/
 
+ConditionSet Limit::pre_condition(std::size_t child_idx, const std::tuple<const LimitOperator*>&)
+{
+     M_insist(child_idx == 0);
+
+    ConditionSet pre_cond;
+
+    /*----- Limit does not support SIMD. -----*/
+    pre_cond.add_condition(NoSIMD());
+
+    return pre_cond;
+}
+
 void Limit::execute(const Match<Limit> &M, setup_t setup, pipeline_t pipeline, teardown_t teardown)
 {
     std::optional<Block> teardown_block; ///< block around pipeline code to jump to teardown code when limit is reached
@@ -3318,6 +3432,9 @@ ConditionSet HashBasedGroupJoin::pre_condition(
         }
     }
 
+    /*----- Hash-based group-join does not support SIMD. -----*/
+    pre_cond.add_condition(NoSIMD());
+
     return pre_cond;
 }
 
@@ -3327,8 +3444,6 @@ ConditionSet HashBasedGroupJoin::post_condition(const Match<HashBasedGroupJoin>&
 
     /*----- Hash-based group-join does not introduce predication (it is already handled by the hash table). -----*/
     post_cond.add_condition(Predicated(false));
-
-    // TODO: SIMD width if hash table supports this
 
     return post_cond;
 }

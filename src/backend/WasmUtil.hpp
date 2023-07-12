@@ -1031,18 +1031,18 @@ struct buffer_swap_proxy_t
  *====================================================================================================================*/
 
 /** Sets the \p n -th bit of the value pointed to by \p bytes to \p value. */
-template<typename T>
-requires integral<typename T::type>
-void setbit(Ptr<T> bytes, Boolx1 value, uint8_t n)
+template<typename T, std::size_t L>
+requires integral<typename T::type> and (T::num_simd_lanes == L)
+void setbit(Ptr<T> bytes, Bool<L> value, uint8_t n)
 {
-    *bytes ^= (-value.to<typename T::type>() xor *bytes.clone()) bitand T(1 << n);
+    *bytes ^= (-value.template to<typename T::type>() xor *bytes.clone()) bitand T(1 << n);
 }
 /** Sets the bit masked by \p mask of the value pointed to by \p bytes to \p value. */
-template<typename T>
-requires integral<typename T::type>
-void setbit(Ptr<T> bytes, Boolx1 value, T mask)
+template<typename T, std::size_t L>
+requires integral<typename T::type> and (T::num_simd_lanes == L)
+void setbit(Ptr<T> bytes, Bool<L> value, T mask)
 {
-    *bytes ^= (-value.to<typename T::type>() xor *bytes.clone()) bitand mask;
+    *bytes ^= (-value.template to<typename T::type>() xor *bytes.clone()) bitand mask;
 }
 
 

@@ -2836,36 +2836,50 @@ std::size_t num_##NAME() const { return 0; }
 
             void push_candidates(state_type state, double h, Context &... context) {
                 /// We can not keep the states safely, so not in the heap shape
-                if (state.size() == 1) {
+                if (layer_candidates.size() < beam_width) {
+                    /* There is still space in the candidates, so simply add the state to the heap. */
                     layer_candidates.emplace_back(std::move(state), h);
-                    std::make_heap(layer_candidates.begin(), layer_candidates.end());
-                }
-                else {
-                    if (layer_candidates.size() < beam_width) {
-                        /* There is still space in the candidates, so simply add the state to the heap. */
-                        layer_candidates.emplace_back(std::move(state), h);
-                        if (layer_candidates.size() == beam_width ) {
-                            std::make_heap(layer_candidates.begin(), layer_candidates.end());
-                        }
-                    } else {
-                        if constexpr (!sorted_candidates) { return; }
-                        M_insist(layer_candidates.size() == beam_width);
-                        auto &top = layer_candidates.front();
-                        if (state.g() + h >= top.state.g() + top.h) {
-                            /// Larger than largest value
-                            return;
-                        }
-                        layer_candidates.emplace_back(std::move(state), h);
-                        std::pop_heap(layer_candidates.begin(), layer_candidates.end());
-                        layer_candidates.pop_back();
+                    if (layer_candidates.size() == beam_width ) {
+                        std::make_heap(layer_candidates.begin(), layer_candidates.end());
                     }
+                } else {
+                    if constexpr (!sorted_candidates) { return; }
+                    M_insist(layer_candidates.size() == beam_width);
+                    auto &top = layer_candidates.front();
+                    if (state.g() + h >= top.state.g() + top.h) {
+                        /// Larger than largest value
+                        return;
+                    }
+                    layer_candidates.emplace_back(std::move(state), h);
+                    std::pop_heap(layer_candidates.begin(), layer_candidates.end());
+                    layer_candidates.pop_back();
                 }
+//                if (state.size() == 1) {
+//                    layer_candidates.emplace_back(std::move(state), h);
+//                    std::make_heap(layer_candidates.begin(), layer_candidates.end());
+//                }
+//                else {
+//                    if (layer_candidates.size() < beam_width) {
+//                        /* There is still space in the candidates, so simply add the state to the heap. */
+//                        layer_candidates.emplace_back(std::move(state), h);
+//                        if (layer_candidates.size() == beam_width ) {
+//                            std::make_heap(layer_candidates.begin(), layer_candidates.end());
+//                        }
+//                    } else {
+//                        if constexpr (!sorted_candidates) { return; }
+//                        M_insist(layer_candidates.size() == beam_width);
+//                        auto &top = layer_candidates.front();
+//                        if (state.g() + h >= top.state.g() + top.h) {
+//                            /// Larger than largest value
+//                            return;
+//                        }
+//                        layer_candidates.emplace_back(std::move(state), h);
+//                        std::pop_heap(layer_candidates.begin(), layer_candidates.end());
+//                        layer_candidates.pop_back();
+//                    }
+//                }
             }
 
-            void push_goals(state_type state, double h) {
-                /// We can not keep the states safely, so not in the heap shape
-                layer_candidates.emplace_back(std::move(state), h);
-            }
 
 
             void for_each_successor(callback_t &&callback, const state_type &state, heuristic_type &heuristic,
@@ -2933,7 +2947,10 @@ std::size_t num_##NAME() const { return 0; }
                 for (size_t i{0}; i < layer_candidates_size; i++) {
                     auto curr = state_manager_.pop();
                     const state_type &state = curr.first;
-//                    std::cout << "Current state.size()" << state.size() << std::endl; // Same size in same for-loop
+//                    std::cout << "Current state.size() = " << state.size() << ", "
+//                            << state.g() << " + " << curr.second << " = " << state.g() + curr.second
+//                            << ", parent " << (state.parent()? state.parent()->g() : 0)
+//                            << std::endl; // Same size in same for-loop
 
                     if (expand.is_goal(state, context...)) return state;
 

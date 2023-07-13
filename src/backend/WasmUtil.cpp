@@ -2,6 +2,7 @@
 
 #include "backend/Interpreter.hpp"
 #include "backend/WasmMacro.hpp"
+#include <mutable/util/concepts.hpp>
 #include <optional>
 
 
@@ -16,19 +17,14 @@ using namespace m::wasm;
 
 /** Convert \p operand of some `SQL_t` type to the target type \tparam T.  \tparam T must be a `SQL_t` type.  Conversion
  * is done *in place*, i.e. the `SQL_t` instance is directly modified. */
-template<typename T>
+template<arithmetic T>
 void convert_in_place(SQL_t &operand)
 {
     std::visit(overloaded {
         [&operand](auto &&actual) -> void requires requires { actual.template to<T>(); } {
             auto v = actual.template to<T>();
             operand.~SQL_t();
-            if constexpr (std::same_as<T, char*>)
-                new (&operand) SQL_t(NChar(v, static_cast<NChar>(actual).can_be_null(),
-                                           static_cast<NChar>(actual).length(),
-                                           static_cast<NChar>(actual).guarantees_terminating_nul()));
-            else
-                new (&operand) SQL_t(v);
+            new (&operand) SQL_t(v);
         },
         [](auto &actual) -> void requires (not requires { actual.template to<T>(); }) {
             M_unreachable("illegal conversion");
@@ -39,44 +35,37 @@ void convert_in_place(SQL_t &operand)
 
 /** Convert \p operand to runtime type \p to_type.  This is done by delegating to `convert_in_place<T>` through a
  * dynamic dispatch based on \p to_type. */
-void convert_in_place(SQL_t &operand, const Type *to_type)
+void convert_in_place(SQL_t &operand, const Numeric *to_type)
 {
-    visit(overloaded {
-        [&operand](const Boolean&) -> void { convert_in_place<bool>(operand); },
-        [&operand](const Numeric &n) -> void {
-            switch (n.kind) {
-                case Numeric::N_Int:
-                case Numeric::N_Decimal:
-                    switch (n.size()) {
-                        default:
-                            M_unreachable("invalid integer size");
-                        case 8:
-                            convert_in_place<int8_t>(operand);
-                            return;
-                        case 16:
-                            convert_in_place<int16_t>(operand);
-                            return;
-                        case 32:
-                            convert_in_place<int32_t>(operand);
-                            return;
-                        case 64:
-                            convert_in_place<int64_t>(operand);
-                            return;
-                    }
-                    break;
-                case Numeric::N_Float:
-                    if (n.size() <= 32)
-                        convert_in_place<float>(operand);
-                    else
-                        convert_in_place<double>(operand);
-                    break;
+    switch (to_type->kind) {
+        case Numeric::N_Decimal:
+            M_unreachable("currently not supported");
+
+        case Numeric::N_Int:
+            switch (to_type->size()) {
+                default:
+                    M_unreachable("invalid integer size");
+                case 8:
+                    convert_in_place<int8_t>(operand);
+                    return;
+                case 16:
+                    convert_in_place<int16_t>(operand);
+                    return;
+                case 32:
+                    convert_in_place<int32_t>(operand);
+                    return;
+                case 64:
+                    convert_in_place<int64_t>(operand);
+                    return;
             }
-        },
-        [&operand](const CharacterSequence&) -> void { convert_in_place<char*>(operand); },
-        [&operand](const Date&) -> void { convert_in_place<int32_t>(operand); },
-        [&operand](const DateTime&) -> void { convert_in_place<int64_t>(operand); },
-        [](auto&&) -> void { M_unreachable("illegal conversion"); },
-    }, *to_type);
+            break;
+        case Numeric::N_Float:
+            if (to_type->size() <= 32)
+                convert_in_place<float>(operand);
+            else
+                convert_in_place<double>(operand);
+            break;
+    }
 }
 
 template<bool CanBeNull>

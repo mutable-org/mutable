@@ -541,6 +541,11 @@ struct pattern_matcher_recursive<PhysOp, Idx, Op, PatternQueue...>
                 new_children.emplace_back(*new_child);
             }
             current_children.insert(current_children.end(), new_children.begin(), new_children.end());
+        } else { // special case for handling leaf producer, e.g. scan operator
+            static_assert(producer<Op>);
+            ConditionSet empty;
+            if (not PhysOp::pre_condition_(current_children.size(), current_nodes).implied_by(empty))
+                return; // match does not fulfill pre-condition for this physical operator
         }
 
         if constexpr (sizeof...(PatternQueue) == 0) {

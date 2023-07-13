@@ -337,7 +337,7 @@ struct M_EXPORT BinaryExpr : Expr
 {
     std::unique_ptr<Expr> lhs;
     std::unique_ptr<Expr> rhs;
-    const Type *common_operand_type = nullptr;
+    const Numeric *common_operand_type = nullptr;
 
     BinaryExpr(Token op, std::unique_ptr<Expr> lhs, std::unique_ptr<Expr> rhs)
         : Expr(op)

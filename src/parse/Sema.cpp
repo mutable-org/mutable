@@ -789,7 +789,7 @@ void Sema::operator()(BinaryExpr &e)
             M_insist(ty_rhs);
 
             /* Compute type of the binary expression. */
-            e.common_operand_type = e.type_ = arithmetic_join(ty_lhs, ty_rhs);
+            e.type_ = e.common_operand_type = arithmetic_join(ty_lhs, ty_rhs);
             break;
         }
 

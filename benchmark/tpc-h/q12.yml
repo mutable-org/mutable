@@ -52,7 +52,7 @@ systems:
     mutable:
         pattern: '^Execute query:.*'
         configurations:
-            'WasmV8 PAX4M': >-
+            'WasmV8, PAX4M': >-
               --backend WasmV8
               --data-layout PAX4M
               --cardinality-estimator Injected

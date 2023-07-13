@@ -17,6 +17,9 @@ struct DataLayoutFactory
 {
     virtual ~DataLayoutFactory() { }
 
+    /** Creates and returns a *deep copy* of `this`. */
+    virtual std::unique_ptr<DataLayoutFactory> clone() const = 0;
+
     /** Returns a `DataLayout` for the given `Type`s contained in \p schema and length \p num_tuples. */
     DataLayout make(const Schema &schema, std::size_t num_tuples = 0) const {
         view v(schema.cbegin(), schema.cend(), [](auto it) -> auto & { return it->type; });
@@ -35,6 +38,8 @@ struct DataLayoutFactory
 
 struct RowLayoutFactory : DataLayoutFactory
 {
+    std::unique_ptr<DataLayoutFactory> clone() const override { return std::make_unique<RowLayoutFactory>(); }
+
     using DataLayoutFactory::make;
     DataLayout make(std::vector<const Type*> types, std::size_t num_tuples = 0) const override;
 };
@@ -70,6 +75,10 @@ struct PAXLayoutFactory : DataLayoutFactory
             num_tuples_ = num;
         else
             num_bytes_ = num;
+    }
+
+    std::unique_ptr<DataLayoutFactory> clone() const override {
+        return std::make_unique<PAXLayoutFactory>(option_, NTuples == option_ ? num_tuples_ : num_bytes_);
     }
 
     using DataLayoutFactory::make;

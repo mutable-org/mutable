@@ -41,10 +41,10 @@ struct M_EXPORT Schema
         static Identifier CONST_ID_;
 
         public:
-        const char *prefix; ///< prefix of this `Identifier`, may be `nullptr`
-        const char *name; ///< the name of this `Identifier`
+        const char *prefix = nullptr; ///< prefix of this `Identifier`, may be `nullptr`
+        const char *name = nullptr; ///< the name of this `Identifier`
 
-        Identifier() = default; // XXX: ok?
+        Identifier() = default;
         Identifier(const char *name) : prefix(nullptr), name(name) { }
         Identifier(const char *prefix, const char *name)
             : prefix(prefix) , name(name)

@@ -2867,6 +2867,7 @@ std::size_t num_##NAME() const { return 0; }
             using type = layeredSearch<State, Expand, Heuristic, BeamWidth, true, 0, Config, Context...>;
         };
 
+        template<int BeamFactor >
         struct hanwen_layeredSearch_sorted_dynamic{
             template<
                     heuristic_search_state State,
@@ -2875,7 +2876,7 @@ std::size_t num_##NAME() const { return 0; }
                     typename Config,
                     typename... Context
             >
-            using type = layeredSearch<State, Expand, Heuristic, 0, true, 2, Config, Context...>;
+            using type = layeredSearch<State, Expand, Heuristic, 0, true, BeamFactor, Config, Context...>;
         };
 
 

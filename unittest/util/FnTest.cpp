@@ -136,12 +136,12 @@ TEST_CASE("log2", "[core][util][fn]")
 
 TEST_CASE("powi", "[core][util][fn]")
 {
-    REQUIRE(powi(4, 0) == 1);
-    REQUIRE(powi(4, 1) == 4);
-    REQUIRE(powi(4, 2) == 16);
-    REQUIRE(powi(4, 3) == 64);
-    REQUIRE(powi(4, 4) == 256);
-    REQUIRE(powi(4, 5) == 1024);
+    REQUIRE(powi(4, 0U) == 1);
+    REQUIRE(powi(4, 1U) == 4);
+    REQUIRE(powi(4, 2U) == 16);
+    REQUIRE(powi(4, 3U) == 64);
+    REQUIRE(powi(4, 4U) == 256);
+    REQUIRE(powi(4, 5U) == 1024);
 }
 
 TEST_CASE("sum_wo_overflow", "[core][util][fn]")

@@ -375,16 +375,16 @@ bool M_EXPORT intersect(const Container &first, const Set &second)
 }
 
 /** Power function for integral types. */
-template<typename T, typename U>
-auto M_EXPORT powi(const T base, const U exp) ->
-std::enable_if_t< std::is_integral_v<T> and std::is_integral_v<U>, std::common_type_t<T, U> >
+template<integral T, unsigned_integral U>
+T M_EXPORT powi(const T base, const U exp)
 {
-    if (exp == 0)
+    M_insist(exp >= U(0));
+    if (exp == U(0))
         return 1;
     else if (exp & 0x1)
-        return base * powi(base, exp - 1);
+        return base * powi(base, exp - U(1));
     else {
-        T tmp = powi(base, exp/2);
+        T tmp = powi(base, exp / U(2));
         return tmp * tmp;
     }
 }

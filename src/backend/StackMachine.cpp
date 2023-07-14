@@ -212,7 +212,7 @@ void StackMachineBuilder::operator()(Const<ast::BinaryExpr> &e)
         if (n_from->scale < n_to->scale) {
             M_insist(n_to->is_decimal(), "only decimals have a scale");
             /* Scale up. */
-            auto delta = n_to->scale - n_from->scale;
+            const uint32_t delta = n_to->scale - n_from->scale;
             const int64_t factor = powi<int64_t>(10, delta);
             switch (n_from->kind) {
                 case Numeric::N_Float:
@@ -234,7 +234,7 @@ void StackMachineBuilder::operator()(Const<ast::BinaryExpr> &e)
         } else if (n_from->scale > n_to->scale) {
             M_insist(n_from->is_decimal(), "only decimals have a scale");
             /* Scale down. */
-            auto delta = n_from->scale - n_to->scale;
+            const uint32_t delta = n_from->scale - n_to->scale;
             const int64_t factor = powi<int64_t>(10, delta);
             switch (n_from->kind) {
                 case Numeric::N_Float:
@@ -326,7 +326,7 @@ void StackMachineBuilder::operator()(Const<ast::BinaryExpr> &e)
             auto n_lhs = as<const Numeric>(ty_lhs);
             auto n_rhs = as<const Numeric>(ty_rhs);
             auto n_res = as<const Numeric>(ty);
-            int64_t the_scale = 0;
+            uint32_t the_scale = 0;
 
             (*this)(*e.lhs);
             if (n_lhs->is_floating_point()) {
@@ -382,7 +382,7 @@ void StackMachineBuilder::operator()(Const<ast::BinaryExpr> &e)
             auto n_lhs = as<const Numeric>(ty_lhs);
             auto n_rhs = as<const Numeric>(ty_rhs);
             auto n_res = as<const Numeric>(ty);
-            int64_t the_scale = 0;
+            int32_t the_scale = 0;
 
             (*this)(*e.lhs);
             if (n_lhs->is_floating_point()) {
@@ -398,8 +398,8 @@ void StackMachineBuilder::operator()(Const<ast::BinaryExpr> &e)
             else
                 the_scale -= n_rhs->scale;
 
-            if (the_scale < n_res->scale) {
-                const int64_t factor = powi<int64_t>(10, n_res->scale - the_scale); // scale up
+            if (the_scale < int32_t(n_res->scale)) {
+                const int64_t factor = powi(10L, n_res->scale - the_scale); // scale up
                 load_numeric(factor, n_res);
                 stack_machine_.emit_Mul_i();
             }
@@ -414,8 +414,8 @@ void StackMachineBuilder::operator()(Const<ast::BinaryExpr> &e)
             auto opcode = StackMachine::STR_TO_OPCODE.at(opstr);
             stack_machine_.emit(opcode); // Div_x
 
-            if (the_scale > n_res->scale) {
-                const int64_t factor = powi<int64_t>(10, the_scale - n_res->scale); // scale down
+            if (the_scale > int32_t(n_res->scale)) {
+                const int64_t factor = powi(10L, the_scale - n_res->scale); // scale down
                 load_numeric(factor, n_res);
                 stack_machine_.emit_Div_i();
             }
@@ -538,7 +538,7 @@ void StackMachine::emit(const ast::Expr &expr, std::size_t tuple_id)
 {
     if (auto it = in_schema.find(Schema::Identifier(expr)); it != in_schema.end()) { // expression already computed
         /* Given the expression, identify the position of its value in the tuple.  */
-        auto idx = std::distance(in_schema.begin(), it);
+        const unsigned idx = std::distance(in_schema.begin(), it);
         M_insist(idx < in_schema.num_entries(), "index out of bounds");
         emit_Ld_Tup(tuple_id, idx);
     } else { // expression has to be computed
@@ -750,13 +750,14 @@ void StackMachine::emit_Cast(const Type *to_ty, const Type *from_ty)
                         return;
 
                     case Numeric::N_Decimal: { /* decimal -> decimal */
-                        const int delta = n_to->scale - n_from->scale;
-                        if (delta > 0) {        /* decimal of lower scale to decimal of higher scale */
-                            add_and_emit_load(powi(10L, delta));
-                            emit_Mul_i();
-                        } else if (delta < 0) { /* decimal of higher scale to decimal of lower scale */
-                            add_and_emit_load(powi(10L, -delta));
-                            emit_Div_i();
+                        if (n_to->scale != n_from->scale) {
+                            if (n_to->scale > n_from->scale) {
+                                add_and_emit_load(powi(10L, n_to->scale - n_from->scale));
+                                emit_Mul_i();
+                            } else {
+                                add_and_emit_load(powi(10L, n_from->scale - n_to->scale));
+                                emit_Div_i();
+                            }
                         }
                         return;
                     }

@@ -240,6 +240,18 @@ bool M_EXPORT is(std::reference_wrapper<From> v) { return is<To>(v.get()); }
 template<typename To, typename From>
 bool M_EXPORT is(const std::unique_ptr<From> &v) { return is<To>(v.get()); }
 
+template<typename T, typename... Us>
+T & get_as(std::variant<Us...> &v)
+{
+    return *M_notnull(std::get_if<T>(&v));
+}
+
+template<typename T, typename... Us>
+const T & get_as(const std::variant<Us...> &v)
+{
+    return *M_notnull(std::get_if<T>(&v));
+}
+
 inline std::string escape(char c)
 {
     switch (c) {

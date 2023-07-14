@@ -498,11 +498,7 @@ struct ThePreOrderOperatorVisitor : std::conditional_t<C, ConstOperatorVisitor, 
     using super = std::conditional_t<C, ConstOperatorVisitor, OperatorVisitor>;
     template<typename T> using Const = typename super::template Const<T>;
     void operator()(Const<Operator> &op) {
-        try {
-            op.accept(*this);
-        } catch (visit_stop_recursion) {
-            return;
-        }
+        try { op.accept(*this); } catch (visit_skip_subtree) { return; }
         if (auto c = cast<Const<Consumer>>(&op)) {
             for (auto child : c->children())
                 (*this)(*child);

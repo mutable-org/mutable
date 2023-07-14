@@ -474,10 +474,10 @@ Optimizer::compute_projections_required_for_order_by(const std::vector<projectio
             /*----- Find `fn` in projections. -----*/
             for (auto &[expr, alias] : projections) {
                 if (not alias and fn == expr.get())
-                    throw visit_stop_recursion(); // found
+                    throw visit_skip_subtree(); // found
             }
             required_projections.emplace_back(fn, nullptr);
-            throw visit_stop_recursion();
+            throw visit_skip_subtree();
         },
         [](auto&&) -> void { /* nothing to be done */ },
     };

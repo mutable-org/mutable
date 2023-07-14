@@ -10,8 +10,10 @@
 
 namespace m {
 
-/** Exception class which may be throw to stop recursion of pre-order visitors. */
+/** Exception class which may be throw to stop entire recursion in visitors. */
 struct visit_stop_recursion { };
+/** Exception class which may be throw to skip recursion of the subtree in pre-order visitors. */
+struct visit_skip_subtree { };
 
 /** Visitor base class. */
 template<typename V, typename Base>
@@ -56,7 +58,7 @@ struct Visitor
             CLASS_LIST(M_MAKE_STL_VISIT_METHOD) \
         }; \
         V v(std::forward<Vis>(vis)); \
-        v(obj); \
+        try { v(obj); } catch (visit_stop_recursion) { } \
         if constexpr (not std::is_same_v<void, typename V::result_type>) { \
             return std::move(v.result->value); \
         } else { \

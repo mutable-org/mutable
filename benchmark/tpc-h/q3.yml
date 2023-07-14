@@ -3,6 +3,15 @@ suite: TPC
 benchmark: TPC-H
 name: Q3
 readonly: true
+chart:
+    x:
+        scale: linear
+        type: O
+        label: Scale factor
+    y:
+        scale: linear
+        type: Q
+        label: 'Execution time [ms]'
 data:
     Lineitem:
         file: benchmark/tpc-h/data/lineitem.tbl

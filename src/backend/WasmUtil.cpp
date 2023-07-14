@@ -147,7 +147,7 @@ void ExprCompiler::operator()(const ast::Constant &e)
 
     auto set_constant = [this, &e, &value]<std::size_t L>(){
         auto set_helper = overloaded {
-            [this]<sql_type T>(T &&actual) { set(std::forward<T>(actual)); },
+            [this]<sql_type T>(T &&actual) { this->set(std::forward<T>(actual)); },
             [](auto&&) { M_unreachable("not a SQL type"); }
         };
 
@@ -210,7 +210,7 @@ void ExprCompiler::operator()(const ast::UnaryExpr &e)
         std::visit(overloaded {
             [](std::monostate&&) -> void { M_unreachable("illegal value"); },
             [this, &unop](auto &&expr) -> void requires requires { { unop(expr) } -> sql_type; } {
-                set(unop(expr));
+                this->set(unop(expr));
             },
             [](auto &&expr) -> void requires (not requires { { unop(expr) } -> sql_type; }) {
                 M_unreachable("illegal operation");
@@ -258,7 +258,7 @@ void ExprCompiler::operator()(const ast::BinaryExpr &e)
                     [](std::monostate&&) -> void { M_unreachable("illegal value"); },
                     [this, expr_lhs, &binop](auto &&expr_rhs) mutable -> void
                     requires requires { { binop(expr_lhs, expr_rhs) } -> sql_type; } {
-                        set(binop(expr_lhs, expr_rhs));
+                        this->set(binop(expr_lhs, expr_rhs));
                     },
                     [](auto &&expr_rhs) -> void
                     requires (not requires { { binop(expr_lhs, expr_rhs) } -> sql_type; }) {

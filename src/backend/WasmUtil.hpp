@@ -447,6 +447,9 @@ struct ExprCompiler : ast::ConstASTExprVisitor
         intermediate_result_.~SQL_t(); // destroy old
         new (&intermediate_result_) SQL_t(std::move(value)); // placement-new
     }
+
+    template<sql_type T>
+    void set(T &&value) { set(SQL_t(std::forward<T>(value))); }
 };
 
 

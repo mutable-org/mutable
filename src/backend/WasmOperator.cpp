@@ -660,14 +660,46 @@ void LazyDisjunctiveFilter::execute(const Match<LazyDisjunctiveFilter> &M, setup
  * Projection
  *====================================================================================================================*/
 
-ConditionSet Projection::pre_condition(std::size_t child_idx, const std::tuple<const ProjectionOperator*>&)
+ConditionSet Projection::pre_condition(
+    std::size_t child_idx,
+    const std::tuple<const ProjectionOperator*> &partial_inner_nodes)
 {
      M_insist(child_idx == 0);
 
     ConditionSet pre_cond;
 
-    /*----- Projection does not support SIMD. -----*/
-    pre_cond.add_condition(NoSIMD());
+    auto &projection = *std::get<0>(partial_inner_nodes);
+
+    if (not projection.children().empty()) { // projections starting a pipeline produce only a single tuple, i.e. no SIMD
+        /*----- Projection does only support SIMD if all expressions can be computed using SIMD instructions. -----*/
+        auto is_simd_computable = [](const ast::Expr &e){
+            bool simd_computable = true;
+            visit(overloaded {
+                [&](const ast::BinaryExpr &b) -> void {
+                    if (b.lhs->type()->is_character_sequence() or b.rhs->type()->is_character_sequence()) {
+                        simd_computable = false; // string operations are not SIMDfiable
+                        throw visit_stop_recursion(); // abort recursion
+                    }
+                    if (b.common_operand_type->is_integral() and b.op().type == TK_SLASH) {
+                        simd_computable = false; // integer division is not SIMDfiable
+                        throw visit_stop_recursion(); // abort recursion
+                    }
+                    if (b.op().type == TK_PERCENT) {
+                        simd_computable = false; // modulo is not SIMDfiable
+                        throw visit_stop_recursion(); // abort recursion
+                    }
+                },
+                [](auto&) -> void {
+                    /* designators, constants, unary expressions, NULL(), INT(), already computed aggregates and results
+                     * of a nested query are SIMDfiable; nothing to be done */
+                },
+            }, e, m::tag<m::ast::ConstPreOrderExprVisitor>());
+            return simd_computable;
+        };
+        auto pred = [&](auto &p){ return not is_simd_computable(p.first); };
+        if (std::any_of(projection.projections().cbegin(), projection.projections().cend(), pred))
+            pre_cond.add_condition(NoSIMD());
+    }
 
     return pre_cond;
 }
@@ -725,14 +757,14 @@ void Projection::execute(const Match<Projection> &M, setup_t setup, pipeline_t p
                     /*----- Compile expression. -----*/
                     M_insist(p != M.projection.projections().end());
                     std::visit(overloaded {
-                        [&]<typename T>(Expr<T> value) -> void {
+                        [&]<typename T, std::size_t L>(Expr<T, L> value) -> void {
                             if (value.can_be_null()) {
-                                Var<Expr<T>> var(value); // introduce variable s.t. uses only load from it
+                                Var<Expr<T, L>> var(value); // introduce variable s.t. uses only load from it
                                 new_env.add(e.id, var);
                             } else {
                                 /* introduce variable w/o NULL bit s.t. uses only load from it */
-                                Var<PrimitiveExpr<T>> var(value.insist_not_null());
-                                new_env.add(e.id, Expr<T>(var));
+                                Var<PrimitiveExpr<T, L>> var(value.insist_not_null());
+                                new_env.add(e.id, Expr<T, L>(var));
                             }
                         },
                         [&](NChar value) -> void {
@@ -740,7 +772,6 @@ void Projection::execute(const Match<Projection> &M, setup_t setup, pipeline_t p
                             new_env.add(e.id, NChar(var, value.can_be_null(), value.length(),
                                                     value.guarantees_terminating_nul()));
                         },
-                        [](auto) -> void { M_unreachable("SIMDfication currently not supported"); },
                         [](std::monostate) -> void { M_unreachable("invalid expression"); },
                     }, old_env.compile(p->first));
                 }
@@ -756,9 +787,36 @@ void Projection::execute(const Match<Projection> &M, setup_t setup, pipeline_t p
     };
 
     if (M.child) {
+        /*----- Set minimal number of SIMD lanes preferred to get fully utilized SIMD vectors *after* the projection. */
+        uint64_t min_size_in_bytes = 16;
+        for (auto &p : M.projection.projections()) {
+            visit(overloaded {
+                [](const m::ast::ErrorExpr&) -> void { M_unreachable("no errors at this stage"); },
+                [](const m::ast::Designator&) -> void { /* nothing to be done */ },
+                [](const m::ast::Constant&) -> void { /* nothing to be done */ },
+                [](const m::ast::QueryExpr&) -> void { /* nothing to be done */ },
+                [&min_size_in_bytes](const m::ast::FnApplicationExpr &fn) -> void {
+                    if (fn.get_function().is_aggregate())
+                        throw visit_skip_subtree(); // skip arguments to already computed aggregate
+                    min_size_in_bytes = std::min(min_size_in_bytes, (fn.type()->size() + 7) / 8);
+                    if (min_size_in_bytes == 1)
+                        throw visit_stop_recursion(); // abort recursion
+                },
+                [&min_size_in_bytes](auto &e) -> void { // i.e. for unary and binary expressions
+                    min_size_in_bytes = std::min(min_size_in_bytes, (e.type()->size() + 7) / 8);
+                    if (min_size_in_bytes == 1)
+                        throw visit_stop_recursion(); // abort recursion
+                }
+            }, p.first.get(), m::tag<m::ast::ConstPreOrderExprVisitor>());
+        }
+        CodeGenContext::Get().update_num_simd_lanes_preferred(16 / min_size_in_bytes); // set own preference
+
+        /*----- Execute projection. -----*/
         M.child->get().execute(std::move(setup), std::move(execute_projection), std::move(teardown));
     } else {
+        /*----- Execute projection. -----*/
         setup();
+        CodeGenContext::Get().set_num_simd_lanes(1); // since only a single tuple is produced
         execute_projection();
         teardown();
     }

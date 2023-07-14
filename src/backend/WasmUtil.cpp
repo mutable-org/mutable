@@ -111,8 +111,15 @@ void ExprCompiler::operator()(const ast::ErrorExpr&) { M_unreachable("no errors 
 
 void ExprCompiler::operator()(const ast::Designator &e)
 {
-    if (e.type()->is_none()) {
-        set(_I32x1::Null()); // create NULL
+    if (e.type()->is_none()) { // create NULL
+        switch (CodeGenContext::Get().num_simd_lanes()) {
+            default: M_unreachable("invalid number of SIMD lanes");
+            case  1: set(_I32x1::Null());  break;
+            case  2: set(_I32x2::Null());  break;
+            case  4: set(_I32x4::Null());  break;
+            case  8: set(_I32x8::Null());  break;
+            case 16: set(_I32x16::Null()); break;
+        }
         return;
     }
 
@@ -123,52 +130,75 @@ void ExprCompiler::operator()(const ast::Designator &e)
 
 void ExprCompiler::operator()(const ast::Constant &e)
 {
-    if (e.type()->is_none()) {
-        set(_I32x1::Null()); // create NULL
+    if (e.type()->is_none()) { // create NULL
+        switch (CodeGenContext::Get().num_simd_lanes()) {
+            default: M_unreachable("invalid number of SIMD lanes");
+            case  1: set(_I32x1::Null());  break;
+            case  2: set(_I32x2::Null());  break;
+            case  4: set(_I32x4::Null());  break;
+            case  8: set(_I32x8::Null());  break;
+            case 16: set(_I32x16::Null()); break;
+        }
         return;
     }
 
     /* Interpret constant. */
     auto value = Interpreter::eval(e);
 
-    visit(overloaded {
-        [this, &value](const Boolean&) { set(_Boolx1(value.as_b())); },
-        [this, &value](const Numeric &n) {
-            switch (n.kind) {
-                case Numeric::N_Int:
-                case Numeric::N_Decimal:
-                    switch (n.size()) {
-                        default:
-                            M_unreachable("invalid integer size");
-                        case 8:
-                            set(_I8x1(value.as_i()));
-                            break;
-                        case 16:
-                            set(_I16x1(value.as_i()));
-                            break;
-                        case 32:
-                            set(_I32x1(value.as_i()));
-                            break;
-                        case 64:
-                            set(_I64x1(value.as_i()));
-                            break;
-                    }
-                    break;
-                case Numeric::N_Float:
-                    if (n.size() <= 32)
-                        set(_Floatx1(value.as_f()));
-                    else
-                        set(_Doublex1(value.as_d()));
-            }
-        },
-        [this, &value](const CharacterSequence&) {
-            set(CodeGenContext::Get().get_literal_address(value.as<const char*>()));
-        },
-        [this, &value](const Date&) { set(_I32x1(value.as_i())); },
-        [this, &value](const DateTime&) { set(_I64x1(value.as_i())); },
-        [](const NoneType&) { M_unreachable("should've been handled earlier"); },
-        [](auto&&) { M_unreachable("invalid type"); },
-    }, *e.type());
+    auto set_constant = [this, &e, &value]<std::size_t L>(){
+        auto set_helper = overloaded {
+            [this]<sql_type T>(T &&actual) { set(std::forward<T>(actual)); },
+            [](auto&&) { M_unreachable("not a SQL type"); }
+        };
+
+        visit(overloaded {
+            [&value, &set_helper](const Boolean&) { set_helper(_Bool<L>(value.as_b())); },
+            [&value, &set_helper](const Numeric &n) {
+                switch (n.kind) {
+                    case Numeric::N_Int:
+                    case Numeric::N_Decimal:
+                        switch (n.size()) {
+                            default:
+                                M_unreachable("invalid integer size");
+                            case 8:
+                                set_helper(_I8<L>(value.as_i()));
+                                break;
+                            case 16:
+                                set_helper(_I16<L>(value.as_i()));
+                                break;
+                            case 32:
+                                set_helper(_I32<L>(value.as_i()));
+                                break;
+                            case 64:
+                                set_helper(_I64<L>(value.as_i()));
+                                break;
+                        }
+                        break;
+                    case Numeric::N_Float:
+                        if (n.size() <= 32)
+                            set_helper(_Float<L>(value.as_f()));
+                        else
+                            set_helper(_Double<L>(value.as_d()));
+                }
+            },
+            [this, &value](const CharacterSequence&) {
+                M_insist(L == 1, "string SIMDfication currently not supported");
+                set(CodeGenContext::Get().get_literal_address(value.as<const char*>()));
+            },
+            [&value, &set_helper](const Date&) { set_helper(_I32<L>(value.as_i())); },
+            [&value, &set_helper](const DateTime&) { set_helper(_I64<L>(value.as_i())); },
+            [](const NoneType&) { M_unreachable("should've been handled earlier"); },
+            [](auto&&) { M_unreachable("invalid type for given number of SIMD lanes"); },
+        }, *e.type());
+    };
+    switch (CodeGenContext::Get().num_simd_lanes()) {
+        default: M_unreachable("invalid number of SIMD lanes");
+        case  1: set_constant.operator()<1>();  break;
+        case  2: set_constant.operator()<2>();  break;
+        case  4: set_constant.operator()<4>();  break;
+        case  8: set_constant.operator()<8>();  break;
+        case 16: set_constant.operator()<16>(); break;
+    }
 }
 
 void ExprCompiler::operator()(const ast::UnaryExpr &e)
@@ -245,6 +275,7 @@ void ExprCompiler::operator()(const ast::BinaryExpr &e)
 #define CMPOP(OP, STRCMP_OP) { \
         if (e.lhs->type()->is_character_sequence()) { \
             M_insist(e.rhs->type()->is_character_sequence()); \
+            M_insist(CodeGenContext::Get().num_simd_lanes() == 1, "invalid number of SIMD lanes"); \
             apply_binop( \
                 [](NChar lhs, NChar rhs) -> _Boolx1 { \
                     return strcmp(lhs, rhs, STRCMP_OP); \
@@ -278,6 +309,7 @@ void ExprCompiler::operator()(const ast::BinaryExpr &e)
         case TK_Like: {
             M_insist(e.lhs->type()->is_character_sequence());
             M_insist(e.rhs->type()->is_character_sequence());
+            M_insist(CodeGenContext::Get().num_simd_lanes() == 1, "invalid number of SIMD lanes");
             (*this)(*e.lhs);
             NChar str = get<NChar>();
             (*this)(*e.rhs);
@@ -289,6 +321,7 @@ void ExprCompiler::operator()(const ast::BinaryExpr &e)
         case TK_DOTDOT: {
             M_insist(e.lhs->type()->is_character_sequence());
             M_insist(e.rhs->type()->is_character_sequence());
+            M_insist(CodeGenContext::Get().num_simd_lanes() == 1, "invalid number of SIMD lanes");
             (*this)(*e.lhs);
             NChar lhs = get<NChar>();
             (*this)(*e.rhs);
@@ -363,7 +396,15 @@ void ExprCompiler::operator()(const ast::FnApplicationExpr &e)
         case m::Function::FN_ISNULL: {
             (*this)(*e.args[0]);
             auto arg = get();
-            set(_Boolx1(is_null(arg)));
+            std::visit(overloaded { // do not use constraint `is_sql_type` since `is_null()` returns a `PrimitiveExpr`
+                [this]<sql_type T>(T actual) -> void requires requires { SQL_t(actual.is_null()); } {
+                    set(actual.is_null());
+                },
+                []<sql_type T>(T actual) -> void requires (not requires { SQL_t(actual.is_null()); }) {
+                    M_unreachable("NULL check not supported");
+                },
+                [](std::monostate) -> void { M_unreachable("invalid variant"); },
+            }, arg);
             break;
         }
 
@@ -371,7 +412,8 @@ void ExprCompiler::operator()(const ast::FnApplicationExpr &e)
         case m::Function::FN_INT: {
             (*this)(*e.args[0]);
             auto arg = get();
-            set(convert<_I32x1>(arg));
+            convert_in_place<int32_t>(arg);
+            set(std::move(arg));
             break;
         }
 

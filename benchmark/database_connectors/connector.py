@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 import os
 import multiprocessing
 
-DEFAULT_TIMEOUT = 30  # seconds
+DEFAULT_TIMEOUT = 60  # seconds
 TIMEOUT_PER_CASE = 10 # seconds
 
 #=======================================================================================================================

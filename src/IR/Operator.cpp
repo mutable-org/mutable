@@ -329,7 +329,7 @@ struct SchemaMinimizer : OperatorVisitor
 
 void SchemaMinimizer::operator()(Const<ScanOperator> &op)
 {
-    required = required & op.schema(); // intersect with scan schema to add constraints to the required schema
+    required = required & op.schema(); // intersect with scan operator schema to add constraints to the required schema
     op.schema() = required; // the scan operator produces exactly those attributes required by the ancestors
 }
 

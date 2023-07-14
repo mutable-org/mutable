@@ -187,7 +187,7 @@ M_LCOV_EXCL_STOP
         return res;
     }
 
-    /** Returns a copy of `this` `Schema` where all constant entries are removed..  */
+    /** Returns a copy of `this` `Schema` where all constant entries are removed. */
     Schema drop_constants() const {
         Schema res;
         for (auto &e : *this) {
@@ -197,15 +197,17 @@ M_LCOV_EXCL_STOP
         return res;
     }
 
-    /** Adds all entries of `other` to `this` `Schema`. */
+    /** Adds all entries of `other` to `this` `Schema`, potentially introducing duplicates.  In other words, no
+     * duplicate checking is performed. */
     Schema & operator+=(const Schema &other) {
         for (auto &e : other)
             entries_.emplace_back(e);
         return *this;
     }
 
-    /** Adds all entries of `other` to `this` `Schema` using *set semantics*.  If an entry of `other` with a particular
-     * `Identifier` already exists in `this`, it is not added again. */
+    /** Adds all entries of \p other to `this` `Schema` using *set semantics*.  If an entry of \p other with a
+     * particular `Identifier` already exists in `this`, it is not added again.  In other words, elements of \p other
+     * are added to `this` with duplicate checking. */
     Schema & operator|=(const Schema &other) {
         for (auto &e : other) {
             if (not has(e.id))
@@ -214,6 +216,7 @@ M_LCOV_EXCL_STOP
         return *this;
     }
 
+    /** Checks whether two `Schema`s have identical `Identifier`s by checking for mutual set-inclusion. */
     bool operator==(const Schema &other) const {
         return std::all_of(this->begin(), this->end(), [&](const entry_type &p) { return other.has(p.id); }) and
                std::all_of(other.begin(), other.end(), [&](const entry_type &p) { return this->has(p.id); });
@@ -242,7 +245,7 @@ inline Schema operator+(const Schema &left, const Schema &right)
     return S;
 }
 
-/** Computes the *set intersection* of two `Schema`s. */
+/** Computes the *set intersection* of two `Schema`s.  Merges the constraints of \p left and \p right. */
 inline Schema operator&(const Schema &left, const Schema &right)
 {
     Schema res;

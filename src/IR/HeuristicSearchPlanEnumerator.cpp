@@ -2497,29 +2497,27 @@ using IDDFS = ai::IDDFS<State, Expand, Heuristic, Config, Context...>;
 /// Change the beam width here
 template<typename State, typename Expand, typename Heuristic, typename Config, typename... Context>
 using hanwen_layered_search = ai::hanwen_layeredSearch<1>::type<State, Expand, Heuristic, Config, Context...>;
-
 template<typename State, typename Expand, typename Heuristic, typename Config, typename... Context>
 using hanwen_layered_search_2 = ai::hanwen_layeredSearch<2>::type<State, Expand, Heuristic, Config, Context...>;
-
 template<typename State, typename Expand, typename Heuristic, typename Config, typename... Context>
 using hanwen_layered_search_3 = ai::hanwen_layeredSearch<3>::type<State, Expand, Heuristic, Config, Context...>;
 
 /// Change to sorted here
 template<typename State, typename Expand, typename Heuristic, typename Config, typename... Context>
 using hanwen_layered_search_sorted = ai::hanwen_layeredSearch_sorted<1>::type<State, Expand, Heuristic, Config, Context...>;
-
 template<typename State, typename Expand, typename Heuristic, typename Config, typename... Context>
 using hanwen_layered_search_sorted_2 = ai::hanwen_layeredSearch_sorted<2>::type<State, Expand, Heuristic, Config, Context...>;
-
 template<typename State, typename Expand, typename Heuristic, typename Config, typename... Context>
 using hanwen_layered_search_sorted_3 = ai::hanwen_layeredSearch_sorted<3>::type<State, Expand, Heuristic, Config, Context...>;
-
 template<typename State, typename Expand, typename Heuristic, typename Config, typename... Context>
 using hanwen_layered_search_sorted_4 = ai::hanwen_layeredSearch_sorted<4>::type<State, Expand, Heuristic, Config, Context...>;
 template<typename State, typename Expand, typename Heuristic, typename Config, typename... Context>
 using hanwen_layered_search_sorted_5 = ai::hanwen_layeredSearch_sorted<5>::type<State, Expand, Heuristic, Config, Context...>;
 template<typename State, typename Expand, typename Heuristic, typename Config, typename... Context>
 using hanwen_layered_search_sorted_6 = ai::hanwen_layeredSearch_sorted<6>::type<State, Expand, Heuristic, Config, Context...>;
+
+template<typename State, typename Expand, typename Heuristic, typename Config, typename... Context>
+using hanwen_layered_search_sorted_dynamic = ai::hanwen_layeredSearch_sorted_dynamic::type<State, Expand, Heuristic, Config, Context...>;
 
 template<typename State, typename Expand, typename Heuristic, typename Config, typename... Context>
 using AStar = ai::AStar<State, Expand, Heuristic, Config, Context...>;
@@ -2812,6 +2810,8 @@ struct HeuristicSearch final : PlanEnumeratorCRTP<HeuristicSearch>
         HEURISTIC_SEARCH(SubproblemsArray, BottomUpComplete, zero, hanwen_layered_search_sorted_4)
         HEURISTIC_SEARCH(SubproblemsArray, BottomUpComplete, zero, hanwen_layered_search_sorted_5)
         HEURISTIC_SEARCH(SubproblemsArray, BottomUpComplete, zero, hanwen_layered_search_sorted_6)
+
+        HEURISTIC_SEARCH(SubproblemsArray, BottomUpComplete, zero, hanwen_layered_search_sorted_dynamic)
 
 
         /// Currently we didn't use the direct entrance for bidirectional search

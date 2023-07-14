@@ -2352,7 +2352,6 @@ std::size_t num_##NAME() const { return 0; }
 
             using state_type = State;
             static constexpr bool detect_duplicates = true;
-            static constexpr unsigned beam_width = BeamWidth;
 
         private:
             ///> type for a pointer to an entry in the map of states
@@ -2553,7 +2552,7 @@ std::size_t num_##NAME() const { return 0; }
 
 
             bool queues_empty() const{return beam_queue_.empty();}
-            unsigned queues_size() const{return beam_queue_.size();}
+            int queues_size() {return beam_queue_.size();}
 
 
             void print_counters(std::ostream &out) const {
@@ -2611,6 +2610,7 @@ std::size_t num_##NAME() const { return 0; }
                 typename Heuristic,
                 unsigned BeamWidth,
                 bool SortedCandidates,
+                int BeamFactor,
                 typename Config,
                 typename... Context
         > requires heuristic_search_heuristic<Heuristic, Context...>
@@ -2621,6 +2621,9 @@ std::size_t num_##NAME() const { return 0; }
 
             static constexpr unsigned beam_width = BeamWidth;
             static constexpr bool sorted_candidates = SortedCandidates;
+            static constexpr bool use_beam_factor = (BeamFactor != 0);
+            static constexpr int beam_factor = BeamFactor;
+            int candidates_size;
 
             using callback_t = std::function<void(state_type, double)>;
 
@@ -2705,15 +2708,15 @@ std::size_t num_##NAME() const { return 0; }
 
             void push_candidates(state_type state, double h, Context &... context) {
                 /// We can not keep the states safely, so not in the heap shape
-                if (layer_candidates.size() < beam_width) {
+                if (layer_candidates.size() < candidates_size) {
                     /* There is still space in the candidates, so simply add the state to the heap. */
                     layer_candidates.emplace_back(std::move(state), h);
-                    if (layer_candidates.size() == beam_width ) {
+                    if (layer_candidates.size() == candidates_size ) {
                         std::make_heap(layer_candidates.begin(), layer_candidates.end());
                     }
                 } else {
                     if constexpr (!sorted_candidates) { return; }
-                    M_insist(layer_candidates.size() == beam_width);
+                    M_insist(layer_candidates.size() == candidates_size);
                     auto &top = layer_candidates.front();
                     if (state.g() + h >= top.state.g() + top.h) {
                         /// Larger than largest value
@@ -2768,11 +2771,12 @@ std::size_t num_##NAME() const { return 0; }
                 typename Heuristic,
                 unsigned BeamWidth,
                 bool SortedCandidates,
+                int BeamFactor,
                 typename Config,
                 typename... Context
         >
         requires heuristic_search_heuristic<Heuristic, Context...>
-        const State &layeredSearch<State, Expand, Heuristic, BeamWidth, SortedCandidates, Config, Context...>::search(
+        const State &layeredSearch<State, Expand, Heuristic, BeamWidth, SortedCandidates, BeamFactor, Config, Context...>::search(
                 state_type initial_state,
                 expand_type expand,
                 heuristic_type &heuristic,
@@ -2780,22 +2784,26 @@ std::size_t num_##NAME() const { return 0; }
         ) {
             /// 1. Initial all the states inside
             /// Push the value directly in beam search queue
+            int counter = initial_state.size();
+            if (use_beam_factor) { candidates_size = counter * beam_factor; } else { candidates_size = beam_width; }
             state_manager_.push(std::move(initial_state), 0, context...);
+
 
             while (!state_manager_.queues_empty()) {
                 /// 2.1. Init the current_layer_candidates for further usage
 
-                size_t layer_candidates_size = std::min(beam_width, state_manager_.queues_size());
+                size_t layer_candidates_size = std::min(candidates_size, state_manager_.queues_size());
                 layer_candidates.clear();
+
 
                 /// 2.2. foreach state in layer candidates -> explore_state()
                 for (size_t i{0}; i < layer_candidates_size; i++) {
                     auto curr = state_manager_.pop();
                     const state_type &state = curr.first;
-//                    std::cout << "Current state.size() = " << state.size() << ", "
-//                            << state.g() << " + " << curr.second << " = " << state.g() + curr.second
-//                            << ", parent " << (state.parent()? state.parent()->g() : 0)
-//                            << std::endl; // Same size in same for-loop
+                    std::cout << "Current state.size() = " << state.size() << ", "
+                            << state.g() << " + " << curr.second << " = " << state.g() + curr.second
+                            << ", parent " << (state.parent()? state.parent()->g() : 0)
+                            << std::endl; // Same size in same for-loop
 
                     if (expand.is_goal(state, context...)) return state;
 
@@ -2844,7 +2852,7 @@ std::size_t num_##NAME() const { return 0; }
                     typename Config,
                     typename... Context
             >
-            using type = layeredSearch<State, Expand, Heuristic, BeamWidth, false, Config, Context...>;
+            using type = layeredSearch<State, Expand, Heuristic, BeamWidth, false, 0, Config, Context...>;
         };
 
         template<unsigned BeamWidth>
@@ -2856,7 +2864,18 @@ std::size_t num_##NAME() const { return 0; }
                     typename Config,
                     typename... Context
             >
-            using type = layeredSearch<State, Expand, Heuristic, BeamWidth, true, Config, Context...>;
+            using type = layeredSearch<State, Expand, Heuristic, BeamWidth, true, 0, Config, Context...>;
+        };
+
+        struct hanwen_layeredSearch_sorted_dynamic{
+            template<
+                    heuristic_search_state State,
+                    typename Expand,
+                    typename Heuristic,
+                    typename Config,
+                    typename... Context
+            >
+            using type = layeredSearch<State, Expand, Heuristic, 0, true, 2, Config, Context...>;
         };
 
 

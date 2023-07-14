@@ -2515,6 +2515,13 @@ template<typename State, typename Expand, typename Heuristic, typename Config, t
 using hanwen_layered_search_sorted_3 = ai::hanwen_layeredSearch_sorted<3>::type<State, Expand, Heuristic, Config, Context...>;
 
 template<typename State, typename Expand, typename Heuristic, typename Config, typename... Context>
+using hanwen_layered_search_sorted_4 = ai::hanwen_layeredSearch_sorted<4>::type<State, Expand, Heuristic, Config, Context...>;
+template<typename State, typename Expand, typename Heuristic, typename Config, typename... Context>
+using hanwen_layered_search_sorted_5 = ai::hanwen_layeredSearch_sorted<5>::type<State, Expand, Heuristic, Config, Context...>;
+template<typename State, typename Expand, typename Heuristic, typename Config, typename... Context>
+using hanwen_layered_search_sorted_6 = ai::hanwen_layeredSearch_sorted<6>::type<State, Expand, Heuristic, Config, Context...>;
+
+template<typename State, typename Expand, typename Heuristic, typename Config, typename... Context>
 using AStar = ai::AStar<State, Expand, Heuristic, Config, Context...>;
 template<typename State, typename Expand, typename Heuristic, typename Config, typename... Context>
 using wAStar = ai::wAStar<std::ratio<2, 1>>::type<State, Expand, Heuristic, Config, Context...>;
@@ -2801,6 +2808,11 @@ struct HeuristicSearch final : PlanEnumeratorCRTP<HeuristicSearch>
         HEURISTIC_SEARCH(SubproblemsArray, BottomUpComplete, zero, hanwen_layered_search_sorted_2)
         HEURISTIC_SEARCH(SubproblemsArray, TopDownComplete, zero, hanwen_layered_search_sorted_3)
         HEURISTIC_SEARCH(SubproblemsArray, BottomUpComplete, zero, hanwen_layered_search_sorted_3)
+
+        HEURISTIC_SEARCH(SubproblemsArray, BottomUpComplete, zero, hanwen_layered_search_sorted_4)
+        HEURISTIC_SEARCH(SubproblemsArray, BottomUpComplete, zero, hanwen_layered_search_sorted_5)
+        HEURISTIC_SEARCH(SubproblemsArray, BottomUpComplete, zero, hanwen_layered_search_sorted_6)
+
 
         /// Currently we didn't use the direct entrance for bidirectional search
         /// We directly get in the Bidirectional funciton from upstairs

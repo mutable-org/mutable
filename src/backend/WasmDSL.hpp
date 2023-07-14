@@ -1897,8 +1897,8 @@ struct PrimitiveExpr<T>
 
     friend std::ostream & operator<<(std::ostream &out, const PrimitiveExpr &P) {
         out << "PrimitiveExpr<" << typeid(type).name() << ">: ";
-        if (P.value_) out << *P.value_;
-        else          out << "None";
+        if (P.expr_) out << *P.expr_;
+        else         out << "None";
         return out;
     }
 
@@ -2645,7 +2645,7 @@ UNARY_LIST(UNARY)
 
     public:
     friend std::ostream & operator<<(std::ostream &out, const Expr &E) {
-        out << "Expr<" << typeid(type).name() << ">: value_=" *E.value_ << ", is_null_=" << *E.is_null_;
+        out << "Expr<" << typeid(type).name() << ">: value_=" << E.value_ << ", is_null_=" << E.is_null_;
         return out;
     }
 

@@ -156,9 +156,9 @@ systems:
                         o_orderdate,
                         o_shippriority
                 FROM
-                        {customer.table_name},
-                        {orders.table_name},
-                        {lineitem.table_name}
+                        "Customer",
+                        "Orders",
+                        "Lineitem"
                 WHERE
                         c_mktsegment = 'BUILDING'
                         AND c_custkey = o_custkey

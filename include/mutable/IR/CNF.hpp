@@ -135,6 +135,8 @@ struct M_EXPORT CNF : public std::vector<Clause>
     /** Returns `true` iff this `CNF` formula is an equi-predicate, i.e. conjunction of equality comparisons of each
      * two designators. */
     bool is_equi() const {
+        if (size() == 0)
+            return false;
         for (auto &clause : *this)
             if (not clause.is_equi()) return false;
         return true;

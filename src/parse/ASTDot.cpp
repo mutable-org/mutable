@@ -79,7 +79,7 @@ void ASTDot::operator()(Const<Designator> &e)
             << " [style=\"dashed\",dir=\"forward\",color=\"#404040\"];";
     } else if (auto val = std::get_if<const Expr*>(&t)) {
         const Expr *expr = *val;
-        indent() << id(e) << EDGE << id(*expr) << " [style=\"dashed\",dir=\"forward\",color=\"#404040\"];";
+        indent() << id(e) << EDGE << id(*expr) << " [style=\"dashed\",dir=\"forward\",color=\"crimson\"];";
     }
 }
 

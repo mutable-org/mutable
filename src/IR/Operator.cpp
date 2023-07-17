@@ -47,6 +47,9 @@ std::ostream & m::operator<<(std::ostream &out, const Operator &op) {
                 << "ScanOperator (" << op.store().table().name << " AS " << op.alias() << ')';
         },
         [&out, &depth](const FilterOperator &op) { indent(out, op, depth).out << "FilterOperator " << op.filter(); },
+        [&out, &depth](const DisjunctiveFilterOperator &op) {
+            indent(out, op, depth).out << "DisjunctiveFilterOperator " << op.filter();
+        },
         [&out, &depth](const JoinOperator &op) {
             indent(out, op, depth).out << "JoinOperator " << op.predicate();
         },
@@ -117,6 +120,16 @@ void Operator::dot(std::ostream &out) const
             out << "    " << id(op) << " [label=<<B>σ</B><SUB><FONT COLOR=\"0.0 0.0 0.25\" POINT-SIZE=\"10\">"
                 << html_escape(to_string(op.filter()))
                 << "</FONT></SUB>>];\n"
+                << "    " << id(*op.child(0)) << EDGE << id(op) << ";\n";
+        },
+        [&out](const DisjunctiveFilterOperator &op) {
+            out << "    " << id(op) << " [label=<<B>σ</B><SUB><FONT COLOR=\"0.0 0.0 0.25\" POINT-SIZE=\"10\">";
+            const auto &clause = op.filter()[0];
+            for (auto it = clause.cbegin(); it != clause.cend(); ++it) {
+                if (it != clause.cbegin()) out << " → ";
+                out << html_escape(to_string(*it));
+            }
+            out << "</FONT></SUB>>];\n"
                 << "    " << id(*op.child(0)) << EDGE << id(op) << ";\n";
         },
         [&out](const JoinOperator &op) {
@@ -359,6 +372,10 @@ void SchemaMinimizer::operator()(FilterOperator &op)
     auto required_by_op = op.filter().get_required(); // add what's required to evaluate the filter predicate
     required |= required_by_op; // add what's required to evaluate the filter predicate
     (*this)(*op.child(0));
+}
+
+void SchemaMinimizer::operator()(DisjunctiveFilterOperator &op) {
+    (*this)(as<FilterOperator>(op)); // delegate to FilterOperator
 }
 
 void SchemaMinimizer::operator()(JoinOperator &op)

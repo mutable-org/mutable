@@ -264,6 +264,19 @@ struct M_EXPORT FilterOperator : Producer, Consumer
     void accept(ConstOperatorVisitor &v) const override;
 };
 
+struct M_EXPORT DisjunctiveFilterOperator : FilterOperator
+{
+    DisjunctiveFilterOperator(cnf::CNF filter)
+        : FilterOperator(std::move(filter))
+    {
+        M_insist(this->filter().size() == 1, "a disjunctive filter must have exactly one clause");
+        M_insist(this->filter()[0].size() >= 2, "a disjunctive filter must have at least two predicates ");
+    }
+
+    void accept(OperatorVisitor &v) override;
+    void accept(ConstOperatorVisitor &v) const override;
+};
+
 struct M_EXPORT JoinOperator : Producer, Consumer
 {
     private:
@@ -466,6 +479,7 @@ struct M_EXPORT SortingOperator : Producer, Consumer
     X(PrintOperator) \
     X(NoOpOperator) \
     X(FilterOperator) \
+    X(DisjunctiveFilterOperator) \
     X(JoinOperator) \
     X(ProjectionOperator) \
     X(LimitOperator) \

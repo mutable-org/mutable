@@ -857,6 +857,25 @@ struct FilterData : OperatorData
     }
 };
 
+struct DisjunctiveFilterData : OperatorData
+{
+    std::vector<StackMachine> predicates;
+    Tuple res;
+
+    DisjunctiveFilterData(const DisjunctiveFilterOperator &op, const Schema &pipeline_schema)
+        : res({ Type::Get_Boolean(Type::TY_Vector) })
+    {
+        auto clause = op.filter()[0];
+        for (cnf::Predicate &pred : clause) {
+            cnf::Clause clause({ pred });
+            cnf::CNF cnf({ clause });
+            StackMachine &SM = predicates.emplace_back(pipeline_schema);
+            SM.emit(cnf, 1); // compile single predicate
+            SM.emit_St_Tup_b(0, 0);
+        }
+    }
+};
+
 }
 
 
@@ -930,6 +949,28 @@ void Pipeline::operator()(const FilterOperator &op)
         Tuple *args[] = { &data->res, &*it };
         data->filter(args);
         if (data->res.is_null(0) or not data->res[0].as_b()) block_.erase(it);
+    }
+    if (not block_.empty())
+        op.parent()->accept(*this);
+}
+
+void Pipeline::operator()(const DisjunctiveFilterOperator &op)
+{
+    if (not op.data())
+        op.data(new DisjunctiveFilterData(op, this->schema()));
+
+    auto data = as<DisjunctiveFilterData>(op.data());
+    for (auto it = block_.begin(); it != block_.end(); ++it) {
+        data->res.set(0, false); // reset
+        Tuple *args[] = { &data->res, &*it };
+
+        for (auto &pred : data->predicates) {
+            pred(args);
+            if (not data->res.is_null(0) and data->res[0].as_b())
+                goto satisfied; // one predicate is satisfied ⇒ entire clause is satisfied
+        }
+        block_.erase(it); // no predicate was satisfied ⇒ drop tuple
+satisfied:;
     }
     if (not block_.empty())
         op.parent()->accept(*this);
@@ -1382,6 +1423,11 @@ void Interpreter::operator()(const ScanOperator &op)
 }
 
 void Interpreter::operator()(const FilterOperator &op)
+{
+    op.child(0)->accept(*this);
+}
+
+void Interpreter::operator()(const DisjunctiveFilterOperator &op)
 {
     op.child(0)->accept(*this);
 }

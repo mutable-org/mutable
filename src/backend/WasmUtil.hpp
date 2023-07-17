@@ -119,28 +119,16 @@ struct Decimal : Expr<Base>
     Expr<To> to() { return val().template to<To>() / powi(To(10), To(scale_)); }
 
     Decimal clone() const { return Decimal(expr_type::clone(), scale_); }
-    bool can_be_null() const { return expr_type::can_be_null(); }
-    Bool is_null() {
-        if (can_be_null()) {
-            return expr_type::is_null();
-        } else {
-            expr_type::discard();
-            return Bool(false);
-        }
-    }
-    Bool not_null() {
-        if (can_be_null()) {
-            return expr_type::not_null();
-        } else {
-            expr_type::discard();
-            return Bool(true);
-        }
-    }
 
 
     /*------------------------------------------------------------------------------------------------------------------
      * Unary operations
      *----------------------------------------------------------------------------------------------------------------*/
+
+    /** Bitwise negation is not supported by `Decimal` type. */
+    Decimal operator~()
+    requires false
+    { M_unreachable("modulo division on decimals is not defined"); }
 
 
     /*------------------------------------------------------------------------------------------------------------------
@@ -209,6 +197,42 @@ struct Decimal : Expr<Base>
     template<typename T>
     requires false
     Decimal operator%(T&&) { M_unreachable("modulo division on decimals is not defined"); }
+
+    /** Bitwise and is not supported by `Decimal` type. */
+    template<typename T>
+    requires false
+    Decimal operator bitand(T&&) { M_unreachable("bitwise and on decimals is not defined"); }
+
+    /** Bitwise or is not supported by `Decimal` type. */
+    template<typename T>
+    requires false
+    Decimal operator bitor(T&&) { M_unreachable("bitwise or on decimals is not defined"); }
+
+    /** Bitwise xor (exclusive or) is not supported by `Decimal` type. */
+    template<typename T>
+    requires false
+    Decimal operator xor(T&&) { M_unreachable("exclusive or on decimals is not defined"); }
+
+    /** Shift left is not supported by `Decimal` type. */
+    template<typename T>
+    requires false
+    Decimal operator<<(T&&) { M_unreachable("shift left on decimals is not defined"); }
+
+    /** Shift right is not supported by `Decimal` type. */
+    template<typename T>
+    requires false
+    Decimal operator>>(T&&) { M_unreachable("shift right on decimals is not defined"); }
+
+    /** Shift right is not supported by `Decimal` type. */
+    template<typename T>
+    requires false
+    Decimal rotl(T&&) { M_unreachable("rotate left on decimals is not defined"); }
+
+    /** Shift right is not supported by `Decimal` type. */
+    template<typename T>
+    requires false
+    Decimal rotr(T&&) { M_unreachable("rotate right on decimals is not defined"); }
+
 
     friend std::ostream & operator<<(std::ostream &out, const Decimal &d) {
         return out << "Decimal: " << static_cast<const expr_type&>(d) << ", scale = " << d.scale_;

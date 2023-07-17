@@ -59,6 +59,7 @@ struct Block
     std::array<Tuple, N> data_; ///< an array of the tuples of this `Block`; some slots may be unused
     uint64_t mask_ = 0x0; ///< a mast identifying which slots of `data_` are in use
     static_assert(N <= 64, "maximum block size exceeded");
+    Schema schema_;
 
     public:
     Block() = default;
@@ -66,15 +67,19 @@ struct Block
     Block(Block&&) = delete;
 
     /** Create a new `Block` with tuples of `Schema` `schema`. */
-    Block(Schema schema) {
+    Block(Schema schema)
+        : schema_(std::move(schema))
+    {
         for (auto &t : data_)
-            t = Tuple(schema);
+            t = Tuple(schema_);
     }
 
     /** Return a pointer to the underlying array of tuples. */
     Tuple * data() { return data_.data(); }
     /** Return a pointer to the underlying array of tuples. */
     const Tuple * data() const { return data_.data(); }
+
+    const Schema & schema() const { return schema_; }
 
     /** Return the capacity of this `Block`. */
     static constexpr std::size_t capacity() { return CAPACITY; }
@@ -196,6 +201,8 @@ struct Pipeline : ConstOperatorVisitor
     void push(const Operator &pipeline_start) { (*this)(pipeline_start); }
 
     void clear() { block_.clear(); }
+
+    const Schema & schema() const { return block_.schema(); }
 
     using ConstOperatorVisitor::operator();
 #define DECLARE(CLASS) void operator()(Const<CLASS> &op) override;

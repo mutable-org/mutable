@@ -8,6 +8,7 @@
 #include <mutable/parse/AST.hpp>
 #include <mutable/storage/Store.hpp>
 #include <mutable/storage/Store.hpp>
+#include <numeric>
 #include <vector>
 
 
@@ -19,99 +20,101 @@ using namespace m::ast;
  * Helper functions
  *====================================================================================================================*/
 
-struct WeightFilterClauses : ConstASTExprVisitor
+struct WeighExpr
 {
     private:
-    std::vector<unsigned> clause_costs_;
     unsigned weight_;
 
     public:
+    operator unsigned() const { return weight_; }
+
     void operator()(const cnf::CNF &cnf) {
-        for (auto &clause : cnf) {
-            weight_ = 0;
-            for (auto pred : clause)
-                (*this)(*pred);
-            clause_costs_.push_back(weight_);
-        }
-    }
-    unsigned operator[](std::size_t idx) const { M_insist(idx < clause_costs_.size()); return clause_costs_[idx]; }
-
-    private:
-    using ConstASTExprVisitor::operator();
-    void operator()(const ErrorExpr&) { M_unreachable("no errors at this stage"); }
-
-    void operator()(const Designator &e) {
-        if (auto cs = cast<const CharacterSequence>(e.type()))
-            weight_ += cs->length;
-        else
-            weight_ += 1;
+        for (auto &clause : cnf)
+            (*this)(clause);
     }
 
-    void operator()(const Constant &e) {
-        if (auto cs = cast<const CharacterSequence>(e.type()))
-            weight_ += cs->length;
-        else
-            weight_ += 1;
+    void operator()(const cnf::Clause &clause) {
+        for (auto pred : clause)
+            (*this)(*pred);
     }
 
-    void operator()(const FnApplicationExpr &e) {
-        weight_ += 1;
-        for (auto &arg : e.args)
-            (*this)(*arg);
+    void operator()(const ast::Expr &e) {
+        visit(overloaded {
+            [](const ErrorExpr&) { M_unreachable("no errors at this stage"); },
+            [this](const Designator &d) {
+                if (auto cs = cast<const CharacterSequence>(d.type()))
+                    weight_ += cs->length;
+                else
+                    weight_ += 1;
+            },
+            [this](const Constant &e) {
+                if (auto cs = cast<const CharacterSequence>(e.type()))
+                    weight_ += cs->length;
+                else
+                    weight_ += 1;
+            },
+            [this](const FnApplicationExpr&) {
+                weight_ += 1;
+            },
+            [this](const UnaryExpr&) { weight_ += 1; },
+            [this](const BinaryExpr&) { weight_ += 1; },
+            [this](const QueryExpr&) { weight_ += 1000; } // XXX: this should never happen because of unnesting
+        }, e, tag<ConstPreOrderExprVisitor>{});
     }
 
+#if 0
     void operator()(const UnaryExpr &e) { weight_ += 1; (*this)(*e.expr); }
 
     void operator()(const BinaryExpr &e) { weight_ += 1; (*this)(*e.lhs); (*this)(*e.rhs); }
 
     void operator()(const QueryExpr&) { weight_ += 1000; }
+#endif
 };
 
-std::unique_ptr<FilterOperator> optimize_filter(std::unique_ptr<FilterOperator> filter)
+std::vector<cnf::CNF> optimize_filter(cnf::CNF filter)
 {
-    WeightFilterClauses W;
-    W(filter->filter());
-    std::vector<std::pair<cnf::Clause, unsigned>> weighted_clauses;
-    weighted_clauses.reserve(filter->filter().size());
-    for (std::size_t i = 0; i != filter->filter().size(); ++i)
-        weighted_clauses.emplace_back(filter->filter()[i], W[i]);
+    constexpr unsigned MAX_WEIGHT = 12; // equals to 4 comparisons of fixed-length values
+    M_insist(not filter.empty());
 
-    /* Sort clauses by weight in descending order. */
-    std::sort(weighted_clauses.begin(), weighted_clauses.end(), [](auto &left, auto &right) -> bool {
-        return left.second > right.second;
+    /* Compute clause weights. */
+    std::vector<unsigned> clause_weights;
+    clause_weights.reserve(filter.size());
+    for (auto &clause : filter) {
+        WeighExpr W;
+        W(clause);
+        clause_weights.emplace_back(W);
+    }
+
+    /* Sort clauses by weight using an index vector. */
+    std::vector<std::size_t> order(filter.size(), 0);
+    std::iota(order.begin(), order.end(), 0);
+    std::sort(order.begin(), order.end(), [&clause_weights](std::size_t first, std::size_t second) -> bool {
+        return clause_weights[first] < clause_weights[second];
     });
 
-    filter->filter(cnf::CNF{});
-    constexpr unsigned MAX_WEIGHT = 12; // equals to 4 comparisons of fixed-length values
-    unsigned w = 0;
-    cnf::CNF cnf;
-    {
-        auto wc = weighted_clauses.back();
-        weighted_clauses.pop_back();
-        cnf.push_back(wc.first);
-        w = wc.second;
-    }
-    while (not weighted_clauses.empty()) {
-        auto wc = weighted_clauses.back();
-        weighted_clauses.pop_back();
+    /* Dissect filter into sequence of filters. */
+    std::vector<cnf::CNF> optimized_filters;
+    unsigned current_weight = 0;
+    cnf::CNF current_filter;
+    for (std::size_t i = 0, end = filter.size(); i != end; ++i) {
+        const std::size_t idx = order[i];
+        cnf::Clause clause(std::move(filter[idx]));
+        M_insist(not clause.empty());
+        const unsigned clause_weight = clause_weights[idx];
 
-        if (w + wc.second <= MAX_WEIGHT) {
-            cnf.push_back(wc.first);
-            w += wc.second;
-        } else {
-            filter->filter(std::move(cnf));
-            cnf = cnf::CNF();
-            auto tmp = std::make_unique<FilterOperator>(cnf::CNF{});
-            tmp->add_child(filter.release());
-            filter = std::move(tmp);
-            cnf.push_back(wc.first);
-            w = wc.second;
+        if (not current_filter.empty() and current_weight + clause_weight > MAX_WEIGHT) {
+            optimized_filters.emplace_back(std::move(current_filter)); // empties current_filter
+            current_weight = 0;
         }
-    }
-    M_insist(not cnf.empty());
-    filter->filter(std::move(cnf));
 
-    return filter;
+        current_filter.emplace_back(std::move(clause));
+        current_weight += clause_weight;
+    }
+    if (not current_filter.empty())
+        optimized_filters.emplace_back(std::move(current_filter));
+
+    M_insist(not optimized_filters.empty());
+    return optimized_filters;
 }
 
 
@@ -214,12 +217,22 @@ Optimizer::optimize_with_plantable(const QueryGraph &G) const
 
         /* Apply filter, if any. */
         if (ds->filter().size()) {
-            auto filter = std::make_unique<FilterOperator>(ds->filter());
-            filter->add_child(source_plans[ds->id()]);
-            filter = optimize_filter(std::move(filter));
-            auto new_model = CE.estimate_filter(G, *plan_table[s].model, filter->filter());
-            source_plans[ds->id()] = filter.release();
+            /* Update data model with filter. */
+            auto new_model = CE.estimate_filter(G, *plan_table[s].model, ds->filter());
             plan_table[s].model = std::move(new_model);
+
+            /* Optimize the filter by splitting into smaller filters and ordering them. */
+            std::vector<cnf::CNF> filters = optimize_filter(ds->filter());
+            Producer *filtered_ds = source_plans[ds->id()];
+
+            /* Construct a plan as a sequence of filters. */
+            for (auto &&filter : filters) {
+                auto tmp = std::make_unique<FilterOperator>(filter);
+                tmp->add_child(filtered_ds);
+                filtered_ds = tmp.release();
+            }
+
+            source_plans[ds->id()] = filtered_ds;
         }
 
         /* Set operator information. */

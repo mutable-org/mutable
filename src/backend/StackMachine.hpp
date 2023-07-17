@@ -109,8 +109,21 @@ struct StackMachine
     /** Emit operations evaluating the `Expr` `expr`. */
     void emit(const ast::Expr &expr, std::size_t tuple_id = 0);
 
+    /** Emit operations evaluating the `Expr` `expr`. */
+    void emit(const ast::Expr &expr, const Schema &schema, std::size_t tuple_id = 0);
+
+    /** Emit operations evaluating the `Expr` `expr`. */
+    void emit(const ast::Expr &expr,
+              std::vector<Schema> &schemas,
+              std::vector<std::size_t> &tuple_ids);
+
     /** Emit operations evaluating the `CNF` formula `cnf`. */
     void emit(const cnf::CNF &cnf, std::size_t tuple_id = 0);
+
+    /** Emit operations evaluating the `Expr` `expr`. */
+    void emit(const cnf::CNF &cnf,
+              std::vector<Schema> &schemas,
+              std::vector<std::size_t> &tuple_ids);
 
     /* The following macros are used to automatically generate methods to emit a particular opcode.  For example, for
      * the opcode `Pop`, we will define a function `emit_Pop()`, that appends the `Pop` opcode to the current opcode

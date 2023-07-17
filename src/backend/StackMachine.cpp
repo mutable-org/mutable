@@ -43,20 +43,34 @@ struct m::StackMachineBuilder : ast::ConstASTExprVisitor
 {
     private:
     StackMachine &stack_machine_;
-    const Schema &schema_;
-    const std::size_t tuple_id;
+    const std::vector<Schema> &schemas_;
+    const std::vector<std::size_t> &tuple_ids_;
 
     public:
-    StackMachineBuilder(StackMachine &stack_machine, const Schema &in_schema, const ast::Expr &expr, std::size_t tuple_id)
+    StackMachineBuilder(StackMachine &stack_machine, const ast::Expr &expr,
+                        const std::vector<Schema> &schemas,
+                        const std::vector<std::size_t> &tuple_ids)
         : stack_machine_(stack_machine)
-        , schema_(in_schema)
-        , tuple_id(tuple_id)
+        , schemas_(schemas)
+        , tuple_ids_(tuple_ids)
     {
         (*this)(expr); // compute the command sequence
     }
 
     private:
     static std::unordered_map<std::string, std::regex> regexes_; ///< regexes built from patterns in LIKE expressions
+
+    /** Returns a pair of (tuple_id, attr_id). */
+    std::pair<std::size_t, std::size_t>
+    find_id(Schema::Identifier id) const {
+        for (std::size_t schema_idx = 0; schema_idx != schemas_.size(); ++schema_idx) {
+            auto &S = schemas_[schema_idx];
+            auto it = S.find(id);
+            if (it != S.cend())
+                return { tuple_ids_[schema_idx], std::distance(S.cbegin(), it) };
+        }
+        M_unreachable("identifier not found");
+    }
 
     using ConstASTExprVisitor::operator();
     void operator()(Const<ast::ErrorExpr>&) override { M_unreachable("invalid expression"); }
@@ -72,10 +86,8 @@ std::unordered_map<std::string, std::regex> StackMachineBuilder::regexes_;
 
 void StackMachineBuilder::operator()(Const<ast::Designator> &e)
 {
-    /* Given the designator, identify the position of its value in the tuple.  */
-    auto idx = schema_[{e.table_name.text, e.attr_name.text}].first;
-    M_insist(idx < schema_.num_entries(), "index out of bounds");
-    stack_machine_.emit_Ld_Tup(tuple_id, idx);
+    auto [tuple_id, attr_id] = find_id({e.table_name.text, e.attr_name.text});
+    stack_machine_.emit_Ld_Tup(tuple_id, attr_id);
 }
 
 void StackMachineBuilder::operator()(Const<ast::Constant> &e) {
@@ -132,9 +144,8 @@ void StackMachineBuilder::operator()(Const<ast::FnApplicationExpr> &e)
             std::ostringstream oss;
             oss << e;
             auto name = C.pool(oss.str().c_str());
-            auto idx = schema_[{name}].first;
-            M_insist(idx < schema_.num_entries(), "index out of bounds");
-            stack_machine_.emit_Ld_Tup(tuple_id, idx);
+            auto [tuple_id, attr_id] = find_id({name});
+            stack_machine_.emit_Ld_Tup(tuple_id, attr_id);
             return;
         }
     }
@@ -504,9 +515,8 @@ void StackMachineBuilder::operator()(Const<ast::BinaryExpr> &e)
 void StackMachineBuilder::operator()(Const<ast::QueryExpr> &e) {
     /* Given the query expression, identify the position of its value in the tuple.  */
     Catalog &C = Catalog::Get();
-    std::size_t idx(schema_[{e.alias(), C.pool("$res")}].first);
-    M_insist(idx < schema_.num_entries(), "index out of bounds");
-    stack_machine_.emit_Ld_Tup(tuple_id, idx);
+    auto [tuple_id, attr_id] = find_id({e.alias(), C.pool("$res")});
+    stack_machine_.emit_Ld_Tup(tuple_id, attr_id);
 }
 
 
@@ -542,18 +552,61 @@ void StackMachine::emit(const ast::Expr &expr, std::size_t tuple_id)
         M_insist(idx < in_schema.num_entries(), "index out of bounds");
         emit_Ld_Tup(tuple_id, idx);
     } else { // expression has to be computed
-        StackMachineBuilder(*this, in_schema, expr, tuple_id); // compute the command sequence for this stack machine
+        std::vector<Schema> svec({in_schema});
+        std::vector<std::size_t> tuple_ids({tuple_id});
+        StackMachineBuilder(*this, expr, svec, tuple_ids); // compute the command sequence for this stack machine
     }
+}
+
+void StackMachine::emit(const ast::Expr &expr, const Schema &schema, std::size_t tuple_id)
+{
+    if (auto it = in_schema.find(Schema::Identifier(expr)); it != in_schema.end()) { // expression already computed
+        /* Given the expression, identify the position of its value in the tuple.  */
+        const unsigned idx = std::distance(in_schema.begin(), it);
+        M_insist(idx < in_schema.num_entries(), "index out of bounds");
+        emit_Ld_Tup(tuple_id, idx);
+    } else { // expression has to be computed
+        std::vector<Schema> svec({schema});
+        std::vector<std::size_t> tuple_ids({tuple_id});
+        StackMachineBuilder(*this, expr, svec, tuple_ids); // compute the command sequence for this stack machine
+    }
+}
+
+void StackMachine::emit(const ast::Expr &expr,
+                        std::vector<Schema> &schemas,
+                        std::vector<std::size_t> &tuple_ids)
+{
+    StackMachineBuilder(*this, expr, schemas, tuple_ids); // compute the command sequence for this stack machine
 }
 
 void StackMachine::emit(const cnf::CNF &cnf, std::size_t tuple_id)
 {
-    /* Compile filter into stack machine.  TODO: short-circuit evaluation. */
+    /* Compile filter into stack machine. */
     for (auto clause_it = cnf.cbegin(); clause_it != cnf.cend(); ++clause_it) {
         auto &C = *clause_it;
         for (auto pred_it = C.cbegin(); pred_it != C.cend(); ++pred_it) {
             auto &P = *pred_it;
             emit(*P, tuple_id); // emit code for predicate
+            if (P.negative())
+                ops.push_back(StackMachine::Opcode::Not_b); // negate if negative
+            if (pred_it != C.cbegin())
+                ops.push_back(StackMachine::Opcode::Or_b);
+        }
+        if (clause_it != cnf.cbegin())
+            ops.push_back(StackMachine::Opcode::And_b);
+    }
+}
+
+void StackMachine::emit(const cnf::CNF &cnf,
+                        std::vector<Schema> &schemas,
+                        std::vector<std::size_t> &tuple_ids)
+{
+    /* Compile filter into stack machine. */
+    for (auto clause_it = cnf.cbegin(); clause_it != cnf.cend(); ++clause_it) {
+        auto &C = *clause_it;
+        for (auto pred_it = C.cbegin(); pred_it != C.cend(); ++pred_it) {
+            auto &P = *pred_it;
+            emit(*P, schemas, tuple_ids); // emit code for predicate
             if (P.negative())
                 ops.push_back(StackMachine::Opcode::Not_b); // negate if negative
             if (pred_it != C.cbegin())

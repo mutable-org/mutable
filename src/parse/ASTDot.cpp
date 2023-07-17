@@ -64,7 +64,10 @@ void ASTDot::operator()(Const<Designator> &e)
     if (e.has_type()) {
         std::ostringstream oss;
         oss << *e.type();
-        out << "<FONT POINT-SIZE=\"11\"><I> : " << html_escape(oss.str()) << "</I></FONT>";
+        out << "<FONT POINT-SIZE=\"11\"><I> : " << html_escape(oss.str());
+        if (auto pt = cast<const PrimitiveType>(e.type()))
+            out << "<SUB>" << (pt->is_scalar() ? "s" : "v") << "</SUB>";
+        out << "</I></FONT>";
     }
     out << ">];";
 

@@ -30,6 +30,9 @@ struct ASTDumper : ConstASTVisitor
             out << '\n' << std::string(2 * indent_ - 2, ' ') << "` ";
         return out;
     }
+
+    private:
+    void print_type(const Expr &e) const;
 };
 
 }

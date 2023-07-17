@@ -7,6 +7,15 @@ using namespace m;
 using namespace m::ast;
 
 
+void ASTDumper::print_type(const Expr &e) const
+{
+    if (e.has_type()) {
+        out << " of type " << *e.type();
+        if (auto pt = cast<const PrimitiveType>(e.type()))
+            out << (pt->is_scalar() ? " scalar" : " vectorial");
+    }
+}
+
 /*===== Expr =========================================================================================================*/
 
 void ASTDumper::operator()(Const<ErrorExpr> &e)
@@ -18,8 +27,7 @@ void ASTDumper::operator()(Const<Designator> &e)
 {
     if (e.has_explicit_table_name()) {
         indent() << "Designator";
-        if (e.has_type())
-            out << " of type " << *e.type();
+        print_type(e);
         ++indent_;
         indent() << "table name '" << e.table_name.text << "' (" << e.table_name.pos << ')';
         indent() << "attribute name '" << e.attr_name.text << "' (" << e.attr_name.pos << ')';
@@ -27,7 +35,7 @@ void ASTDumper::operator()(Const<Designator> &e)
     } else {
         indent() << "Identifier '" << e.attr_name.text << '\'';
         if (e.has_table_name()) out << " deduced to table '" << e.get_table_name() << '\'';
-        if (e.has_type()) out << " of type " << *e.type();
+        print_type(e);
         out << " (" << e.attr_name.pos << ')';
     }
 }
@@ -42,21 +50,23 @@ void ASTDumper::operator()(Const<Constant> &e)
 void ASTDumper::operator()(Const<FnApplicationExpr> &e)
 {
     indent() << "FnApplicationExpr";
-    if (e.has_type()) out << " of type " << *e.type();
+    print_type(e);
     ++indent_;
     (*this)(*e.fn);
-    indent() << "args";
-    ++indent_;
-    for (auto &expr : e.args)
-        (*this)(*expr);
-    --indent_;
+    if (not e.args.empty()) {
+        indent() << "args";
+        ++indent_;
+        for (auto &expr : e.args)
+            (*this)(*expr);
+        --indent_;
+    }
     --indent_;
 }
 
 void ASTDumper::operator()(Const<UnaryExpr> &e)
 {
     indent() << "UnaryExpr '" << e.op().text << "'";
-    if (e.has_type()) out << " of type " << *e.type();
+    print_type(e);
     out << " (" << e.op().pos << ')';
     ++indent_;
     (*this)(*e.expr);
@@ -66,7 +76,7 @@ void ASTDumper::operator()(Const<UnaryExpr> &e)
 void ASTDumper::operator()(Const<BinaryExpr> &e)
 {
     indent() << "BinaryExpr '" << e.op().text << "'";
-    if (e.has_type()) out << " of type " << *e.type();
+    print_type(e);
     out << " (" << e.op().pos << ')';
     ++indent_;
     (*this)(*e.lhs);
@@ -77,7 +87,7 @@ void ASTDumper::operator()(Const<BinaryExpr> &e)
 void ASTDumper::operator()(Const<QueryExpr> &e)
 {
     indent() << "QueryExpr";
-    if (e.has_type()) out << " of type " << *e.type();
+    print_type(e);
     ++indent_;
     (*this)(*e.query);
     --indent_;

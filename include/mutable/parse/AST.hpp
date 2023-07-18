@@ -84,7 +84,11 @@ struct M_EXPORT Expr
     virtual void accept(ASTExprVisitor &v) = 0;
     virtual void accept(ConstASTExprVisitor &v) const = 0;
 
-    /** Returns a `Schema` instance containing all required definitions (of `Attribute`s and other `Designator`s). */
+    /** Returns a `Schema` instance containing all required definitions.  Recursively traverses the `Expr` to find all
+     * `Designators`.  Note, that `FnApplicationExpr`s require special handling: a `FnApplicationExpr` that is an
+     * aggregation is stringified to a `Schema::Identifier` and not processed further recursively.  The reason for this
+     * special treatment is that aggregations are performed during grouping and the aggregate value is referenced by the
+     * stringified expression (or alias, if given). */
     Schema get_required() const;
 
     /** Writes a Graphivz dot representation of this `Expr` to `out`.  Used to render ASTs with Graphivz. */

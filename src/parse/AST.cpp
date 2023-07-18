@@ -147,10 +147,24 @@ Schema Expr::get_required() const
     auto visitor = overloaded {
         [](auto&) { },
         [&schema](const Designator &d) {
-            Schema::Identifier id(d.table_name.text, d.attr_name.text);
-            if (not schema.has(id)) // avoid duplicates
-                schema.add(id, d.type());
+            if (d.type()->is_primitive()) { // avoid non-primitive types, e.g. functions
+                Schema::Identifier id(d.table_name.text, d.attr_name.text);
+                if (not schema.has(id)) // avoid duplicates
+                    schema.add(id, d.type());
+            }
         },
+        [&schema](const FnApplicationExpr &fn) {
+            if (fn.get_function().is_aggregate()) {
+                Catalog &C = Catalog::Get();
+                static std::ostringstream oss;
+                oss.str("");
+                oss << fn;
+                Schema::Identifier id(C.pool(oss.str()));
+                if (not schema.has(id)) // avoid duplicates
+                    schema.add(id, fn.type());
+                throw visit_stop_recursion{}; // TODO: throw visit_skip_subtree after Luca's MR
+            }
+        }
     };
     visit(visitor, *this, m::tag<ConstPreOrderExprVisitor>());
     return schema;

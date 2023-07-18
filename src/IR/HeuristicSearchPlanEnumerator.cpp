@@ -2591,16 +2591,13 @@ bool heuristic_search_helper(const char *vertex_str, const char *expand_str, con
         search_algorithm S(PT, G, M, CF, CE);
 
         const double upper_bound = [&]() {
-            if constexpr (not search_algorithm::use_beam_search) {
-                /*----- Run GOO to compute upper bound of plan cost. -----*/
-                GOO Goo;
-                Goo(G, CF, PT);
-                return PT.get_final().cost;
-            } else {
-                /* Beam search becomes incomplete if an upper bound derived from an actual plan is provided.  Beam
-                 * search may never find that plan or any better plan, and hence return without finding a path. */
-                return std::numeric_limits<double>::quiet_NaN();
-            }
+            /*----- Run GOO to compute upper bound of plan cost. -----*/
+            /* Beam search becomes incomplete if an upper bound derived from an actual plan is provided.  Beam search
+             * may never find that plan or any better plan, and hence return without finding a path. In this case, the
+             * initial plan found by GOO is used. */
+            GOO Goo;
+            Goo(G, CF, PT);
+            return PT.get_final().cost;
         }();
         if (Options::Get().statistics)
             std::cout << "initial upper bound is " << upper_bound << std::endl;
@@ -2620,9 +2617,11 @@ bool heuristic_search_helper(const char *vertex_str, const char *expand_str, con
                 reconstruct_plan_bottom_up(goal, PT, G, CE, CF);
             }
         } catch (std::logic_error err) {
-            std::cout << "search " << search_str << '+' << vertex_str << '+' << expand_str << '+' << heuristic_str
-                      << " did not reach a goal state, fall back to DPccp" << std::endl;
-            DPccp{}(G, CF, PT);
+            if constexpr (not search_algorithm::use_beam_search) {
+                std::cout << "search " << search_str << '+' << vertex_str << '+' << expand_str << '+' << heuristic_str
+                          << " did not reach a goal state, fall back to DPccp" << std::endl;
+                DPccp{}(G, CF, PT);
+            }
         }
 #ifdef COUNTERS
         if (Options::Get().statistics) {

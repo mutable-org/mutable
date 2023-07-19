@@ -404,6 +404,7 @@ struct M_EXPORT GroupingOperator : Producer, Consumer
 
     const auto & group_by() const { return group_by_; }
     const auto & aggregates() const { return aggregates_; }
+    auto & aggregates() { return aggregates_; }
 
     void accept(OperatorVisitor &v) override;
     void accept(ConstOperatorVisitor &v) const override;
@@ -436,6 +437,7 @@ struct M_EXPORT AggregationOperator : Producer, Consumer
     }
 
     const auto & aggregates() const { return aggregates_; }
+    auto & aggregates() { return aggregates_; }
 
     void accept(OperatorVisitor &v) override;
     void accept(ConstOperatorVisitor &v) const override;

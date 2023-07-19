@@ -212,7 +212,6 @@ ProjectionOperator::ProjectionOperator(std::vector<projection_type> projections)
     : projections_(std::move(projections))
 {
     /* Compute the schema of the operator. */
-    uint64_t const_expr_counter = 0;
     auto &S = schema();
     for (auto &[proj, alias] : projections_) {
         auto ty = proj.get().type();

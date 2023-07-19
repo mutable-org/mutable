@@ -116,6 +116,8 @@ M_LCOV_EXCL_STOP
     /** Returns the number of entries in this `Schema`. */
     std::size_t num_entries() const { return entries_.size(); }
 
+    bool empty() const { return entries_.empty(); }
+
     /** Returns an iterator to the entry with the given `Identifier` `id`, or `end()` if no such entry exists.  */
     iterator find(Identifier id) {
         auto pred = [&id](const entry_type &e) -> bool { return e.id == id; }; // match qualified

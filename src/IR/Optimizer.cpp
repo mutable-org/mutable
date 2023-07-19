@@ -343,8 +343,6 @@ Optimizer::optimize_with_plantable(const QueryGraph &G) const
         plan = std::move(projection);
     }
 
-    // std::cerr << "Plan before minimizing:\n";
-    // plan->dump();
     plan->minimize_schema();
     delete[] source_plans;
     return { std::move(plan), std::move(plan_table) };

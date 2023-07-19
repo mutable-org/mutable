@@ -326,6 +326,7 @@ struct M_EXPORT ProjectionOperator : Producer, Consumer
     }
 
     const std::vector<projection_type> & projections() const { return projections_; }
+    std::vector<projection_type> & projections() { return projections_; }
 
     void accept(OperatorVisitor &v) override;
     void accept(ConstOperatorVisitor &v) const override;

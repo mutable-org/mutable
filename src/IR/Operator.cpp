@@ -245,6 +245,7 @@ GroupingOperator::GroupingOperator(std::vector<group_type> group_by,
 {
     auto &C = Catalog::Get();
     auto &S = schema();
+    std::ostringstream oss;
 
     {
         for (auto &[grp, alias] : group_by_) {
@@ -260,7 +261,7 @@ GroupingOperator::GroupingOperator(std::vector<group_type> group_by,
                 Schema::Identifier id(nullptr, D->attr_name.text); // w/o table name
                 S.add(id, pt->as_scalar(), constraints);
             } else {
-                std::ostringstream oss;
+                oss.str("");
                 oss << grp.get();
                 auto alias = C.pool(oss.str().c_str());
                 S.add(alias, pt->as_scalar(), constraints);
@@ -270,7 +271,7 @@ GroupingOperator::GroupingOperator(std::vector<group_type> group_by,
 
     for (auto &e : aggregates_) {
         auto ty = e.get().type();
-        std::ostringstream oss;
+        oss.str("");
         oss << e.get();
         auto alias = C.pool(oss.str().c_str());
         Schema::entry_type::constraints_t constraints{0};
@@ -285,9 +286,10 @@ AggregationOperator::AggregationOperator(std::vector<std::reference_wrapper<cons
 {
     auto &C = Catalog::Get();
     auto &S = schema();
+    std::ostringstream oss;
     for (auto &e : aggregates_) {
         auto ty = e.get().type();
-        std::ostringstream oss;
+        oss.str("");
         oss << e.get();
         auto alias = C.pool(oss.str().c_str());
         Schema::entry_type::constraints_t constraints{Schema::entry_type::UNIQUE}; // since a single tuple is produced
@@ -317,6 +319,7 @@ struct SchemaMinimizer : OperatorVisitor
 {
     private:
     Schema required;
+    bool is_top_of_plan_ = true;
 
     public:
     using OperatorVisitor::operator();
@@ -326,90 +329,173 @@ struct SchemaMinimizer : OperatorVisitor
 #undef DECLARE
 };
 
-void SchemaMinimizer::operator()(Const<ScanOperator> &op)
+void SchemaMinimizer::operator()(ScanOperator &op)
 {
     required = required & op.schema(); // intersect with scan operator schema to add constraints to the required schema
     op.schema() = required; // the scan operator produces exactly those attributes required by the ancestors
 }
 
-void SchemaMinimizer::operator()(Const<CallbackOperator> &op)
+void SchemaMinimizer::operator()(CallbackOperator &op)
 {
     (*this)(*op.child(0)); // this operator does not affect what is required; nothing to be done
     op.schema() = op.child(0)->schema();
 }
 
-void SchemaMinimizer::operator()(Const<PrintOperator> &op)
+void SchemaMinimizer::operator()(PrintOperator &op)
 {
     (*this)(*op.child(0)); // this operator does not affect what is required; nothing to be done
     op.schema() = op.child(0)->schema();
 }
 
-void SchemaMinimizer::operator()(Const<NoOpOperator> &op)
+void SchemaMinimizer::operator()(NoOpOperator &op)
 {
     (*this)(*op.child(0)); // this operator does not affect what is required; nothing to be done
     op.schema() = op.child(0)->schema();
 }
 
-void SchemaMinimizer::operator()(Const<FilterOperator> &op)
+void SchemaMinimizer::operator()(FilterOperator &op)
 {
-    required |= op.filter().get_required(); // add what's required to evaluate the filter predicate
+    op.schema() = required;
+    auto required_by_op = op.filter().get_required(); // add what's required to evaluate the filter predicate
+    required |= required_by_op; // add what's required to evaluate the filter predicate
     (*this)(*op.child(0));
-    op.schema() = op.child(0)->schema();
 }
 
-void SchemaMinimizer::operator()(Const<JoinOperator> &op)
+void SchemaMinimizer::operator()(JoinOperator &op)
 {
-    auto ours = required | op.predicate().get_required(); // what we need and all operators above us
-    op.schema() = Schema();
+    op.schema() = required;
+    auto required_from_below = required | op.predicate().get_required(); // what we need and all operators above us
     for (auto c : const_cast<const JoinOperator&>(op).children()) {
-        required = ours & c->schema(); // what we need from this child
+        required = required_from_below & c->schema(); // what we need from this child
         (*this)(*c);
-        op.schema() += c->schema(); // add what is produced by the child to the schema of the join
     }
 }
 
-void SchemaMinimizer::operator()(Const<ProjectionOperator> &op)
+void SchemaMinimizer::operator()(ProjectionOperator &op)
 {
-    // FIXME simply adding all projections is not correct for *nested* projection operators
-    required = Schema();
-    for (auto &p : op.projections())
-        required |= p.first.get().get_required();
+    Schema required_by_op;
+    Schema ours;
+
+    std::size_t pos_out = 0;
+    for (std::size_t pos_in = 0; pos_in != op.projections().size(); ++pos_in) {
+        M_insist(pos_out <= pos_in);
+        auto &proj = op.projections()[pos_in];
+        auto &e = op.schema()[pos_in];
+
+        if (is_top_of_plan_ or required.has(e.id)) {
+            required_by_op |= proj.first.get().get_required();
+            op.projections()[pos_out++] = std::move(op.projections()[pos_in]);
+            ours.add(e);
+        }
+    }
+    M_insist(pos_out <= op.projections().size());
+    const auto &dummy = op.projections()[0];
+    op.projections().resize(pos_out, dummy);
+
+    op.schema() = std::move(ours);
+    required = std::move(required_by_op);
+    is_top_of_plan_ = false;
     if (not const_cast<const ProjectionOperator&>(op).children().empty())
         (*this)(*op.child(0));
 }
 
-void SchemaMinimizer::operator()(Const<LimitOperator> &op)
+void SchemaMinimizer::operator()(LimitOperator &op)
 {
     (*this)(*op.child(0));
     op.schema() = op.child(0)->schema();
 }
 
-void SchemaMinimizer::operator()(Const<GroupingOperator> &op)
+void SchemaMinimizer::operator()(GroupingOperator &op)
 {
-    required = Schema(); // the GroupingOperator doesn't care what later operators require
-    for (auto &[grp, _] : op.group_by())
-        required |= grp.get().get_required();
-    for (auto &Agg : op.aggregates()) // TODO drop aggregates not required
-        required |= Agg.get().get_required();
+    Catalog &C = Catalog::Get();
+
+    Schema ours;
+    Schema required_by_us;
+
+    auto it = op.schema().cbegin();
+    for (auto &[grp, _] : op.group_by()) {
+        required_by_us |= grp.get().get_required();
+        ours.add(*it++); // copy grouping keys
+    }
+
+    if (not op.aggregates().empty()) {
+        std::ostringstream oss;
+        std::size_t pos_out = 0;
+        for (std::size_t pos_in = 0; pos_in != op.aggregates().size(); ++pos_in) {
+            M_insist(pos_out <= pos_in);
+            auto &agg = op.aggregates()[pos_in];
+
+            oss.str("");
+            oss << agg.get();
+            Schema::Identifier agg_id(C.pool(oss.str()));
+
+            if (is_top_of_plan_ or required.has(agg_id)) { // if first, require everything
+                for (auto &arg : agg.get().args)
+                    required_by_us |= arg->get_required();
+                op.aggregates()[pos_out++] = std::move(op.aggregates()[pos_in]); // keep aggregate
+                ours.add(op.schema()[agg_id].second);
+            }
+        }
+        M_insist(pos_out <= op.aggregates().size());
+        const ast::FnApplicationExpr &dummy = op.aggregates()[0].get();
+        op.aggregates().resize(pos_out, dummy); // discard unrequired aggregates
+    }
+
+    op.schema() = std::move(ours);
+    required = std::move(required_by_us);
+    is_top_of_plan_ = false;
     (*this)(*op.child(0));
-    /* Schema of grouping operator does not change. */
 }
 
-void SchemaMinimizer::operator()(Const<AggregationOperator> &op)
+void SchemaMinimizer::operator()(AggregationOperator &op)
 {
-    required = Schema(); // the AggregationOperator doesn't care what later operators require
-    for (auto &agg : op.aggregates())
-        required |= agg.get().get_required();
+    M_insist(not op.aggregates().empty());
+    Catalog &C = Catalog::Get();
+    std::ostringstream oss;
+
+    Schema required_by_op; // the AggregationOperator doesn't care what later operators require
+    Schema ours;
+
+    std::size_t pos_out = 0;
+    for (std::size_t pos_in = 0; pos_in != op.aggregates().size(); ++pos_in) {
+        M_insist(pos_out <= pos_in);
+        auto &agg = op.aggregates()[pos_in];
+
+        oss.str("");
+        oss << agg.get();
+        Schema::Identifier agg_id(C.pool(oss.str()));
+
+        if (is_top_of_plan_ or required.has(agg_id)) { // if first, require everything
+            for (auto &arg : agg.get().args)
+                required_by_op |= arg->get_required();
+            op.aggregates()[pos_out++] = std::move(op.aggregates()[pos_in]); // keep aggregate
+            ours.add(op.schema()[agg_id].second);
+        }
+    }
+    M_insist(pos_out <= op.aggregates().size());
+    const ast::FnApplicationExpr &dummy = op.aggregates()[0].get();
+    op.aggregates().resize(pos_out, dummy); // discard unrequired aggregates
+
+    op.schema() = std::move(ours);
+    required = std::move(required_by_op);
+    is_top_of_plan_ = false;
     (*this)(*op.child(0));
-    /* Schema of AggregationOperator does not change. */
 }
 
-void SchemaMinimizer::operator()(Const<SortingOperator> &op)
+void SchemaMinimizer::operator()(SortingOperator &op)
 {
-    for (auto &Ord : op.order_by())
-        required |= Ord.first.get().get_required();
+    if (is_top_of_plan_) {
+        required = op.schema(); // require everything
+        is_top_of_plan_ = false;
+    } else {
+        Schema required_by_op;
+        for (auto &ord : op.order_by())
+            required_by_op |= ord.first.get().get_required(); // we require *all* expressions to order by
+        M_insist(required == (required & op.schema()), "required must be subset of operator schema");
+        op.schema() = required; // set schema to what is required above
+        required |= required_by_op; // add what we require to compute the order
+    }
     (*this)(*op.child(0));
-    op.schema() = op.child(0)->schema();
 }
 
 void Operator::minimize_schema()

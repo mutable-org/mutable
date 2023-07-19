@@ -165,8 +165,11 @@ Optimizer::optimize_with_plantable(const QueryGraph &G) const
     auto &DB = C.get_database_in_use();
     auto &CE = DB.cardinality_estimator();
 
-    if (num_sources == 0)
+    if (num_sources == 0) {
+        plan_table.get_final().cost = 0; // no sources → no cost
+        plan_table.get_final().model = CE.empty_model(); // XXX: should rather be 1 (single tuple) than empty
         return { std::make_unique<ProjectionOperator>(G.projections()), std::move(plan_table) };
+    }
 
     /*----- Initialize plan table and compute plans for data sources. ------------------------------------------------*/
     Producer **source_plans = new Producer*[num_sources];

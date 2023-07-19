@@ -8,24 +8,9 @@ SELECT
         o_orderdate,
         o_shippriority
 FROM
-        --  Customer, -- 150 ms
-        --  Lineitem,
-        --  Orders
-        Customer, -- 146 ms
+        Customer,
         Orders,
         Lineitem
-        --  Orders, -- 200 ms
-        --  Lineitem,
-        --  Customer
-        --  Orders, -- 181 ms
-        --  Customer,
-        --  Lineitem
-        --  Lineitem, -- 500 ms
-        --  Orders,
-        --  Customer
-        --  Lineitem, -- 451 ms
-        --  Customer,
-        --  Orders
 WHERE
         c_mktsegment = "BUILDING"
         AND c_custkey = o_custkey

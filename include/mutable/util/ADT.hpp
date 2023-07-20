@@ -365,7 +365,7 @@ struct dyn_array
 /** Implements a doubly-linked list with an overhead of just a single pointer per element. */
 template<
     typename T,
-    typename Allocator = malloc_allocator
+    is_allocator Allocator = malloc_allocator
 >
 struct doubly_linked_list
 {
@@ -459,7 +459,7 @@ struct doubly_linked_list
     /*----- Constructors & Destructor --------------------------------------------------------------------------------*/
     doubly_linked_list() : doubly_linked_list(allocator_type()) { }
 
-    template<typename A = allocator_type>
+    template<is_allocator A = allocator_type>
     explicit doubly_linked_list(A &&allocator)
         : allocator_(std::forward<A>(allocator))
     { }

@@ -1,10 +1,17 @@
 #pragma once
 
 #include <cstdint>
+#include <memory>
 #include <type_traits>
 
 
 namespace m {
+
+template <typename T>
+concept is_allocator = requires (T t, size_t size, size_t alignment, void *ptr) {
+    { t.allocate(size, alignment) } -> std::same_as<void*>;
+    { t.deallocate(ptr, size) } -> std::same_as<void>;
+};
 
 template<typename Actual>
 struct allocator

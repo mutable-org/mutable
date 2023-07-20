@@ -592,10 +592,11 @@ TEST_CASE("doubly_linked_list", "[core][util]")
 
         SECTION("copy c'tor")
         {
-            const dlint L1(vec.begin(), vec.end());
+            dlint L1(vec.begin(), vec.end());
+            dlint& L1_ref = L1;
 
             dlint L2(L1);
-            dlint L3 = dlint(L1);
+            dlint L3 = dlint(L1_ref);
 
             CHECK_LIST(L1, { 42, 13, 73 });
             CHECK_LIST(L2, { 42, 13, 73 });
@@ -617,7 +618,7 @@ TEST_CASE("doubly_linked_list", "[core][util]")
 
         SECTION("= operator")
         {
-            const dlint L1(vec.begin(), vec.end());
+            dlint L1(vec.begin(), vec.end());
             dlint L2;
 
             L2 = dlint(L1);

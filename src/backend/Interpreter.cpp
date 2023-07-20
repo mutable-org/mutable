@@ -845,15 +845,15 @@ struct SortingData : OperatorData
 
 struct FilterData : OperatorData
 {
-    std::optional<StackMachine> filter;
+    StackMachine filter;
     Tuple res;
 
-    FilterData() : res({ Type::Get_Boolean(Type::TY_Vector) }) { }
-
-    void emit_filter(const FilterOperator &op, const Schema &pipeline_schema) {
-        filter.emplace(pipeline_schema);
-        filter->emit(op.filter(), 1);
-        filter->emit_St_Tup_b(0, 0);
+    FilterData(const FilterOperator &op, const Schema &pipeline_schema)
+        : filter(pipeline_schema)
+        , res({ Type::Get_Boolean(Type::TY_Vector) })
+    {
+        filter.emit(op.filter(), 1);
+        filter.emit_St_Tup_b(0, 0);
     }
 };
 
@@ -922,13 +922,13 @@ void Pipeline::operator()(const NoOpOperator &op)
 
 void Pipeline::operator()(const FilterOperator &op)
 {
-    auto data = as<FilterData>(op.data());
-    if (not data->filter)
-        data->emit_filter(op, this->schema());
+    if (not op.data())
+        op.data(new FilterData(op, this->schema()));
 
+    auto data = as<FilterData>(op.data());
     for (auto it = block_.begin(); it != block_.end(); ++it) {
         Tuple *args[] = { &data->res, &*it };
-        (*data->filter)(args);
+        data->filter(args);
         if (data->res.is_null(0) or not data->res[0].as_b()) block_.erase(it);
     }
     if (not block_.empty())
@@ -1383,8 +1383,6 @@ void Interpreter::operator()(const ScanOperator &op)
 
 void Interpreter::operator()(const FilterOperator &op)
 {
-    auto data = new FilterData();
-    op.data(data);
     op.child(0)->accept(*this);
 }
 

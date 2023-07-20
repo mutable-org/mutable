@@ -1395,6 +1395,8 @@ void Interpreter::operator()(const JoinOperator &op)
         if (auto scan = cast<ScanOperator>(op.child(0))) /// XXX: hack for pre-allocation
             data->ht.resize(scan->store().num_rows());
         op.child(0)->accept(*this); // build HT on LHS
+        if (data->ht.size() == 0) // no tuples produced
+            return;
         data->is_probe_phase = true;
         op.child(1)->accept(*this); // probe HT with RHS
     } else {
@@ -1405,6 +1407,8 @@ void Interpreter::operator()(const JoinOperator &op)
             data->active_child = i;
             auto c = op.child(i);
             c->accept(*this);
+            if (i != op.children().size() - 1 and data->buffers[i].empty()) // no tuples produced
+                return;
         }
     }
 }
@@ -1522,7 +1526,10 @@ void Interpreter::operator()(const AggregationOperator &op)
 void Interpreter::operator()(const SortingOperator &op)
 {
     op.child(0)->accept(*this);
+
     auto data = as<SortingData>(op.data());
+    if (not data) // no tuples produced
+        return;
 
     const auto &orderings = op.order_by();
 

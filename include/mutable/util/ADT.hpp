@@ -612,8 +612,6 @@ struct doubly_linked_list
 
     void clear() { while (head_) pop_front(); M_insist(size_ == 0); }
 
-    void swap(doubly_linked_list &other) { swap(*this, other); }
-
     /*----- Operations -----------------------------------------------------------------------------------------------*/
     void reverse() { std::swap(head_, tail_); }
 

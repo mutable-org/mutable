@@ -23,7 +23,7 @@ using namespace m::ast;
 struct WeighExpr
 {
     private:
-    unsigned weight_;
+    unsigned weight_ = 0;
 
     public:
     operator unsigned() const { return weight_; }
@@ -50,8 +50,7 @@ struct WeighExpr
             [this](const Constant &e) {
                 if (auto cs = cast<const CharacterSequence>(e.type()))
                     weight_ += cs->length;
-                else
-                    weight_ += 1;
+                // fixed-size constants are considered free, as they may be encoded as immediate constants in the instr
             },
             [this](const FnApplicationExpr&) {
                 weight_ += 1;
@@ -61,14 +60,6 @@ struct WeighExpr
             [this](const QueryExpr&) { weight_ += 1000; } // XXX: this should never happen because of unnesting
         }, e, tag<ConstPreOrderExprVisitor>{});
     }
-
-#if 0
-    void operator()(const UnaryExpr &e) { weight_ += 1; (*this)(*e.expr); }
-
-    void operator()(const BinaryExpr &e) { weight_ += 1; (*this)(*e.lhs); (*this)(*e.rhs); }
-
-    void operator()(const QueryExpr&) { weight_ += 1000; }
-#endif
 };
 
 std::vector<cnf::CNF> optimize_filter(cnf::CNF filter)
@@ -227,9 +218,15 @@ Optimizer::optimize_with_plantable(const QueryGraph &G) const
 
             /* Construct a plan as a sequence of filters. */
             for (auto &&filter : filters) {
-                auto tmp = std::make_unique<FilterOperator>(filter);
-                tmp->add_child(filtered_ds);
-                filtered_ds = tmp.release();
+                if (filter.size() == 1 and filter[0].size() > 1) { // disjunctive filter
+                    auto tmp = std::make_unique<DisjunctiveFilterOperator>(std::move(filter));
+                    tmp->add_child(filtered_ds);
+                    filtered_ds = tmp.release();
+                } else {
+                    auto tmp = std::make_unique<FilterOperator>(std::move(filter));
+                    tmp->add_child(filtered_ds);
+                    filtered_ds = tmp.release();
+                }
             }
 
             source_plans[ds->id()] = filtered_ds;

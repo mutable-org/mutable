@@ -104,7 +104,7 @@ struct StateManager
     static constexpr bool has_beam_queue = HasBeamQueue;
 
     static constexpr bool detect_duplicates = true;
-    static constexpr bool enable_cost_based_pruning = true;
+    static constexpr bool enable_cost_based_pruning = Config::PerformCostBasedPruning;
 
     private:
     ///> type for a pointer to an entry in the map of states

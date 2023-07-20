@@ -2503,7 +2503,7 @@ struct Fibonacci_heap
     using compare = boost::heap::compare<Cmp>;
 
     template<typename T, typename... Options>
-    using heap_type = boost::heap::binomial_heap<T, Options...>;
+    using heap_type = boost::heap::fibonacci_heap<T, Options...>;
 
     template<typename T>
     using allocator_type = boost::container::node_allocator<T>;
@@ -2533,6 +2533,12 @@ struct monotone
     static constexpr bool IsMonotone = B;
 };
 
+template<bool B>
+struct cost_based_pruning
+{
+    static constexpr bool PerformCostBasedPruning = B;
+};
+
 /** Combines multiple configuration parameters into a single configuration type. */
 template<typename T, typename... Ts>
 struct combine : T, combine<Ts...> { };
@@ -2549,10 +2555,12 @@ struct combine<T> : T { };
     template<typename State, typename Expand, typename Heuristic, typename... Context> \
     using NAME = ai::genericAStar<State, Expand, Heuristic, combine<__VA_ARGS__>, Context...>
 
-DEFINE_SEARCH(AStar,                monotone<true>, Fibonacci_heap, weight<1>, lazy<false>, beam<0>);
-DEFINE_SEARCH(lazyAStar,            monotone<true>, Fibonacci_heap, weight<1>, lazy<true>,  beam<0>);
-DEFINE_SEARCH(beam_search,          monotone<true>, Fibonacci_heap, weight<1>, lazy<false>, beam<2>);
-DEFINE_SEARCH(dynamic_beam_search,  monotone<true>, Fibonacci_heap, weight<1>, lazy<false>, beam<1, 5>);
+DEFINE_SEARCH(AStar,                monotone<true>, Fibonacci_heap, weight<1>, lazy<false>, cost_based_pruning<false>, beam<0>);
+DEFINE_SEARCH(lazyAStar,            monotone<true>, Fibonacci_heap, weight<1>, lazy<true>, cost_based_pruning<false>,  beam<0>);
+DEFINE_SEARCH(beam_search,          monotone<true>, Fibonacci_heap, weight<1>, lazy<false>, cost_based_pruning<false>, beam<2>);
+DEFINE_SEARCH(dynamic_beam_search,  monotone<true>, Fibonacci_heap, weight<1>, lazy<false>, cost_based_pruning<false>, beam<1, 5>);
+DEFINE_SEARCH(AStar_with_cbp,       monotone<true>, Fibonacci_heap, weight<1>, lazy<false>, cost_based_pruning<true>,  beam<0>);
+DEFINE_SEARCH(beam_search_with_cbp, monotone<true>, Fibonacci_heap, weight<1>, lazy<false>, cost_based_pruning<true>,  beam<2>);
 
 #undef DEFINE_SEARCH
 
@@ -2665,7 +2673,9 @@ struct HeuristicSearch final : PlanEnumeratorCRTP<HeuristicSearch>
         // bottom-up
         //   zero
         HEURISTIC_SEARCH(   SubproblemsArray,   BottomUpComplete,   zero,                           AStar                           )
+        HEURISTIC_SEARCH(   SubproblemsArray,   BottomUpComplete,   zero,                           AStar_with_cbp                  )
         HEURISTIC_SEARCH(   SubproblemsArray,   BottomUpComplete,   zero,                           beam_search            )
+        HEURISTIC_SEARCH(   SubproblemsArray,   BottomUpComplete,   zero,                           beam_search_with_cbp   )
         HEURISTIC_SEARCH(   SubproblemsArray,   BottomUpComplete,   zero,                           dynamic_beam_search    )
 
         //   sum
@@ -2697,12 +2707,14 @@ struct HeuristicSearch final : PlanEnumeratorCRTP<HeuristicSearch>
         // top-down
         //   zero
         HEURISTIC_SEARCH(   SubproblemsArray,   TopDownComplete,    zero,                           AStar                           )
+        HEURISTIC_SEARCH(   SubproblemsArray,   TopDownComplete,    zero,                           AStar_with_cbp                  )
 
         //   sqrt_sum
         HEURISTIC_SEARCH(   SubproblemsArray,   TopDownComplete,    sqrt_sum,                       AStar                           )
 
         //   sum
         HEURISTIC_SEARCH(   SubproblemsArray,   TopDownComplete,    sum,                            AStar                           )
+        HEURISTIC_SEARCH(   SubproblemsArray,   TopDownComplete,    sum,                            AStar_with_cbp                  )
 
         //    GOO
         HEURISTIC_SEARCH(   SubproblemsArray,   TopDownComplete,    GOO,                            AStar                           )

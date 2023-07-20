@@ -1,7 +1,8 @@
 #include "catch2/catch.hpp"
 
 #include <mutable/util/ADT.hpp>
-
+#include <utility>
+#include <vector>
 
 using namespace m;
 
@@ -231,8 +232,9 @@ TEST_CASE("doubly_linked_list", "[core][util]")
         /* Forward iteration. */
         {
             auto list_it = L.cbegin();
-            for (auto value_it = begin(values); value_it != end(values); ++value_it, ++list_it) {
+            for (auto value_it = begin(values); value_it != end(values); ++value_it, list_it++) {
                 REQUIRE(list_it != L.cend());
+                CAPTURE(*list_it);
                 CHECK(*list_it == *value_it);
             }
             CHECK(list_it == L.cend());
@@ -243,6 +245,7 @@ TEST_CASE("doubly_linked_list", "[core][util]")
             auto list_rit = L.crbegin();
             for (auto value_it = rbegin(values); value_it != rend(values); ++value_it, ++list_rit) {
                 REQUIRE(list_rit != L.crend());
+                CAPTURE(*list_rit);
                 CHECK(*list_rit == *value_it);
             }
             CHECK(list_rit == L.crend());
@@ -314,7 +317,7 @@ TEST_CASE("doubly_linked_list", "[core][util]")
         }
     }
 
-    SECTION("emplace_front")
+    SECTION("push_front/emplace_front")
     {
         {
             auto &ref = L.emplace_front(42);
@@ -326,6 +329,9 @@ TEST_CASE("doubly_linked_list", "[core][util]")
             CHECK_LIST(L, { 42 });
         }
 
+        L.clear();
+        L.push_front(42);
+
         {
             auto &ref = L.emplace_front(13);
             REQUIRE_FALSE(L.empty());
@@ -336,13 +342,18 @@ TEST_CASE("doubly_linked_list", "[core][util]")
             CHECK_LIST(L, { 13, 42 });
         }
 
+        L.clear();
+        L.push_front(42);
+        L.push_front(13);
+        const auto &L_ref = L;
+
         {
             auto &ref = L.emplace_front(73);
             REQUIRE_FALSE(L.empty());
             REQUIRE(L.size() == 3);
             CHECK(ref == 73);
-            CHECK(L.front() == 73);
-            CHECK(L.back() == 42);
+            CHECK(L_ref.front() == 73);
+            CHECK(L_ref.back() == 42);
             CHECK_LIST(L, { 73, 13, 42 });
         }
     }
@@ -445,13 +456,6 @@ TEST_CASE("doubly_linked_list", "[core][util]")
         // decltype(L)::iterator ncit = cit; // illegal conversion
     }
 
-    SECTION("range c'tor")
-    {
-        const std::vector<int> vec{{ 42, 13, 73 }};
-        doubly_linked_list<int> L(vec.begin(), vec.end());
-        CHECK_LIST(L, { 42, 13, 73 });
-    }
-
     SECTION("clear")
     {
         L.push_back(42);
@@ -517,6 +521,8 @@ TEST_CASE("doubly_linked_list", "[core][util]")
             --ref;
             CHECK(*ref == 13);
             CHECK_LIST(L, { 42, 13 });
+            CHECK(*ref-- == 13);
+            CHECK(*ref.operator->() == 42);
         }
     }
 
@@ -571,5 +577,62 @@ TEST_CASE("doubly_linked_list", "[core][util]")
         L.push_back(73);
         L.reverse();
         CHECK_LIST(L, { 73, 13, 42 });
+    }
+
+    SECTION("Constructor / Assignemnt")
+    {
+        using dlint = doubly_linked_list<int>;
+        const std::vector<int> vec { { 42, 13, 73 } };
+
+        SECTION("range c'tor")
+        {
+            dlint L(vec.begin(), vec.end());
+            CHECK_LIST(L, { 42, 13, 73 });
+        }
+
+        SECTION("copy c'tor")
+        {
+            const dlint L1(vec.begin(), vec.end());
+
+            dlint L2(L1);
+            dlint L3 = dlint(L1);
+
+            CHECK_LIST(L1, { 42, 13, 73 });
+            CHECK_LIST(L2, { 42, 13, 73 });
+            CHECK_LIST(L3, { 42, 13, 73 });
+        }
+
+        SECTION("move c'tor")
+        {
+            dlint L1(vec.begin(), vec.end());
+
+            dlint L2(std::move(L1));
+            CHECK_LIST(L2, { 42, 13, 73 });
+            CHECK(L1.empty());
+
+            dlint L3 = std::move(L2);
+            CHECK_LIST(L3, { 42, 13, 73 });
+            CHECK(L2.empty());
+        }
+
+        SECTION("= operator")
+        {
+            const dlint L1(vec.begin(), vec.end());
+            dlint L2;
+
+            L2 = dlint(L1);
+            CHECK_LIST(L1, { 42, 13, 73 });
+            CHECK_LIST(L2, { 42, 13, 73 });
+        }
+
+        SECTION("move assginment")
+        {
+            dlint L1(vec.begin(), vec.end());
+            dlint L2;
+
+            L2 = std::move(L1);
+            CHECK_LIST(L2, { 42, 13, 73 });
+            CHECK(L1.empty());
+        }
     }
 }

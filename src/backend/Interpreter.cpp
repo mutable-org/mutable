@@ -1392,8 +1392,8 @@ void Interpreter::operator()(const JoinOperator &op)
         /* Perform simple hash join. */
         auto data = new SimpleHashJoinData(op);
         op.data(data);
-        if (auto scan = cast<ScanOperator>(op.child(0))) /// XXX: hack for pre-allocation
-            data->ht.resize(scan->store().num_rows());
+        if (op.has_info())
+            data->ht.resize(op.info().estimated_cardinality);
         op.child(0)->accept(*this); // build HT on LHS
         if (data->ht.size() == 0) // no tuples produced
             return;

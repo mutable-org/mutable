@@ -602,10 +602,12 @@ void HashBasedGrouping::execute(const Match<HashBasedGrouping> &M, setup_t setup
 
     /*----- Compute hash table schema and information about aggregates, especially AVG aggregates. -----*/
     Schema ht_schema;
+    /* Add key(s). */
     for (std::size_t i = 0; i < num_keys; ++i) {
         auto &e = M.grouping.schema()[i];
         ht_schema.add(e.id, e.type, e.constraints);
     }
+    /* Add payload. */
     auto p = compute_aggregate_info(M.grouping.aggregates(), M.grouping.schema(), num_keys);
     const auto &aggregates = p.first;
     const auto &avg_aggregates = p.second;
@@ -2739,12 +2741,13 @@ void SimpleHashJoin<UniqueBuild, Predicated>::execute(const Match<SimpleHashJoin
     constexpr uint64_t PAYLOAD_SIZE_THRESHOLD_IN_BITS = std::numeric_limits<uint64_t>::infinity();
     constexpr double HIGH_WATERMARK = 0.7;
 
-    const auto ht_schema = M.build.schema().drop_constants().deduplicate();
+    M_insist(((M.join.schema() | M.join.predicate().get_required()) & M.build.schema()) == M.build.schema());
+    M_insist(M.build.schema().drop_constants() == M.build.schema());
+    const auto ht_schema = M.build.schema().deduplicate();
 
     /*----- Decompose each clause of the join predicate of the form `A.x = B.y` into parts `A.x` and `B.y`. -----*/
     auto p = decompose_equi_predicate(M.join.predicate(), ht_schema);
-    const auto &build_keys = p.first;
-    const auto &probe_keys = p.second;
+    const std::vector<Schema::Identifier> &build_keys = p.first, &probe_keys = p.second;
 
     /*----- Compute payload IDs and its total size in bits (ignoring padding). -----*/
     std::vector<Schema::Identifier> payload_ids;

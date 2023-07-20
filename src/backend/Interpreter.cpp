@@ -8,6 +8,7 @@
 #include <mutable/Options.hpp>
 #include <mutable/parse/AST.hpp>
 #include <mutable/util/fn.hpp>
+#include <numeric>
 #include <type_traits>
 
 
@@ -572,18 +573,20 @@ struct NoOpData : OperatorData
 struct ProjectionData : OperatorData
 {
     Pipeline pipeline;
-    StackMachine projections;
+    std::optional<StackMachine> projections;
     Tuple res;
 
     ProjectionData(const ProjectionOperator &op)
         : pipeline(op.schema())
-        , projections(op.children().size() ? StackMachine(op.child(0)->schema()) : StackMachine(Schema()))
         , res(op.schema())
-    {
+    { }
+
+    void emit_projections(const Schema &pipeline_schema, const ProjectionOperator &op) {
+        projections.emplace(pipeline_schema);
         std::size_t out_idx = 0;
         for (auto &p : op.projections()) {
-            projections.emit(p.first.get(), 1);
-            projections.emit_St_Tup(0, out_idx++, p.first.get().type());
+            projections->emit(p.first.get(), 1);
+            projections->emit_St_Tup(0, out_idx++, p.first.get().type());
         }
     }
 };
@@ -591,27 +594,38 @@ struct ProjectionData : OperatorData
 struct JoinData : OperatorData
 {
     Pipeline pipeline;
+    std::vector<StackMachine> load_attrs;
+
     JoinData(const JoinOperator &op) : pipeline(op.schema()) { }
+
+    void emit_load_attrs(const Schema &in_schema) {
+        auto &SM = load_attrs.emplace_back();
+        for (std::size_t schema_idx = 0; schema_idx != in_schema.num_entries(); ++schema_idx) {
+            auto &e = in_schema[schema_idx];
+            auto it = pipeline.schema().find(e.id);
+            if (it != pipeline.schema().end()) { // attribute is needed
+                SM.emit_Ld_Tup(1, schema_idx);
+                SM.emit_St_Tup(0, std::distance(pipeline.schema().begin(), it), e.type);
+            }
+        }
+    }
 };
 
 struct NestedLoopsJoinData : JoinData
 {
     using buffer_type = std::vector<Tuple>;
 
-    StackMachine predicate;
-    buffer_type *buffers;
+    StackMachine predicate; ///< evaluated the predicate to a bool
+    std::vector<Schema> buffer_schemas; ///< schema of each buffer
+    buffer_type *buffers; ///< tuple buffer per child
     std::size_t active_child;
     Tuple res;
 
     NestedLoopsJoinData(const JoinOperator &op)
         : JoinData(op)
-        , predicate(op.schema())
-        , buffers(new buffer_type[op.children().size()])
+        , buffers(new buffer_type[op.children().size() - 1])
         , res({ Type::Get_Boolean(Type::TY_Vector) })
-    {
-        predicate.emit(op.predicate(), 1);
-        predicate.emit_St_Tup(0, 0, Type::Get_Boolean(Type::TY_Vector));
-    }
+    { }
 
     ~NestedLoopsJoinData() { delete[] buffers; }
 };
@@ -619,6 +633,7 @@ struct NestedLoopsJoinData : JoinData
 struct SimpleHashJoinData : JoinData
 {
     bool is_probe_phase = false; ///< determines whether tuples are used to *build* or *probe* the hash table
+    std::vector<std::pair<const ast::Expr*, const ast::Expr*>> exprs;
     StackMachine build_key; ///< extracts the key of the build input
     StackMachine probe_key; ///< extracts the key of the probe input
     RefCountingHashMap<Tuple, Tuple> ht; ///< hash table on build input
@@ -628,8 +643,6 @@ struct SimpleHashJoinData : JoinData
 
     SimpleHashJoinData(const JoinOperator &op)
         : JoinData(op)
-        , build_key(op.child(0)->schema())
-        , probe_key(op.child(1)->schema())
         , ht(1024)
     {
         auto &schema_lhs = op.child(0)->schema();
@@ -639,7 +652,6 @@ struct SimpleHashJoinData : JoinData
 
         /* Decompose each join predicate of the form `A.x = B.y` into parts `A.x` and `B.y` and build the schema of the
          * join key. */
-        unsigned key_idx = 0;
         auto &pred = op.predicate();
         for (auto &clause : pred) {
             M_insist(clause.size() == 1, "invalid predicate for simple hash join");
@@ -665,26 +677,34 @@ struct SimpleHashJoinData : JoinData
 #ifndef NDEBUG
                 M_insist((required_by_second & schema_rhs).num_entries() != 0, "second must belong to RHS");
 #endif
-                /* First belongs to LHS, the build relation. */
-                build_key.emit(*first, 1);
-                build_key.emit_St_Tup(0, key_idx, first->type());
-                probe_key.emit(*second, 1);
-                probe_key.emit_St_Tup(0, key_idx, second->type());
+                exprs.emplace_back(first, second);
             } else {
 #ifndef NDEBUG
                 M_insist((required_by_first & schema_rhs).num_entries() != 0, "first must belong to RHS");
                 M_insist((required_by_second & schema_lhs).num_entries() != 0, "second must belong to LHS");
 #endif
-                build_key.emit(*second, 1);
-                build_key.emit_St_Tup(0, key_idx, second->type());
-                probe_key.emit(*first, 1);
-                probe_key.emit_St_Tup(0, key_idx, first->type());
+                exprs.emplace_back(second, first);
             }
-            ++key_idx;
         }
 
         /* Create the tuple holding a key. */
         key = Tuple(key_schema);
+    }
+
+    void load_build_key(const Schema &pipeline_schema) {
+        for (std::size_t i = 0; i != exprs.size(); ++i) {
+            const ast::Expr *expr = exprs[i].first;
+            build_key.emit(*expr, pipeline_schema, 1); // compile expr
+            build_key.emit_St_Tup(0, i, expr->type()); // write result to index i
+        }
+    }
+
+    void load_probe_key(const Schema &pipeline_schema) {
+        for (std::size_t i = 0; i != exprs.size(); ++i) {
+            const ast::Expr *expr = exprs[i].second;
+            probe_key.emit(*expr, pipeline_schema, 1); // compile expr
+            probe_key.emit_St_Tup(0, i, expr->type()); // write result to index i
+        }
     }
 };
 
@@ -819,20 +839,21 @@ struct SortingData : OperatorData
 {
     Pipeline pipeline;
     std::vector<Tuple> buffer;
-    SortingData(const SortingOperator &op) : pipeline(op.schema()) { }
+
+    SortingData(Schema buffer_schema) : pipeline(std::move(buffer_schema)) { }
 };
 
 struct FilterData : OperatorData
 {
-    StackMachine filter;
+    std::optional<StackMachine> filter;
     Tuple res;
 
-    FilterData(const FilterOperator &op)
-        : filter(op.child(0)->schema())
-        , res({ Type::Get_Boolean(Type::TY_Vector) })
-    {
-        filter.emit(op.filter(), 1);
-        filter.emit_St_Tup_b(0, 0);
+    FilterData() : res({ Type::Get_Boolean(Type::TY_Vector) }) { }
+
+    void emit_filter(const FilterOperator &op, const Schema &pipeline_schema) {
+        filter.emplace(pipeline_schema);
+        filter->emit(op.filter(), 1);
+        filter->emit_St_Tup_b(0, 0);
     }
 };
 
@@ -902,9 +923,12 @@ void Pipeline::operator()(const NoOpOperator &op)
 void Pipeline::operator()(const FilterOperator &op)
 {
     auto data = as<FilterData>(op.data());
+    if (not data->filter)
+        data->emit_filter(op, this->schema());
+
     for (auto it = block_.begin(); it != block_.end(); ++it) {
         Tuple *args[] = { &data->res, &*it };
-        data->filter(args);
+        (*data->filter)(args);
         if (data->res.is_null(0) or not data->res[0].as_b()) block_.erase(it);
     }
     if (not block_.empty())
@@ -913,28 +937,35 @@ void Pipeline::operator()(const FilterOperator &op)
 
 void Pipeline::operator()(const JoinOperator &op)
 {
-    if (op.predicate().is_equi()) {
+    if (is<SimpleHashJoinData>(op.data())) {
         /* Perform simple hash join. */
         auto data = as<SimpleHashJoinData>(op.data());
         Tuple *args[2] = { &data->key, nullptr };
         if (data->is_probe_phase) {
-            const auto &tuple_schema = op.child(1)->schema();
-            const auto num_entries_build = op.child(0)->schema().num_entries();
-            const auto num_entries_probe = tuple_schema.num_entries();
+            if (data->load_attrs.size() != 2) {
+                data->load_probe_key(this->schema());
+                data->emit_load_attrs(this->schema());
+            }
             auto &pipeline = data->pipeline;
             std::size_t i = 0;
             for (auto &t : block_) {
                 args[1] = &t;
                 data->probe_key(args);
                 pipeline.block_.fill();
-                data->ht.for_all(*args[0], [&](const std::pair<const Tuple, Tuple> &v) {
+                data->ht.for_all(*args[0], [&](std::pair<const Tuple, Tuple> &v) {
                     if (i == pipeline.block_.capacity()) {
                         pipeline.push(*op.parent());
                         i = 0;
                     }
 
-                    pipeline.block_[i].insert(v.second, 0, num_entries_build);
-                    pipeline.block_[i].insert(t, num_entries_build, num_entries_probe);
+                    {
+                        Tuple *load_args[2] = { &pipeline.block_[i], &v.second };
+                        data->load_attrs[0](load_args); // load build attrs
+                    }
+                    {
+                        Tuple *load_args[2] = { &pipeline.block_[i], &t };
+                        data->load_attrs[1](load_args); // load probe attrs
+                    }
                     ++i;
                 });
             }
@@ -945,6 +976,10 @@ void Pipeline::operator()(const JoinOperator &op)
                 pipeline.push(*op.parent());
             }
         } else {
+            if (data->load_attrs.size() != 1) {
+                data->load_build_key(this->schema());
+                data->emit_load_attrs(this->schema());
+            }
             const auto &tuple_schema = op.child(0)->schema();
             for (auto &t : block_) {
                 args[1] = &t;
@@ -956,6 +991,8 @@ void Pipeline::operator()(const JoinOperator &op)
         /* Perform nested-loops join. */
         auto data = as<NestedLoopsJoinData>(op.data());
         auto size = op.children().size();
+        std::vector<Tuple*> predicate_args(size + 1, nullptr);
+        predicate_args[0] = &data->res;
 
         if (data->active_child == size - 1) {
             /* This is the right-most child.  Combine its produced tuple with all combinations of the buffered
@@ -964,36 +1001,56 @@ void Pipeline::operator()(const JoinOperator &op)
             std::size_t child_id = 0; // cursor to the child that provides the next part of the joined tuple
             auto &pipeline = data->pipeline;
 
+            /* Compile loading data from current child. */
+            if (data->buffer_schemas.size() != size) {
+                M_insist(data->buffer_schemas.size() == size - 1);
+                M_insist(data->load_attrs.size() == size - 1);
+                data->emit_load_attrs(this->schema());
+                data->buffer_schemas.emplace_back(this->schema()); // save the schema of the current pipeline
+                if (op.predicate().size()) {
+                    std::vector<std::size_t> tuple_ids(size);
+                    std::iota(tuple_ids.begin(), tuple_ids.end(), 1); // start at index 1
+                    data->predicate.emit(op.predicate(), data->buffer_schemas, tuple_ids);
+                    data->predicate.emit_St_Tup_b(0, 0);
+                }
+            }
+
+            M_insist(data->buffer_schemas.size() == size);
+            M_insist(data->load_attrs.size() == size);
+
             for (;;) {
                 if (child_id == size - 1) { // right-most child, which produced the RHS `block_`
                     /* Combine the tuples.  One tuple from each buffer. */
                     pipeline.clear();
                     pipeline.block_.mask(block_.mask());
 
-                    /* Concatenate tuples from the first n-1 children. */
-                    auto output_it = pipeline.block_.begin();
-                    auto &first = *output_it++; // the first tuple in the output block
-                    std::size_t n = 0; // number of attrs in `first`
-                    for (std::size_t i = 0; i != positions.size(); ++i) {
-                        auto &buffer = data->buffers[i];
-                        auto n_child = op.child(i)->schema().num_entries(); // number of attributes from this child
-                        first.insert(buffer[positions[i]], n, n_child);
-                        n += n_child;
+                    if (op.predicate().size()) {
+                        for (std::size_t cid = 0; cid != child_id; ++cid)
+                            predicate_args[cid + 1] = &data->buffers[cid][positions[cid]];
                     }
 
-                    /* Fill block with clones of first tuple and append the tuple from the last child. */
-                    for (; output_it != pipeline.block_.end(); ++output_it)
-                        output_it->insert(first, 0, n);
+                    /* Concatenate tuples from the first n-1 children. */
+                    for (auto output_it = pipeline.block_.begin(); output_it != pipeline.block_.end(); ++output_it) {
+                        auto &rhs = block_[output_it.index()];
+                        if (op.predicate().size()) { // do we have a predicate?
+                            predicate_args[size] = &rhs;
+                            data->predicate(predicate_args.data()); // evaluate predicate
+                            if (data->res.is_null(0) or not data->res[0].as_b()) {
+                                pipeline.block_.erase(output_it);
+                                continue;
+                            }
+                        }
 
-                    /* Evaluate the join predicate on the joined tuple and set the block's mask accordingly. */
-                    const auto num_attrs_rhs = op.child(child_id)->schema().num_entries();
-                    for (auto it = pipeline.block_.begin(); it != pipeline.block_.end(); ++it) {
-                        auto &rhs = block_[it.index()];
-                        it->insert(rhs, n, num_attrs_rhs); // append attrs of tuple from last child
-                        Tuple *args[] = { &data->res, &*it };
-                        data->predicate(args);
-                        if (data->res.is_null(0) or not data->res[0].as_b())
-                            pipeline.block_.erase(it);
+                        for (std::size_t i = 0; i != child_id; ++i) {
+                            auto &buffer = data->buffers[i]; // get buffer of i-th child
+                            Tuple *load_args[2] = { &*output_it, &buffer[positions[i]] }; // load child's current tuple
+                            data->load_attrs[i](load_args);
+                        }
+
+                        {
+                            Tuple *load_args[2] = { &*output_it, &rhs }; // load last child's attributes
+                            data->load_attrs[child_id](load_args);
+                        }
                     }
 
                     if (not pipeline.block_.empty())
@@ -1016,6 +1073,11 @@ void Pipeline::operator()(const JoinOperator &op)
         } else {
             /* This is not the right-most child.  Collect its produced tuples in a buffer. */
             const auto &tuple_schema = op.child(data->active_child)->schema();
+            if (data->buffer_schemas.size() <= data->active_child) {
+                data->buffer_schemas.emplace_back(this->schema()); // save the schema of the current pipeline
+                data->emit_load_attrs(this->schema());
+                M_insist(data->buffer_schemas.size() == data->load_attrs.size());
+            }
             for (auto &t : block_)
                 data->buffers[data->active_child].emplace_back(t.clone(tuple_schema));
         }
@@ -1026,15 +1088,16 @@ void Pipeline::operator()(const ProjectionOperator &op)
 {
     auto data = as<ProjectionData>(op.data());
     auto &pipeline = data->pipeline;
+    if (not data->projections)
+        data->emit_projections(this->schema(), op);
 
     pipeline.clear();
     pipeline.block_.mask(block_.mask());
 
-
     for (auto it = block_.begin(); it != block_.end(); ++it) {
         auto &out = pipeline.block_[it.index()];
         Tuple *args[] = { &out, &*it };
-        data->projections(args);
+        (*data->projections)(args);
     }
 
     pipeline.push(*op.parent());
@@ -1279,11 +1342,13 @@ void Pipeline::operator()(const AggregationOperator &op)
 
 void Pipeline::operator()(const SortingOperator &op)
 {
+    if (not op.data())
+        op.data(new SortingData(this->schema()));
+
     /* cache all tuples for sorting */
     auto data = as<SortingData>(op.data());
-    auto tuple_schema = op.child(0)->schema();
     for (auto &t : block_)
-        data->buffer.emplace_back(t.clone(tuple_schema));
+        data->buffer.emplace_back(t.clone(this->schema()));
 }
 
 /*======================================================================================================================
@@ -1318,7 +1383,7 @@ void Interpreter::operator()(const ScanOperator &op)
 
 void Interpreter::operator()(const FilterOperator &op)
 {
-    auto data = new FilterData(op);
+    auto data = new FilterData();
     op.data(data);
     op.child(0)->accept(*this);
 }
@@ -1458,14 +1523,12 @@ void Interpreter::operator()(const AggregationOperator &op)
 
 void Interpreter::operator()(const SortingOperator &op)
 {
-    auto data = new SortingData(op);
-    op.data(data);
     op.child(0)->accept(*this);
+    auto data = as<SortingData>(op.data());
 
     const auto &orderings = op.order_by();
-    auto &S = op.schema();
 
-    StackMachine comparator(S);
+    StackMachine comparator(data->pipeline.schema());
     for (auto o : orderings) {
         comparator.emit(o.first.get(), 1); // LHS
         comparator.emit(o.first.get(), 2); // RHS

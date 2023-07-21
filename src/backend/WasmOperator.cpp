@@ -351,9 +351,18 @@ void NoOp::execute(const Match<NoOp> &M, setup_t, pipeline_t, teardown_t)
         /* pipeline= */ [&](){
             M_insist(bool(num_tuples));
             if (auto &env = CodeGenContext::Get().env(); env.predicated()) {
-                M_insist(CodeGenContext::Get().num_simd_lanes() == 1,
-                         "SIMDfication with predication currently not supported");
-                *num_tuples += env.extract_predicate<_Boolx1>().is_true_and_not_null().to<uint32_t>();
+                switch (CodeGenContext::Get().num_simd_lanes()) {
+                    default: M_unreachable("invalid number of simd lanes");
+                    case  1: {
+                        *num_tuples += env.extract_predicate<_Boolx1>().is_true_and_not_null().to<uint32_t>();
+                        break;
+                    }
+                    case 16: {
+                        auto pred = env.extract_predicate<_Boolx16>().is_true_and_not_null();
+                        *num_tuples += pred.bitmask().popcnt();
+                        break;
+                    }
+                }
             } else {
                 *num_tuples += uint32_t(CodeGenContext::Get().num_simd_lanes());
             }
@@ -555,8 +564,10 @@ ConditionSet Filter<Predicated>::pre_condition(std::size_t child_idx, const std:
 
     ConditionSet pre_cond;
 
-    /*----- Filter does not support SIMD. -----*/
-    pre_cond.add_condition(NoSIMD());
+    if constexpr (not Predicated) {
+        /*----- Branching filter does not support SIMD. -----*/
+        pre_cond.add_condition(NoSIMD());
+    }
 
     return pre_cond;
 }
@@ -587,6 +598,10 @@ double Filter<Predicated>::cost(const Match<Filter> &M)
 template<bool Predicated>
 void Filter<Predicated>::execute(const Match<Filter> &M, setup_t setup, pipeline_t pipeline, teardown_t teardown)
 {
+    /*----- Set minimal number of SIMD lanes preferred to get fully utilized SIMD vectors for the filter condition. --*/
+    CodeGenContext::Get().update_num_simd_lanes_preferred(16); // set own preference
+
+    /*----- Execute filter. -----*/
     M.child.execute(
         /* setup=    */ std::move(setup),
         /* pipeline= */ [&, pipeline=std::move(pipeline)](){
@@ -2591,9 +2606,10 @@ void Aggregation::execute(const Match<Aggregation> &M, setup_t setup, pipeline_t
                     /*----- If predication is used, introduce pred. var. and update it before computing aggregates. --*/
                     std::optional<Var<Bool<L>>> pred;
                     if (env.predicated()) {
-                        M_insist(L == 1, "SIMDfied predication should currently not occur");
-                        auto _pred = env.extract_predicate<_Boolx1>().is_true_and_not_null();
-                        pred = M_CONSTEXPR_COND(L == 1, _pred, _pred.broadcast<L>()); // TODO: remove broadcast once this is supported
+                        if constexpr (sql_boolean_type<_Bool<L>>)
+                            pred = env.extract_predicate<_Bool<L>>().is_true_and_not_null();
+                        else
+                            M_unreachable("invalid number of SIMD lanes");
                     }
 
                     /*----- Compute aggregates (except AVG). -----*/

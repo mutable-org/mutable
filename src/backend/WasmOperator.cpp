@@ -3142,10 +3142,8 @@ void NoOpSorting::execute(const Match<NoOpSorting> &M, setup_t setup, pipeline_t
  *====================================================================================================================*/
 
 template<bool Predicated>
-ConditionSet NestedLoopsJoin<Predicated>::pre_condition(std::size_t child_idx, const std::tuple<const JoinOperator*>&)
+ConditionSet NestedLoopsJoin<Predicated>::pre_condition(std::size_t, const std::tuple<const JoinOperator*>&)
 {
-     M_insist(child_idx == 0);
-
     ConditionSet pre_cond;
 
     /*----- Nested-loops join does not support SIMD. -----*/

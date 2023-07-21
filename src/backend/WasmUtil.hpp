@@ -419,8 +419,7 @@ struct ExprCompiler : ast::ConstASTExprVisitor
         (*this)(e);
         return std::move(intermediate_result_);
     }
-
-    ///> Compile a `m::Expr` of statically known type to an `Expr<T>`.
+    ///> Compile a `m::Expr` \p e of statically known type to \tparam T.
     template<sql_type T>
     T compile(const m::ast::Expr &e) {
         (*this)(e);
@@ -561,7 +560,7 @@ struct Environment
     SQL_t operator[](Schema::Identifier id) const { return get(id); }
 
 
-    /*----- Expression compilation -----------------------------------------------------------------------------------*/
+    /*----- Expression and CNF compilation ---------------------------------------------------------------------------*/
     ///> Compile \p t by delegating compilation to an `ExprCompiler` for `this` `Environment`.
     template<typename T>
     requires requires (ExprCompiler C, T &&t) { C.compile(std::forward<T>(t)); }

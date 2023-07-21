@@ -4,6 +4,7 @@ import argparse
 import difflib
 import glob
 import itertools
+import math
 import os
 import subprocess
 import yamale
@@ -108,6 +109,7 @@ def run_stage(args, test_case, stage_name, command):
         err = err.decode('UTF-8')
         num_err = err.count('error')
         is_sorted = 'ORDER BY' in test_case.query
+        consider_rounding_errors = stage_name == 'end2end'
 
         if 'returncode' in stage:
             check_returncode(stage['returncode'], returncode)
@@ -116,7 +118,7 @@ def run_stage(args, test_case, stage_name, command):
         if 'err' in stage:
             check_stderr(stage['err'], err)
         if 'out' in stage:
-            check_stdout(stage['out'], out, args.verbose, is_sorted)
+            check_stdout(stage['out'], out, args.verbose, is_sorted, consider_rounding_errors)
     except TestException as ex:
         report_failure(str(ex), stage_name, test_case, args.debug, command)
         return False
@@ -148,11 +150,34 @@ def check_stderr(expected, actual):
     return
 
 
-def check_stdout(expected, actual, verbose, is_sorted):
+def check_stdout(expected, actual, verbose, is_sorted, consider_rounding_errors):
     if expected != None:
         sort = lambda l: l if is_sorted else sorted(l)
-        expected_sorted, actual_sorted = sort(expected.split('\n')), sort(actual.split('\n'))
-        if expected_sorted != actual_sorted:
+        expected_sorted, actual_sorted = sort(expected.split('\n')[:-1]), sort(actual.split('\n')[:-1])
+
+        def equal(expected, actual):
+            if not consider_rounding_errors:
+                return expected == actual
+
+            if len(expected) != len(actual):
+                return False
+            for i in range(len(expected)):
+                expected_tuple = expected[i].split(',')
+                actual_tuple = actual[i].split(',')
+                if len(expected_tuple) != len(actual_tuple):
+                    return False
+                for j in range(len(expected_tuple)):
+                    expected_value = expected_tuple[j]
+                    actual_value = actual_tuple[j]
+                    if expected_value[0] != '"' and '.' in expected_value: # floating point -> consider rounding errors
+                        if not math.isclose(float(expected_value), float(actual_value)):
+                            return False
+                    else: # all other types -> use exact string comparison
+                        if expected_value != actual_value:
+                            return False
+            return True
+
+        if not equal(expected_sorted, actual_sorted):
             diff = ""
             if verbose:
                 diff = '\n==>' + colordiff(actual, expected).rstrip('\n').replace('\n', '\n   ')

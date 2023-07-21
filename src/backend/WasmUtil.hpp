@@ -332,6 +332,12 @@ using SQL_t = std::variant<
 >;
 
 
+template<typename T>
+concept sql_boolean_type = sql_type<T> and boolean<typename T::type>;
+
+using SQL_boolean_t = std::variant<std::monostate, _Boolx1, _Boolx16>;
+
+
 /*======================================================================================================================
  * Helper functions for SQL types
  *====================================================================================================================*/
@@ -427,8 +433,16 @@ struct ExprCompiler : ast::ConstASTExprVisitor
         return *std::get_if<T>(&intermediate_result_);
     }
 
-    ///> Compile a `m::cnf::CNF` \p cnf to an `Expr<bool>`.
-    _Boolx1 compile(const cnf::CNF &cnf);
+    ///> Compile a `m::cnf::CNF` \p cnf of statically unknown type to a `SQL_t`.
+    SQL_boolean_t compile(const cnf::CNF &cnf);
+
+    ///> Compile a `m::cnf::CNF` \p cnf of statically known type to \tparam T.
+    template<sql_boolean_type T>
+    T compile(const cnf::CNF &cnf) {
+        auto result = compile(cnf);
+        M_insist(std::holds_alternative<T>(result));
+        return *std::get_if<T>(&result);
+    }
 
     private:
     using ConstASTExprVisitor::operator();
@@ -469,7 +483,7 @@ struct Environment
     ///> maps `Schema::Identifier`s to `Expr<T>`s that evaluate to the current expression
     std::unordered_map<Schema::Identifier, SQL_t> exprs_;
     ///> optional predicate if predication is used
-    std::optional<_Boolx1> predicate_;
+    SQL_boolean_t predicate_;
 
     public:
     Environment() = default;
@@ -578,27 +592,61 @@ struct Environment
 
     /*----- Predication ----------------------------------------------------------------------------------------------*/
     ///> Returns `true` iff `this` `Environment` uses predication.
-    bool predicated() const { return bool(predicate_); }
+    bool predicated() const { return not std::holds_alternative<std::monostate>(predicate_); }
+
     ///> Adds the predicate \p pred to the predication predicate.
-    void add_predicate(_Boolx1 pred) {
-        if (predicate_)
-            predicate_.emplace(*predicate_ and pred);
-        else
-            predicate_.emplace(pred);
+    void add_predicate(SQL_boolean_t &&pred) {
+        std::visit(overloaded {
+            [](std::monostate) -> void { M_unreachable("invalid predicate"); },
+            [this]<sql_boolean_type T>(T &&e) -> void { this->add_predicate<T>(std::forward<T>(e)); },
+        }, std::forward<SQL_boolean_t>(pred));
+    }
+    ///> Adds the predicate \p pred to the predication predicate.
+    template<sql_boolean_type T>
+    void add_predicate(T &&pred) {
+        if (predicated()) {
+            auto old = extract_predicate<T>();
+            new (&predicate_) SQL_boolean_t(old and std::forward<T>(pred)); // placement-new
+        } else {
+            new (&predicate_) SQL_boolean_t(std::forward<T>(pred)); // placement-new
+        }
     }
     ///> Adds the predicate compiled from the `cnf::CNF` \p cnf to the predication predicate.
     void add_predicate(const cnf::CNF &cnf) { add_predicate(compile(cnf)); }
+
     ///> Returns the **moved** current predication predicate.
-    _Boolx1 extract_predicate() {
+    SQL_boolean_t extract_predicate() {
         M_insist(predicated(), "cannot access an undefined or already extracted predicate");
-        auto tmp = *predicate_;
-        predicate_.reset();
+        auto tmp = std::move(predicate_);
+        new (&predicate_) SQL_boolean_t(std::monostate()); // placement-new
         return tmp;
     }
-    ///> Returns the **copied** current predication predicate.
-    _Boolx1 get_predicate() const {
+    ///> Returns the **moved** current predication predicate.
+    template<sql_boolean_type T>
+    T extract_predicate() {
         M_insist(predicated(), "cannot access an undefined or already extracted predicate");
-        return predicate_->clone();
+        M_insist(std::holds_alternative<T>(predicate_));
+        auto tmp = *std::get_if<T>(&predicate_);
+        predicate_.~SQL_boolean_t(); // destroy old
+        new (&predicate_) SQL_boolean_t(std::monostate()); // placement-new
+        return tmp;
+    }
+
+    ///> Returns the **copied** current predication predicate.
+    SQL_boolean_t get_predicate() const {
+        return std::visit(overloaded {
+            [](const std::monostate&) -> SQL_boolean_t {
+                M_unreachable("cannot access an undefined or already extracted predicate");
+            },
+            [](const auto &e) -> SQL_boolean_t { return e.clone(); },
+        }, predicate_);
+    }
+    ///> Returns the **copied** current predication predicate.
+    template<sql_boolean_type T>
+    T get_predicate() const {
+        M_insist(predicated(), "cannot access an undefined or already extracted predicate");
+        M_insist(std::holds_alternative<T>(predicate_));
+        return std::get_if<T>(&predicate_)->clone();
     }
 
     void dump(std::ostream &out) const;
@@ -1143,6 +1191,12 @@ I32x1 compare(const Environment &env_left, const Environment &env_right,
  * explicit instantiation declarations
  *====================================================================================================================*/
 
+template void Environment::add_predicate(_Boolx1 &&);
+template void Environment::add_predicate(_Boolx16&&);
+template _Boolx1  Environment::extract_predicate();
+template _Boolx16 Environment::extract_predicate();
+template _Boolx1  Environment::get_predicate() const;
+template _Boolx16 Environment::get_predicate() const;
 extern template std::tuple<Block, Block, Block> compile_store_sequential(
     const Schema&, Ptr<void>, const storage::DataLayout&, std::size_t, const Schema&, Var<U32x1>&
 );

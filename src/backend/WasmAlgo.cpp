@@ -715,7 +715,8 @@ HashTable::entry_t ChainedHashTable<IsGlobal>::emplace_without_rehashing(std::ve
     /*----- If predication is used, introduce predication variable and update it before inserting a key. -----*/
     std::optional<Var<Boolx1>> pred;
     if (auto &env = CodeGenContext::Get().env(); env.predicated()) {
-        pred = env.extract_predicate().is_true_and_not_null();
+        M_insist(CodeGenContext::Get().num_simd_lanes() == 1, "invalid number of SIMD lanes");
+        pred = env.extract_predicate<_Boolx1>().is_true_and_not_null();
         if (not predication_dummy_)
             create_predication_dummy();
     }
@@ -761,7 +762,8 @@ std::pair<HashTable::entry_t, Boolx1> ChainedHashTable<IsGlobal>::try_emplace(st
     /*----- If predication is used, introduce predication variable and update it before inserting a key. -----*/
     std::optional<Var<Boolx1>> pred;
     if (auto &env = CodeGenContext::Get().env(); env.predicated()) {
-        pred = env.extract_predicate().is_true_and_not_null();
+        M_insist(CodeGenContext::Get().num_simd_lanes() == 1, "invalid number of SIMD lanes");
+        pred = env.extract_predicate<_Boolx1>().is_true_and_not_null();
         if (not predication_dummy_)
             create_predication_dummy();
     }
@@ -825,7 +827,8 @@ std::pair<HashTable::entry_t, Boolx1> ChainedHashTable<IsGlobal>::find(std::vect
     /*----- If predication is used, introduce predication temporal and set it before looking-up a key. -----*/
     std::optional<Boolx1> pred;
     if (auto &env = CodeGenContext::Get().env(); env.predicated()) {
-        pred.emplace(env.extract_predicate().is_true_and_not_null());
+        M_insist(CodeGenContext::Get().num_simd_lanes() == 1, "invalid number of SIMD lanes");
+        pred.emplace(env.extract_predicate<_Boolx1>().is_true_and_not_null());
         if (not predication_dummy_)
             create_predication_dummy();
     }
@@ -873,7 +876,8 @@ void ChainedHashTable<IsGlobal>::for_each_in_equal_range(std::vector<SQL_t> key,
     /*----- If predication is used, introduce predication temporal and set it before looking-up a key. -----*/
     std::optional<Boolx1> pred;
     if (auto &env = CodeGenContext::Get().env(); env.predicated()) {
-        pred.emplace(env.extract_predicate().is_true_and_not_null());
+        M_insist(CodeGenContext::Get().num_simd_lanes() == 1, "invalid number of SIMD lanes");
+        pred.emplace(env.extract_predicate<_Boolx1>().is_true_and_not_null());
         if (not predication_dummy_)
             const_cast<ChainedHashTable<IsGlobal>*>(this)->create_predication_dummy();
     }
@@ -1576,7 +1580,8 @@ Ptr<void> OpenAddressingHashTable<IsGlobal, ValueInPlace>::emplace_without_rehas
     /*----- If predication is used, introduce predication variable and update it before inserting a key. -----*/
     std::optional<Var<Boolx1>> pred;
     if (auto &env = CodeGenContext::Get().env(); env.predicated()) {
-        pred = env.extract_predicate().is_true_and_not_null();
+        M_insist(CodeGenContext::Get().num_simd_lanes() == 1, "invalid number of SIMD lanes");
+        pred = env.extract_predicate<_Boolx1>().is_true_and_not_null();
         if (not predication_dummy_)
             create_predication_dummy();
     }
@@ -1637,7 +1642,8 @@ OpenAddressingHashTable<IsGlobal, ValueInPlace>::try_emplace(std::vector<SQL_t> 
     /*----- If predication is used, introduce predication variable and update it before inserting a key. -----*/
     std::optional<Var<Boolx1>> pred;
     if (auto &env = CodeGenContext::Get().env(); env.predicated()) {
-        pred = env.extract_predicate().is_true_and_not_null();
+        M_insist(CodeGenContext::Get().num_simd_lanes() == 1, "invalid number of SIMD lanes");
+        pred = env.extract_predicate<_Boolx1>().is_true_and_not_null();
         if (not predication_dummy_)
             create_predication_dummy();
     }
@@ -1720,7 +1726,8 @@ std::pair<HashTable::entry_t, Boolx1> OpenAddressingHashTable<IsGlobal, ValueInP
     /*----- If predication is used, introduce predication temporal and set it before looking-up a key. -----*/
     std::optional<Boolx1> pred;
     if (auto &env = CodeGenContext::Get().env(); env.predicated()) {
-        pred.emplace(env.extract_predicate().is_true_and_not_null());
+        M_insist(CodeGenContext::Get().num_simd_lanes() == 1, "invalid number of SIMD lanes");
+        pred.emplace(env.extract_predicate<_Boolx1>().is_true_and_not_null());
         if (not predication_dummy_)
             create_predication_dummy();
     }
@@ -1782,7 +1789,8 @@ void OpenAddressingHashTable<IsGlobal, ValueInPlace>::for_each_in_equal_range(st
     /*----- If predication is used, introduce predication temporal and set it before looking-up a key. -----*/
     std::optional<Boolx1> pred;
     if (auto &env = CodeGenContext::Get().env(); env.predicated()) {
-        pred.emplace(env.extract_predicate().is_true_and_not_null());
+        M_insist(CodeGenContext::Get().num_simd_lanes() == 1, "invalid number of SIMD lanes");
+        pred.emplace(env.extract_predicate<_Boolx1>().is_true_and_not_null());
         if (not predication_dummy_)
             const_cast<OpenAddressingHashTable<IsGlobal, ValueInPlace>*>(this)->create_predication_dummy();
     }

@@ -49,7 +49,7 @@ void write_result_set(const Schema &schema, const DataLayoutFactory &factory,
                         if (auto &env = CodeGenContext::Get().env(); env.predicated()) {
                             M_insist(CodeGenContext::Get().num_simd_lanes() == 1,
                                      "SIMDfication with predication not supported");
-                            *counter += env.extract_predicate().is_true_and_not_null().to<uint32_t>();
+                            *counter += env.extract_predicate<_Boolx1>().is_true_and_not_null().to<uint32_t>();
                         } else {
                             *counter += uint32_t(CodeGenContext::Get().num_simd_lanes());
                         }
@@ -92,7 +92,7 @@ void write_result_set(const Schema &schema, const DataLayoutFactory &factory,
                         if (auto &env = CodeGenContext::Get().env(); env.predicated()) {
                             M_insist(CodeGenContext::Get().num_simd_lanes() == 1,
                                      "SIMDfication with predication not supported");
-                            *num_tuples += env.extract_predicate().is_true_and_not_null().to<uint32_t>();
+                            *num_tuples += env.extract_predicate<_Boolx1>().is_true_and_not_null().to<uint32_t>();
                         } else {
                             *num_tuples += uint32_t(CodeGenContext::Get().num_simd_lanes());
                         }
@@ -353,7 +353,7 @@ void NoOp::execute(const Match<NoOp> &M, setup_t, pipeline_t, teardown_t)
             if (auto &env = CodeGenContext::Get().env(); env.predicated()) {
                 M_insist(CodeGenContext::Get().num_simd_lanes() == 1,
                          "SIMDfication with predication currently not supported");
-                *num_tuples += env.extract_predicate().is_true_and_not_null().to<uint32_t>();
+                *num_tuples += env.extract_predicate<_Boolx1>().is_true_and_not_null().to<uint32_t>();
             } else {
                 *num_tuples += uint32_t(CodeGenContext::Get().num_simd_lanes());
             }
@@ -594,7 +594,8 @@ void Filter<Predicated>::execute(const Match<Filter> &M, setup_t setup, pipeline
                 CodeGenContext::Get().env().add_predicate(M.filter.filter());
                 pipeline();
             } else {
-                IF (CodeGenContext::Get().env().compile(M.filter.filter()).is_true_and_not_null()) {
+                M_insist(CodeGenContext::Get().num_simd_lanes() == 1, "invalid number of SIMD lanes");
+                IF (CodeGenContext::Get().env().compile<_Boolx1>(M.filter.filter()).is_true_and_not_null()) {
                     pipeline();
                 };
             }
@@ -635,12 +636,13 @@ void LazyDisjunctiveFilter::execute(const Match<LazyDisjunctiveFilter> &M, setup
     M.child.execute(
         /* setup=    */ std::move(setup),
         /* pipeline= */ [&, pipeline=std::move(pipeline)](){
+            M_insist(CodeGenContext::Get().num_simd_lanes() == 1, "invalid number of SIMD lanes");
             BLOCK(lazy_disjunctive_filter)
             {
                 BLOCK(lazy_disjunctive_filter_then)
                 {
                     for (const cnf::Predicate &pred : clause) {
-                        auto cond = CodeGenContext::Get().env().compile<_Bool>(*pred);
+                        auto cond = CodeGenContext::Get().env().compile<_Boolx1>(*pred);
                         if (pred.negative())
                             GOTO(cond.is_false_and_not_null(), lazy_disjunctive_filter_then); // break to remainder of pipline
                         else
@@ -1772,8 +1774,10 @@ void OrderedGrouping::execute(const Match<OrderedGrouping> &M, setup_t setup, pi
 
             /*----- If predication is used, introduce pred. var. and update it before computing aggregates. -----*/
             std::optional<Var<Boolx1>> pred;
-            if (env.predicated())
-                pred = env.extract_predicate().is_true_and_not_null();
+            if (env.predicated()) {
+                M_insist(CodeGenContext::Get().num_simd_lanes() == 1, "invalid number of SIMD lanes");
+                pred = env.extract_predicate<_Boolx1>().is_true_and_not_null();
+            }
 
             /*----- Compute aggregates. -----*/
             Block reset_aggs("ordered_grouping.reset_aggs", false),
@@ -2588,7 +2592,7 @@ void Aggregation::execute(const Match<Aggregation> &M, setup_t setup, pipeline_t
                     std::optional<Var<Bool<L>>> pred;
                     if (env.predicated()) {
                         M_insist(L == 1, "SIMDfied predication should currently not occur");
-                        auto _pred = env.extract_predicate().is_true_and_not_null();
+                        auto _pred = env.extract_predicate<_Boolx1>().is_true_and_not_null();
                         pred = M_CONSTEXPR_COND(L == 1, _pred, _pred.broadcast<L>()); // TODO: remove broadcast once this is supported
                     }
 
@@ -3195,7 +3199,8 @@ void NestedLoopsJoin<Predicated>::execute(const Match<NestedLoopsJoin> &M, setup
                             CodeGenContext::Get().env().add_predicate(M.join.predicate());
                             pipeline();
                         } else {
-                            IF (CodeGenContext::Get().env().compile(M.join.predicate()).is_true_and_not_null()) {
+                            M_insist(CodeGenContext::Get().num_simd_lanes() == 1, "invalid number of SIMD lanes");
+                            IF (CodeGenContext::Get().env().compile<_Boolx1>(M.join.predicate()).is_true_and_not_null()) {
                                 pipeline();
                             };
                         }
@@ -3720,7 +3725,8 @@ void SortMergeJoin<SortLeft, SortRight, Predicated>::execute(const Match<SortMer
             env.add_predicate(M.join.predicate());
             pipeline();
         } else {
-            IF (env.compile(M.join.predicate()).is_true_and_not_null()) { // predicate fulfilled
+            M_insist(CodeGenContext::Get().num_simd_lanes() == 1, "invalid number of SIMD lanes");
+            IF (env.compile<_Boolx1>(M.join.predicate()).is_true_and_not_null()) { // predicate fulfilled
                 pipeline();
             };
         }

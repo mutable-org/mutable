@@ -68,10 +68,10 @@ void convert_in_place(SQL_t &operand, const Numeric *to_type)
     }
 }
 
-template<bool CanBeNull>
-std::conditional_t<CanBeNull, _Boolx1, Boolx1> compile_cnf(ExprCompiler &C, const cnf::CNF &cnf)
+template<bool CanBeNull, std::size_t L>
+std::conditional_t<CanBeNull, _Bool<L>, Bool<L>> compile_cnf(ExprCompiler &C, const cnf::CNF &cnf)
 {
-    using result_t = std::conditional_t<CanBeNull, _Boolx1, Boolx1>;
+    using result_t = std::conditional_t<CanBeNull, _Bool<L>, Bool<L>>;
 
     std::optional<result_t> wasm_cnf, wasm_clause;
     for (auto &clause : cnf) {
@@ -79,8 +79,8 @@ std::conditional_t<CanBeNull, _Boolx1, Boolx1> compile_cnf(ExprCompiler &C, cons
         for (auto &pred : clause) {
             /* Generate code for the literal of the predicate. */
             M_insist(pred.expr().type()->is_boolean());
-            auto compiled = M_CONSTEXPR_COND(CanBeNull, C.compile<_Boolx1>(pred.expr()),
-                                                        C.compile<_Boolx1>(pred.expr()).insist_not_null());
+            auto compiled = M_CONSTEXPR_COND(CanBeNull, C.compile<_Bool<L>>(pred.expr()),
+                                                        C.compile<_Bool<L>>(pred.expr()).insist_not_null());
             auto wasm_pred = pred.negative() ? not compiled : compiled;
 
             /* Add the predicate to the clause with an `or`. */
@@ -438,12 +438,13 @@ void ExprCompiler::operator()(const ast::QueryExpr &e)
     set(env_.get(id));
 }
 
-_Boolx1 ExprCompiler::compile(const cnf::CNF &cnf)
+SQL_boolean_t ExprCompiler::compile(const cnf::CNF &cnf)
 {
-    if (cnf.can_be_null())
-        return compile_cnf<true>(*this, cnf);
-    else
-        return compile_cnf<false>(*this, cnf);
+    switch (CodeGenContext::Get().num_simd_lanes()) {
+        default: M_unreachable("invalid number of SIMD lanes");
+        case  1: return cnf.can_be_null() ? compile_cnf<true,  1>(*this, cnf) : compile_cnf<false,  1>(*this, cnf);
+        case 16: return cnf.can_be_null() ? compile_cnf<true, 16>(*this, cnf) : compile_cnf<false, 16>(*this, cnf);
+    }
 }
 
 
@@ -555,7 +556,7 @@ compile_data_layout_sequential(const Schema &tuple_schema, Ptr<void> base_addres
     std::optional<Var<Boolx1>> pred;
     if (is_predicated) {
         BLOCK_OPEN(stores) {
-            pred = env.extract_predicate().is_true_and_not_null();
+            pred = env.extract_predicate<_Boolx1>().is_true_and_not_null();
         }
     }
 
@@ -2461,8 +2462,10 @@ void Buffer<IsGlobal>::resume_pipeline_inline(param_t tuple_schema_) const
 
     /*----- If predication is used, compute number of tuples to load from buffer depending on predicate. -----*/
     std::optional<Var<Boolx1>> pred; // use variable since WHILE loop will clone it (for IF and DO_WHILE)
-    if (auto &env = CodeGenContext::Get().env(); env.predicated())
-        pred = env.extract_predicate().is_true_and_not_null();
+    if (auto &env = CodeGenContext::Get().env(); env.predicated()) {
+        M_insist(CodeGenContext::Get().num_simd_lanes() == 1, "invalid number of SIMD lanes");
+        pred = env.extract_predicate<_Boolx1>().is_true_and_not_null();
+    }
     U32x1 num_tuples = pred ? Select(*pred, size, 0U) : size;
 
     /*----- Compute possible number of SIMD lanes and decide which to use with regard to other operators preferences. */

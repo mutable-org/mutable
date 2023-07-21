@@ -246,7 +246,7 @@ compute_aggregate_info(const std::vector<std::reference_wrapper<const FnApplicat
             /*----- Decide how to compute the average aggregate and insert sum aggregate accordingly. -----*/
             Schema::Identifier sum;
             bool compute_running_avg;
-            if (e.type->size() <= 32) {
+            if (fn_expr.args[0]->type()->size() <= 32) {
                 /* Compute average by summing up all values in a 64-bit field (thus no overflows should occur) and
                  * dividing by the running count once at the end. */
                 compute_running_avg = false;

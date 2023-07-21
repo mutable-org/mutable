@@ -45,12 +45,12 @@ MAX_CARDINALITY=10000
 MIN_RELATIONS=3
 # Associative array mapping topologies to their max. number of relations tested
 declare -A TOPOLOGIES=(
-    [chain]=30
-    [cycle]=30
+   [chain]=63
+   [cycle]=63
     [star]=15
-    [clique]=15
+   [clique]=15
 )
-#declare -A TOPOLOGIES=(
+#declare -A T0OPOLOGIES=(
 #    [chain]=50
 #    [cycle]=100
 #    [star]=100
@@ -66,22 +66,38 @@ declare -A TOPOLOGY_STEPS=(
 
 ORDERED_PLANNERS=(
     ###### HANWEN Manuelly Test #####
-    "DPccp"
-    "IKKBZ"
-
+    # "DPccp"
+#    "IKKBZ"
+    # "GOO"
 #    "TD-cleanAStar-zero"
 #    "BU-cleanAStar-zero"
 
 #    "BU-IDDFS-zero"
 #    "BU-A*-zero"
 #    "BU-A*-sum"
-  "BU-hanwen-layered-zero"
-  "BU-hanwen-layered2-zero"
-  "BU-hanwen-layered3-zero"
+#  "BU-hanwen-layered-zero"
+#  "BU-hanwen-layered2-zero"
+#  "BU-hanwen-layered3-zero"
 
-  "BU-hanwen-layered-sorted-zero"
-  "BU-hanwen-layered-sorted2-zero"
-  "BU-hanwen-layered-sorted3-zero"
+#  "BU-hanwen-layered-sorted-zero"
+#  "BU-hanwen-layered-sorted2-zero"
+ "BU-hanwen-layered-sorted2-zero"
+ "BU-hanwen-layered-sorted3-zero"
+ "BU-hanwen-layered-sorted2-sum"
+ "BU-hanwen-layered-sorted3-sum"
+#  "BU-hanwen-layered-sorted4-zero"
+#  "BU-hanwen-layered-sorted5-zero"
+#  "BU-hanwen-layered-sorted6-zero"
+
+#  "BU-hanwen-layered-sorted-dynamic2-zero"
+#   "BU-hanwen-layered-sorted-dynamic3-zero"
+
+"TD-hanwen-layered-sorted2-zero"
+"TD-hanwen-layered-sorted3-zero"
+
+"TD-hanwen-layered-sorted2-sum"
+"TD-hanwen-layered-sorted3-zero"
+
 #  "TD-hanwen-layered-zero"
 
 #    "BU-BIDIRECTIONAL-zero"
@@ -260,19 +276,19 @@ do
 
             # Generate problem
             SEED=${RANDOM}
-            echo -n '` '
-            python3 querygen.py -t "${TOPOLOGY}" -n ${N} --count=${QUERY_REPEAT_COUNT} | tr -d '\n'
-            (time ${HANWEN_MAKE_FOLDER}/bin/cardinality_gen \
-                ${FLAGS} \
-                --seed "${SEED}" \
-                --min "${MIN_CARDINALITY}" \
-                --max "${MAX_CARDINALITY}" \
-                "${NAME}.schema.sql" \
-                "${NAME}.query.sql") \
-                3>&1 1>"${NAME}.cardinalities.json" 2>&3 3>&- | ack real | cut -d$'\t' -f 2 | (read -r TIME; echo " (${TIME})";)
+            echo -n "${TOPOLOGY} ${N}"
+#            python3 querygen.py -t "${TOPOLOGY}" -n ${N} --count=${QUERY_REPEAT_COUNT} | tr -d '\n'
+#            (time ${HANWEN_MAKE_FOLDER}/bin/cardinality_gen \
+#                ${FLAGS} \
+#                --seed "${SEED}" \
+#                --min "${MIN_CARDINALITY}" \
+#                --max "${MAX_CARDINALITY}" \
+#                "${NAME}.schema.sql" \
+#                "${NAME}.query.sql") \
+#                3>&1 1>"${NAME}.cardinalities.json" 2>&3 3>&- | ack real | cut -d$'\t' -f 2 | (read -r TIME; echo " (${TIME})";)
 
             # Evaluate problem with each planner
-            echo '` Running planner'
+            echo "\t Running planner"
             for PLANNER in "${ORDERED_PLANNERS[@]}";
             do
                 if [ ${PLANNER_TIME_OUTS[${PLANNER}]} -ge ${MAX_TIMEOUTS_PER_CONFIG} ];

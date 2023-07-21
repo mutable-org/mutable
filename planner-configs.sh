@@ -19,16 +19,19 @@ declare -A PLANNER_CONFIGS=(
     [BU-hanwen-layered2-zero]="--plan-enumerator HeuristicSearch --hs-vertex SubproblemsArray --hs-expand BottomUpComplete --hs-heuristic zero --hs-search hanwen_layered_search_2"
     [TD-hanwen-layered2-zero]="--plan-enumerator HeuristicSearch --hs-vertex SubproblemsArray --hs-expand TopDownComplete --hs-heuristic zero --hs-search hanwen_layered_search_2"
     [BU-hanwen-layered3-zero]="--plan-enumerator HeuristicSearch --hs-vertex SubproblemsArray --hs-expand BottomUpComplete --hs-heuristic zero --hs-search hanwen_layered_search_3"
-    [TD-hanwen-layered3-zero]="--plan-enumerator HeuristicSearch --hs-vertex SubproblemsArray --hs-expand TopDownComplete --hs-heuristic zero --hs-search hanwen_layered_search_3"
-
+    
     [BU-hanwen-layered-sorted-zero]="--plan-enumerator HeuristicSearch --hs-vertex SubproblemsArray --hs-expand BottomUpComplete --hs-heuristic zero --hs-search hanwen_layered_search_sorted"
     [BU-hanwen-layered-sorted2-zero]="--plan-enumerator HeuristicSearch --hs-vertex SubproblemsArray --hs-expand BottomUpComplete --hs-heuristic zero --hs-search hanwen_layered_search_sorted_2"
     [BU-hanwen-layered-sorted3-zero]="--plan-enumerator HeuristicSearch --hs-vertex SubproblemsArray --hs-expand BottomUpComplete --hs-heuristic zero --hs-search hanwen_layered_search_sorted_3"
+    [BU-hanwen-layered-sorted3-sum]="--plan-enumerator HeuristicSearch --hs-vertex SubproblemsArray --hs-expand BottomUpComplete --hs-heuristic sum --hs-search hanwen_layered_search_sorted_3"
     [BU-hanwen-layered-sorted4-zero]="--plan-enumerator HeuristicSearch --hs-vertex SubproblemsArray --hs-expand BottomUpComplete --hs-heuristic zero --hs-search hanwen_layered_search_sorted_4"
     [BU-hanwen-layered-sorted5-zero]="--plan-enumerator HeuristicSearch --hs-vertex SubproblemsArray --hs-expand BottomUpComplete --hs-heuristic zero --hs-search hanwen_layered_search_sorted_5"
     [BU-hanwen-layered-sorted6-zero]="--plan-enumerator HeuristicSearch --hs-vertex SubproblemsArray --hs-expand BottomUpComplete --hs-heuristic zero --hs-search hanwen_layered_search_sorted_6"
+    [TD-hanwen-layered-sorted3-zero]="--plan-enumerator HeuristicSearch --hs-vertex SubproblemsArray --hs-expand TopDownComplete --hs-heuristic zero --hs-search hanwen_layered_search_sorted_3"
+    [TD-hanwen-layered-sorted3-sum]="--plan-enumerator HeuristicSearch --hs-vertex SubproblemsArray --hs-expand TopDownComplete --hs-heuristic sum --hs-search hanwen_layered_search_sorted_3"
 
-    [BU-hanwen-layered-sorted-dynamic-zero]="--plan-enumerator HeuristicSearch --hs-vertex SubproblemsArray --hs-expand BottomUpComplete --hs-heuristic zero --hs-search hanwen_layered_search_sorted_dynamic"
+    [BU-hanwen-layered-sorted-dynamic2-zero]="--plan-enumerator HeuristicSearch --hs-vertex SubproblemsArray --hs-expand BottomUpComplete --hs-heuristic zero --hs-search hanwen_layered_search_sorted_dynamic_2"
+    [BU-hanwen-layered-sorted-dynamic3-zero]="--plan-enumerator HeuristicSearch --hs-vertex SubproblemsArray --hs-expand BottomUpComplete --hs-heuristic zero --hs-search hanwen_layered_search_sorted_dynamic_3"
 
     # BottomUp
     [BU-BIDIRECTIONAL-zero]="--plan-enumerator HeuristicSearch --hs-vertex SubproblemsArray --hs-expand BottomUpComplete --hs-heuristic zero --hs-search BIDIRECTIONAL"

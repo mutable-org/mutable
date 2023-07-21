@@ -2802,12 +2802,18 @@ struct HeuristicSearch final : PlanEnumeratorCRTP<HeuristicSearch>
         HEURISTIC_SEARCH(SubproblemsArray, TopDownComplete, zero, hanwen_layered_search_3)
         HEURISTIC_SEARCH(SubproblemsArray, BottomUpComplete, zero, hanwen_layered_search_3)
 
+
         HEURISTIC_SEARCH(SubproblemsArray, TopDownComplete, zero, hanwen_layered_search_sorted)
         HEURISTIC_SEARCH(SubproblemsArray, BottomUpComplete, zero, hanwen_layered_search_sorted)
         HEURISTIC_SEARCH(SubproblemsArray, TopDownComplete, zero, hanwen_layered_search_sorted_2)
         HEURISTIC_SEARCH(SubproblemsArray, BottomUpComplete, zero, hanwen_layered_search_sorted_2)
         HEURISTIC_SEARCH(SubproblemsArray, TopDownComplete, zero, hanwen_layered_search_sorted_3)
         HEURISTIC_SEARCH(SubproblemsArray, BottomUpComplete, zero, hanwen_layered_search_sorted_3)
+
+        HEURISTIC_SEARCH(SubproblemsArray, BottomUpComplete , sum, hanwen_layered_search_sorted_2)
+        HEURISTIC_SEARCH(SubproblemsArray, TopDownComplete, sum, hanwen_layered_search_sorted_2)
+        HEURISTIC_SEARCH(SubproblemsArray, BottomUpComplete , sum, hanwen_layered_search_sorted_3)
+        HEURISTIC_SEARCH(SubproblemsArray, TopDownComplete, sum, hanwen_layered_search_sorted_3)
 
         HEURISTIC_SEARCH(SubproblemsArray, BottomUpComplete, zero, hanwen_layered_search_sorted_4)
         HEURISTIC_SEARCH(SubproblemsArray, BottomUpComplete, zero, hanwen_layered_search_sorted_5)

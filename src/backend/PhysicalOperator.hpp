@@ -296,7 +296,7 @@ struct PhysicalOptimizer : ConstPostOrderOperatorVisitor
             cost += child.get().second.cost;
         match->cost(cost);
 
-        if (cost < phys_op_cost_) {
+        if (cost < phys_op_cost_) { // XXX: this should be removed because of possible multiple post conditions
             /* Compute post-condition. */
             auto post_cond = PhysOp::post_condition_(*match);
             if (post_cond.empty()) {
@@ -526,6 +526,10 @@ struct pattern_matcher_recursive<PhysOp, Idx, Op, PatternQueue...>
                     return; // no match for current child exists
                 PhysicalOptimizer::conditional_phys_op_map::const_iterator new_child;
                 double min_cost = std::numeric_limits<double>::infinity();
+                /* FIXME: The following loop already performs local optimization by searching the cheapest child.
+                 *        However, post conditions are not yet considered and thus there will be stored only a
+                 *        single locally optimal plan rather than the locally optimal one *per* unique post
+                 *        condition which may result in finding no plan covering even if there is one. */
                 for (auto it = opt.table()[c->id()].cbegin(); it != opt.table()[c->id()].cend(); ++it) {
                     if (auto cost = it->second.cost;
                         cost < min_cost and PhysOp::pre_condition_(

@@ -2515,6 +2515,13 @@ template<typename State, typename Expand, typename Heuristic, typename Config, t
 using hanwen_layered_search_sorted_5 = ai::hanwen_layeredSearch_sorted<5>::type<State, Expand, Heuristic, Config, Context...>;
 template<typename State, typename Expand, typename Heuristic, typename Config, typename... Context>
 using hanwen_layered_search_sorted_6 = ai::hanwen_layeredSearch_sorted<6>::type<State, Expand, Heuristic, Config, Context...>;
+template<typename State, typename Expand, typename Heuristic, typename Config, typename... Context>
+using hanwen_layered_search_sorted_10 = ai::hanwen_layeredSearch_sorted<10>::type<State, Expand, Heuristic, Config, Context...>;
+template<typename State, typename Expand, typename Heuristic, typename Config, typename... Context>
+using hanwen_layered_search_sorted_15 = ai::hanwen_layeredSearch_sorted<15>::type<State, Expand, Heuristic, Config, Context...>;
+template<typename State, typename Expand, typename Heuristic, typename Config, typename... Context>
+using hanwen_layered_search_sorted_25 = ai::hanwen_layeredSearch_sorted<25>::type<State, Expand, Heuristic, Config, Context...>;
+
 
 template<typename State, typename Expand, typename Heuristic, typename Config, typename... Context>
 using hanwen_layered_search_sorted_dynamic_2 = ai::hanwen_layeredSearch_sorted_dynamic<2>::type<State, Expand, Heuristic, Config, Context...>;
@@ -2802,18 +2809,32 @@ struct HeuristicSearch final : PlanEnumeratorCRTP<HeuristicSearch>
         HEURISTIC_SEARCH(SubproblemsArray, TopDownComplete, zero, hanwen_layered_search_3)
         HEURISTIC_SEARCH(SubproblemsArray, BottomUpComplete, zero, hanwen_layered_search_3)
 
-
-        HEURISTIC_SEARCH(SubproblemsArray, TopDownComplete, zero, hanwen_layered_search_sorted)
         HEURISTIC_SEARCH(SubproblemsArray, BottomUpComplete, zero, hanwen_layered_search_sorted)
-        HEURISTIC_SEARCH(SubproblemsArray, TopDownComplete, zero, hanwen_layered_search_sorted_2)
         HEURISTIC_SEARCH(SubproblemsArray, BottomUpComplete, zero, hanwen_layered_search_sorted_2)
-        HEURISTIC_SEARCH(SubproblemsArray, TopDownComplete, zero, hanwen_layered_search_sorted_3)
         HEURISTIC_SEARCH(SubproblemsArray, BottomUpComplete, zero, hanwen_layered_search_sorted_3)
 
+        HEURISTIC_SEARCH(SubproblemsArray, BottomUpComplete, sum, hanwen_layered_search_sorted)
         HEURISTIC_SEARCH(SubproblemsArray, BottomUpComplete , sum, hanwen_layered_search_sorted_2)
-        HEURISTIC_SEARCH(SubproblemsArray, TopDownComplete, sum, hanwen_layered_search_sorted_2)
         HEURISTIC_SEARCH(SubproblemsArray, BottomUpComplete , sum, hanwen_layered_search_sorted_3)
+
+        HEURISTIC_SEARCH(SubproblemsArray, TopDownComplete, zero, hanwen_layered_search_sorted)
+        HEURISTIC_SEARCH(SubproblemsArray, TopDownComplete, zero, hanwen_layered_search_sorted_2)
+        HEURISTIC_SEARCH(SubproblemsArray, TopDownComplete, zero, hanwen_layered_search_sorted_3)
+
+
+        HEURISTIC_SEARCH(SubproblemsArray, TopDownComplete, zero, hanwen_layered_search_sorted_2)
+        HEURISTIC_SEARCH(SubproblemsArray, TopDownComplete, zero, hanwen_layered_search_sorted_3)
+        HEURISTIC_SEARCH(SubproblemsArray, TopDownComplete, zero, hanwen_layered_search_sorted_6)
+        HEURISTIC_SEARCH(SubproblemsArray, TopDownComplete, zero, hanwen_layered_search_sorted_10)
+        HEURISTIC_SEARCH(SubproblemsArray, TopDownComplete, zero, hanwen_layered_search_sorted_15)
+        HEURISTIC_SEARCH(SubproblemsArray, TopDownComplete, zero, hanwen_layered_search_sorted_25)
+
+        HEURISTIC_SEARCH(SubproblemsArray, TopDownComplete, sum, hanwen_layered_search_sorted_2)
         HEURISTIC_SEARCH(SubproblemsArray, TopDownComplete, sum, hanwen_layered_search_sorted_3)
+        HEURISTIC_SEARCH(SubproblemsArray, TopDownComplete, sum, hanwen_layered_search_sorted_6)
+        HEURISTIC_SEARCH(SubproblemsArray, TopDownComplete, sum, hanwen_layered_search_sorted_10)
+        HEURISTIC_SEARCH(SubproblemsArray, TopDownComplete, sum, hanwen_layered_search_sorted_15)
+        HEURISTIC_SEARCH(SubproblemsArray, TopDownComplete, sum, hanwen_layered_search_sorted_25)
 
         HEURISTIC_SEARCH(SubproblemsArray, BottomUpComplete, zero, hanwen_layered_search_sorted_4)
         HEURISTIC_SEARCH(SubproblemsArray, BottomUpComplete, zero, hanwen_layered_search_sorted_5)

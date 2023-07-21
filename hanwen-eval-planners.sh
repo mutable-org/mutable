@@ -81,10 +81,10 @@ ORDERED_PLANNERS=(
 
 #  "BU-hanwen-layered-sorted-zero"
 #  "BU-hanwen-layered-sorted2-zero"
- "BU-hanwen-layered-sorted2-zero"
- "BU-hanwen-layered-sorted3-zero"
- "BU-hanwen-layered-sorted2-sum"
- "BU-hanwen-layered-sorted3-sum"
+# "BU-hanwen-layered-sorted2-zero"
+# "BU-hanwen-layered-sorted3-zero"
+# "BU-hanwen-layered-sorted2-sum"
+# "BU-hanwen-layered-sorted3-sum"
 #  "BU-hanwen-layered-sorted4-zero"
 #  "BU-hanwen-layered-sorted5-zero"
 #  "BU-hanwen-layered-sorted6-zero"
@@ -94,9 +94,17 @@ ORDERED_PLANNERS=(
 
 "TD-hanwen-layered-sorted2-zero"
 "TD-hanwen-layered-sorted3-zero"
+"TD-hanwen-layered-sorted6-zero"
+"TD-hanwen-layered-sorted10-zero"
+"TD-hanwen-layered-sorted15-zero"
+"TD-hanwen-layered-sorted25-zero"
 
 "TD-hanwen-layered-sorted2-sum"
-"TD-hanwen-layered-sorted3-zero"
+"TD-hanwen-layered-sorted3-sum"
+"TD-hanwen-layered-sorted6-sum"
+"TD-hanwen-layered-sorted10-sum"
+"TD-hanwen-layered-sorted15-sum"
+"TD-hanwen-layered-sorted25-sum"
 
 #  "TD-hanwen-layered-zero"
 

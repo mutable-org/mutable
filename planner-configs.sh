@@ -27,8 +27,20 @@ declare -A PLANNER_CONFIGS=(
     [BU-hanwen-layered-sorted4-zero]="--plan-enumerator HeuristicSearch --hs-vertex SubproblemsArray --hs-expand BottomUpComplete --hs-heuristic zero --hs-search hanwen_layered_search_sorted_4"
     [BU-hanwen-layered-sorted5-zero]="--plan-enumerator HeuristicSearch --hs-vertex SubproblemsArray --hs-expand BottomUpComplete --hs-heuristic zero --hs-search hanwen_layered_search_sorted_5"
     [BU-hanwen-layered-sorted6-zero]="--plan-enumerator HeuristicSearch --hs-vertex SubproblemsArray --hs-expand BottomUpComplete --hs-heuristic zero --hs-search hanwen_layered_search_sorted_6"
+
+    [TD-hanwen-layered-sorted2-zero]="--plan-enumerator HeuristicSearch --hs-vertex SubproblemsArray --hs-expand TopDownComplete --hs-heuristic zero --hs-search hanwen_layered_search_sorted_2"
     [TD-hanwen-layered-sorted3-zero]="--plan-enumerator HeuristicSearch --hs-vertex SubproblemsArray --hs-expand TopDownComplete --hs-heuristic zero --hs-search hanwen_layered_search_sorted_3"
+    [TD-hanwen-layered-sorted6-zero]="--plan-enumerator HeuristicSearch --hs-vertex SubproblemsArray --hs-expand TopDownComplete --hs-heuristic zero --hs-search hanwen_layered_search_sorted_6"
+    [TD-hanwen-layered-sorted10-zero]="--plan-enumerator HeuristicSearch --hs-vertex SubproblemsArray --hs-expand TopDownComplete --hs-heuristic zero --hs-search hanwen_layered_search_sorted_10"
+    [TD-hanwen-layered-sorted15-zero]="--plan-enumerator HeuristicSearch --hs-vertex SubproblemsArray --hs-expand TopDownComplete --hs-heuristic zero --hs-search hanwen_layered_search_sorted_15"
+    [TD-hanwen-layered-sorted25-zero]="--plan-enumerator HeuristicSearch --hs-vertex SubproblemsArray --hs-expand TopDownComplete --hs-heuristic zero --hs-search hanwen_layered_search_sorted_25"
+
+    [TD-hanwen-layered-sorted2-sum]="--plan-enumerator HeuristicSearch --hs-vertex SubproblemsArray --hs-expand TopDownComplete --hs-heuristic sum --hs-search hanwen_layered_search_sorted_2"
     [TD-hanwen-layered-sorted3-sum]="--plan-enumerator HeuristicSearch --hs-vertex SubproblemsArray --hs-expand TopDownComplete --hs-heuristic sum --hs-search hanwen_layered_search_sorted_3"
+    [TD-hanwen-layered-sorted6-sum]="--plan-enumerator HeuristicSearch --hs-vertex SubproblemsArray --hs-expand TopDownComplete --hs-heuristic sum --hs-search hanwen_layered_search_sorted_6"
+    [TD-hanwen-layered-sorted10-sum]="--plan-enumerator HeuristicSearch --hs-vertex SubproblemsArray --hs-expand TopDownComplete --hs-heuristic sum --hs-search hanwen_layered_search_sorted_10"
+    [TD-hanwen-layered-sorted15-sum]="--plan-enumerator HeuristicSearch --hs-vertex SubproblemsArray --hs-expand TopDownComplete --hs-heuristic sum --hs-search hanwen_layered_search_sorted_15"
+    [TD-hanwen-layered-sorted25-sum]="--plan-enumerator HeuristicSearch --hs-vertex SubproblemsArray --hs-expand TopDownComplete --hs-heuristic sum --hs-search hanwen_layered_search_sorted_25"
 
     [BU-hanwen-layered-sorted-dynamic2-zero]="--plan-enumerator HeuristicSearch --hs-vertex SubproblemsArray --hs-expand BottomUpComplete --hs-heuristic zero --hs-search hanwen_layered_search_sorted_dynamic_2"
     [BU-hanwen-layered-sorted-dynamic3-zero]="--plan-enumerator HeuristicSearch --hs-vertex SubproblemsArray --hs-expand BottomUpComplete --hs-heuristic zero --hs-search hanwen_layered_search_sorted_dynamic_3"

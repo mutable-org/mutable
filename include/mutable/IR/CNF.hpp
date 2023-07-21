@@ -72,6 +72,11 @@ struct M_EXPORT Predicate
 
     /** Print a textual representation of `pred` to `out`. */
     friend std::ostream & M_EXPORT operator<<(std::ostream &out, const Predicate &pred);
+    friend M_EXPORT std::string to_string(const Predicate &pred) {
+        std::ostringstream oss;
+        oss << pred;
+        return oss.str();
+    }
 
     void dump(std::ostream &out) const;
     void dump() const;
@@ -114,6 +119,11 @@ struct M_EXPORT Clause : public std::vector<Predicate>
 
     /** Print a textual representation of `clause` to `out`. */
     friend std::ostream & M_EXPORT operator<<(std::ostream &out, const Clause &clause);
+    friend M_EXPORT std::string to_string(const Clause &clause) {
+        std::ostringstream oss;
+        oss << clause;
+        return oss.str();
+    }
 
     void dump(std::ostream &out) const;
     void dump() const;
@@ -158,7 +168,7 @@ struct M_EXPORT CNF : public std::vector<Clause>
 
     /** Print a textual representation of `cnf` to `out`. */
     friend M_EXPORT std::ostream & operator<<(std::ostream &out, const CNF &cnf);
-    friend std::string to_string(const CNF &cnf) {
+    friend M_EXPORT std::string to_string(const CNF &cnf) {
         std::ostringstream oss;
         oss << cnf;
         return oss.str();

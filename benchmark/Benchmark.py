@@ -199,6 +199,11 @@ BEGIN
       AND name={dbstr(experiment)}
       AND version={version}
     INTO experiment_id;
+
+    -- Update chartconfig of this experiment (if a new one was inserted)
+    UPDATE "Experiments"
+    SET chart_config=chartconfig_id
+    WHERE id=experiment_id;
 ''')
                     for config, measurements in configs.items():
                         if len(measurements['case']) == 0:

@@ -2209,9 +2209,6 @@ ConditionSet Aggregation::pre_condition(std::size_t child_idx, const std::tuple<
 
     ConditionSet pre_cond;
 
-    /*----- Aggregation does not support SIMD. -----*/
-    pre_cond.add_condition(NoSIMD());
-
     return pre_cond;
 }
 
@@ -2237,492 +2234,755 @@ ConditionSet Aggregation::post_condition(const Match<Aggregation> &M)
 void Aggregation::execute(const Match<Aggregation> &M, setup_t setup, pipeline_t pipeline, teardown_t teardown)
 {
     Environment results; ///< stores result tuple
+    ///> code to construct aggregates from SIMD vectors; must be emitted *after* the child pipeline is executed
+    std::vector<std::function<void(void)>> finalize_aggregates;
 
     /*----- Compute information about aggregates, especially about AVG aggregates. -----*/
     auto p = compute_aggregate_info(M.aggregation.aggregates(), M.aggregation.schema());
     const auto &aggregates = p.first;
     const auto &avg_aggregates = p.second;
 
+    /*----- Set minimal number of SIMD lanes preferred to get fully utilized SIMD vectors for the aggregate args. ----*/
+    uint64_t min_size_in_bytes = 16;
+    for (auto &fn : M.aggregation.aggregates()) {
+        for (auto &e : fn.get().args) {
+            visit(overloaded {
+                [](const m::ast::ErrorExpr&) -> void { M_unreachable("no errors at this stage"); },
+                [](const m::ast::Designator&) -> void { /* nothing to be done */ },
+                [](const m::ast::Constant&) -> void { /* nothing to be done */ },
+                [](const m::ast::QueryExpr&) -> void { /* nothing to be done */ },
+                [&min_size_in_bytes](const m::ast::FnApplicationExpr &fn) -> void {
+                    M_insist(not fn.get_function().is_aggregate(), "aggregate arguments must not be aggregates");
+                    min_size_in_bytes = std::min(min_size_in_bytes, (fn.type()->size() + 7) / 8);
+                    if (min_size_in_bytes == 1)
+                        throw visit_stop_recursion(); // abort recursion
+                },
+                [&min_size_in_bytes](auto &e) -> void { // i.e. for unary and binary expressions
+                    min_size_in_bytes = std::min(min_size_in_bytes, (e.type()->size() + 7) / 8);
+                    if (min_size_in_bytes == 1)
+                        throw visit_stop_recursion(); // abort recursion
+                }
+            }, *e, m::tag<m::ast::ConstPreOrderExprVisitor>());
+        }
+    }
+    CodeGenContext::Get().update_num_simd_lanes_preferred(16 / min_size_in_bytes); // set own preference
+
+    /*----- Set minimal number of SIMD lanes preferred to be able to compute running averages. ----*/
+    if (std::any_of(avg_aggregates.begin(), avg_aggregates.end(), [](auto &i){ return i.second.compute_running_avg; }))
+        CodeGenContext::Get().update_num_simd_lanes_preferred(4); // set own preference
+
     /*----- Create child function. -----*/
     FUNCTION(aggregation_child_pipeline, void(void)) // create function for pipeline
     {
         auto S = CodeGenContext::Get().scoped_environment(); // create scoped environment for this function
 
-        using agg_t = agg_t_<false>;
-        using agg_backup_t = agg_t_<true>;
-        agg_t agg_values[aggregates.size()]; ///< *local* values of the computed aggregates
-        agg_backup_t agg_value_backups[aggregates.size()]; ///< *global* value backups of the computed aggregates
+#ifndef NDEBUG
+        std::size_t num_simd_lanes; ///< to insist that setup, pipeline, and teardown callbacks use the same value
+#endif
+        void *_agg_values; ///< *local* values of the computed aggregates
+        void *_agg_value_backups; ///< *global* value backups of the computed aggregates
 
         M.child.execute(
-            /* setup=    */ setup_t::Make_Without_Parent([&](){
-                /*----- Initialize aggregates and their backups. -----*/
-                for (std::size_t idx = 0; idx < aggregates.size(); ++idx) {
-                    auto &info = aggregates[idx];
+            /* setup=    */ setup_t::Make_Without_Parent([&]() {
+                auto execute_setup = [&]<std::size_t L>() {
+#ifndef NDEBUG
+                    num_simd_lanes = L;
+#endif
 
-                    bool is_min = false; ///< flag to indicate whether aggregate function is MIN
-                    switch (info.fnid) {
-                        default:
-                            M_unreachable("unsupported aggregate function");
-                        case m::Function::FN_MIN:
-                            is_min = true; // set flag and delegate to MAX case
-                        case m::Function::FN_MAX: {
-                            auto min_max = [&]<typename T>() {
-                                auto neutral = is_min ? std::numeric_limits<T>::max()
-                                                      : std::numeric_limits<T>::lowest();
+                    /*----- Initialize aggregates helper structures. -----*/
+                    using agg_t = agg_t_<false, L>;
+                    using agg_backup_t = agg_t_<true, L>;
+                    auto agg_values = new agg_t[aggregates.size()];
+                    auto agg_value_backups = new agg_backup_t[aggregates.size()];
 
-                                Var<PrimitiveExpr<T>> min_max;
-                                Global<PrimitiveExpr<T>> min_max_backup(neutral); // initialize with neutral element +inf or -inf
-                                Var<Boolx1> is_null;
-                                Global<Boolx1> is_null_backup(true); // MIN/MAX is initially NULL
+                    /*----- Store aggregates helper structures for pipeline and teardown callbacks. -----*/
+                    _agg_values = static_cast<void*>(agg_values);
+                    _agg_value_backups = static_cast<void*>(agg_value_backups);
 
-                                /*----- Set local aggregate variables to global backups. -----*/
-                                min_max = min_max_backup;
-                                is_null = is_null_backup;
+                    /*----- Initialize aggregates and their backups. -----*/
+                    for (std::size_t idx = 0; idx < aggregates.size(); ++idx) {
+                        auto &info = aggregates[idx];
 
-                                /*----- Add global aggregate to result environment to access it in other function. -----*/
-                                results.add(info.entry.id, Select(is_null_backup, Expr<T>::Null(), min_max_backup));
+                        bool is_min = false; ///< flag to indicate whether aggregate function is MIN
+                        switch (info.fnid) {
+                            default:
+                                M_unreachable("unsupported aggregate function");
+                            case m::Function::FN_MIN:
+                                is_min = true; // set flag and delegate to MAX case
+                            case m::Function::FN_MAX: {
+                                auto min_max = [&]<typename T>() {
+                                    auto neutral = is_min ? std::numeric_limits<T>::max()
+                                                          : std::numeric_limits<T>::lowest();
+
+                                    Var<PrimitiveExpr<T, L>> min_max;
+                                    Global<PrimitiveExpr<T, L>> min_max_backup(
+                                        neutral // initialize with neutral element +inf or -inf
+                                    );
+                                    Var<Bool<L>> is_null;
+                                    Global<Bool<L>> is_null_backup(true); // MIN/MAX is initially NULL
+
+                                    /*----- Set local aggregate variables to global backups. -----*/
+                                    min_max = min_max_backup;
+                                    is_null = is_null_backup;
+
+                                    /*----- Add global aggregate to result env. to access it in other function. -----*/
+                                    if constexpr (L == 1) { // scalar
+                                        PrimitiveExpr<T> value = min_max_backup;
+                                        Boolx1 is_null = is_null_backup;
+                                        results.add(info.entry.id, Select(is_null, Expr<T>::Null(), value));
+                                    } else { // vectorial
+                                        /* Create lambda which emits the computation of the final *scalar* aggregate.
+                                         * This can then be called in the pipeline function starting at the aggregation
+                                         * operator s.t. the emitted variable is a local of the correct function.
+                                         * Do not access the global variables inside the lambda using closure by
+                                         * reference since they are already destroyed when the lambda will be called.
+                                         * Instead, copy their values into the lambda. However, since DSL expressions
+                                         * are not const-copy-constructible, we have to allocate them on the heap and
+                                         * destroy them manually inside the lambda. */
+                                        auto simd_min_max = new PrimitiveExpr<T, L>(min_max_backup.val());
+                                        auto simd_is_null = new Bool<L>(is_null_backup.val());
+                                        finalize_aggregates.emplace_back([&, is_min, simd_min_max, simd_is_null]() {
+                                            PrimitiveExpr<T> value = [&]<std::size_t... Is>(std::index_sequence<Is...>) {
+                                                Var<PrimitiveExpr<T>> res(simd_min_max->clone().template extract<0>());
+                                                auto update = [&]<std::size_t I>(){
+                                                    if constexpr (requires (PrimitiveExpr<T> v) { min(v, v); max(v, v); }) {
+                                                        res = is_min ? min(res, simd_min_max->clone().template extract<I>())
+                                                                     : max(res, simd_min_max->clone().template extract<I>());
+                                                    } else {
+                                                        const Var<PrimitiveExpr<T>> extracted(
+                                                            simd_min_max->clone().template extract<I>()
+                                                        ); // due to multiple uses
+                                                        auto cmp = is_min ? extracted < res : extracted > res;
+#if 1
+                                                        res = Select(cmp, extracted, res);
+#else
+                                                        IF (cmp) {
+                                                            res = extracted;
+                                                        };
+#endif
+                                                    }
+                                                };
+                                                (update.template operator()<Is + 1>(), ...);
+                                                return res;
+                                            }(std::make_index_sequence<L - 1>{});
+                                            simd_min_max->discard(); // since it was always cloned
+                                            Boolx1 is_null = simd_is_null->all_true();
+                                            results.add(info.entry.id, Select(is_null, Expr<T>::Null(), value));
+                                            delete simd_min_max; // destroy heap-allocated variable
+                                            delete simd_is_null; // destroy heap-allocated variable
+                                        });
+                                    }
+
+                                    /*----- Move aggregate variables to access them later. ----*/
+                                    new (&agg_values[idx]) agg_t(std::make_pair(
+                                        std::move(min_max), std::move(is_null))
+                                    );
+                                    new (&agg_value_backups[idx]) agg_backup_t(std::make_pair(
+                                        std::move(min_max_backup), std::move(is_null_backup)
+                                    ));
+                                };
+                                auto &n = as<const Numeric>(*info.entry.type);
+                                switch (n.kind) {
+                                    case Numeric::N_Int:
+                                    case Numeric::N_Decimal:
+                                        switch (n.size()) {
+                                            default: M_unreachable("invalid size");
+                                            case  8: min_max.template operator()<int8_t >(); break;
+                                            case 16: min_max.template operator()<int16_t>(); break;
+                                            case 32: min_max.template operator()<int32_t>(); break;
+                                            case 64: min_max.template operator()<int64_t>(); break;
+                                        }
+                                        break;
+                                    case Numeric::N_Float:
+                                        if (n.size() <= 32)
+                                            min_max.template operator()<float>();
+                                        else
+                                            min_max.template operator()<double>();
+                                }
+                                break;
+                            }
+                            case m::Function::FN_AVG:
+                                break; // skip here and handle later
+                            case m::Function::FN_SUM: {
+                                auto sum = [&]<typename T>() {
+                                    Var<PrimitiveExpr<T, L>> sum;
+                                    Global<PrimitiveExpr<T, L>> sum_backup(T(0)); // initialize with neutral element 0
+                                    Var<Bool<L>> is_null;
+                                    Global<Bool<L>> is_null_backup(true); // SUM is initially NULL
+
+                                    /*----- Set local aggregate variables to global backups. -----*/
+                                    sum = sum_backup;
+                                    is_null = is_null_backup;
+
+                                    /*----- Add global aggregate to result env. to access it in other function. -----*/
+                                    if constexpr (L == 1) { // scalar
+                                        PrimitiveExpr<T> value = sum_backup;
+                                        Boolx1 is_null = is_null_backup;
+                                        results.add(info.entry.id, Select(is_null, Expr<T>::Null(), value));
+                                    } else { // vectorial
+                                        PrimitiveExpr<T> value = [&]<std::size_t... Is>(std::index_sequence<Is...>) {
+                                            return (sum_backup.template extract<Is>() + ...);
+                                        }(std::make_index_sequence<L>{});
+                                        Boolx1 is_null = is_null_backup.all_true();
+                                        results.add(info.entry.id, Select(is_null, Expr<T>::Null(), value));
+                                    }
+
+                                    /*----- Move aggregate variables to access them later. ----*/
+                                    new (&agg_values[idx]) agg_t(std::make_pair(std::move(sum), std::move(is_null)));
+                                    new (&agg_value_backups[idx]) agg_backup_t(std::make_pair(
+                                        std::move(sum_backup), std::move(is_null_backup)
+                                    ));
+                                };
+                                auto &n = as<const Numeric>(*info.entry.type);
+                                switch (n.kind) {
+                                    case Numeric::N_Int:
+                                    case Numeric::N_Decimal:
+                                        switch (n.size()) {
+                                            default: M_unreachable("invalid size");
+                                            case  8: sum.template operator()<int8_t >(); break;
+                                            case 16: sum.template operator()<int16_t>(); break;
+                                            case 32: sum.template operator()<int32_t>(); break;
+                                            case 64: sum.template operator()<int64_t>(); break;
+                                        }
+                                        break;
+                                    case Numeric::N_Float:
+                                        if (n.size() <= 32)
+                                            sum.template operator()<float>();
+                                        else
+                                            sum.template operator()<double>();
+                                }
+                                break;
+                            }
+                            case m::Function::FN_COUNT: {
+                                Var<I64<L>> count;
+                                Global<I64<L>> count_backup(0); // initialize with neutral element 0
+                                /* no `is_null` variables needed since COUNT will not be NULL */
+
+                                /*----- Set local aggregate variable to global backup. -----*/
+                                count = count_backup;
+
+                                /*----- Add global aggregate to result env. to access it in other function. -----*/
+                                if constexpr (L == 1) { // scalar
+                                    I64x1 value = count_backup;
+                                    results.add(info.entry.id, value);
+                                } else { // vectorial
+                                    I64x1 value = [&]<std::size_t... Is>(std::index_sequence<Is...>) {
+                                        return (count_backup.template extract<Is>() + ...);
+                                    }(std::make_index_sequence<L>{});
+                                    results.add(info.entry.id, value);
+                                }
 
                                 /*----- Move aggregate variables to access them later. ----*/
-                                new (&agg_values[idx]) agg_t(std::make_pair(std::move(min_max), std::move(is_null)));
-                                new (&agg_value_backups[idx]) agg_backup_t(std::make_pair(
-                                    std::move(min_max_backup), std::move(is_null_backup)
-                                ));
-                            };
-                            auto &n = as<const Numeric>(*info.entry.type);
-                            switch (n.kind) {
-                                case Numeric::N_Int:
-                                case Numeric::N_Decimal:
-                                    switch (n.size()) {
-                                        default: M_unreachable("invalid size");
-                                        case  8: min_max.template operator()<int8_t >(); break;
-                                        case 16: min_max.template operator()<int16_t>(); break;
-                                        case 32: min_max.template operator()<int32_t>(); break;
-                                        case 64: min_max.template operator()<int64_t>(); break;
-                                    }
-                                    break;
-                                case Numeric::N_Float:
-                                    if (n.size() <= 32)
-                                        min_max.template operator()<float>();
-                                    else
-                                        min_max.template operator()<double>();
+                                new (&agg_values[idx]) agg_t(std::move(count));
+                                new (&agg_value_backups[idx]) agg_backup_t(std::move(count_backup));
+
+                                break;
                             }
-                            break;
                         }
-                        case m::Function::FN_AVG: {
-                            Var<Doublex1> avg;
-                            Global<Doublex1> avg_backup(0.0); // initialize with neutral element 0
-                            Var<Boolx1> is_null;
-                            Global<Boolx1> is_null_backup(true); // AVG is initially NULL
+                    }
+
+                    /*----- Initialize AVG aggregates after others to ensure that running count is initialized before. */
+                    for (std::size_t idx = 0; idx < aggregates.size(); ++idx) {
+                        auto &info = aggregates[idx];
+
+                        if (info.fnid == m::Function::FN_AVG) {
+                            Var<Double<L>> avg;
+                            Global<Double<L>> avg_backup(0.0); // initialize with neutral element 0
+                            Var<Bool<L>> is_null;
+                            Global<Bool<L>> is_null_backup(true); // AVG is initially NULL
 
                             /*----- Set local aggregate variables to global backups. -----*/
                             avg = avg_backup;
                             is_null = is_null_backup;
 
-                            /*----- Add global aggregate to result environment to access it in other function. -----*/
-                            results.add(info.entry.id, Select(is_null_backup, _Doublex1::Null(), avg_backup));
+                            /*----- Add global aggregate to result env. to access it in other function. -----*/
+                            if constexpr (L == 1) { // scalar
+                                Doublex1 value = avg_backup;
+                                Boolx1 is_null = is_null_backup;
+                                results.add(info.entry.id, Select(is_null, _Doublex1::Null(), value));
+                            } else { // vectorial
+                                /* Create lambda which emits the computation of the final *scalar* aggregate.
+                                 * This can then be called in the pipeline function starting at the aggregation
+                                 * operator s.t. the emitted variable is a local of the correct function.
+                                 * Do not access the global variables inside the lambda using closure by
+                                 * reference since they are already destroyed when the lambda will be called.
+                                 * Instead, copy their values into the lambda. However, since DSL expressions
+                                 * are not const-copy-constructible, we have to allocate them on the heap and
+                                 * destroy them manually inside the lambda. */
+                                auto simd_avg = new Double<L>(avg_backup.val());
+                                auto simd_is_null = new Bool<L>(is_null_backup.val());
+                                auto simd_running_count = new I64<L>([&](){
+                                    auto it = avg_aggregates.find(info.entry.id);
+                                    M_insist(it != avg_aggregates.end());
+                                    const auto &avg_info = it->second;
+                                    M_insist(avg_info.compute_running_avg,
+                                             "AVG aggregate may only occur for running average computations");
+
+                                    auto running_count_idx = std::distance(
+                                        aggregates.cbegin(),
+                                        std::find_if(
+                                            aggregates.cbegin(), aggregates.cend(), [&avg_info](const auto &info){
+                                                return info.entry.id == avg_info.running_count;
+                                        })
+                                    );
+                                    M_insist(0 <= running_count_idx and running_count_idx < aggregates.size());
+
+                                    auto &running_count =
+                                        *M_notnull(std::get_if<Global<I64<L>>>(&agg_value_backups[running_count_idx]));
+                                    return running_count.val();
+                                }());
+                                finalize_aggregates.emplace_back([&, simd_avg, simd_is_null, simd_running_count]() {
+                                    Doublex1 value = [&]<std::size_t... Is>(std::index_sequence<Is...>) {
+                                        I64x1 count = (simd_running_count->clone().template extract<Is>() + ...);
+                                        const Var<Double<L>> simd_sum([&](){
+                                            if constexpr (L != 2) {
+                                                return *simd_avg * simd_running_count->template to<double>();
+                                            } else {
+                                                M_unreachable("conversion from `I64<2>` to `Double<2>` not supported");
+                                                return Double<L>(0.0); // this line is never reached; return dummy value
+                                            }
+                                        }());
+                                        return (simd_sum.template extract<Is>() + ...) / count.to<double>();
+                                    }(std::make_index_sequence<L>{});
+                                    Boolx1 is_null = simd_is_null->all_true();
+                                    results.add(info.entry.id, Select(is_null, _Doublex1::Null(), value));
+                                    delete simd_avg; // destroy heap-allocated variable
+                                    delete simd_is_null; // destroy heap-allocated variable
+                                    delete simd_running_count; // destroy heap-allocated variable
+                                });
+                            }
 
                             /*----- Move aggregate variables to access them later. ----*/
                             new (&agg_values[idx]) agg_t(std::make_pair(std::move(avg), std::move(is_null)));
                             new (&agg_value_backups[idx]) agg_backup_t(std::make_pair(
                                 std::move(avg_backup), std::move(is_null_backup)
                             ));
-
-                            break;
-                        }
-                        case m::Function::FN_SUM: {
-                            auto sum = [&]<typename T>() {
-                                Var<PrimitiveExpr<T>> sum;
-                                Global<PrimitiveExpr<T>> sum_backup(T(0)); // initialize with neutral element 0
-                                Var<Boolx1> is_null;
-                                Global<Boolx1> is_null_backup(true); // SUM is initially NULL
-
-                                /*----- Set local aggregate variables to global backups. -----*/
-                                sum = sum_backup;
-                                is_null = is_null_backup;
-
-                                /*----- Add global aggregate to result environment to access it in other function. -----*/
-                                results.add(info.entry.id, Select(is_null_backup, Expr<T>::Null(), sum_backup));
-
-                                /*----- Move aggregate variables to access them later. ----*/
-                                new (&agg_values[idx]) agg_t(std::make_pair(std::move(sum), std::move(is_null)));
-                                new (&agg_value_backups[idx]) agg_backup_t(std::make_pair(
-                                    std::move(sum_backup), std::move(is_null_backup)
-                                ));
-                            };
-                            auto &n = as<const Numeric>(*info.entry.type);
-                            switch (n.kind) {
-                                case Numeric::N_Int:
-                                case Numeric::N_Decimal:
-                                    switch (n.size()) {
-                                        default: M_unreachable("invalid size");
-                                        case  8: sum.template operator()<int8_t >(); break;
-                                        case 16: sum.template operator()<int16_t>(); break;
-                                        case 32: sum.template operator()<int32_t>(); break;
-                                        case 64: sum.template operator()<int64_t>(); break;
-                                    }
-                                    break;
-                                case Numeric::N_Float:
-                                    if (n.size() <= 32)
-                                        sum.template operator()<float>();
-                                    else
-                                        sum.template operator()<double>();
-                            }
-                            break;
-                        }
-                        case m::Function::FN_COUNT: {
-                            Var<I64x1> count;
-                            Global<I64x1> count_backup(0); // initialize with neutral element 0
-                            /* no `is_null` variables needed since COUNT will not be NULL */
-
-                            /*----- Set local aggregate variable to global backup. -----*/
-                            count = count_backup;
-
-                            /*----- Add global aggregate to result environment to access it in other function. -----*/
-                            results.add(info.entry.id, count_backup.val());
-
-                            /*----- Move aggregate variables to access them later. ----*/
-                            new (&agg_values[idx]) agg_t(std::move(count));
-                            new (&agg_value_backups[idx]) agg_backup_t(std::move(count_backup));
-
-                            break;
                         }
                     }
+                };
+                switch (CodeGenContext::Get().num_simd_lanes()) {
+                    default: M_unreachable("unsupported number of SIMD lanes");
+                    case  1: execute_setup.operator()<1>();  break;
+                    case  2: execute_setup.operator()<2>();  break;
+                    case  4: execute_setup.operator()<4>();  break;
+                    case  8: execute_setup.operator()<8>();  break;
+                    case 16: execute_setup.operator()<16>(); break;
                 }
             }),
             /* pipeline= */ [&](){
-                auto &env = CodeGenContext::Get().env();
-
-                /*----- If predication is used, introduce pred. var. and update it before computing aggregates. -----*/
-                std::optional<Var<Boolx1>> pred;
-                if (env.predicated())
-                    pred = env.extract_predicate().is_true_and_not_null();
-
-                /*----- Compute aggregates (except AVG). -----*/
-                for (std::size_t idx = 0; idx < aggregates.size(); ++idx) {
-                    auto &info = aggregates[idx];
-
-                    bool is_min = false; ///< flag to indicate whether aggregate function is MIN
-                    switch (info.fnid) {
-                        default:
-                            M_unreachable("unsupported aggregate function");
-                        case m::Function::FN_MIN:
-                            is_min = true; // set flag and delegate to MAX case
-                        case m::Function::FN_MAX: {
-                            M_insist(info.args.size() == 1,
-                                     "MIN and MAX aggregate functions expect exactly one argument");
-                            const auto &arg = *info.args[0];
-                            auto min_max = [&]<typename T>() {
-                                auto &[min_max, is_null] = *M_notnull((
-                                    std::get_if<std::pair<Var<PrimitiveExpr<T>>, Var<Boolx1>>>(&agg_values[idx])
-                                ));
-
-                                auto _arg = env.compile(arg);
-                                Expr<T> _new_val = convert<Expr<T>>(_arg);
-                                if (_new_val.can_be_null()) {
-                                    M_insist_no_ternary_logic();
-                                    auto _new_val_pred = pred ? Select(*pred, _new_val, Expr<T>::Null()) : _new_val;
-                                    auto [new_val_, new_val_is_null_] = _new_val_pred.split();
-                                    const Var<Boolx1> new_val_is_null(new_val_is_null_); // due to multiple uses
-
-                                    if constexpr (std::floating_point<T>) {
-                                        min_max = Select(new_val_is_null,
-                                                         min_max, // ignore NULL
-                                                         is_min ? min(min_max, new_val_) // update old min with new value
-                                                                : max(min_max, new_val_)); // update old max with new value
-                                    } else {
-                                        const Var<PrimitiveExpr<T>> new_val(new_val_); // due to multiple uses
-                                        auto cmp = is_min ? new_val < min_max : new_val > min_max;
-#if 1
-                                        min_max = Select(new_val_is_null,
-                                                         min_max, // ignore NULL
-                                                         Select(cmp,
-                                                                new_val, // update to new value
-                                                                min_max)); // do not update
-#else
-                                        IF (not new_val_is_null and cmp) {
-                                            min_max = new_val;
-                                        };
+                auto execute_pipeline = [&]<std::size_t L>(){
+#ifndef NDEBUG
+                    M_insist(num_simd_lanes == L,
+                             "number of SIMD lanes in pipeline callback must match the one in setup callback");
 #endif
-                                    }
-                                    is_null = is_null and new_val_is_null; // MIN/MAX is NULL iff all values are NULL
-                                } else {
-                                    auto neutral = is_min ? std::numeric_limits<T>::max()
-                                                          : std::numeric_limits<T>::lowest();
-                                    auto _new_val_pred = pred ? Select(*pred, _new_val, neutral) : _new_val;
-                                    auto new_val_ = _new_val_pred.insist_not_null();
-                                    if constexpr (std::floating_point<T>) {
-                                        min_max = is_min ? min(min_max, new_val_) // update old min with new value
-                                                         : max(min_max, new_val_); // update old max with new value
-                                    } else {
-                                        const Var<PrimitiveExpr<T>> new_val(new_val_); // due to multiple uses
-                                        auto cmp = is_min ? new_val < min_max : new_val > min_max;
+
+                    /*----- Get aggregates helper structures. -----*/
+                    using agg_t = agg_t_<false, L>;
+                    using agg_backup_t = agg_t_<true, L>;
+                    auto agg_values = static_cast<agg_t*>(_agg_values);
+                    auto agg_value_backups = static_cast<agg_backup_t*>(_agg_value_backups);
+
+                    auto &env = CodeGenContext::Get().env();
+
+                    /*----- If predication is used, introduce pred. var. and update it before computing aggregates. --*/
+                    std::optional<Var<Bool<L>>> pred;
+                    if (env.predicated()) {
+                        M_insist(L == 1, "SIMDfied predication should currently not occur");
+                        auto _pred = env.extract_predicate().is_true_and_not_null();
+                        pred = M_CONSTEXPR_COND(L == 1, _pred, _pred.broadcast<L>()); // TODO: remove broadcast once this is supported
+                    }
+
+                    /*----- Compute aggregates (except AVG). -----*/
+                    for (std::size_t idx = 0; idx < aggregates.size(); ++idx) {
+                        auto &info = aggregates[idx];
+
+                        bool is_min = false; ///< flag to indicate whether aggregate function is MIN
+                        switch (info.fnid) {
+                            default:
+                                M_unreachable("unsupported aggregate function");
+                            case m::Function::FN_MIN:
+                                is_min = true; // set flag and delegate to MAX case
+                            case m::Function::FN_MAX: {
+                                M_insist(info.args.size() == 1,
+                                         "MIN and MAX aggregate functions expect exactly one argument");
+                                const auto &arg = *info.args[0];
+                                auto min_max = overloaded{
+                                    [&]<typename T>() requires sql_type<Expr<T, L>> {
+                                        auto &[min_max, is_null] = *M_notnull((
+                                            std::get_if<
+                                                std::pair<Var<PrimitiveExpr<T, L>>, Var<Bool<L>>>
+                                            >(&agg_values[idx])
+                                        ));
+
+                                        auto _arg = env.compile(arg);
+                                        Expr<T, L> _new_val = convert<Expr<T, L>>(_arg);
+                                        if (_new_val.can_be_null()) {
+                                            M_insist_no_ternary_logic();
+                                            auto _new_val_pred =
+                                                pred ? Select(*pred, _new_val, Expr<T, L>::Null()) : _new_val;
+                                            auto [new_val_, new_val_is_null_] = _new_val_pred.split();
+                                            const Var<Bool<L>> new_val_is_null(new_val_is_null_); // due to multiple uses
+
+                                            if constexpr (requires (PrimitiveExpr<T, L> v) { min(v, v); max(v, v); }) {
+                                                min_max = Select(new_val_is_null,
+                                                                 min_max, // ignore NULL
+                                                                 is_min ? min(min_max, new_val_) // update old min with new value
+                                                                        : max(min_max, new_val_)); // update old max with new value
+                                            } else {
+                                                const Var<PrimitiveExpr<T, L>> new_val(new_val_); // due to multiple uses
+                                                auto cmp = is_min ? new_val < min_max : new_val > min_max;
 #if 1
-                                        min_max = Select(cmp,
-                                                         new_val, // update to new value
-                                                         min_max); // do not update
+                                                min_max = Select(new_val_is_null,
+                                                                 min_max, // ignore NULL
+                                                                 Select(cmp,
+                                                                        new_val, // update to new value
+                                                                        min_max)); // do not update
 #else
-                                        IF (cmp) {
-                                            min_max = new_val;
-                                        };
+                                                IF (not new_val_is_null and cmp) {
+                                                    min_max = new_val;
+                                                };
 #endif
-                                    }
-                                    is_null = false; // at least one non-NULL value is consumed
+                                            }
+                                            is_null = is_null and new_val_is_null; // MIN/MAX is NULL iff all values are NULL
+                                        } else {
+                                            auto neutral = is_min ? std::numeric_limits<T>::max()
+                                                                  : std::numeric_limits<T>::lowest();
+                                            auto _new_val_pred =
+                                                pred ? Select(*pred, _new_val, PrimitiveExpr<T, L>(neutral)) : _new_val;
+                                            auto new_val_ = _new_val_pred.insist_not_null();
+                                            if constexpr (requires (PrimitiveExpr<T, L> v) { min(v, v); max(v, v); }) {
+                                                min_max = is_min ? min(min_max, new_val_) // update old min with new value
+                                                                 : max(min_max, new_val_); // update old max with new value
+                                            } else {
+                                                const Var<PrimitiveExpr<T, L>> new_val(new_val_); // due to multiple uses
+                                                auto cmp = is_min ? new_val < min_max : new_val > min_max;
+#if 1
+                                                min_max = Select(cmp,
+                                                                 new_val, // update to new value
+                                                                 min_max); // do not update
+#else
+                                                IF (cmp) {
+                                                    min_max = new_val;
+                                                };
+#endif
+                                            }
+                                            is_null = Bool<L>(false); // at least one non-NULL value is consumed
+                                        }
+                                    },
+                                    []<typename>() { M_unreachable("invalid type for given number of SIMD lanes"); }
+                                };
+                                auto &n = as<const Numeric>(*info.entry.type);
+                                switch (n.kind) {
+                                    case Numeric::N_Int:
+                                    case Numeric::N_Decimal:
+                                        switch (n.size()) {
+                                            default: M_unreachable("invalid size");
+                                            case  8: min_max.template operator()<int8_t >(); break;
+                                            case 16: min_max.template operator()<int16_t>(); break;
+                                            case 32: min_max.template operator()<int32_t>(); break;
+                                            case 64: min_max.template operator()<int64_t>(); break;
+                                        }
+                                        break;
+                                    case Numeric::N_Float:
+                                        if (n.size() <= 32)
+                                            min_max.template operator()<float>();
+                                        else
+                                            min_max.template operator()<double>();
                                 }
-                            };
-                            auto &n = as<const Numeric>(*info.entry.type);
-                            switch (n.kind) {
-                                case Numeric::N_Int:
-                                case Numeric::N_Decimal:
-                                    switch (n.size()) {
-                                        default: M_unreachable("invalid size");
-                                        case  8: min_max.template operator()<int8_t >(); break;
-                                        case 16: min_max.template operator()<int16_t>(); break;
-                                        case 32: min_max.template operator()<int32_t>(); break;
-                                        case 64: min_max.template operator()<int64_t>(); break;
-                                    }
-                                    break;
-                                case Numeric::N_Float:
-                                    if (n.size() <= 32)
-                                        min_max.template operator()<float>();
-                                    else
-                                        min_max.template operator()<double>();
+                                break;
                             }
-                            break;
-                        }
-                        case m::Function::FN_AVG:
-                            break; // skip here and handle later
-                        case m::Function::FN_SUM: {
-                            M_insist(info.args.size() == 1, "SUM aggregate function expects exactly one argument");
-                            const auto &arg = *info.args[0];
+                            case m::Function::FN_AVG:
+                                break; // skip here and handle later
+                            case m::Function::FN_SUM: {
+                                M_insist(info.args.size() == 1, "SUM aggregate function expects exactly one argument");
+                                const auto &arg = *info.args[0];
 
-                            auto sum = [&]<typename T>() {
-                                auto &[sum, is_null] = *M_notnull((
-                                    std::get_if<std::pair<Var<PrimitiveExpr<T>>, Var<Boolx1>>>(&agg_values[idx])
-                                ));
+                                auto sum = overloaded{
+                                    [&]<typename T>() requires sql_type<Expr<T, L>> {
+                                        auto &[sum, is_null] = *M_notnull((
+                                            std::get_if<
+                                                std::pair<Var<PrimitiveExpr<T, L>>, Var<Bool<L>>>
+                                            >(&agg_values[idx])
+                                        ));
 
-                                auto _arg = env.compile(arg);
-                                Expr<T> _new_val = convert<Expr<T>>(_arg);
-                                if (_new_val.can_be_null()) {
-                                    M_insist_no_ternary_logic();
-                                    auto _new_val_pred = pred ? Select(*pred, _new_val, Expr<T>::Null()) : _new_val;
-                                    auto [new_val, new_val_is_null_] = _new_val_pred.split();
-                                    const Var<Boolx1> new_val_is_null(new_val_is_null_); // due to multiple uses
+                                        auto _arg = env.compile(arg);
+                                        Expr<T, L> _new_val = convert<Expr<T, L>>(_arg);
+                                        if (_new_val.can_be_null()) {
+                                            M_insist_no_ternary_logic();
+                                            auto _new_val_pred =
+                                                pred ? Select(*pred, _new_val, Expr<T, L>::Null()) : _new_val;
+                                            auto [new_val, new_val_is_null_] = _new_val_pred.split();
+                                            const Var<Bool<L>> new_val_is_null(new_val_is_null_); // due to multiple uses
 
-                                    sum += Select(new_val_is_null,
-                                                  T(0), // ignore NULL
-                                                  new_val); // add new value to old sum
-                                    is_null = is_null and new_val_is_null; // SUM is NULL iff all values are NULL
+                                            sum += Select(new_val_is_null,
+                                                          PrimitiveExpr<T, L>(T(0)), // ignore NULL
+                                                          new_val); // add new value to old sum
+                                            is_null = is_null and new_val_is_null; // SUM is NULL iff all values are NULL
+                                        } else {
+                                            auto _new_val_pred =
+                                                pred ? Select(*pred, _new_val, PrimitiveExpr<T, L>(T(0))) : _new_val;
+                                            sum += _new_val_pred.insist_not_null(); // add new value to old sum
+                                            is_null = Bool<L>(false); // at least one non-NULL value is consumed
+                                        }
+                                    },
+                                    []<typename>() { M_unreachable("invalid type for given number of SIMD lanes"); }
+                                };
+                                auto &n = as<const Numeric>(*info.entry.type);
+                                switch (n.kind) {
+                                    case Numeric::N_Int:
+                                    case Numeric::N_Decimal:
+                                        switch (n.size()) {
+                                            default: M_unreachable("invalid size");
+                                            case  8: sum.template operator()<int8_t >(); break;
+                                            case 16: sum.template operator()<int16_t>(); break;
+                                            case 32: sum.template operator()<int32_t>(); break;
+                                            case 64: sum.template operator()<int64_t>(); break;
+                                        }
+                                        break;
+                                    case Numeric::N_Float:
+                                        if (n.size() <= 32)
+                                            sum.template operator()<float>();
+                                        else
+                                            sum.template operator()<double>();
+                                }
+                                break;
+                            }
+                            case m::Function::FN_COUNT: {
+                                M_insist(info.args.size() <= 1, "COUNT aggregate function expects at most one argument");
+                                M_insist(info.entry.type->is_integral() and info.entry.type->size() == 64);
+
+                                auto &count = *M_notnull(std::get_if<Var<I64<L>>>(&agg_values[idx]));
+
+                                if (info.args.empty()) {
+                                    count += pred ? pred->template to<int64_t>() : I64<L>(1); // increment old count by 1 iff `pred` is true
                                 } else {
-                                    auto _new_val_pred = pred ? Select(*pred, _new_val, T(0)) : _new_val;
-                                    sum += _new_val_pred.insist_not_null(); // add new value to old sum
-                                    is_null = false; // at least one non-NULL value is consumed
-                                }
-                            };
-                            auto &n = as<const Numeric>(*info.entry.type);
-                            switch (n.kind) {
-                                case Numeric::N_Int:
-                                case Numeric::N_Decimal:
-                                    switch (n.size()) {
-                                        default: M_unreachable("invalid size");
-                                        case  8: sum.template operator()<int8_t >(); break;
-                                        case 16: sum.template operator()<int16_t>(); break;
-                                        case 32: sum.template operator()<int32_t>(); break;
-                                        case 64: sum.template operator()<int64_t>(); break;
+                                    auto _new_val = env.compile(*info.args[0]);
+                                    if (can_be_null(_new_val)) {
+                                        M_insist_no_ternary_logic();
+                                        I64<L> inc = pred ? (not_null<L>(_new_val) and *pred).template to<int64_t>()
+                                                          : not_null<L>(_new_val).template to<int64_t>();
+                                        count += inc; // increment old count by 1 iff new value is present and `pred` is true
+                                    } else {
+                                        discard(_new_val); // since it is not needed in this case
+                                        I64<L> inc = pred ? pred->template to<int64_t>() : I64<L>(1);
+                                        count += inc; // increment old count by 1 iff new value is present and `pred` is true
                                     }
-                                    break;
-                                case Numeric::N_Float:
-                                    if (n.size() <= 32)
-                                        sum.template operator()<float>();
-                                    else
-                                        sum.template operator()<double>();
+                                }
+                                break;
                             }
-                            break;
                         }
-                        case m::Function::FN_COUNT: {
-                            M_insist(info.args.size() <= 1, "COUNT aggregate function expects at most one argument");
-                            M_insist(info.entry.type->is_integral() and info.entry.type->size() == 64);
+                    }
 
-                            auto &count = *M_notnull(std::get_if<Var<I64x1>>(&agg_values[idx]));
+                    /*----- Compute AVG aggregates after others to ensure that running count is incremented before. --*/
+                    for (std::size_t idx = 0; idx < aggregates.size(); ++idx) {
+                        auto &info = aggregates[idx];
 
-                            if (info.args.empty()) {
-                                count += pred ? pred->to<int64_t>() : I64x1(1); // increment old count by 1 iff `pred` is true
+                        if (info.fnid == m::Function::FN_AVG) {
+                            M_insist(info.args.size() == 1, "AVG aggregate function expects exactly one argument");
+                            const auto &arg = *info.args[0];
+                            M_insist(info.entry.type->is_double());
+
+                            auto it = avg_aggregates.find(info.entry.id);
+                            M_insist(it != avg_aggregates.end());
+                            const auto &avg_info = it->second;
+                            M_insist(avg_info.compute_running_avg,
+                                     "AVG aggregate may only occur for running average computations");
+
+                            auto &[avg, is_null] = *M_notnull((
+                                std::get_if<std::pair<Var<Double<L>>, Var<Bool<L>>>>(&agg_values[idx])
+                            ));
+
+                            /* Compute AVG as iterative mean as described in Knuth, The Art of Computer Programming
+                             * Vol 2, section 4.2.2. */
+                            auto running_count_idx = std::distance(
+                                aggregates.cbegin(),
+                                std::find_if(aggregates.cbegin(), aggregates.cend(), [&avg_info](const auto &info){
+                                    return info.entry.id == avg_info.running_count;
+                                })
+                            );
+                            M_insist(0 <= running_count_idx and running_count_idx < aggregates.size());
+                            Double<L> running_count = [&](){
+                                auto &running_count =
+                                    *M_notnull(std::get_if<Var<I64<L>>>(&agg_values[running_count_idx]));
+                                if constexpr (L != 2) {
+                                    return running_count.template to<double>();
+                                } else {
+                                    M_unreachable("conversion from `I64<2>` to `Double<2>` not supported");
+                                    return Double<L>(0.0); // this line is never reached; return dummy value
+                                }
+                            }();
+
+                            auto _arg = env.compile(arg);
+                            _Double<L> _new_val = convert<_Double<L>>(_arg);
+                            if (_new_val.can_be_null()) {
+                                M_insist_no_ternary_logic();
+                                auto _new_val_pred = pred ? Select(*pred, _new_val, _Double<L>::Null()) : _new_val;
+                                auto [new_val, new_val_is_null_] = _new_val_pred.split();
+                                const Var<Bool<L>> new_val_is_null(new_val_is_null_); // due to multiple uses
+
+                                auto delta_absolute = new_val - avg;
+                                auto delta_relative = delta_absolute / running_count;
+
+                                avg += Select(new_val_is_null,
+                                              Double<L>(0.0), // ignore NULL
+                                              delta_relative); // update old average with new value
+                                is_null = is_null and new_val_is_null; // AVG is NULL iff all values are NULL
                             } else {
-                                auto _new_val = env.compile(*info.args[0]);
-                                if (can_be_null(_new_val)) {
-                                    M_insist_no_ternary_logic();
-                                    I64x1 inc = pred ? (not_null(_new_val) and *pred).to<int64_t>()
-                                                   : not_null(_new_val).to<int64_t>();
-                                    count += inc; // increment old count by 1 iff new value is present and `pred` is true
-                                } else {
-                                    discard(_new_val); // since it is not needed in this case
-                                    I64x1 inc = pred ? pred->to<int64_t>() : I64x1(1);
-                                    count += inc; // increment old count by 1 iff new value is present and `pred` is true
-                                }
+                                auto _new_val_pred = pred ? Select(*pred, _new_val, avg) : _new_val;
+                                auto delta_absolute = _new_val_pred.insist_not_null() - avg;
+                                auto delta_relative = delta_absolute / running_count;
+
+                                avg += delta_relative; // update old average with new value
+                                is_null = Bool<L>(false); // at least one non-NULL value is consumed
                             }
-                            break;
                         }
                     }
-                }
-
-                /*----- Compute AVG aggregates after others to ensure that running count is incremented before. -----*/
-                for (std::size_t idx = 0; idx < aggregates.size(); ++idx) {
-                    auto &info = aggregates[idx];
-
-                    if (info.fnid == m::Function::FN_AVG) {
-                        M_insist(info.args.size() == 1, "AVG aggregate function expects exactly one argument");
-                        const auto &arg = *info.args[0];
-                        M_insist(info.entry.type->is_double());
-
-                        auto it = avg_aggregates.find(info.entry.id);
-                        M_insist(it != avg_aggregates.end());
-                        const auto &avg_info = it->second;
-                        M_insist(avg_info.compute_running_avg,
-                                 "AVG aggregate may only occur for running average computations");
-
-                        auto &[avg, is_null] = *M_notnull((
-                            std::get_if<std::pair<Var<Doublex1>, Var<Boolx1>>>(&agg_values[idx])
-                        ));
-
-                        /* Compute AVG as iterative mean as described in Knuth, The Art of Computer Programming
-                         * Vol 2, section 4.2.2. */
-                        auto running_count_idx = std::distance(
-                            aggregates.cbegin(),
-                            std::find_if(aggregates.cbegin(), aggregates.cend(), [&avg_info](const auto &info){
-                                return info.entry.id == avg_info.running_count;
-                            })
-                        );
-                        M_insist(0 <= running_count_idx and running_count_idx < aggregates.size());
-                        auto &running_count = *M_notnull(std::get_if<Var<I64x1>>(&agg_values[running_count_idx]));
-
-                        auto _arg = env.compile(arg);
-                        _Doublex1 _new_val = convert<_Doublex1>(_arg);
-                        if (_new_val.can_be_null()) {
-                            M_insist_no_ternary_logic();
-                            auto _new_val_pred = pred ? Select(*pred, _new_val, _Doublex1::Null()) : _new_val;
-                            auto [new_val, new_val_is_null_] = _new_val_pred.split();
-                            const Var<Boolx1> new_val_is_null(new_val_is_null_); // due to multiple uses
-
-                            auto delta_absolute = new_val - avg;
-                            auto delta_relative = delta_absolute / running_count.to<double>();
-
-                            avg += Select(new_val_is_null,
-                                          0.0, // ignore NULL
-                                          delta_relative); // update old average with new value
-                            is_null = is_null and new_val_is_null; // AVG is NULL iff all values are NULL
-                        } else {
-                            auto _new_val_pred = pred ? Select(*pred, _new_val, avg) : _new_val;
-                            auto delta_absolute = _new_val_pred.insist_not_null() - avg;
-                            auto delta_relative = delta_absolute / running_count.to<double>();
-
-                            avg += delta_relative; // update old average with new value
-                            is_null = false; // at least one non-NULL value is consumed
-                        }
-                    }
+                };
+                switch (CodeGenContext::Get().num_simd_lanes()) {
+                    default: M_unreachable("unsupported number of SIMD lanes");
+                    case  1: execute_pipeline.operator()<1>();  break;
+                    case  2: execute_pipeline.operator()<2>();  break;
+                    case  4: execute_pipeline.operator()<4>();  break;
+                    case  8: execute_pipeline.operator()<8>();  break;
+                    case 16: execute_pipeline.operator()<16>(); break;
                 }
             },
             /* teardown= */ teardown_t::Make_Without_Parent([&](){
-                /*----- Store local aggregate values to globals to access them in other function. -----*/
-                for (std::size_t idx = 0; idx < aggregates.size(); ++idx) {
-                    auto &info = aggregates[idx];
+                auto execute_teardown = [&]<std::size_t L>(){
+#ifndef NDEBUG
+                    M_insist(num_simd_lanes == L,
+                             "number of SIMD lanes in teardown callback must match the one in setup callback");
+#endif
 
-                    bool is_min = false; ///< flag to indicate whether aggregate function is MIN
-                    switch (info.fnid) {
-                        default:
-                            M_unreachable("unsupported aggregate function");
-                        case m::Function::FN_MIN:
-                            is_min = true; // set flag and delegate to MAX case
-                        case m::Function::FN_MAX: {
-                            auto min_max = [&]<typename T>() {
-                                auto &[min_max_backup, is_null_backup] = *M_notnull((
-                                    std::get_if<std::pair<Global<PrimitiveExpr<T>>, Global<Boolx1>>>(&agg_value_backups[idx])
-                                ));
-                                std::tie(min_max_backup, is_null_backup) = *M_notnull((
-                                    std::get_if<std::pair<Var<PrimitiveExpr<T>>, Var<Boolx1>>>(&agg_values[idx])
-                                ));
-                            };
-                            auto &n = as<const Numeric>(*info.entry.type);
-                            switch (n.kind) {
-                                case Numeric::N_Int:
-                                case Numeric::N_Decimal:
-                                    switch (n.size()) {
-                                        default: M_unreachable("invalid size");
-                                        case  8: min_max.template operator()<int8_t >(); break;
-                                        case 16: min_max.template operator()<int16_t>(); break;
-                                        case 32: min_max.template operator()<int32_t>(); break;
-                                        case 64: min_max.template operator()<int64_t>(); break;
-                                    }
-                                    break;
-                                case Numeric::N_Float:
-                                    if (n.size() <= 32)
-                                        min_max.template operator()<float>();
-                                    else
-                                        min_max.template operator()<double>();
+                    /*----- Get aggregates helper structures. -----*/
+                    using agg_t = agg_t_<false, L>;
+                    using agg_backup_t = agg_t_<true, L>;
+                    auto agg_values = static_cast<agg_t*>(_agg_values);
+                    auto agg_value_backups = static_cast<agg_backup_t*>(_agg_value_backups);
+
+                    /*----- Store local aggregate values to globals to access them in other function. -----*/
+                    for (std::size_t idx = 0; idx < aggregates.size(); ++idx) {
+                        auto &info = aggregates[idx];
+
+                        bool is_min = false; ///< flag to indicate whether aggregate function is MIN
+                        switch (info.fnid) {
+                            default:
+                                M_unreachable("unsupported aggregate function");
+                            case m::Function::FN_MIN:
+                                is_min = true; // set flag and delegate to MAX case
+                            case m::Function::FN_MAX: {
+                                auto min_max = [&]<typename T>() {
+                                    auto &[min_max_backup, is_null_backup] = *M_notnull((
+                                        std::get_if<
+                                            std::pair<Global<PrimitiveExpr<T, L>>, Global<Bool<L>>>
+                                        >(&agg_value_backups[idx])
+                                    ));
+                                    std::tie(min_max_backup, is_null_backup) = *M_notnull((
+                                        std::get_if<std::pair<Var<PrimitiveExpr<T, L>>, Var<Bool<L>>>>(&agg_values[idx])
+                                    ));
+                                };
+                                auto &n = as<const Numeric>(*info.entry.type);
+                                switch (n.kind) {
+                                    case Numeric::N_Int:
+                                    case Numeric::N_Decimal:
+                                        switch (n.size()) {
+                                            default: M_unreachable("invalid size");
+                                            case  8: min_max.template operator()<int8_t >(); break;
+                                            case 16: min_max.template operator()<int16_t>(); break;
+                                            case 32: min_max.template operator()<int32_t>(); break;
+                                            case 64: min_max.template operator()<int64_t>(); break;
+                                        }
+                                        break;
+                                    case Numeric::N_Float:
+                                        if (n.size() <= 32)
+                                            min_max.template operator()<float>();
+                                        else
+                                            min_max.template operator()<double>();
+                                }
+                                break;
                             }
-                            break;
-                        }
-                        case m::Function::FN_AVG: {
-                            auto &[avg_backup, is_null_backup] = *M_notnull((
-                                std::get_if<std::pair<Global<Doublex1>, Global<Boolx1>>>(&agg_value_backups[idx])
-                            ));
-                            std::tie(avg_backup, is_null_backup) = *M_notnull((
-                                std::get_if<std::pair<Var<Doublex1>, Var<Boolx1>>>(&agg_values[idx])
-                            ));
-
-                            break;
-                        }
-                        case m::Function::FN_SUM: {
-                            M_insist(info.args.size() == 1, "SUM aggregate function expects exactly one argument");
-                            const auto &arg = *info.args[0];
-
-                            auto sum = [&]<typename T>() {
-                                auto &[sum_backup, is_null_backup] = *M_notnull((
-                                    std::get_if<std::pair<Global<PrimitiveExpr<T>>, Global<Boolx1>>>(&agg_value_backups[idx])
+                            case m::Function::FN_AVG: {
+                                auto &[avg_backup, is_null_backup] = *M_notnull((
+                                    std::get_if<std::pair<Global<Double<L>>, Global<Bool<L>>>>(&agg_value_backups[idx])
                                 ));
-                                std::tie(sum_backup, is_null_backup) = *M_notnull((
-                                    std::get_if<std::pair<Var<PrimitiveExpr<T>>, Var<Boolx1>>>(&agg_values[idx])
+                                std::tie(avg_backup, is_null_backup) = *M_notnull((
+                                    std::get_if<std::pair<Var<Double<L>>, Var<Bool<L>>>>(&agg_values[idx])
                                 ));
-                            };
-                            auto &n = as<const Numeric>(*info.entry.type);
-                            switch (n.kind) {
-                                case Numeric::N_Int:
-                                case Numeric::N_Decimal:
-                                    switch (n.size()) {
-                                        default: M_unreachable("invalid size");
-                                        case  8: sum.template operator()<int8_t >(); break;
-                                        case 16: sum.template operator()<int16_t>(); break;
-                                        case 32: sum.template operator()<int32_t>(); break;
-                                        case 64: sum.template operator()<int64_t>(); break;
-                                    }
-                                    break;
-                                case Numeric::N_Float:
-                                    if (n.size() <= 32)
-                                        sum.template operator()<float>();
-                                    else
-                                        sum.template operator()<double>();
+
+                                break;
                             }
-                            break;
-                        }
-                        case m::Function::FN_COUNT: {
-                            auto &count_backup = *M_notnull(std::get_if<Global<I64x1>>(&agg_value_backups[idx]));
-                            count_backup = *M_notnull(std::get_if<Var<I64x1>>(&agg_values[idx]));
+                            case m::Function::FN_SUM: {
+                                M_insist(info.args.size() == 1, "SUM aggregate function expects exactly one argument");
+                                const auto &arg = *info.args[0];
 
-                            break;
+                                auto sum = [&]<typename T>() {
+                                    auto &[sum_backup, is_null_backup] = *M_notnull((
+                                        std::get_if<
+                                            std::pair<Global<PrimitiveExpr<T, L>>, Global<Bool<L>>>
+                                        >(&agg_value_backups[idx])
+                                    ));
+                                    std::tie(sum_backup, is_null_backup) = *M_notnull((
+                                        std::get_if<std::pair<Var<PrimitiveExpr<T, L>>, Var<Bool<L>>>>(&agg_values[idx])
+                                    ));
+                                };
+                                auto &n = as<const Numeric>(*info.entry.type);
+                                switch (n.kind) {
+                                    case Numeric::N_Int:
+                                    case Numeric::N_Decimal:
+                                        switch (n.size()) {
+                                            default: M_unreachable("invalid size");
+                                            case  8: sum.template operator()<int8_t >(); break;
+                                            case 16: sum.template operator()<int16_t>(); break;
+                                            case 32: sum.template operator()<int32_t>(); break;
+                                            case 64: sum.template operator()<int64_t>(); break;
+                                        }
+                                        break;
+                                    case Numeric::N_Float:
+                                        if (n.size() <= 32)
+                                            sum.template operator()<float>();
+                                        else
+                                            sum.template operator()<double>();
+                                }
+                                break;
+                            }
+                            case m::Function::FN_COUNT: {
+                                auto &count_backup = *M_notnull(std::get_if<Global<I64<L>>>(&agg_value_backups[idx]));
+                                count_backup = *M_notnull(std::get_if<Var<I64<L>>>(&agg_values[idx]));
+
+                                break;
+                            }
                         }
                     }
-                }
 
-                /*----- Destroy created aggregates and their backups. -----*/
-                for (std::size_t idx = 0; idx < aggregates.size(); ++idx) {
-                    agg_values[idx].~agg_t();
-                    agg_value_backups[idx].~agg_backup_t();
+                    /*----- Destroy created aggregates and their backups. -----*/
+                    for (std::size_t idx = 0; idx < aggregates.size(); ++idx) {
+                        agg_values[idx].~agg_t();
+                        agg_value_backups[idx].~agg_backup_t();
+                    }
+
+                    /*----- Free aggregates helper structures. -----*/
+                    delete[] agg_values;
+                    delete[] agg_value_backups;
+                };
+                switch (CodeGenContext::Get().num_simd_lanes()) {
+                    default: M_unreachable("unsupported number of SIMD lanes");
+                    case  1: execute_teardown.operator()<1>();  break;
+                    case  2: execute_teardown.operator()<2>();  break;
+                    case  4: execute_teardown.operator()<4>();  break;
+                    case  8: execute_teardown.operator()<8>();  break;
+                    case 16: execute_teardown.operator()<16>(); break;
                 }
             })
-       );
+        );
     }
     aggregation_child_pipeline(); // call child function
 
     /*----- Emit setup code *before* possibly introducing temporary boolean variables to not overwrite them. -----*/
     setup();
+
+    /*----- Emit code to finalize aggregate computations. -----*/
+    for (auto &fn : finalize_aggregates)
+        fn();
 
     /*----- Add computed aggregates tuple to current environment. ----*/
     auto &env = CodeGenContext::Get().env();
@@ -2737,7 +2997,7 @@ void Aggregation::execute(const Match<Aggregation> &M, setup_t setup, pipeline_t
             M_insist(avg.can_be_null());
             _Var<Doublex1> var(avg); // introduce variable s.t. uses only load from it
             env.add(e.id, var);
-        } else { // part of key or already computed aggregate
+        } else { // already computed aggregate
             std::visit(overloaded {
                 [&]<typename T>(Expr<T> value) -> void {
                     if (value.can_be_null()) {
@@ -2749,17 +3009,14 @@ void Aggregation::execute(const Match<Aggregation> &M, setup_t setup, pipeline_t
                         env.add(e.id, Expr<T>(var));
                     }
                 },
-                [&](NChar value) -> void {
-                    Var<Ptr<Charx1>> var(value.val()); // introduce variable s.t. uses only load from it
-                    env.add(e.id, NChar(var, value.can_be_null(), value.length(), value.guarantees_terminating_nul()));
-                },
-                [](auto) -> void { M_unreachable("SIMDfication currently not supported"); },
+                [](auto) -> void { M_unreachable("only scalar and non-string values must occur"); },
                 [](std::monostate) -> void { M_unreachable("invalid reference"); },
             }, results.get(e.id)); // do not extract to be able to access for not-yet-computed AVG aggregates
         }
     }
 
     /*----- Resume pipeline. -----*/
+    CodeGenContext::Get().set_num_simd_lanes(1); // since only a single tuple is produced
     pipeline();
 
     /*----- Emit teardown code. -----*/

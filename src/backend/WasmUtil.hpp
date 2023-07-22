@@ -369,25 +369,31 @@ inline bool can_be_null(const SQL_t &variant)
     }, variant);
 }
 
-inline Boolx1 is_null(SQL_t &variant)
+template<std::size_t L = 1>
+inline Bool<L> is_null(SQL_t &variant)
 {
     return std::visit(overloaded {
-        []<sql_type T>(T actual) -> Boolx1 requires (T::num_simd_lanes == 1) { return actual.is_null(); },
-        []<sql_type T>(T) -> Boolx1 requires (T::num_simd_lanes > 1) {
-            M_unreachable("SIMDfication currently not supported");
+        []<sql_type T>(T actual) -> Bool<L> requires requires { { actual.is_null() } -> std::same_as<Bool<L>>; } {
+            return actual.is_null();
         },
-        [](std::monostate) -> Boolx1 { M_unreachable("invalid variant"); },
+        []<sql_type T>(T actual) -> Bool<L> requires (not requires { { actual.is_null() } -> std::same_as<Bool<L>>; }) {
+            M_unreachable("invalid type for given number of SIMD lanes");
+        },
+        [](std::monostate) -> Bool<L> { M_unreachable("invalid variant"); },
     }, variant);
 }
 
-inline Boolx1 not_null(SQL_t &variant)
+template<std::size_t L = 1>
+inline Bool<L> not_null(SQL_t &variant)
 {
     return std::visit(overloaded {
-        []<sql_type T>(T actual) -> Boolx1 requires (T::num_simd_lanes == 1) { return actual.not_null(); },
-        []<sql_type T>(T) -> Boolx1 requires (T::num_simd_lanes > 1) {
-            M_unreachable("SIMDfication currently not supported");
+        []<sql_type T>(T actual) -> Bool<L> requires requires { { actual.not_null() } -> std::same_as<Bool<L>>; } {
+            return actual.not_null();
         },
-        [](std::monostate) -> Boolx1 { M_unreachable("invalid variant"); },
+        []<sql_type T>(T actual) -> Bool<L> requires (not requires { { actual.not_null() } -> std::same_as<Bool<L>>; }) {
+            M_unreachable("invalid type for given number of SIMD lanes");
+        },
+        [](std::monostate) -> Bool<L> { M_unreachable("invalid variant"); },
     }, variant);
 }
 

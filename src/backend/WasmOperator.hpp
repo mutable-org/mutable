@@ -199,15 +199,15 @@ struct Aggregation : PhysicalOperator<Aggregation, AggregationOperator>
     private:
     template<bool IsGlobal, typename T>
     using var_t_ = std::conditional_t<IsGlobal, Global<T>, Var<T>>;
-    template<bool IsGlobal>
+    template<bool IsGlobal, std::size_t L>
     using agg_t_ = std::variant<
-        var_t_<IsGlobal, I64x1>,
-        std::pair<var_t_<IsGlobal, I8x1>,     var_t_<IsGlobal, Boolx1>>,
-        std::pair<var_t_<IsGlobal, I16x1>,    var_t_<IsGlobal, Boolx1>>,
-        std::pair<var_t_<IsGlobal, I32x1>,    var_t_<IsGlobal, Boolx1>>,
-        std::pair<var_t_<IsGlobal, I64x1>,    var_t_<IsGlobal, Boolx1>>,
-        std::pair<var_t_<IsGlobal, Floatx1>,  var_t_<IsGlobal, Boolx1>>,
-        std::pair<var_t_<IsGlobal, Doublex1>, var_t_<IsGlobal, Boolx1>>
+        var_t_<IsGlobal, I64<L>>,
+        std::pair<var_t_<IsGlobal, I8<L>>,     var_t_<IsGlobal, Bool<L>>>,
+        std::pair<var_t_<IsGlobal, I16<L>>,    var_t_<IsGlobal, Bool<L>>>,
+        std::pair<var_t_<IsGlobal, I32<L>>,    var_t_<IsGlobal, Bool<L>>>,
+        std::pair<var_t_<IsGlobal, I64<L>>,    var_t_<IsGlobal, Bool<L>>>,
+        std::pair<var_t_<IsGlobal, Float<L>>,  var_t_<IsGlobal, Bool<L>>>,
+        std::pair<var_t_<IsGlobal, Double<L>>, var_t_<IsGlobal, Bool<L>>>
     >;
 
     public:

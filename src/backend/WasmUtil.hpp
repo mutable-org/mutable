@@ -732,41 +732,45 @@ inline Environment Scope::extract()
  * called multiple times and each call starts storing at exactly the point where it has ended in the last call.  The
  * given variable \p tuple_id will be incremented automatically before advancing to the next tuple (i.e. code for
  * this will be emitted at the start of the block returned as third element).  Predication is supported and emitted
- * respectively.
+ * respectively.  SIMDfication is supported and will be emitted iff \p num_simd_lanes is greater than 1.
  *
  * Does not emit any code but returns three `wasm::Block`s containing code: the first one initializes all needed
  * variables, the second one stores one tuple, and the third one advances to the next tuple. */
 template<VariableKind Kind>
 std::tuple<Block, Block, Block>
 compile_store_sequential(const Schema &tuple_schema, Ptr<void> base_address, const storage::DataLayout &layout,
-                         const Schema &layout_schema, Variable<uint32_t, Kind, false> &tuple_id);
+                          std::size_t num_simd_lanes, const Schema &layout_schema,
+                          Variable<uint32_t, Kind, false> &tuple_id);
 
 /** Compiles the data layout \p layout containing tuples of schema \p layout_schema such that it sequentially stores
  * tuples of schema \p tuple_schema starting at memory address \p base_address and tuple ID \p tuple_id.  The store
  * has to be done in a single pass, i.e. the execution of the returned code must *not* be split among multiple
  * function calls.  The given variable \p tuple_id will be incremented automatically before advancing to the next
  * tuple (i.e. code for this will be emitted at the start of the block returned as third element).  Predication is
- * supported and emitted respectively.
+ * supported and emitted respectively.  SIMDfication is supported and will be emitted iff \p num_simd_lanes is greater
+ * than 1.
  *
  * Does not emit any code but returns three `wasm::Block`s containing code: the first one initializes all needed
  * variables, the second one stores one tuple, and the third one advances to the next tuple. */
 template<VariableKind Kind>
 std::tuple<Block, Block, Block>
 compile_store_sequential_single_pass(const Schema &tuple_schema, Ptr<void> base_address,
-                                     const storage::DataLayout &layout, const Schema &layout_schema,
-                                     Variable<uint32_t, Kind, false> &tuple_id);
+                                     const storage::DataLayout &layout, std::size_t num_simd_lanes,
+                                     const Schema &layout_schema, Variable<uint32_t, Kind, false> &tuple_id);
 
 /** Compiles the data layout \p layout containing tuples of schema \p layout_schema such that it sequentially loads
  * tuples of schema \p tuple_schema starting at memory address \p base_address and tuple ID \p tuple_id.  The given
  * variable \p tuple_id will be incremented automatically before advancing to the next tuple (i.e. code for this will
- * be emitted at the start of the block returned as third element).
+ * be emitted at the start of the block returned as third element).  SIMDfication is supported and will be emitted
+ * iff \p num_simd_lanes is greater than 1.
  *
  * Does not emit any code but returns three `wasm::Block`s containing code: the first one initializes all needed
  * variables, the second one loads one tuple, and the third one advances to the next tuple. */
 template<VariableKind Kind>
 std::tuple<Block, Block, Block>
 compile_load_sequential(const Schema &tuple_schema, Ptr<void> base_address, const storage::DataLayout &layout,
-                        const Schema &layout_schema, Variable<uint32_t, Kind, false> &tuple_id);
+                         std::size_t num_simd_lanes, const Schema &layout_schema,
+                         Variable<uint32_t, Kind, false> &tuple_id);
 
 /** Compiles the data layout \p layout starting at memory address \p base_address and containing tuples of schema
  * \p layout_schema such that it stores the single tuple with schema \p tuple_schema and ID \p tuple_id.

@@ -449,7 +449,7 @@ void Scan::execute(const Match<Scan> &M, setup_t setup, pipeline_t pipeline, tea
     setup();
 
     /*----- Compile data layout to generate sequential load from table. -----*/
-    auto [inits, loads, jumps] = compile_load_sequential(schema, base_address, table.layout(),
+    auto [inits, loads, jumps] = compile_load_sequential(schema, base_address, table.layout(), 1,
                                                          table.schema(M.scan.alias()), tuple_id);
 
     /*----- Generate the loop for the actual scan, with the pipeline emitted into the loop body. -----*/
@@ -3285,10 +3285,10 @@ void SortMergeJoin<SortLeft, SortRight, Predicated>::execute(const Match<SortMer
     /*----- Compile data layouts to generate sequential loads from buffers. -----*/
     Var<U32x1> tuple_id_parent, tuple_id_child; // default initialized to 0
     auto [inits_parent, loads_parent, _jumps_parent] =
-        compile_load_sequential(buffer_parent.schema(), buffer_parent.base_address(), buffer_parent.layout(),
+        compile_load_sequential(buffer_parent.schema(), buffer_parent.base_address(), buffer_parent.layout(), 1,
                                 buffer_parent.schema(), tuple_id_parent);
     auto [inits_child, loads_child, _jumps_child] =
-        compile_load_sequential(buffer_child.schema(), buffer_child.base_address(), buffer_child.layout(),
+        compile_load_sequential(buffer_child.schema(), buffer_child.base_address(), buffer_child.layout(), 1,
                                 buffer_child.schema(), tuple_id_child);
     /* since structured bindings cannot be used in lambda capture */
     Block jumps_parent(std::move(_jumps_parent)), jumps_child(std::move(_jumps_child));

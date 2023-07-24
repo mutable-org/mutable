@@ -14,6 +14,7 @@ namespace m {
     X(Scan) \
     X(Filter<false>) \
     X(Filter<true>) \
+    X(LazyDisjunctiveFilter) \
     X(Projection) \
     X(HashBasedGrouping) \
     X(OrderedGrouping) \
@@ -44,6 +45,7 @@ namespace m {
     X(Callback) \
     X(Print) \
     X(Scan) \
+    X(LazyDisjunctiveFilter) \
     X(Projection) \
     X(HashBasedGrouping) \
     X(OrderedGrouping) \
@@ -107,6 +109,16 @@ struct Filter : PhysicalOperator<Filter<Predicated>, FilterOperator>
     static double cost(const Match<Filter>&) { return M_CONSTEXPR_COND(Predicated, 2.0, 1.0); }
     static ConditionSet adapt_post_condition(const Match<Filter> &M, const ConditionSet &post_cond_child);
 };
+
+struct LazyDisjunctiveFilter : PhysicalOperator<LazyDisjunctiveFilter, DisjunctiveFilterOperator>
+{
+    static void execute(const Match<LazyDisjunctiveFilter> &M, setup_t setup, pipeline_t pipeline, teardown_t teardown);
+    static double cost(const Match<LazyDisjunctiveFilter> &M);
+    static ConditionSet adapt_post_condition(const Match<LazyDisjunctiveFilter>&, const ConditionSet &post_cond_child) {
+        return ConditionSet(post_cond_child);
+    }
+};
+
 
 struct Projection : PhysicalOperator<Projection, ProjectionOperator>
 {
@@ -409,6 +421,33 @@ struct Match<wasm::Filter<Predicated>> : MatchBase
 
     std::string name() const override {
         return M_CONSTEXPR_COND(Predicated, "wasm::PredicatedFilter", "wasm::BranchingFilter");
+    }
+};
+
+template<>
+struct Match<wasm::LazyDisjunctiveFilter> : MatchBase
+{
+    private:
+    std::unique_ptr<const storage::DataLayoutFactory> buffer_factory_;
+    std::size_t buffer_num_tuples_;
+    public:
+    const DisjunctiveFilterOperator &filter;
+    const MatchBase &child;
+
+    Match(const DisjunctiveFilterOperator *filter, std::vector<std::reference_wrapper<const MatchBase>> &&children)
+        : filter(*filter)
+        , child(children[0])
+    {
+        M_insist(children.size() == 1);
+    }
+
+    void execute(setup_t setup, pipeline_t pipeline, teardown_t teardown) const override {
+        execute_buffered(*this, filter.schema(), buffer_factory_, buffer_num_tuples_,
+                         std::move(setup), std::move(pipeline), std::move(teardown));
+    }
+
+    std::string name() const override {
+        return "wasm::LazyDisjunctiveFilter";
     }
 };
 

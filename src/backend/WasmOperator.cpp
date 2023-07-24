@@ -483,6 +483,46 @@ template struct m::wasm::Filter<true>;
 
 
 /*======================================================================================================================
+ * LazyDisjunctiveFilter
+ *====================================================================================================================*/
+
+double LazyDisjunctiveFilter::cost(const Match<LazyDisjunctiveFilter> &M)
+{
+    const cnf::CNF &cond = M.filter.filter();
+    M_insist(cond.size() == 1, "disjunctive filter condition must be a single clause");
+    return cond[0].size(); // number of predicates in the clause
+}
+
+void LazyDisjunctiveFilter::execute(const Match<LazyDisjunctiveFilter> &M, setup_t setup, pipeline_t pipeline,
+                                    teardown_t teardown)
+{
+    const cnf::Clause &clause = M.filter.filter()[0];
+
+    M.child.execute(
+        /* setup=    */ std::move(setup),
+        /* pipeline= */ [&, pipeline=std::move(pipeline)](){
+            BLOCK(lazy_disjunctive_filter)
+            {
+                BLOCK(lazy_disjunctive_filter_then)
+                {
+                    for (const cnf::Predicate &pred : clause) {
+                        auto cond = CodeGenContext::Get().env().compile<_Bool>(*pred);
+                        if (pred.negative())
+                            GOTO(cond.is_false_and_not_null(), lazy_disjunctive_filter_then); // break to remainder of pipline
+                        else
+                            GOTO(cond.is_true_and_not_null(), lazy_disjunctive_filter_then); // break to remainder of pipline
+                    }
+                    GOTO(lazy_disjunctive_filter); // skip pipeline
+                }
+                pipeline();
+            }
+        },
+        /* teardown= */ std::move(teardown)
+    );
+}
+
+
+/*======================================================================================================================
  * Projection
  *====================================================================================================================*/
 

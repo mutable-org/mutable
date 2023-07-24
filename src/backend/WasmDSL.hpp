@@ -816,7 +816,7 @@ struct Block final
     private:
     Block() = default;
 
-    /** Create a new `Block` for a given `::wasm::Block` and set it *active* in the current `Module`. */
+    /** Create a new `Block` for a given `::wasm::Block`. */
     Block(::wasm::Block *block, bool attach_to_parent)
         : this_block_(M_notnull(block))
         , attach_to_parent_(attach_to_parent)

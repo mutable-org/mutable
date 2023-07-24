@@ -479,9 +479,9 @@ struct pattern_matcher_recursive<PhysOp, Idx, Op, PatternQueue...>
     {
         M_insist(sizeof...(PatternQueue) == sizeof...(op_queue));
 
-        auto op = cast<const Op>(&op_);
-        if (not op)
+        if (typeid(op_) != typeid(Op)) // check for *exact* match, not just *is a* relationship
             return; // current operator does not match
+        const Op *op = dynamic_cast<const Op*>(&op_); // requires dynamic_cast because of virtual inheritance
 
         /* Check whether matches for all children exists and fulfill the pre-conditions for this physical operator.
          * If so, update current nodes and current children, otherwise, no match can be found. */

@@ -459,6 +459,16 @@ ConditionSet Filter<Predicated>::adapt_post_condition(const Match<Filter>&, cons
 }
 
 template<bool Predicated>
+double Filter<Predicated>::cost(const Match<Filter> &M)
+{
+    const cnf::CNF &cond = M.filter.filter();
+    const unsigned cost = std::accumulate(cond.cbegin(), cond.cend(), 0U, [](unsigned cost, const cnf::Clause &clause) {
+        return cost + clause.size();
+    });
+    return cost * (Predicated ? 2.0 : 1.0);
+}
+
+template<bool Predicated>
 void Filter<Predicated>::execute(const Match<Filter> &M, setup_t setup, pipeline_t pipeline, teardown_t teardown)
 {
     M.child.execute(
@@ -490,7 +500,7 @@ double LazyDisjunctiveFilter::cost(const Match<LazyDisjunctiveFilter> &M)
 {
     const cnf::CNF &cond = M.filter.filter();
     M_insist(cond.size() == 1, "disjunctive filter condition must be a single clause");
-    return cond[0].size(); // number of predicates in the clause
+    return cond[0].size() / 2.0; // on avg. half the number of predicates in the clause XXX consider selectivities
 }
 
 void LazyDisjunctiveFilter::execute(const Match<LazyDisjunctiveFilter> &M, setup_t setup, pipeline_t pipeline,

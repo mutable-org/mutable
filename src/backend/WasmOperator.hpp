@@ -106,7 +106,7 @@ template<bool Predicated>
 struct Filter : PhysicalOperator<Filter<Predicated>, FilterOperator>
 {
     static void execute(const Match<Filter> &M, setup_t setup, pipeline_t pipeline, teardown_t teardown);
-    static double cost(const Match<Filter>&) { return M_CONSTEXPR_COND(Predicated, 2.0, 1.0); }
+    static double cost(const Match<Filter>&);
     static ConditionSet adapt_post_condition(const Match<Filter> &M, const ConditionSet &post_cond_child);
 };
 

@@ -542,40 +542,40 @@ struct CollectStringLiterals : ConstOperatorVisitor, ast::ConstASTExprVisitor
     /*----- Operator -------------------------------------------------------------------------------------------------*/
     void operator()(const ScanOperator &) override { /* nothing to be done */ }
 
-    void operator()(const CallbackOperator & op) override { recurse(op); }
+    void operator()(const CallbackOperator &op) override { recurse(op); }
 
-    void operator()(const PrintOperator & op) override { recurse(op); }
+    void operator()(const PrintOperator &op) override { recurse(op); }
 
-    void operator()(const NoOpOperator & op) override { recurse(op); }
+    void operator()(const NoOpOperator &op) override { recurse(op); }
 
-    void operator()(const FilterOperator & op) override
+    void operator()(const FilterOperator &op) override
     {
-        for (auto &c: op.filter()) {
-            for (auto &p: c)
-                (*this)(*p);
-        }
+        (*this)(op.filter());
+        recurse(op);
+    }
+
+    void operator()(const DisjunctiveFilterOperator &op) override
+    {
+        (*this)(op.filter());
         recurse(op);
     }
 
     void operator()(const JoinOperator & op) override
     {
-        for (auto &c : op.predicate()) {
-            for (auto &p: c)
-                (*this)(*p);
-        }
+        (*this)(op.predicate());
         recurse(op);
     }
 
-    void operator()(const ProjectionOperator & op) override
+    void operator()(const ProjectionOperator &op) override
     {
         for (auto p : op.projections())
             (*this)(p.first.get());
         recurse(op);
     }
 
-    void operator()(const LimitOperator & op) override { recurse(op); }
+    void operator()(const LimitOperator &op) override { recurse(op); }
 
-    void operator()(const GroupingOperator & op) override
+    void operator()(const GroupingOperator &op) override
     {
         for (auto [grp, alias] : op.group_by())
             (*this)(grp.get());
@@ -584,12 +584,22 @@ struct CollectStringLiterals : ConstOperatorVisitor, ast::ConstASTExprVisitor
     void operator()(const AggregationOperator &op) override { recurse(op); }
     void operator()(const SortingOperator &op) override { recurse(op); }
 
+
+    /*----- CNF ------------------------------------------------------------------------------------------------------*/
+    void operator()(const cnf::CNF &cnf) {
+        for (auto &clause: cnf) {
+            for (auto &pred: clause)
+                (*this)(*pred);
+        }
+    }
+
+
     /*----- Expr -----------------------------------------------------------------------------------------------------*/
     void operator()(const ast::ErrorExpr &) override { M_unreachable("no errors at this stage"); }
 
     void operator()(const ast::Designator &) override { /* nothing to be done */ }
 
-    void operator()(const ast::Constant & e) override
+    void operator()(const ast::Constant &e) override
     {
         if (e.is_string()) {
             auto s = Interpreter::eval(e);

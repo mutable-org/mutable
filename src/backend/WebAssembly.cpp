@@ -58,7 +58,9 @@ WasmEngine::WasmContext::WasmContext(uint32_t id, config_t config, const Operato
     , plan(plan)
     , vm(size)
 {
-    install_guard_page();
+    install_guard_page(); // map nullptr page
+
+    M_insist(size <= WASM_MAX_MEMORY);
 }
 
 uint32_t WasmEngine::WasmContext::map_table(const Table &table)

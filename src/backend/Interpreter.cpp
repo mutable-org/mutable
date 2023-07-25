@@ -59,6 +59,15 @@ static StackMachine compile_data_layout(const Schema &tuple_schema, void *addres
     std::unordered_map<std::size_t, std::size_t> leaf2id;
     std::unordered_map<std::size_t, std::size_t> leaf2mask;
 
+    /*----- Check whether any of the entries in `tuple_schema` can be NULL, so that we need the NULL bitmap. -----*/
+    const bool needs_null_bitmap = [&]() {
+        for (auto &tuple_entry : tuple_schema) {
+            if (layout_schema[tuple_entry.id].second.nullable())
+                return true; // found an entry in `tuple_schema` that can be NULL according to `layout_schema`
+        }
+        return false; // no attribute in `tuple_schema` can be NULL according to `layout_schema`
+    }();
+
     /* Compute location of NULL bitmap. */
     const auto null_bitmap_idx = layout_schema.num_entries();
     auto find_null_bitmap = [&](const DataLayout &layout, std::size_t row_id) -> void {
@@ -89,7 +98,8 @@ static StackMachine compile_data_layout(const Schema &tuple_schema, void *addres
         find_null_bitmap_impl(static_cast<const DataLayout::INode&>(layout), uintptr_t(address), row_id,
                               find_null_bitmap_impl);
     };
-    find_null_bitmap(layout, row_id);
+    if (needs_null_bitmap)
+        find_null_bitmap(layout, row_id);
     if (null_bitmap_info and null_bitmap_info.bit_stride) {
         null_bitmap_info.offset_id = SM.add(null_bitmap_info.bit_offset); // add initial NULL bitmap offset to context
     }
@@ -102,6 +112,7 @@ static StackMachine compile_data_layout(const Schema &tuple_schema, void *addres
             for (auto &child : node) {
                 if (auto child_leaf = cast<const DataLayout::Leaf>(child.ptr.get())) {
                     if (child_leaf->index() != null_bitmap_idx) {
+                        const bool attr_can_be_null = null_bitmap_info and layout_schema[child_leaf->index()].nullable();
                         auto &id = layout_schema[child_leaf->index()].id;
 
                         /* Locate the attribute in the operator schema. */
@@ -121,7 +132,7 @@ static StackMachine compile_data_layout(const Schema &tuple_schema, void *addres
                                      "the stride must be a whole multiple of a byte or less than a byte");
 
                             /* Access NULL bit. */
-                            if (null_bitmap_info) {
+                            if (attr_can_be_null) {
                                 if (not null_bitmap_info.bit_stride) {
                                     /* No bit stride means the NULL bitmap only advances with parent sequence. */
                                     const std::size_t bit_offset = null_bitmap_info.bit_offset + child_leaf->index();
@@ -260,7 +271,7 @@ static StackMachine compile_data_layout(const Schema &tuple_schema, void *addres
                                     SM.emit_And_i();
                                     SM.emit_NEZ_i();
 
-                                    if (null_bitmap_info)
+                                    if (attr_can_be_null)
                                         SM.emit_Sel();
 
                                     /* Store value in output tuple. */
@@ -306,7 +317,7 @@ static StackMachine compile_data_layout(const Schema &tuple_schema, void *addres
                                     else
                                         SM.emit_Ld(child_leaf->type());
 
-                                    if (null_bitmap_info)
+                                    if (attr_can_be_null)
                                         SM.emit_Sel();
 
                                     /* Store value in output tuple. */
@@ -394,7 +405,7 @@ static StackMachine compile_data_layout(const Schema &tuple_schema, void *addres
                 if (auto child_leaf = cast<const DataLayout::Leaf>(child.ptr.get())) {
                     std::size_t offset_id;
                     std::size_t mask_id = -1UL;
-                    if (child_leaf->index() == null_bitmap_idx) {
+                    if (null_bitmap_info and child_leaf->index() == null_bitmap_idx) {
                         offset_id = null_bitmap_info.id;
                         mask_id = null_bitmap_info.offset_id;
                     } else if (auto it = leaf2id.find(child_leaf->index()); it != leaf2id.end()) {

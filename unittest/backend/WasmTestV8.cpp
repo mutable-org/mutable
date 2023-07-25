@@ -75,8 +75,8 @@ struct invoke_v8<PrimitiveExpr<ReturnType, ReturnL>(PrimitiveExpr<ParamTypes, Pa
 
     public:
     invoke_v8() {
-        /* Ensure context for SIMD result vector in memory. */
-        if (not std::same_as<ReturnType, void> and ReturnL > 1)
+        /* Ensure context for SIMD result vector in memory or CDT debugging. */
+        if ((not std::same_as<ReturnType, void> and ReturnL > 1) or getenv("MUTABLE_CDT_PORT") != NULL)
             context_created_ = m::WasmEngine::Ensure_Wasm_Context_For_ID(Module::ID()).second;
     }
 

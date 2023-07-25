@@ -174,6 +174,18 @@ struct MatchBase
 
     double cost() const { return cost_; }
 
+    friend std::ostream & operator<<(std::ostream &out, const MatchBase &M) {
+        M.print(out);
+        return out;
+    }
+
+    protected:
+    static std::ostream & indent(std::ostream &out, unsigned level) {
+        if (level) out << '\n' << std::string(2 * level - 2, ' ') << "` ";
+        return out;
+    }
+    virtual void print(std::ostream &out, unsigned level = 0) const = 0;
+
     private:
     void cost(double new_cost) { cost_ = new_cost; }
 };
@@ -362,22 +374,13 @@ struct PhysicalOptimizer : ConstPostOrderOperatorVisitor
         out << "}\n";
     };
 
-    private:
-    void dump_plan_helper(const table_entry &e, std::ostream &out, unsigned indent = 0) const {
-        if (indent)
-            out << std::string(2 * indent - 2, ' ') << "` ";
-        out << e.match->name() << " (cumulative cost=" << e.cost << ")" << std::endl;
-        for (const auto &child : e.children)
-            dump_plan_helper(child.get().second, out, indent + 1);
-    }
-
     public:
     /** Prints a representation of the found physical operator covering for the logical plan rooted in `plan` to
      * `out`. */
-    void dump_plan(const Operator &plan, std::ostream &out) const { dump_plan_helper(get_plan(plan), out, 0); };
+    void dump_plan(const Operator &plan, std::ostream &out) const;
     /** Prints a representation of the found physical operator covering for the logical plan rooted in `plan` to
      * `std::cout`. */
-    void dump_plan(const Operator &plan) const { dump_plan(plan, std::cout); };
+    void dump_plan(const Operator &plan) const;
 };
 
 

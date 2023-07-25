@@ -308,6 +308,9 @@ struct Match<wasm::NoOp> : MatchBase
         wasm::NoOp::execute(*this, std::move(setup), std::move(pipeline), std::move(teardown));
     }
     std::string name() const override { return "wasm::NoOp"; }
+
+    protected:
+    void print(std::ostream &out, unsigned level) const override;
 };
 
 template<>
@@ -330,18 +333,21 @@ struct Match<wasm::Callback> : MatchBase
         wasm::Callback::execute(*this, std::move(setup), std::move(pipeline), std::move(teardown));
     }
     std::string name() const override { return "wasm::Callback"; }
+
+    protected:
+    void print(std::ostream &out, unsigned level) const override;
 };
 
 template<>
 struct Match<wasm::Print> : MatchBase
 {
-    const PrintOperator &print;
+    const PrintOperator &print_;
     const MatchBase &child;
     std::unique_ptr<const storage::DataLayoutFactory> result_set_factory;
     std::optional<std::size_t> result_set_num_tuples_;
 
     Match(const PrintOperator *print, std::vector<std::reference_wrapper<const MatchBase>> &&children)
-        : print(*print)
+        : print_(*print)
         , child(children[0])
         , result_set_factory(std::make_unique<storage::RowLayoutFactory>()) // TODO: let optimizer decide this
     {
@@ -352,6 +358,9 @@ struct Match<wasm::Print> : MatchBase
         wasm::Print::execute(*this, std::move(setup), std::move(pipeline), std::move(teardown));
     }
     std::string name() const override { return "wasm::Print"; }
+
+    protected:
+    void print(std::ostream &out, unsigned level) const override;
 };
 
 template<>
@@ -398,6 +407,9 @@ struct Match<wasm::Scan> : MatchBase
         oss << "wasm::Scan(" << scan.alias() << ')';
         return oss.str();
     }
+
+    protected:
+    void print(std::ostream &out, unsigned level) const override;
 };
 
 template<bool Predicated>
@@ -425,6 +437,9 @@ struct Match<wasm::Filter<Predicated>> : MatchBase
     std::string name() const override {
         return M_CONSTEXPR_COND(Predicated, "wasm::PredicatedFilter", "wasm::BranchingFilter");
     }
+
+    protected:
+    void print(std::ostream &out, unsigned level) const override;
 };
 
 template<>
@@ -452,6 +467,9 @@ struct Match<wasm::LazyDisjunctiveFilter> : MatchBase
     std::string name() const override {
         return "wasm::LazyDisjunctiveFilter";
     }
+
+    protected:
+    void print(std::ostream &out, unsigned level) const override;
 };
 
 template<>
@@ -473,6 +491,9 @@ struct Match<wasm::Projection> : MatchBase
         wasm::Projection::execute(*this, std::move(setup), std::move(pipeline), std::move(teardown));
     }
     std::string name() const override { return "wasm::Projection"; }
+
+    protected:
+    void print(std::ostream &out, unsigned level) const override;
 };
 
 template<>
@@ -492,6 +513,9 @@ struct Match<wasm::HashBasedGrouping> : MatchBase
         wasm::HashBasedGrouping::execute(*this, std::move(setup), std::move(pipeline), std::move(teardown));
     }
     std::string name() const override { return "wasm::HashBasedGrouping"; }
+
+    protected:
+    void print(std::ostream &out, unsigned level) const override;
 };
 
 template<>
@@ -511,6 +535,9 @@ struct Match<wasm::OrderedGrouping> : MatchBase
         wasm::OrderedGrouping::execute(*this, std::move(setup), std::move(pipeline), std::move(teardown));
     }
     std::string name() const override { return "wasm::OrderedGrouping"; }
+
+    protected:
+    void print(std::ostream &out, unsigned level) const override;
 };
 
 template<>
@@ -530,6 +557,9 @@ struct Match<wasm::Aggregation> : MatchBase
         wasm::Aggregation::execute(*this, std::move(setup), std::move(pipeline), std::move(teardown));
     }
     std::string name() const override { return "wasm::Aggregation"; }
+
+    protected:
+    void print(std::ostream &out, unsigned level) const override;
 };
 
 template<>
@@ -551,6 +581,9 @@ struct Match<wasm::Sorting> : MatchBase
         wasm::Sorting::execute(*this, std::move(setup), std::move(pipeline), std::move(teardown));
     }
     std::string name() const override { return "wasm::Sorting"; }
+
+    protected:
+    void print(std::ostream &out, unsigned level) const override;
 };
 
 template<>
@@ -568,6 +601,9 @@ struct Match<wasm::NoOpSorting> : MatchBase
         wasm::NoOpSorting::execute(*this, std::move(setup), std::move(pipeline), std::move(teardown));
     }
     std::string name() const override { return "wasm::NoOpSorting"; }
+
+    protected:
+    void print(std::ostream &out, unsigned level) const override;
 };
 
 template<bool Predicated>
@@ -599,6 +635,9 @@ struct Match<wasm::NestedLoopsJoin<Predicated>> : MatchBase
     std::string name() const override {
         return M_CONSTEXPR_COND(Predicated, "wasm::PredicatedNestedLoopsJoin", "wasm::BranchingNestedLoopsJoin");
     }
+
+    protected:
+    void print(std::ostream &out, unsigned level) const override;
 };
 
 template<bool UniqueBuild, bool Predicated>
@@ -634,6 +673,9 @@ struct Match<wasm::SimpleHashJoin<UniqueBuild, Predicated>> : MatchBase
         oss << M_CONSTEXPR_COND(Predicated, "PredicatedSimpleHashJoin", "BranchingSimpleHashJoin");
         return oss.str();
     }
+
+    protected:
+    void print(std::ostream &out, unsigned level) const override;
 };
 
 template<bool SortLeft, bool SortRight, bool Predicated>
@@ -678,6 +720,9 @@ struct Match<wasm::SortMergeJoin<SortLeft, SortRight, Predicated>> : MatchBase
                 return M_CONSTEXPR_COND(Predicated, "PredicatedMergeJoin", "BranchingMergeJoin");
         }
     }
+
+    protected:
+    void print(std::ostream &out, unsigned level) const override;
 };
 
 template<>
@@ -697,6 +742,9 @@ struct Match<wasm::Limit> : MatchBase
         wasm::Limit::execute(*this, std::move(setup), std::move(pipeline), std::move(teardown));
     }
     std::string name() const override { return "wasm::Limit"; }
+
+    protected:
+    void print(std::ostream &out, unsigned level) const override;
 };
 
 template<>
@@ -729,6 +777,9 @@ struct Match<wasm::HashBasedGroupJoin> : MatchBase
     }
 
     std::string name() const override { return "wasm::HashBasedGroupJoin"; }
+
+    protected:
+    void print(std::ostream &out, unsigned level) const override;
 };
 
 }

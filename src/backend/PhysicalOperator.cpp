@@ -9,7 +9,8 @@ using namespace m;
 using namespace m::wasm;
 
 
-void PhysicalOptimizer::execute(const Operator &plan) const {
+void PhysicalOptimizer::execute(const Operator &plan) const
+{
     /* Emit code for run function which computes the last pipeline and calls other pipeline functions. */
     FUNCTION(run, void(void))
     {
@@ -24,3 +25,10 @@ void PhysicalOptimizer::execute(const Operator &plan) const {
     plan.reset_ids(); // XXX: ok?
 #endif
 }
+
+void PhysicalOptimizer::dump_plan(const Operator &plan, std::ostream &out) const
+{
+    out << *get_plan(plan).match << std::endl;
+}
+
+void PhysicalOptimizer::dump_plan(const Operator &plan) const { dump_plan(plan, std::cerr); }

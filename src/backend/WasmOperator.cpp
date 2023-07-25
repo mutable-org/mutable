@@ -368,7 +368,7 @@ void Print::execute(const Match<Print> &M, setup_t, pipeline_t, teardown_t)
 {
     M_insist(bool(M.result_set_factory), "`wasm::Print` must have a factory for the result set");
 
-    auto result_set_schema = M.print.schema().drop_constants().deduplicate();
+    auto result_set_schema = M.print_.schema().drop_constants().deduplicate();
     write_result_set(result_set_schema, *M.result_set_factory, M.result_set_num_tuples_, M.child);
 }
 
@@ -3973,6 +3973,180 @@ void HashBasedGroupJoin::execute(const Match<HashBasedGroupJoin> &M, setup_t set
         };
     });
     teardown_t(std::move(teardown), [&](){ ht->teardown(); })();
+}
+
+
+/*======================================================================================================================
+ * Match<T>::print()
+ *====================================================================================================================*/
+
+void Match<m::wasm::NoOp>::print(std::ostream &out, unsigned level) const
+{
+    indent(out, level) << "wasm::NoOp (cumulative cost " << cost() << ')';
+    this->child.print(out, level + 1);
+}
+void Match<m::wasm::Callback>::print(std::ostream &out, unsigned level) const
+{
+    indent(out, level) << "wasm::Callback (cumulative cost " << cost() << ')';
+    this->child.print(out, level + 1);
+}
+
+void Match<m::wasm::Print>::print(std::ostream &out, unsigned level) const
+{
+    indent(out, level) << "wasm::Print " << print_.schema() << " (cumulative cost " << cost() << ')';
+    this->child.print(out, level + 1);
+}
+
+void Match<m::wasm::Scan>::print(std::ostream &out, unsigned level) const
+{
+    indent(out, level) << "wasm::Scan(" << M_notnull(scan.alias()) << ") " << scan.schema()
+                       << " (cumulative cost " << cost() << ')';
+}
+
+template<bool Predicated>
+void Match<m::wasm::Filter<Predicated>>::print(std::ostream &out, unsigned level) const
+{
+    indent(out, level) << "wasm::" << (Predicated ? "Predicated" : "Branching") << "Filter ";
+    if (this->buffer_factory_)
+        out << "with " << this->buffer_num_tuples_ << " tuples output buffer ";
+    out << filter.schema() << " (cumulative cost " << cost() << ')';
+    this->child.print(out, level + 1);
+}
+
+void Match<m::wasm::LazyDisjunctiveFilter>::print(std::ostream &out, unsigned level) const
+{
+    indent(out, level) << "wasm::LazyDisjunctiveFilter ";
+    if (this->buffer_factory_)
+        out << "with " << this->buffer_num_tuples_ << " tuples output buffer ";
+    const cnf::Clause &clause = filter.filter()[0];
+    for (auto it = clause.cbegin(); it != clause.cend(); ++it) {
+        if (it != clause.cbegin()) out << " → ";
+        out << *it;
+    }
+    out << ' ' << filter.schema() << " (cumulative cost " << cost() << ')';
+    this->child.print(out, level + 1);
+}
+
+void Match<m::wasm::Projection>::print(std::ostream &out, unsigned level) const
+{
+    indent(out, level) << "wasm::Projection " << projection.schema() << " (cumulative cost " << cost() << ')';
+    if (this->child)
+        this->child->get().print(out, level + 1);
+}
+
+void Match<m::wasm::HashBasedGrouping>::print(std::ostream &out, unsigned level) const
+{
+    indent(out, level) << "wasm::HashBasedGrouping " << grouping.schema() << " (cumulative cost " << cost() << ')';
+    this->child.print(out, level + 1);
+}
+
+void Match<m::wasm::OrderedGrouping>::print(std::ostream &out, unsigned level) const
+{
+    indent(out, level) << "wasm::OrderedGrouping " << grouping.schema() << " (cumulative cost " << cost() << ')';
+    this->child.print(out, level + 1);
+}
+
+void Match<m::wasm::Aggregation>::print(std::ostream &out, unsigned level) const
+{
+    indent(out, level) << "wasm::Aggregation " << aggregation.schema() << " (cumulative cost " << cost() << ')';
+    this->child.print(out, level + 1);
+}
+
+void Match<m::wasm::Sorting>::print(std::ostream &out, unsigned level) const
+{
+    indent(out, level) << "wasm::Sorting " << sorting.schema() << " (cumulative cost " << cost() << ')';
+    this->child.print(out, level + 1);
+}
+
+void Match<m::wasm::NoOpSorting>::print(std::ostream &out, unsigned level) const
+{
+    indent(out, level) << "wasm::NoOpSorting (cumulative cost " << cost() << ')';
+    this->child.print(out, level + 1);
+}
+
+template<bool Predicated>
+void Match<m::wasm::NestedLoopsJoin<Predicated>>::print(std::ostream &out, unsigned level) const
+{
+    indent(out, level) << "wasm::" << (Predicated ? "Predicated" : "") << "NestedLoopsJoin ";
+    if (this->buffer_factory_)
+        out << "with " << this->buffer_num_tuples_ << " tuples output buffer ";
+    out << join.schema() << " (cumulative cost " << cost() << ')';
+
+    ++level;
+    std::size_t i = children.size();
+    while (i--) {
+        const MatchBase &child = children[i].get();
+        indent(out, level) << i << ". input";
+        child.print(out, level + 1);
+    }
+}
+
+template<bool Unique, bool Predicated>
+void Match<m::wasm::SimpleHashJoin<Unique, Predicated>>::print(std::ostream &out, unsigned level) const
+{
+    indent(out, level) << "wasm::" << (Predicated ? "Predicated" : "") << "SimpleHashJoin";
+    if (Unique) out << " on UNIQUE key ";
+    if (this->buffer_factory_)
+        out << "with " << this->buffer_num_tuples_ << " tuples output buffer ";
+    out << join.schema() << " (cumulative cost " << cost() << ')';
+
+    ++level;
+    const MatchBase &build = children[0].get();
+    const MatchBase &probe = children[1].get();
+    indent(out, level) << "probe input";
+    probe.print(out, level + 1);
+    indent(out, level) << "build input";
+    build.print(out, level + 1);
+}
+
+template<bool SortLeft, bool SortRight, bool Predicated>
+void Match<m::wasm::SortMergeJoin<SortLeft, SortRight, Predicated>>::print(std::ostream &out, unsigned level) const
+{
+    indent(out, level) << "wasm::" << (Predicated ? "Predicated" : "") << "SortMergeJoin ";
+    switch ((unsigned(SortLeft) << 1) | unsigned(SortRight))
+    {
+        case 0: out << "pre-sorted "; break;
+        case 1: out << "sorting right input "; break;
+        case 2: out << "sorting left input "; break;
+        case 3: out << "sorting both inputs "; break;
+    }
+    if (this->left_materializing_factory and this->right_materializing_factory)
+        out << "and materializing both inputs ";
+    else if (this->left_materializing_factory)
+        out << "and materializing left input ";
+    else if (this->right_materializing_factory)
+        out << "and materializing right input ";
+    out << join.schema() << " (cumulative cost " << cost() << ')';
+
+    ++level;
+    const MatchBase &left = children[0].get();
+    const MatchBase &right = children[1].get();
+    indent(out, level) << "right input";
+    right.print(out, level + 1);
+    indent(out, level) << "left input";
+    left.print(out, level + 1);
+}
+
+void Match<m::wasm::Limit>::print(std::ostream &out, unsigned level) const
+{
+    indent(out, level) << "wasm::Limit " << limit.schema() << " (cumulative cost " << cost() << ')';
+    this->child.print(out, level + 1);
+}
+
+void Match<m::wasm::HashBasedGroupJoin>::print(std::ostream &out, unsigned level) const
+{
+    indent(out, level) << "wasm::HashBasedGroupJoin ";
+    if (this->buffer_factory_)
+        out << "with " << this->buffer_num_tuples_ << " tuples output buffer ";
+    out << grouping.schema() << " (cumulative cost " << cost() << ')';
+
+    ++level;
+    const MatchBase &build = children[0].get();
+    const MatchBase &probe = children[1].get();
+    indent(out, level) << "probe input";
+    probe.print(out, level + 1);
+    indent(out, level) << "build input";
+    build.print(out, level + 1);
 }
 
 

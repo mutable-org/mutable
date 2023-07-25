@@ -117,11 +117,7 @@ struct LazyDisjunctiveFilter : PhysicalOperator<LazyDisjunctiveFilter, Disjuncti
 {
     static void execute(const Match<LazyDisjunctiveFilter> &M, setup_t setup, pipeline_t pipeline, teardown_t teardown);
     static double cost(const Match<LazyDisjunctiveFilter> &M);
-    static ConditionSet adapt_post_condition(const Match<LazyDisjunctiveFilter>&, const ConditionSet &post_cond_child) {
-        return ConditionSet(post_cond_child);
-    }
 };
-
 
 struct Projection : PhysicalOperator<Projection, ProjectionOperator>
 {

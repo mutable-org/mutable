@@ -487,10 +487,6 @@ void Filter<Predicated>::execute(const Match<Filter> &M, setup_t setup, pipeline
     );
 }
 
-// explicit instantiations to prevent linker errors
-template struct m::wasm::Filter<false>;
-template struct m::wasm::Filter<true>;
-
 
 /*======================================================================================================================
  * LazyDisjunctiveFilter
@@ -2715,10 +2711,6 @@ void NestedLoopsJoin<Predicated>::execute(const Match<NestedLoopsJoin> &M, setup
     );
 }
 
-// explicit instantiations to prevent linker errors
-template struct m::wasm::NestedLoopsJoin<false>;
-template struct m::wasm::NestedLoopsJoin<true>;
-
 template<bool UniqueBuild, bool Predicated>
 ConditionSet SimpleHashJoin<UniqueBuild, Predicated>::pre_condition(
     std::size_t,
@@ -2954,12 +2946,6 @@ void SimpleHashJoin<UniqueBuild, Predicated>::execute(const Match<SimpleHashJoin
     );
 }
 
-// explicit instantiations to prevent linker errors
-template struct m::wasm::SimpleHashJoin<false, false>;
-template struct m::wasm::SimpleHashJoin<false, true>;
-template struct m::wasm::SimpleHashJoin<true,  false>;
-template struct m::wasm::SimpleHashJoin<true,  true>;
-
 template<bool SortLeft, bool SortRight, bool Predicated>
 ConditionSet SortMergeJoin<SortLeft, SortRight, Predicated>::pre_condition(
     std::size_t child_idx,
@@ -3194,16 +3180,6 @@ void SortMergeJoin<SortLeft, SortRight, Predicated>::execute(const Match<SortMer
     }
     teardown();
 }
-
-// explicit instantiations to prevent linker errors
-template struct m::wasm::SortMergeJoin<false, false, false>;
-template struct m::wasm::SortMergeJoin<false, false, true>;
-template struct m::wasm::SortMergeJoin<false, true,  false>;
-template struct m::wasm::SortMergeJoin<false, true,  true>;
-template struct m::wasm::SortMergeJoin<true,  false, false>;
-template struct m::wasm::SortMergeJoin<true,  false, true>;
-template struct m::wasm::SortMergeJoin<true,  true,  false>;
-template struct m::wasm::SortMergeJoin<true,  true,  true>;
 
 
 /*======================================================================================================================
@@ -3998,3 +3974,11 @@ void HashBasedGroupJoin::execute(const Match<HashBasedGroupJoin> &M, setup_t set
     });
     teardown_t(std::move(teardown), [&](){ ht->teardown(); })();
 }
+
+
+// explicit template instantiations
+#define INSTANTIATE(CLASS) \
+    template struct m::wasm::CLASS; \
+    template struct m::Match<m::wasm::CLASS>;
+M_WASM_OPERATOR_LIST_TEMPLATED(INSTANTIATE)
+#undef INSTANTIATE

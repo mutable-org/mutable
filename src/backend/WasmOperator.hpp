@@ -7,20 +7,9 @@
 
 namespace m {
 
-#define M_WASM_OPERATOR_LIST(X) \
-    X(NoOp) \
-    X(Callback) \
-    X(Print) \
-    X(Scan) \
+#define M_WASM_OPERATOR_LIST_TEMPLATED(X) \
     X(Filter<false>) \
     X(Filter<true>) \
-    X(LazyDisjunctiveFilter) \
-    X(Projection) \
-    X(HashBasedGrouping) \
-    X(OrderedGrouping) \
-    X(Aggregation) \
-    X(Sorting) \
-    X(NoOpSorting) \
     X(NestedLoopsJoin<false>) \
     X(NestedLoopsJoin<true>) \
     X(SimpleHashJoin<M_COMMA(false) false>) \
@@ -34,9 +23,23 @@ namespace m {
     X(SortMergeJoin<M_COMMA(true)  M_COMMA(false) false>) \
     X(SortMergeJoin<M_COMMA(true)  M_COMMA(false) true>) \
     X(SortMergeJoin<M_COMMA(true)  M_COMMA(true)  false>) \
-    X(SortMergeJoin<M_COMMA(true)  M_COMMA(true)  true>) \
+    X(SortMergeJoin<M_COMMA(true)  M_COMMA(true)  true>)
+
+#define M_WASM_OPERATOR_LIST(X) \
+    X(NoOp) \
+    X(Callback) \
+    X(Print) \
+    X(Scan) \
+    X(LazyDisjunctiveFilter) \
+    X(Projection) \
+    X(HashBasedGrouping) \
+    X(OrderedGrouping) \
+    X(Aggregation) \
+    X(Sorting) \
+    X(NoOpSorting) \
     X(Limit) \
-    X(HashBasedGroupJoin)
+    X(HashBasedGroupJoin) \
+    M_WASM_OPERATOR_LIST_TEMPLATED(X)
 
 
 // forward declarations
@@ -730,20 +733,10 @@ struct Match<wasm::HashBasedGroupJoin> : MatchBase
 
 }
 
+
 // explicit instantiation declarations
-extern template struct m::wasm::Filter<false>;
-extern template struct m::wasm::Filter<true>;
-extern template struct m::wasm::NestedLoopsJoin<false>;
-extern template struct m::wasm::NestedLoopsJoin<true>;
-extern template struct m::wasm::SimpleHashJoin<false, false>;
-extern template struct m::wasm::SimpleHashJoin<false, true>;
-extern template struct m::wasm::SimpleHashJoin<true,  false>;
-extern template struct m::wasm::SimpleHashJoin<true,  true>;
-extern template struct m::wasm::SortMergeJoin<false, false, false>;
-extern template struct m::wasm::SortMergeJoin<false, false, true>;
-extern template struct m::wasm::SortMergeJoin<false, true,  false>;
-extern template struct m::wasm::SortMergeJoin<false, true,  true>;
-extern template struct m::wasm::SortMergeJoin<true,  false, false>;
-extern template struct m::wasm::SortMergeJoin<true,  false, true>;
-extern template struct m::wasm::SortMergeJoin<true,  true,  false>;
-extern template struct m::wasm::SortMergeJoin<true,  true,  true>;
+#define DECLARE(CLASS) \
+    extern template struct m::wasm::CLASS; \
+    extern template struct m::Match<m::wasm::CLASS>;
+M_WASM_OPERATOR_LIST_TEMPLATED(DECLARE)
+#undef DECLARE

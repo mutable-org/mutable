@@ -161,9 +161,21 @@ struct teardown_t : std::function<void(void)>
 
 struct MatchBase
 {
+    template<typename T> friend struct Match; // to invoke `print()`
+    friend struct PhysicalOptimizer;
+
+    private:
+    double cost_ = std::numeric_limits<double>::infinity();
+
+    public:
     virtual ~MatchBase() { }
     virtual void execute(setup_t setup, pipeline_t pipeline, teardown_t teardown) const = 0;
     virtual std::string name() const = 0;
+
+    double cost() const { return cost_; }
+
+    private:
+    void cost(double new_cost) { cost_ = new_cost; }
 };
 
 /** Abstract base class of all matchable patterns. */
@@ -264,12 +276,13 @@ struct PhysicalOptimizer : ConstPostOrderOperatorVisitor
 
     /** Handles the found match `match` with children entries `children` for the logical plan rooted in `op`. */
     template<typename PhysOp>
-    void handle_match(const Operator &op, std::unique_ptr<const Match<PhysOp>> &&match,
+    void handle_match(const Operator &op, std::unique_ptr<Match<PhysOp>> &&match,
                       table_entry::order_t children) {
         /* Compute cost of the match and its children. */
         auto cost = PhysOp::cost(*match);
         for (const auto &child : children)
             cost += child.get().second.cost;
+        match->cost(cost);
 
         if (cost < phys_op_cost_) {
             /* Compute post-condition. */
@@ -443,7 +456,7 @@ struct PhysicalOperator : crtp<Actual, PhysicalOperator, Pattern>
 
     /** Instantiates this physical operator given the matched logical operators `inner_nodes` in pre-order and the
      * children entries `children` by returning a corresponding match. */
-    static std::unique_ptr<const Match<Actual>> instantiate(get_nodes_t<Pattern> inner_nodes, const order_t &children) {
+    static std::unique_ptr<Match<Actual>> instantiate(get_nodes_t<Pattern> inner_nodes, const order_t &children) {
         std::vector<std::reference_wrapper<const MatchBase>> children_matches;
         children_matches.reserve(children.size());
         for (const auto &child : children)

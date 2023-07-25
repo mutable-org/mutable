@@ -2634,6 +2634,15 @@ ConditionSet NestedLoopsJoin<Predicated>::adapt_post_conditions(
 }
 
 template<bool Predicated>
+double NestedLoopsJoin<Predicated>::cost(const Match<NestedLoopsJoin> &M)
+{
+    double cost = 1;
+    for (auto &child : M.join.children())
+        cost *= child->info().estimated_cardinality;
+    return cost;
+}
+
+template<bool Predicated>
 void NestedLoopsJoin<Predicated>::execute(const Match<NestedLoopsJoin> &M, setup_t setup, pipeline_t pipeline,
                                           teardown_t teardown)
 {
@@ -2771,6 +2780,12 @@ ConditionSet SimpleHashJoin<UniqueBuild, Predicated>::adapt_post_conditions(
     // TODO: SIMD width if hash table supports this
 
     return post_cond;
+}
+
+template<bool UniqueBuild, bool Predicated>
+double SimpleHashJoin<UniqueBuild, Predicated>::cost(const Match<SimpleHashJoin> &M)
+{
+    return 1.2 * M.build.info().estimated_cardinality + M.probe.info().estimated_cardinality;
 }
 
 template<bool UniqueBuild, bool Predicated>
@@ -3058,6 +3073,21 @@ ConditionSet SortMergeJoin<SortLeft, SortRight, Predicated>::adapt_post_conditio
     // TODO: SIMD widths if materialization took place for sorting
 
     return post_cond;
+}
+
+template<bool SortLeft, bool SortRight, bool Predicated>
+double SortMergeJoin<SortLeft, SortRight, Predicated>::cost(const Match<SortMergeJoin> &M)
+{
+    const double card_left  = M.parent.info().estimated_cardinality;
+    const double card_right = M.child.info().estimated_cardinality;
+
+    double cost = card_left + card_right; // cost for merge
+    if constexpr (SortLeft)
+        cost += std::log2(card_left) * card_left; // cost for sort left
+    if constexpr (SortRight)
+        cost += std::log2(card_right) * card_right; // cost for sort right
+
+    return cost;
 }
 
 template<bool SortLeft, bool SortRight, bool Predicated>

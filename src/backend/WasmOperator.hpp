@@ -213,7 +213,7 @@ template<bool Predicated>
 struct NestedLoopsJoin : PhysicalOperator<NestedLoopsJoin<Predicated>, JoinOperator>
 {
     static void execute(const Match<NestedLoopsJoin> &M, setup_t setup, pipeline_t pipeline, teardown_t teardown);
-    static double cost(const Match<NestedLoopsJoin>&) { return 2.0; }
+    static double cost(const Match<NestedLoopsJoin> &M);
     static ConditionSet
     adapt_post_conditions(const Match<NestedLoopsJoin> &M,
                           std::vector<std::reference_wrapper<const ConditionSet>> &&post_cond_children);
@@ -224,7 +224,7 @@ struct SimpleHashJoin
     : PhysicalOperator<SimpleHashJoin<UniqueBuild, Predicated>, pattern_t<JoinOperator, Wildcard, Wildcard>>
 {
     static void execute(const Match<SimpleHashJoin> &M, setup_t setup, pipeline_t pipeline, teardown_t teardown);
-    static double cost(const Match<SimpleHashJoin>&) { return 1.0; }
+    static double cost(const Match<SimpleHashJoin> &M);
     static ConditionSet
     pre_condition(std::size_t child_idx,
                   const std::tuple<const JoinOperator*, const Wildcard*, const Wildcard*> &partial_inner_nodes);
@@ -238,7 +238,7 @@ struct SortMergeJoin
     : PhysicalOperator<SortMergeJoin<SortLeft, SortRight, Predicated>, pattern_t<JoinOperator, Wildcard, Wildcard>>
 {
     static void execute(const Match<SortMergeJoin> &M, setup_t setup, pipeline_t pipeline, teardown_t teardown);
-    static double cost(const Match<SortMergeJoin>&) { return 0.5 + double(SortLeft) + double(SortRight); }
+    static double cost(const Match<SortMergeJoin> &M);
     static ConditionSet
     pre_condition(std::size_t child_idx,
                   const std::tuple<const JoinOperator*, const Wildcard*, const Wildcard*> &partial_inner_nodes);

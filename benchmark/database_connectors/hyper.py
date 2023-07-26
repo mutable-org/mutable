@@ -214,9 +214,9 @@ sys.stdout.flush()
                 case 'INT':
                     typ = SqlType.int()
                 case 'CHAR':
-                    typ = SqlType.char(ty[1])
+                    typ = SqlType.char(int(ty[1]))
                 case 'DECIMAL':
-                    typ = SqlType.numeric(ty[1], ty[2])
+                    typ = SqlType.numeric(int(ty[1]), int(ty[2]))
                 case 'DATE':
                     typ = SqlType.date()
                 case 'DOUBLE':

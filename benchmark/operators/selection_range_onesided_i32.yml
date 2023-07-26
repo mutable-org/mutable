@@ -15,8 +15,8 @@ chart:
 data:
     'Attribute_i32':
         attributes:
-            'id': 'INT'
-            'val': 'INT'
+            'id': 'INT NOT NULL'
+            'val': 'INT NOT NULL'
         file: 'benchmark/operators/data/Attribute_i32.csv'
         format: 'csv'
         delimiter: ','

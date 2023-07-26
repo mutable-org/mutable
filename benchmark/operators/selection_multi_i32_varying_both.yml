@@ -21,11 +21,11 @@ data:
         delimiter: ','
         header: 1
         attributes:
-            'id': 'INT'
-            'a0': 'INT'
-            'a1': 'INT'
-            'a2': 'INT'
-            'a3': 'INT'
+            'id': 'INT NOT NULL'
+            'a0': 'INT NOT NULL'
+            'a1': 'INT NOT NULL'
+            'a2': 'INT NOT NULL'
+            'a3': 'INT NOT NULL'
 systems:
     mutable:
         configurations:

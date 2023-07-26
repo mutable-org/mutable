@@ -15,8 +15,8 @@ chart:
 data:
     'Attribute_f':
         attributes:
-            'id': 'INT'
-            'val': 'FLOAT'
+            'id': 'INT NOT NULL'
+            'val': 'FLOAT NOT NULL'
         file: 'benchmark/operators/data/Attribute_f.csv'
         format: 'csv'
         delimiter: ','

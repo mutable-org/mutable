@@ -15,8 +15,8 @@ chart:
 data:
     'Attribute_d':
         attributes:
-            'id': 'INT'
-            'val': 'DOUBLE'
+            'id': 'INT NOT NULL'
+            'val': 'DOUBLE NOT NULL'
         file: 'benchmark/operators/data/Attribute_d.csv'
         format: 'csv'
         delimiter: ','

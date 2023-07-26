@@ -17,11 +17,11 @@ chart:
 data:
     'Attributes_multi_i32':
         attributes:
-            'id': 'INT'
-            'a0': 'INT'
-            'a1': 'INT'
-            'a2': 'INT'
-            'a3': 'INT'
+            'id': 'INT NOT NULL'
+            'a0': 'INT NOT NULL'
+            'a1': 'INT NOT NULL'
+            'a2': 'INT NOT NULL'
+            'a3': 'INT NOT NULL'
         file: 'benchmark/operators/data/Attributes_multi_i32.csv'
         format: 'csv'
         delimiter: ','

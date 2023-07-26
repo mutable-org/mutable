@@ -15,8 +15,8 @@ chart:
 data:
     'Attribute_i64':
         attributes:
-            'id': 'INT'
-            'val': 'BIGINT'
+            'id': 'INT NOT NULL'
+            'val': 'BIGINT NOT NULL'
         file: 'benchmark/operators/data/Attribute_i64.csv'
         format: 'csv'
         delimiter: ','

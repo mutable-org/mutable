@@ -297,11 +297,12 @@ build:release:linux-amd64:
           -DWITH_V8=ON
           -DENABLE_SANITIZERS=OFF
           -DENABLE_SANITY_FIELDS=OFF
-        - cmake --build build/${BUILD_TYPE} --target gitversion all
-        - mkdir mutable
+        - cmake --build build/${BUILD_TYPE} --target gitversion shell cardinality_gen
+        - mkdir -p mutable/lib mutable/bin
         - cp -R include mutable
-        - mkdir mutable/lib
         - cp build/${BUILD_TYPE}/lib/libmutable_bundled.a mutable/lib
+        - cp build/${BUILD_TYPE}/bin/cardinality_gen mutable/bin
+        - cp build/${BUILD_TYPE}/bin/shell mutable/bin
     artifacts:
         paths:
             - "mutable"
@@ -327,11 +328,12 @@ build:release:macos-amd64:
           -DWITH_V8=ON
           -DENABLE_SANITIZERS=OFF
           -DENABLE_SANITY_FIELDS=OFF
-        - cmake --build build/${BUILD_TYPE} --target gitversion all
-        - mkdir mutable
+        - cmake --build build/${BUILD_TYPE} --target gitversion shell cardinality_gen
+        - mkdir -p mutable/lib mutable/bin
         - cp -R include mutable
-        - mkdir mutable/lib
         - cp build/${BUILD_TYPE}/lib/libmutable_bundled.a mutable/lib
+        - cp build/${BUILD_TYPE}/bin/cardinality_gen mutable/bin
+        - cp build/${BUILD_TYPE}/bin/shell mutable/bin
     artifacts:
         paths:
             - "mutable"

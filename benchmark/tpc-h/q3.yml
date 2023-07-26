@@ -63,7 +63,7 @@ data:
             'c_comment':       'CHAR 117'
 systems:
     mutable:
-        pattern: '^Execute query:.*'
+        pattern: '^Execute machine code:.*'
         configurations:
             'WasmV8, PAX4M': >-
               --backend WasmV8

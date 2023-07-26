@@ -50,7 +50,7 @@ data:
             'o_comment':       'CHAR 80'
 systems:
     mutable:
-        pattern: '^Execute query:.*'
+        pattern: '^Execute machine code:.*'
         configurations:
             'WasmV8, PAX4M': >-
               --backend WasmV8

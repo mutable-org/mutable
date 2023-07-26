@@ -84,11 +84,8 @@ class Mutable(Connector):
         binargs = yml.get('binargs', None)
         path_to_file = yml['path_to_file']
 
-        # Get database schema
-        schema = os.path.join(os.path.dirname(path_to_file), 'data', 'schema.sql')
-
         # Assemble command
-        command = [ self.mutable_binary, '--benchmark', '--times', schema ]
+        command = [ self.mutable_binary, '--benchmark', '--times']
         if binargs:
             command.extend(binargs.split(' '))
         if supplementary_args:
@@ -109,7 +106,7 @@ class Mutable(Connector):
             if is_readonly:
                 # Produce code to load data into tables
                 path_to_data = os.path.join('benchmark', suite, 'data')
-                imports = create_import_statements(path_to_data, yml['data'], None)
+                imports = get_setup_statements(suite, path_to_data, yml['data'], None)
 
                 import_str = '\n'.join(imports)
                 timeout = DEFAULT_TIMEOUT + TIMEOUT_PER_CASE * len(cases)
@@ -139,7 +136,7 @@ class Mutable(Connector):
                 for case, query in cases.items():
                     # Produce code to load data into tables with scale factor
                     path_to_data = os.path.join('benchmark', suite, 'data')
-                    case_imports = create_import_statements(path_to_data, yml['data'], case)
+                    case_imports = get_setup_statements(suite, path_to_data, yml['data'], case)
                     import_str = '\n'.join(case_imports)
 
                     query_str = import_str + '\n' + query
@@ -230,28 +227,70 @@ in_green = lambda x: f'{Fore.GREEN}{x}{Style.RESET_ALL}'
 in_bold  = lambda x: f'{Style.BRIGHT}{x}{Style.RESET_ALL}'
 
 
-def create_import_statements(path_to_data, data, case):
-    imports = list()
+# Parse attributes of one table, return as string ready for a CREATE TABLE query
+def parse_attributes(attributes: dict):
+    columns = list()
+    for column_name, ty in attributes.items():
+        not_null = 'NOT NULL' if 'NOT NULL' in ty else ''
+        ty = ty.split(' ')
+        match (ty[0]):
+            case 'INT':
+                type = 'INT(4)'
+            case 'CHAR':
+                type = f'CHAR({ty[1]})'
+            case 'DECIMAL':
+                type = f'DECIMAL({ty[1]},{ty[2]})'
+            case 'DATE':
+                type = 'DATE'
+            case 'DOUBLE':
+                type = 'DOUBLE'
+            case 'FLOAT':
+                type = 'FLOAT'
+            case 'BIGINT':
+                type = 'INT(8)'
+            case _:
+                raise Exception(f"Unknown type given for '{column_name}'")
+        columns.append(f'{column_name} {type} {not_null}')
+    return '(' + ',\n'.join(columns) + ')'
+
+
+def get_setup_statements(suite, path_to_data, data, case):
+    statements = list()
+
+    # suite names with a dash ('-') are illegal database names for mutable , e.g. 'plan-enumerators'
+    suite = suite.replace("-", "_")
+    statements.append(f"CREATE DATABASE {suite};")
+    statements.append(f"USE {suite};")
 
     if not data:
-        return imports
+        return statements
 
-    for table_name, tbl in data.items():
-        path = tbl.get('file', os.path.join(path_to_data, f'{table_name}.csv'))
-        if tbl.get('scale_factors') is not None and case is not None:
-            sf = tbl['scale_factors'][case]
+    for table_name, table in data.items():
+        # Create a CREATE TABLE statement for current table
+        columns = parse_attributes(table['attributes'])
+        create = f"CREATE TABLE {table_name} {columns};"
+        statements.append(create)
+
+        # Create an IMPORT statement for current table
+        lines = table.get('lines_in_file')
+        if not lines:
+            continue    # Only import data when lines are given
+
+        path = table.get('file', os.path.join(path_to_data, f'{table_name}.csv'))
+        if table.get('scale_factors') is not None and case is not None:
+            sf = table['scale_factors'][case]
         else:
             sf = 1
-        delimiter = tbl.get('delimiter', ',')
-        header = int(tbl.get('header', 0))
+        delimiter = table.get('delimiter', ',')
+        header = int(table.get('header', 0))
 
-        rows = tbl['lines_in_file'] - header
+        rows = lines - header
         import_str = f'IMPORT INTO {table_name} DSV "{path}" ROWS {int(sf * rows)} DELIMITER "{delimiter}"'
         if header:
             import_str += ' HAS HEADER SKIP HEADER'
+        statements.append(import_str + ';')
 
-        imports.append(import_str + ';')
-    return imports
+    return statements
 
 
 def print_command(command :list, query :str, indent = ''):

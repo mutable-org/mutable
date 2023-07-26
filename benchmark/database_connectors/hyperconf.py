@@ -142,8 +142,7 @@ def benchmark_execution_times(connection :Connection, queries :list, tables :lis
     res = extract_results()
     matches = filter_results(
         res,
-        { 'k': 'query-end'},
-        [ MATCH_SELECT ]
+        { 'k': 'query-end', 'statement': 'SELECT' }
     )
     return list(map(lambda m: m['v']['execution-time'] * 1000, matches))
 
@@ -153,13 +152,11 @@ def benchmark_compilation_times(connection :Connection, queries :list, tables :l
     res = extract_results()
     matches = filter_results(
         res,
-        { 'k': 'query-end'},
-        [ MATCH_SELECT ]
+        { 'k': 'query-end', 'statement': 'SELECT' }
     )
 
     def compilation_time(m):
-        ct = m['v']['adaptive-compilation']
-        return (ct['cheap']['actual'] + ct['optimized']['actual']) * 1000
+        return float(m['v']['pre-execution']['compilation-time']) * 1000
 
     return list(map(compilation_time, matches))
 

@@ -12,6 +12,87 @@ chart:
         scale: log
         type: Q
         label: Optimization time (ms)
+data:
+    'T0':
+        attributes:
+            'key': 'INT'
+            'fkey': 'INT'
+    'T1':
+        attributes:
+            'key': 'INT'
+            'fkey': 'INT'
+    'T2':
+        attributes:
+            'key': 'INT'
+            'fkey': 'INT'
+    'T3':
+        attributes:
+            'key': 'INT'
+            'fkey': 'INT'
+    'T4':
+        attributes:
+            'key': 'INT'
+            'fkey': 'INT'
+    'T5':
+        attributes:
+            'key': 'INT'
+            'fkey': 'INT'
+    'T6':
+        attributes:
+            'key': 'INT'
+            'fkey': 'INT'
+    'T7':
+        attributes:
+            'key': 'INT'
+            'fkey': 'INT'
+    'T8':
+        attributes:
+            'key': 'INT'
+            'fkey': 'INT'
+    'T9':
+        attributes:
+            'key': 'INT'
+            'fkey': 'INT'
+    'T10':
+        attributes:
+            'key': 'INT'
+            'fkey': 'INT'
+    'T11':
+        attributes:
+            'key': 'INT'
+            'fkey': 'INT'
+    'T12':
+        attributes:
+            'key': 'INT'
+            'fkey': 'INT'
+    'T13':
+        attributes:
+            'key': 'INT'
+            'fkey': 'INT'
+    'T14':
+        attributes:
+            'key': 'INT'
+            'fkey': 'INT'
+    'T15':
+        attributes:
+            'key': 'INT'
+            'fkey': 'INT'
+    'T16':
+        attributes:
+            'key': 'INT'
+            'fkey': 'INT'
+    'T17':
+        attributes:
+            'key': 'INT'
+            'fkey': 'INT'
+    'T18':
+        attributes:
+            'key': 'INT'
+            'fkey': 'INT'
+    'T19':
+        attributes:
+            'key': 'INT'
+            'fkey': 'INT'
 systems:
     mutable:
         pattern: '^Compute the query plan:.*'

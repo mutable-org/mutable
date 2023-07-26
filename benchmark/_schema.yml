@@ -30,13 +30,13 @@ axis:
     label: str(required=False)
 ---
 table:
-    attributes: map(str(), key=str(), required=False)           # table column names and types
-    file: str(required=False)                   # path to table file
-    delimiter: str(required=False)              # defaults to ','
-    header: int()                               # 1 if file has header, 0 otherwise; defaults to 0
-    format: str(required=False)                 # file format
-    scale_factors: map(num(min=0, max=1), required=False) # map from case name to scale factor (portion of file to load)
-    lines_in_file: int(required=False)          # Number of lines in the file. Is counted and added by the benchmark script
+    attributes: map(str(), key=str(), required=False)       # table column names and types
+    file: str(required=False)                               # path to table file
+    delimiter: str(required=False)                          # defaults to ','
+    header: int(required=False)                             # 1 if file has header, 0 otherwise; defaults to 0
+    format: str(required=False)                             # file format
+    scale_factors: map(num(min=0, max=1), required=False)   # map from case name to scale factor (portion of file to load)
+    lines_in_file: int(required=False)                      # Number of lines in the file. Is counted and added by the benchmark script
 ---
 config:
     args: str(required=True)

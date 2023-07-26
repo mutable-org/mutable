@@ -415,7 +415,10 @@ if __name__ == '__main__':
             if info.experiment_data:
                 table_access_error = False
                 for table_name, table in info.experiment_data.items():
-                    p = os.path.join(table['file'])
+                    p = table.get('file')
+                    if not p:
+                        continue    # Skip counting files when table does not have a file with data
+                    p = os.path.join(p)
                     if not os.path.isfile(p):
                         tqdm.write(f'Table file \'{p}\' not found.  Skipping benchmark.\n', file=sys.stderr)
                         table_access_error = True

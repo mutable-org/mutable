@@ -120,19 +120,16 @@ def extract_results():
             j.append(json.loads(line))
     return j
 
-def match_result(result :object, attribute_values :dict, matcher :list=list()):
-    for attr, val in attribute_values.items():
-        if attr not in result or result[attr] != val:
-            return False
+def match_result(result :object, matcher :list=list()):
     for m in matcher:
         if not m(result):
             return False
     return True
 
-def filter_results(results :list, attribute_values :dict, matcher :list=list()):
+def filter_results(results :list, matcher :list=list()):
     matches = list()
     for r in results:
-        if match_result(r, attribute_values, matcher):
+        if match_result(r, matcher):
             matches.append(r)
     return matches
 
@@ -142,7 +139,9 @@ def benchmark_execution_times(connection :Connection, queries :list, tables :lis
     res = extract_results()
     matches = filter_results(
         res,
-        { 'k': 'query-end', 'statement': 'SELECT' }
+        [
+            lambda x: 'k' in x and x['k'] == 'query-end' and 'v' in x and 'statement' in x['v'] and x['v']['statement'] == 'SELECT'
+        ]
     )
     return list(map(lambda m: m['v']['execution-time'] * 1000, matches))
 
@@ -152,7 +151,9 @@ def benchmark_compilation_times(connection :Connection, queries :list, tables :l
     res = extract_results()
     matches = filter_results(
         res,
-        { 'k': 'query-end', 'statement': 'SELECT' }
+        [
+            lambda x: 'k' in x and x['k'] == 'query-end' and 'v' in x and 'statement' in x['v'] and x['v']['statement'] == 'SELECT'
+        ]
     )
 
     def compilation_time(m):

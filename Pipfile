@@ -34,8 +34,13 @@ pygraphviz = "*"
 torch = "*"
 torchvision = "*"
 torchaudio = "*"
-
-[dev-packages]
+scipy = "*"
+jupyter = "*"
+nbclassic = "*"
+seaborn = "*"
+wand = "*"
+screeninfo = "*"
+cycler = "*"
 
 [requires]
 python_version = "3.10"

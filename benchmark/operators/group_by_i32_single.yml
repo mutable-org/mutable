@@ -40,18 +40,21 @@ data:
             1.0: 1.0
 systems:
     mutable:
-        pattern: '^Execute query:.*'
         configurations:
-            'Interpreter, PAX4M': >-
-              --backend Interpreter
-              --data-layout PAX4M
-              --cardinality-estimator Injected
-              --use-cardinality-file benchmark/operators/group_by_i32_single.json
-            'WasmV8, PAX4M': >-
-              --backend WasmV8
-              --data-layout PAX4M
-              --cardinality-estimator Injected
-              --use-cardinality-file benchmark/operators/group_by_i32_single.json
+            'Interpreter, PAX4M':
+                args: >-
+                    --backend Interpreter
+                    --data-layout PAX4M
+                    --cardinality-estimator Injected
+                    --use-cardinality-file benchmark/operators/group_by_i32_single.json
+                pattern: '^Execute query:.*'
+            'WasmV8, PAX4M':
+                args: >-
+                    --backend WasmV8
+                    --data-layout PAX4M
+                    --cardinality-estimator Injected
+                    --use-cardinality-file benchmark/operators/group_by_i32_single.json
+                pattern: '^Execute machine code:.*'
         cases:
             0.0: SELECT 1 FROM Distinct_i32 GROUP BY n100000;
             0.1: SELECT 1 FROM Distinct_i32 GROUP BY n100000;

@@ -28,18 +28,21 @@ data:
             'n100000': 'INT'
 systems:
     mutable:
-        pattern: '^Execute query:.*'
         configurations:
-            'Interpreter, PAX4M': >-
-              --backend Interpreter
-              --data-layout PAX4M
-              --cardinality-estimator Injected
-              --use-cardinality-file benchmark/operators/group_by_aggregates.json
-            'WasmV8, PAX4M': >-
-              --backend WasmV8
-              --data-layout PAX4M
-              --cardinality-estimator Injected
-              --use-cardinality-file benchmark/operators/group_by_aggregates.json
+            'Interpreter, PAX4M':
+                args: >-
+                    --backend Interpreter
+                    --data-layout PAX4M
+                    --cardinality-estimator Injected
+                    --use-cardinality-file benchmark/operators/group_by_aggregates.json
+                pattern: '^Execute query:.*'
+            'WasmV8, PAX4M':
+                args: >-
+                  --backend WasmV8
+                  --data-layout PAX4M
+                  --cardinality-estimator Injected
+                  --use-cardinality-file benchmark/operators/group_by_aggregates.json
+                pattern: '^Execute machine code:.*'
         cases:
             1: SELECT MIN(n100) FROM Distinct_i32 GROUP BY n10;
             2: SELECT MIN(n100), MIN(n1000) FROM Distinct_i32 GROUP BY n10;

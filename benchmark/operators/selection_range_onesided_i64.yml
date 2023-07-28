@@ -23,9 +23,10 @@ data:
         header: 1
 systems:
     mutable:
-        pattern: '^Execute query:.*'
         configurations:
-            'WasmV8, PAX4M': --backend WasmV8 --data-layout PAX4M
+            'WasmV8, PAX4M':
+                args: --backend WasmV8 --data-layout PAX4M
+                pattern: '^Execute machine code:.*'
         cases:
             0.0: SELECT 1 FROM Attribute_i64 WHERE val < -9223372036854775807;
             0.1: SELECT 1 FROM Attribute_i64 WHERE val < -7378697629483821056;

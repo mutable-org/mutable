@@ -28,11 +28,16 @@ data:
             'n100000': 'INT'
 systems:
     mutable:
-        pattern: '^Execute query:.*'
         configurations:
-            'Interpreter':  --backend Interpreter
-            'WasmV8, Row':   --backend WasmV8 --data-layout Row
-            'WasmV8, PAX4M': --backend WasmV8 --data-layout PAX4M
+            'Interpreter':
+                args: --backend Interpreter
+                pattern: '^Execute query:.*'
+            'WasmV8, Row':
+                args: --backend WasmV8 --data-layout Row
+                pattern: '^Execute query:.*'
+            'WasmV8, PAX4M':
+                args: --backend WasmV8 --data-layout PAX4M
+                pattern: '^Execute query:.*'
         cases:
             1: SELECT id FROM Distinct_i32 ORDER BY n100000;
             2: SELECT id FROM Distinct_i32 ORDER BY n10000, n1000;

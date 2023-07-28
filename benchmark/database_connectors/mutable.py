@@ -49,23 +49,15 @@ class Mutable(Connector):
         suite = params['suite']
         benchmark = params['benchmark']
         experiment = dict()
-        if configs:
-            # Run benchmark under different configurations
-            for config_name, config in configs.items():
-                config_name = f"mutable (single core, {config_name})"
-                if run_id==0:
-                    tqdm.write(f'` Perform experiment {suite}/{benchmark}/{experiment_name} with configuration {config_name}.')
-                    sys.stdout.flush()
 
-                measurements = self.run_configuration(experiment_name, config_name, config, params)
-                experiment[config_name] = measurements
-        else:
-            config_name = "mutable (single core)"
+        # Run benchmark under different configurations
+        for config_name, config in configs.items():
+            config_name = f"mutable (single core, {config_name})"
             if run_id==0:
-                tqdm.write(f'` Perform experiment {suite}/{benchmark}/{experiment_name} on mutable.')
+                tqdm.write(f'` Perform experiment {suite}/{benchmark}/{experiment_name} with configuration {config_name}.')
                 sys.stdout.flush()
 
-            measurements = self.run_configuration(experiment_name, config_name, '', params)
+            measurements = self.run_configuration(experiment_name, config_name, config, params)
             experiment[config_name] = measurements
 
         return experiment
@@ -102,7 +94,7 @@ class Mutable(Connector):
         if supplementary_args:
             command.extend(supplementary_args.split(' '))
         if config:
-            command.extend(config.split(' '))
+            command.extend(config['args'].split(' '))
 
 
         if is_readonly:
@@ -129,7 +121,7 @@ class Mutable(Connector):
                     combined_query.extend([case])
                 query = '\n'.join(combined_query)
                 try:
-                    durations = self.benchmark_query(command, query, yml['pattern'], timeout, path_to_file)
+                    durations = self.benchmark_query(command, query, config['pattern'], timeout, path_to_file)
                 except BenchmarkTimeoutException as ex:
                     tqdm.write(str(ex))
                     sys.stdout.flush()
@@ -154,7 +146,7 @@ class Mutable(Connector):
                     if self.verbose:
                         print_command(command, query_str, '    ')
                     try:
-                        durations = self.benchmark_query(command, query_str, yml['pattern'], timeout, path_to_file)
+                        durations = self.benchmark_query(command, query_str, config['pattern'], timeout, path_to_file)
                     except BenchmarkTimeoutException as ex:
                         tqdm.write(str(ex))
                         sys.stdout.flush()

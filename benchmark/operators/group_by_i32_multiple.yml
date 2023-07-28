@@ -28,10 +28,13 @@ data:
             'n100000': 'INT'
 systems:
     mutable:
-        pattern: '^Execute query:.*'
         configurations:
-            'Interpreter':  --backend Interpreter
-            'WasmV8, PAX4M': --backend WasmV8 --data-layout PAX4M
+            'Interpreter':
+                args: --backend Interpreter
+                pattern: '^Execute query:.*'
+            'WasmV8, PAX4M':
+                args: --backend WasmV8 --data-layout PAX4M
+                pattern: '^Execute machine code:.*'
         cases:
             1: SELECT 1 FROM Distinct_i32 GROUP BY n10000;
             2: SELECT 1 FROM Distinct_i32 GROUP BY n10000, n1000;

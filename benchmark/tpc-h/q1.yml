@@ -37,13 +37,14 @@ data:
             'l_comment': 'CHAR 44'
 systems:
     mutable:
-        pattern: '^Execute machine code:.*'
         configurations:
-            'WasmV8, PAX4M': >-
-              --backend WasmV8
-              --data-layout PAX4M
-              --cardinality-estimator Injected
-              --use-cardinality-file benchmark/tpc-h/q1.json
+            'WasmV8, PAX4M':
+                args: >-
+                    --backend WasmV8
+                    --data-layout PAX4M
+                    --cardinality-estimator Injected
+                    --use-cardinality-file benchmark/tpc-h/q1.json
+                pattern: '^Execute machine code:.*'
         cases:
             1: |
                 SELECT

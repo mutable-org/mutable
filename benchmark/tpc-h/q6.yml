@@ -36,9 +36,10 @@ data:
             'l_comment': 'CHAR 44'
 systems:
     mutable:
-        pattern: '^Execute machine code:.*'
         configurations:
-            'WasmV8, PAX4M': --backend WasmV8 --data-layout PAX4M
+            'WasmV8, PAX4M':
+                args: --backend WasmV8 --data-layout PAX4M
+                pattern: '^Execute machine code:.*'
         cases:
             1: |
                 SELECT

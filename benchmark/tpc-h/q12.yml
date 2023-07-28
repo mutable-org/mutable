@@ -50,13 +50,14 @@ data:
             'o_comment':       'CHAR 80'
 systems:
     mutable:
-        pattern: '^Execute machine code:.*'
         configurations:
-            'WasmV8, PAX4M': >-
-              --backend WasmV8
-              --data-layout PAX4M
-              --cardinality-estimator Injected
-              --use-cardinality-file benchmark/tpc-h/q12.json
+            'WasmV8, PAX4M':
+                args: >-
+                    --backend WasmV8
+                    --data-layout PAX4M
+                    --cardinality-estimator Injected
+                    --use-cardinality-file benchmark/tpc-h/q12.json
+                pattern: '^Execute machine code:.*'
         cases:
             1: |
                 SELECT

@@ -7,7 +7,7 @@ Install the following tools:
 * Git
 * CMake (3.20 or newer)
 * GNU Make / Ninja / some other build tool of your choice
-* C/C++ Compiler with C++20 support (preferably Clang 14 or newer)
+* Clang 16 or newer (see [Build Clang from Source](build-clang-from-source.md))
 * Doxygen (to generate the documentation)
 * Perl (for our git-hooks)
 * Pipenv (to set up a virtual Python environment and manage packages)

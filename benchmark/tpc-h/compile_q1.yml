@@ -9,6 +9,8 @@ data:
         format: 'CSV'
         delimiter: '|'
         header: 0
+        scale_factors:
+            1: 0.01
         attributes:
             'l_orderkey': 'INT'
             'l_partkey': 'INT'

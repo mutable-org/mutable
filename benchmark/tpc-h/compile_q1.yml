@@ -28,9 +28,10 @@ data:
             'l_comment': 'CHAR 44'
 systems:
     mutable:
-        pattern: '^Compile to WebAssembly:.*'
         configurations:
-            'WasmV8, PAX4M': --backend WasmV8 --data-layout PAX4M --dryrun --quiet
+            'WasmV8, PAX4M':
+                args: --backend WasmV8 --data-layout PAX4M --quiet
+                pattern: '^Compile to WebAssembly:.*'
         cases:
             1:  SELECT
                         l_returnflag,

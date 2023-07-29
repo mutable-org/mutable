@@ -357,7 +357,7 @@ if __name__ == '__main__':
             tqdm.write(f'Writing measurements to \'{output_csv_file}\'.')
             sys.stdout.flush()
             with open(output_csv_file, 'w') as csv:
-                csv.write('commit,date,version,suite,benchmark,experiment,name,config,case,time\n')
+                csv.write('commit,date,version,suite,benchmark,experiment,name,config,case,time,runid\n')
         else:
             tqdm.write(f'Adding measurements to \'{output_csv_file}\'.')
             sys.stdout.flush()

@@ -147,7 +147,9 @@ sys.stdout.flush()
                         # Extract results
                         matches = hyperconf.filter_results(
                             hyperconf.extract_results(),
-                            { 'k': 'query-end', 'statement': 'SELECT' }
+                            [
+                                lambda x: 'k' in x and x['k'] == 'query-end' and 'v' in x and 'statement' in x['v'] and x['v']['statement'] == 'SELECT'
+                            ]
                         )
                         times = map(lambda m: m['v']['execution-time'] * 1000, matches)
                         times = list(map(lambda t: f'{t:.3f}', times))

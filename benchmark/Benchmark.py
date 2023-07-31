@@ -274,8 +274,11 @@ def perform_experiment(yml, conn, info, results) -> list():
         configurations = systems[system].get('configurations')
         if configurations:
             for n, c in configurations.items():
-                if (n==config_name) or (n in config_name):
-                    config = c
+                if n in config_name:
+                    if 'args' in c:
+                        config = c['args']
+                    else:
+                        config = c
 
         measurements = list()
         for case, times in execution_times.items():

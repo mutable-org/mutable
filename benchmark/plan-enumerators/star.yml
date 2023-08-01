@@ -95,16 +95,29 @@ data:
             'fkey': 'INT'
 systems:
     mutable:
-        pattern: '^Compute the query plan:.*'
         args: --dryrun
         configurations:
-            DPccp:          '--plan-enumerator DPccp'
-            DPsizeOpt:      '--plan-enumerator DPsizeOpt'
-            DPsub:          '--plan-enumerator DPsub'
-            DPsubOpt:       '--plan-enumerator DPsubOpt'
-            DPsizeSub:      '--plan-enumerator DPsizeSub'
-            TDbasic:        '--plan-enumerator TDbasic'
-            TDMinCutAGaT:   '--plan-enumerator TDMinCutAGaT'
+            DPccp:
+                args: '--plan-enumerator DPccp'
+                pattern: '^Compute the query plan:.*'
+            DPsizeOpt:
+                args: '--plan-enumerator DPsizeOpt'
+                pattern: '^Compute the query plan:.*'
+            DPsub:
+                args: '--plan-enumerator DPsub'
+                pattern: '^Compute the query plan:.*'
+            DPsubOpt:
+                args: '--plan-enumerator DPsubOpt'
+                pattern: '^Compute the query plan:.*'
+            DPsizeSub:
+                args: '--plan-enumerator DPsizeSub'
+                pattern: '^Compute the query plan:.*'
+            TDbasic:
+                args: '--plan-enumerator TDbasic'
+                pattern: '^Compute the query plan:.*'
+            TDMinCutAGaT:
+                args: '--plan-enumerator TDMinCutAGaT'
+                pattern: '^Compute the query plan:.*'
         cases:
             2:  SELECT
                     *

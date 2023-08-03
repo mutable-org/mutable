@@ -1244,10 +1244,11 @@ std::size_t num_##NAME() const { return 0; }
 
             BiDirectionStateManager &operator=(BiDirectionStateManager &&) = default;
 
-            std::optional<state_type&> check_visited(state_type state, Context &... context) {
+            std::optional<const state_type*> check_visited(state_type& state, Context &... context) {
                 auto &P = partition(state, context...);
-                if (auto it = P.find(state); it==P.end())[[likely]]{return it->firtst;}
-                return {};
+                auto it = P.find(state);
+                if (it==P.end())[[likely]]{return std::nullopt;}
+                return &it->first;
             }
 
             template<bool ToBeamQueue>
@@ -1503,7 +1504,7 @@ std::size_t num_##NAME() const { return 0; }
 
             bool isFound = false;
             std::mutex mutex;
-            std::optional<std::tuple<State&, State&,double>> meet_point; // Store the topdown state and bottomup state
+            std::tuple<state_type*, state_type* , double> meet_point; // Store the topdown state and bottomup state
 
         public:
             explicit biDirectionalSearch(Context &... context)
@@ -1571,56 +1572,55 @@ std::size_t num_##NAME() const { return 0; }
                 }, context...);
             }
 
-            void explore_state_bottomup(const state_type &state, heuristic_type &heuristic, expand_type &expand,
+            void explore_state_bottomup_multithread(const state_type &state, heuristic_type &heuristic, expand_type &expand,
                                         Context &... context) {
                 bidirectional_for_each_successor_bottomup([this, &context...](state_type successor, double h) {
                     auto topdown_state = state_manager_topdown.check_visited(successor, context...);
-                    if (topdown_state.hasValue()) {
+                    if (topdown_state.has_value()) {
                         /// found in the topdown, so we need to maintained the state and return
-                        isFound = true;
                         mutex.lock();
-                        if (!meet_point) {
-                            double overall_score = topdown_state.g() + successor.g();
-                            meet_point = std::make_tuple(topdown_state, successor, overall_score);
+                        if (!isFound) {
+                            double overall_score = topdown_state.value()->g() + successor.g();
+                            meet_point = std::make_tuple(const_cast<state_type*>(topdown_state.value()), &successor, overall_score);
                         } else {
                             // conditionally update here
-                            double curr_score = topdown_state.g() + successor.g();
-                            double pre_score = std::get<3>(meet_point);
+                            double curr_score = topdown_state.value()->g() + successor.g();
+                            double pre_score = std::get<2>(meet_point);
                             if (curr_score < pre_score) {
-                                meet_point = std::make_tuple(topdown_state, successor, curr_score);
+                                meet_point = std::make_tuple(const_cast<state_type*>(topdown_state.value()), &successor, curr_score);
                             }
                         }
+                        isFound = true;
                         mutex.unlock();
-                    } else {
-                        /// Not visited, normal iteration
-                        state_manager_bottomup.push_regular_queue(std::move(successor), h, context...);
                     }
+                    state_manager_bottomup.push_regular_queue(std::move(successor), h, context...);
+
                 }, state, heuristic, expand, context...);
             }
 
-            void explore_state_topdown(const state_type &state, heuristic_type2 &heuristic, expand_type2 &expand2,
+            void explore_state_topdown_multithread(const state_type &state, heuristic_type2 &heuristic, expand_type2 &expand2,
                                        Context &... context) {
                 bidirectional_for_each_successor_topdown([this, &context...](state_type successor, double h) {
                     auto bottomup_state = state_manager_bottomup.check_visited(successor, context...);
-                    if (bottomup_state.hasValue()) {
+                    if (bottomup_state.has_value()) {
                         /// found in the topdown, so we need to maintained the state and return
-                        isFound = true;
                         mutex.lock();
-                        if (!meet_point) {
-                            double overall_score = successor.g() + bottomup_state.g();
-                            meet_point = std::make_tuple(successor, bottomup_state, overall_score);
+                        if (!isFound) {
+                            double overall_score = successor.g() + bottomup_state.value()->g();
+                            meet_point = std::make_tuple(&successor, const_cast<state_type*>(bottomup_state.value()), overall_score);
                         } else {
                             // conditionally update here
-                            double curr_score = successor.g() + bottomup_state.g();
-                            double pre_score = std::get<3>(meet_point);
+                            double curr_score = successor.g() + bottomup_state.value()->g();
+                            double pre_score = std::get<2>(meet_point);
                             if (curr_score < pre_score) {
-                                meet_point = std::make_tuple(successor, bottomup_state, curr_score);
+                                meet_point = std::make_tuple(&successor, const_cast<state_type*>(bottomup_state.value()), curr_score);
                             }
                         }
+                        isFound = true;
                         mutex.unlock();
-                    } else {
-                        state_manager_topdown.push_regular_queue(std::move(successor), h, context...);
                     }
+                    state_manager_topdown.push_regular_queue(std::move(successor), h, context...);
+
                 }, state, heuristic, expand2, context...);
             }
 
@@ -1671,12 +1671,9 @@ std::size_t num_##NAME() const { return 0; }
             void dump() const { dump(std::cerr); }
 
             const state_type &reverse_from_the_meet_point() {
-                state_type &topdown_state = std::get<0>(meet_point);
-                state_type &bottomup_state = std::get<1>(meet_point);
-
-                const state_type *tmp = &topdown_state;
+                const state_type *tmp = std::get<0>(meet_point); // topdown_state pointer
                 const state_type *current = tmp->parent();
-                const state_type *prev = &bottomup_state;
+                const state_type *prev = std::get<1>(meet_point); // bottomup_state pointer
 
                 while (current) {
                     const state_type *parent = current->parent();
@@ -1746,25 +1743,24 @@ std::size_t num_##NAME() const { return 0; }
                 //                }
 
                 /// 3. Bidirectionally extend to step forward
-//                explore_state_bottomup(bottomup_state, heuristic, expand, context...);
-//                explore_state_topdown(topdown_state, heuristic2, expand2, context...);
+                explore_state_bottomup_multithread(bottomup_state, heuristic, expand, context...);
+                explore_state_topdown_multithread(topdown_state, heuristic2, expand2, context...);
+
+                // Multithreaded expansion
+//                std::thread thread1([&](){
+//                    this->explore_state_bottomup_multithread(bottomup_state, heuristic, expand, context...);
+//                });
+//                std::thread thread2([&](){
+//                    this->explore_state_topdown_multithread(topdown_state, heuristic2, expand2, context...);
+//                });
+//                thread1.join();
+//                thread2.join();
 
                 if (isFound){
                     std::cout<<"Bidirectional Search Meet Each Other"<<std::endl;
-
                     const state_type& goal=reverse_from_the_meet_point();
                     return goal;
                 }
-
-                // Multithreaded expansion
-                std::thread thread1([&](){
-                    this->explore_state_bottomup(bottomup_state, heuristic, expand, context...);
-                });
-                std::thread thread2([&](){
-                    this->explore_state_topdown(topdown_state, heuristic2, expand2, context...);
-                });
-                thread1.join();
-                thread2.join();
             }
             throw std::logic_error("goal state unreachable from provided initial state");
         }

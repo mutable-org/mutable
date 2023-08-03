@@ -215,6 +215,8 @@ struct SubproblemsArray : Base<SubproblemsArray>
     Subproblem marked_;
     ///> array of subproblems
     Subproblem *subproblems_ = nullptr;
+    ///> mark of visited in the bidirectional search
+    bool isVisited = false;
 
     /*----- The Big Four and a Half, copy & swap idiom ---------------------------------------------------------------*/
     public:

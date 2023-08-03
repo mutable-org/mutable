@@ -1646,6 +1646,7 @@ std::size_t num_##NAME() const { return 0; }
             /// 1. Init the Bidirectional State Manager
             /// Including front and back - two direction, init and push element - two operations
             /// We can ignore the input initial_state
+            std::cout<<"Bidirectional Search!!!!Let's rock it!"<<std::endl;
             state_manager_bottomup.template push<false>(std::move(bottom_state), 0, context...);
             state_manager_topdown.template push<false>(std::move(top_state), 0, context...);
             /// 2. while loop
@@ -1671,7 +1672,7 @@ std::size_t num_##NAME() const { return 0; }
                 //            return goal;
                 //        }
                 if (diff == 0) {
-                    std::cout << "!! diff==0 Processing... \n";
+                    std::cout << "BIDIRECTIONALNOW!! diff==0 Processing... \n";
                     /// Naive version of logic
                     const state_type &goal = reverse_the_middle_case(topdown_state, bottomup_state);
                     return goal;
@@ -1680,6 +1681,23 @@ std::size_t num_##NAME() const { return 0; }
                 /// 3. Bidirectionally extend to step forward
                 explore_state_bottomup(bottomup_state, heuristic, expand, context...);
                 explore_state_topdown(topdown_state, heuristic2, expand2, context...);
+
+//                if (isFound){
+//                    std::cout<<"Bidirectional Search Meet Each Other"<<std::endl;
+//
+//                    const state_type& goal=reverse_from_the_meet_point();
+//                    return goal;
+//                }
+
+                // Multithreaded expansion
+//                std::thread thread1([&](){
+//                    this->explore_state_bottomup(bottomup_state, heuristic, expand, context...);
+//                });
+//                std::thread thread2([&](){
+//                    this->explore_state_topdown(topdown_state, heuristic2, expand2, context...);
+//                });
+//                thread1.join();
+//                thread2.join();
             }
             throw std::logic_error("goal state unreachable from provided initial state");
         }
@@ -2325,13 +2343,16 @@ std::size_t num_##NAME() const { return 0; }
                 /// 3. Bidirectionally extend to step forward
                 explore_state_bottomup(bottomup_state, heuristic, expand, context...);
                 explore_state_topdown(topdown_state, heuristic2, expand2, context...);
-//        std::thread thread1(&layeredBiDirectionSearch::explore_state_bottomup, bottomup_state, heuristic, expand,
-//                            context...);
-//        std::thread thread2(&layeredBiDirectionSearch::explore_state_topdown, topdown_state, heuristic2, expand2,
-//                            context...);
-//
-//        thread1.join();
-//        thread2.join();
+
+                // Multithreaded expansion
+//                std::thread thread1([&](){
+//                    this->explore_state_bottomup(bottomup_state, heuristic, expand, context...);
+//                });
+//                std::thread thread2([&](){
+//                    this->explore_state_topdown(topdown_state, heuristic2, expand2, context...);
+//                });
+//                thread1.join();
+//                thread2.join();
 
             }
 

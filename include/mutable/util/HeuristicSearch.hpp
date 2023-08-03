@@ -1244,15 +1244,22 @@ std::size_t num_##NAME() const { return 0; }
 
             BiDirectionStateManager &operator=(BiDirectionStateManager &&) = default;
 
-            std::optional<const state_type*> check_visited(state_type& state, Context &... context) {
+            std::optional<const state_type *> check_visited(state_type &state, Context &... context) {
                 auto &P = partition(state, context...);
                 auto it = P.find(state);
-                if (it==P.end())[[likely]]{return std::nullopt;}
+                if (it == P.end())[[likely]] { return std::nullopt; }
+                return &it->first;
+            }
+
+            const state_type *correct_find(state_type &state, Context &... context) {
+                auto &P = partition(state, context...);
+                auto it = P.find(state);
+                if (it == P.end())[[likely]] { return nullptr; }
                 return &it->first;
             }
 
             template<bool ToBeamQueue>
-            void push(state_type state, double h, Context &... context) {
+            const state_type* push(state_type state, double h, Context &... context) {
                 static_assert(not ToBeamQueue or HasBeamQueue, "ToBeamQueue implies HasBeamQueue");
                 static_assert(ToBeamQueue or HasRegularQueue, "not ToBeamQueue implies HasRegularQueue");
 
@@ -1266,6 +1273,7 @@ std::size_t num_##NAME() const { return 0; }
                         /*----- Enqueue state, obtain handle, and add to `StateInfo`. -----*/
                         it->second.handle = Q.push(&*it);
                         inc_new();
+                        return &it->first;
                     } else {
                         /*----- Duplicate, seen before. -----*/
                         M_insist(it->second.h == h, "must not have a different heuristic value for the same state");
@@ -1286,7 +1294,7 @@ std::size_t num_##NAME() const { return 0; }
                         } else if (state.g() >= it->first.g()) [[likely]] {
                             /*----- The state wasn't reached on a cheaper path and hence cannot produce better solutions. -----*/
                             inc_discarded();
-                            return; // XXX is it safe to not add the state to any queue?
+                            return &it->first; // XXX is it safe to not add the state to any queue?
                         } else {
                             /*----- The state was reached on a cheaper path.  We must reconsider the state. -----*/
                             M_insist(state.g() < it->first.g(), "the state was reached on a cheaper path");
@@ -1303,6 +1311,7 @@ std::size_t num_##NAME() const { return 0; }
                                 inc_decrease_key();
                             }
                         }
+                        return &it->first;
                     }
                 } else {
                     const auto new_g = state.g();
@@ -1318,10 +1327,10 @@ std::size_t num_##NAME() const { return 0; }
                 }
             }
 
-            void push_regular_queue(state_type state, double h, Context &... context) {
+            const state_type* push_regular_queue(state_type state, double h, Context &... context) {
                 if constexpr (detect_duplicates) {
                     if constexpr (HasRegularQueue) {
-                        push<false>(std::move(state), h, context...);
+                        return push<false>(std::move(state), h, context...);
                     } else {
                         auto &P = partition(state, context...);
                         /*----- There is no regular queue.  Only update the state's mapping. -----*/
@@ -1504,7 +1513,7 @@ std::size_t num_##NAME() const { return 0; }
 
             bool isFound = false;
             std::mutex mutex;
-            std::tuple<state_type*, state_type* , double> meet_point; // Store the topdown state and bottomup state
+            std::tuple<state_type *, state_type *, double> meet_point; // Store the topdown state and bottomup state
 
         public:
             explicit biDirectionalSearch(Context &... context)
@@ -1572,55 +1581,65 @@ std::size_t num_##NAME() const { return 0; }
                 }, context...);
             }
 
-            void explore_state_bottomup_multithread(const state_type &state, heuristic_type &heuristic, expand_type &expand,
-                                        Context &... context) {
+            void
+            explore_state_bottomup_multithread(const state_type &state, heuristic_type &heuristic, expand_type &expand,
+                                               Context &... context) {
                 bidirectional_for_each_successor_bottomup([this, &context...](state_type successor, double h) {
                     auto topdown_state = state_manager_topdown.check_visited(successor, context...);
+                    auto bottomup_state_ptr=state_manager_bottomup.push_regular_queue(std::move(successor), h, context...);
                     if (topdown_state.has_value()) {
                         /// found in the topdown, so we need to maintained the state and return
                         mutex.lock();
                         if (!isFound) {
-                            double overall_score = topdown_state.value()->g() + successor.g();
-                            meet_point = std::make_tuple(const_cast<state_type*>(topdown_state.value()), &successor, overall_score);
+                            double overall_score = topdown_state.value()->g() + bottomup_state_ptr->g();
+                            meet_point = std::make_tuple(const_cast<state_type *>(topdown_state.value()),
+                                                         const_cast<state_type *>(bottomup_state_ptr),
+                                                         overall_score);
                         } else {
                             // conditionally update here
-                            double curr_score = topdown_state.value()->g() + successor.g();
+                            double curr_score = topdown_state.value()->g() + bottomup_state_ptr->g();
                             double pre_score = std::get<2>(meet_point);
                             if (curr_score < pre_score) {
-                                meet_point = std::make_tuple(const_cast<state_type*>(topdown_state.value()), &successor, curr_score);
+                                meet_point = std::make_tuple(const_cast<state_type *>(topdown_state.value()),
+                                                             const_cast<state_type *>(bottomup_state_ptr),
+                                                             curr_score);
                             }
                         }
                         isFound = true;
                         mutex.unlock();
                     }
-                    state_manager_bottomup.push_regular_queue(std::move(successor), h, context...);
+
 
                 }, state, heuristic, expand, context...);
             }
 
-            void explore_state_topdown_multithread(const state_type &state, heuristic_type2 &heuristic, expand_type2 &expand2,
-                                       Context &... context) {
+            void explore_state_topdown_multithread(const state_type &state, heuristic_type2 &heuristic,
+                                                   expand_type2 &expand2,
+                                                   Context &... context) {
                 bidirectional_for_each_successor_topdown([this, &context...](state_type successor, double h) {
                     auto bottomup_state = state_manager_bottomup.check_visited(successor, context...);
+                    auto topdown_state_ptr = state_manager_topdown.push_regular_queue(std::move(successor), h, context...);
                     if (bottomup_state.has_value()) {
                         /// found in the topdown, so we need to maintained the state and return
                         mutex.lock();
                         if (!isFound) {
-                            double overall_score = successor.g() + bottomup_state.value()->g();
-                            meet_point = std::make_tuple(&successor, const_cast<state_type*>(bottomup_state.value()), overall_score);
+                            double overall_score = topdown_state_ptr->g() + bottomup_state.value()->g();
+                            meet_point = std::make_tuple(const_cast<state_type *>(topdown_state_ptr),
+                                                         const_cast<state_type *>(bottomup_state.value()),
+                                                         overall_score);
                         } else {
                             // conditionally update here
-                            double curr_score = successor.g() + bottomup_state.value()->g();
+                            double curr_score = topdown_state_ptr->g() + bottomup_state.value()->g();
                             double pre_score = std::get<2>(meet_point);
                             if (curr_score < pre_score) {
-                                meet_point = std::make_tuple(&successor, const_cast<state_type*>(bottomup_state.value()), curr_score);
+                                meet_point = std::make_tuple(const_cast<state_type *>(topdown_state_ptr),
+                                                             const_cast<state_type *>(bottomup_state.value()),
+                                                             curr_score);
                             }
                         }
                         isFound = true;
                         mutex.unlock();
                     }
-                    state_manager_topdown.push_regular_queue(std::move(successor), h, context...);
-
                 }, state, heuristic, expand2, context...);
             }
 
@@ -1710,7 +1729,7 @@ std::size_t num_##NAME() const { return 0; }
             /// 1. Init the Bidirectional State Manager
             /// Including front and back - two direction, init and push element - two operations
             /// We can ignore the input initial_state
-            std::cout<<"Bidirectional Search!!!!Let's rock it!"<<std::endl;
+            std::cout << "Bidirectional Search!!!!Let's rock it!" << std::endl;
             state_manager_bottomup.template push<false>(std::move(bottom_state), 0, context...);
             state_manager_topdown.template push<false>(std::move(top_state), 0, context...);
             /// 2. while loop
@@ -1724,7 +1743,7 @@ std::size_t num_##NAME() const { return 0; }
                 size_t diff = bottomup_state.size() - topdown_state.size();
                 std::cout << "diff=" << diff
                           << "\tbottomup_state.size()" << bottomup_state.size()
-                          << "\ttopdown_state.size()" << topdown_state.size() << "\n";
+                          << "\ttopdown_state.size()" << topdown_state.size() << std::endl;
 
                 assert(diff >= 0 && "Reach minus!");
 
@@ -1756,9 +1775,9 @@ std::size_t num_##NAME() const { return 0; }
 //                thread1.join();
 //                thread2.join();
 
-                if (isFound){
-                    std::cout<<"Bidirectional Search Meet Each Other"<<std::endl;
-                    const state_type& goal=reverse_from_the_meet_point();
+                if (isFound) {
+                    std::cout << "Bidirectional Search Meet Each Other" << std::endl;
+                    const state_type &goal = reverse_from_the_meet_point();
                     return goal;
                 }
             }
@@ -2461,11 +2480,17 @@ std::size_t num_##NAME() const { return 0; }
 #endif
 
             DEF_COUNTER(new)
+
             DEF_COUNTER(duplicates)
+
             DEF_COUNTER(regular_to_beam)
+
             DEF_COUNTER(none_to_beam)
+
             DEF_COUNTER(discarded)
+
             DEF_COUNTER(cheaper)
+
             DEF_COUNTER(decrease_key)
 
 #undef DEF_COUNTER
@@ -2478,10 +2503,15 @@ std::size_t num_##NAME() const { return 0; }
                 heap_type *queue;
                 ///> handle to the state's node in a heap
                 typename heap_type::handle_type handle;
+
                 StateInfo() = delete;
+
                 StateInfo(double h, heap_type *queue) : h(h), queue(queue) {}
+
                 StateInfo(const StateInfo &) = delete;
+
                 StateInfo(StateInfo &&) = default;
+
                 StateInfo &operator=(StateInfo &&) = default;
             };
 
@@ -2501,9 +2531,13 @@ std::size_t num_##NAME() const { return 0; }
             template<>
             struct Partitions<true> {
                 std::vector<map_type> partitions_;
+
                 Partitions(Context &... context) : partitions_(state_type::num_partitions(context...)) {}
+
                 Partitions(const Partitions &) = delete;
+
                 Partitions(Partitions &&) = default;
+
                 ~Partitions() {
                     if (Options::Get().statistics) {
                         std::cout << partitions_.size() << " partitions:";
@@ -2539,12 +2573,19 @@ std::size_t num_##NAME() const { return 0; }
             template<>
             struct Partitions<false> {
                 map_type states_;
+
                 Partitions(Context &...) {}
+
                 Partitions(const Partitions &) = delete;
+
                 Partitions(Partitions &&) = default;
+
                 map_type &operator()(const state_type &, Context &...) { return states_; }
+
                 const map_type &operator()(const state_type &, Context &...) const { return states_; }
+
                 std::size_t size() const { return states_.size(); }
+
                 void clear() { states_.clear(); }
             };
 
@@ -2558,8 +2599,11 @@ std::size_t num_##NAME() const { return 0; }
 
         public:
             LayeredStateManager(Context &... context) : partitions_(context...) {}
+
             LayeredStateManager(const LayeredStateManager &) = delete;
+
             LayeredStateManager(LayeredStateManager &&) = default;
+
             LayeredStateManager &operator=(LayeredStateManager &&) = default;
 
             typename map_type::iterator find(const state_type &state, Context &... context) {
@@ -2580,7 +2624,7 @@ std::size_t num_##NAME() const { return 0; }
 
 
             void persist_state(state_type state, double h, Context &... context) {
-                if constexpr(detect_duplicates) {
+                if constexpr (detect_duplicates) {
                     auto &P = partition(state, context...);
                     if (auto it = P.find(state);it == P.end()) {
                         it = P.emplace_hint(it, std::move(state), StateInfo(h, &regular_queue_));
@@ -2614,10 +2658,10 @@ std::size_t num_##NAME() const { return 0; }
                     } else {
                         inc_cheaper();
                         it->first.decrease_g(state.parent(), state.g());
-                        if(it->second.queue==nullptr){
-                            it->second.handle=Q.push(&*it);
-                            it->second.queue=&Q;
-                        }else{
+                        if (it->second.queue == nullptr) {
+                            it->second.handle = Q.push(&*it);
+                            it->second.queue = &Q;
+                        } else {
                             Q.increase(it->second.handle);
                             inc_decrease_key();
                         }
@@ -2625,9 +2669,9 @@ std::size_t num_##NAME() const { return 0; }
                 }
             }
 
-            std::pair<const state_type& ,double>pop(){
-                pointer_type ptr= nullptr;
-                ptr=beam_queue_.top();
+            std::pair<const state_type &, double> pop() {
+                pointer_type ptr = nullptr;
+                ptr = beam_queue_.top();
                 beam_queue_.pop();
                 auto &entry = *static_cast<typename map_type::value_type *>(ptr);
                 entry.second.queue = nullptr; // remove from queue
@@ -2635,8 +2679,9 @@ std::size_t num_##NAME() const { return 0; }
             }
 
 
-            bool queues_empty() const{return beam_queue_.empty();}
-            int queues_size() {return beam_queue_.size();}
+            bool queues_empty() const { return beam_queue_.empty(); }
+
+            int queues_size() { return beam_queue_.size(); }
 
 
             void print_counters(std::ostream &out) const {
@@ -2733,13 +2778,19 @@ std::size_t num_##NAME() const { return 0; }
                 double h;
 
                 weighted_state(state_type state, double h) : state(std::move(state)), h(h) {}
+
                 weighted_state(const weighted_state &) = delete;
+
                 weighted_state(weighted_state &&) = default;
 
                 weighted_state &operator=(weighted_state &&) = default;
+
                 bool operator<(const weighted_state &other) const { return this->weight() < other.weight(); }
+
                 bool operator>(const weighted_state &other) const { return this->weight() > other.weight(); }
+
                 bool operator<=(const weighted_state &other) const { return this->weight() <= other.weight(); }
+
                 bool operator>=(const weighted_state &other) const { return this->weight() >= other.weight(); }
 
             private:
@@ -2791,7 +2842,7 @@ std::size_t num_##NAME() const { return 0; }
             using has_mark = decltype(std::declval<T>().mark(Subproblem()));
 
             void push_candidates(state_type state, double h, Context &... context) {
-                if  (candidates_size == 1) {
+                if (candidates_size == 1) {
                     /* Special Process, to save more time */
                     if (layer_candidates.size() == 0) {
                         layer_candidates.emplace_back(std::move(state), h);
@@ -2823,7 +2874,6 @@ std::size_t num_##NAME() const { return 0; }
                     }
                 }
             }
-
 
 
             void for_each_successor(callback_t &&callback, const state_type &state, heuristic_type &heuristic,
@@ -2872,7 +2922,8 @@ std::size_t num_##NAME() const { return 0; }
                 typename... Context
         >
         requires heuristic_search_heuristic<Heuristic, Context...>
-        const State &layeredSearch<State, Expand, Heuristic, BeamWidth, SortedCandidates, BeamFactor, Config, Context...>::search(
+        const State &
+        layeredSearch<State, Expand, Heuristic, BeamWidth, SortedCandidates, BeamFactor, Config, Context...>::search(
                 state_type initial_state,
                 expand_type expand,
                 heuristic_type &heuristic,
@@ -2966,8 +3017,8 @@ std::size_t num_##NAME() const { return 0; }
             using type = layeredSearch<State, Expand, Heuristic, BeamWidth, true, 0, Config, Context...>;
         };
 
-        template<int BeamFactor >
-        struct hanwen_layeredSearch_sorted_dynamic{
+        template<int BeamFactor>
+        struct hanwen_layeredSearch_sorted_dynamic {
             template<
                     heuristic_search_state State,
                     typename Expand,

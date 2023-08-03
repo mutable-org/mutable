@@ -1259,7 +1259,7 @@ std::size_t num_##NAME() const { return 0; }
             }
 
             template<bool ToBeamQueue>
-            const state_type* push(state_type state, double h, Context &... context) {
+            const state_type *push(state_type state, double h, Context &... context) {
                 static_assert(not ToBeamQueue or HasBeamQueue, "ToBeamQueue implies HasBeamQueue");
                 static_assert(ToBeamQueue or HasRegularQueue, "not ToBeamQueue implies HasRegularQueue");
 
@@ -1327,7 +1327,7 @@ std::size_t num_##NAME() const { return 0; }
                 }
             }
 
-            const state_type* push_regular_queue(state_type state, double h, Context &... context) {
+            const state_type *push_regular_queue(state_type state, double h, Context &... context) {
                 if constexpr (detect_duplicates) {
                     if constexpr (HasRegularQueue) {
                         return push<false>(std::move(state), h, context...);
@@ -1513,7 +1513,7 @@ std::size_t num_##NAME() const { return 0; }
 
             bool isFound = false;
             std::mutex mutex;
-            std::tuple<state_type *, state_type *, double> meet_point; // Store the topdown state and bottomup state
+            std::tuple<const state_type *, const state_type *, double> meet_point; // Store the topdown state and bottomup state
 
         public:
             explicit biDirectionalSearch(Context &... context)
@@ -1586,23 +1586,20 @@ std::size_t num_##NAME() const { return 0; }
                                                Context &... context) {
                 bidirectional_for_each_successor_bottomup([this, &context...](state_type successor, double h) {
                     auto topdown_state = state_manager_topdown.check_visited(successor, context...);
-                    auto bottomup_state_ptr=state_manager_bottomup.push_regular_queue(std::move(successor), h, context...);
+                    auto bottomup_state_ptr = state_manager_bottomup.push_regular_queue(std::move(successor), h,
+                                                                                        context...);
                     if (topdown_state.has_value()) {
                         /// found in the topdown, so we need to maintained the state and return
                         mutex.lock();
                         if (!isFound) {
                             double overall_score = topdown_state.value()->g() + bottomup_state_ptr->g();
-                            meet_point = std::make_tuple(const_cast<state_type *>(topdown_state.value()),
-                                                         const_cast<state_type *>(bottomup_state_ptr),
-                                                         overall_score);
+                            meet_point = std::make_tuple(topdown_state.value(), bottomup_state_ptr, overall_score);
                         } else {
                             // conditionally update here
                             double curr_score = topdown_state.value()->g() + bottomup_state_ptr->g();
                             double pre_score = std::get<2>(meet_point);
                             if (curr_score < pre_score) {
-                                meet_point = std::make_tuple(const_cast<state_type *>(topdown_state.value()),
-                                                             const_cast<state_type *>(bottomup_state_ptr),
-                                                             curr_score);
+                                meet_point = std::make_tuple(topdown_state.value(), bottomup_state_ptr, curr_score);
                             }
                         }
                         isFound = true;
@@ -1618,23 +1615,20 @@ std::size_t num_##NAME() const { return 0; }
                                                    Context &... context) {
                 bidirectional_for_each_successor_topdown([this, &context...](state_type successor, double h) {
                     auto bottomup_state = state_manager_bottomup.check_visited(successor, context...);
-                    auto topdown_state_ptr = state_manager_topdown.push_regular_queue(std::move(successor), h, context...);
+                    auto topdown_state_ptr = state_manager_topdown.push_regular_queue(std::move(successor), h,
+                                                                                      context...);
                     if (bottomup_state.has_value()) {
                         /// found in the topdown, so we need to maintained the state and return
                         mutex.lock();
                         if (!isFound) {
                             double overall_score = topdown_state_ptr->g() + bottomup_state.value()->g();
-                            meet_point = std::make_tuple(const_cast<state_type *>(topdown_state_ptr),
-                                                         const_cast<state_type *>(bottomup_state.value()),
-                                                         overall_score);
+                            meet_point = std::make_tuple(topdown_state_ptr, bottomup_state.value(), overall_score);
                         } else {
                             // conditionally update here
                             double curr_score = topdown_state_ptr->g() + bottomup_state.value()->g();
                             double pre_score = std::get<2>(meet_point);
                             if (curr_score < pre_score) {
-                                meet_point = std::make_tuple(const_cast<state_type *>(topdown_state_ptr),
-                                                             const_cast<state_type *>(bottomup_state.value()),
-                                                             curr_score);
+                                meet_point = std::make_tuple(topdown_state_ptr, bottomup_state.value(), curr_score);
                             }
                         }
                         isFound = true;

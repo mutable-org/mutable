@@ -1756,18 +1756,18 @@ std::size_t num_##NAME() const { return 0; }
                 //                }
 
                 /// 3. Bidirectionally extend to step forward
-                explore_state_bottomup_multithread(bottomup_state, heuristic, expand, context...);
-                explore_state_topdown_multithread(topdown_state, heuristic2, expand2, context...);
+//                explore_state_bottomup_multithread(bottomup_state, heuristic, expand, context...);
+//                explore_state_topdown_multithread(topdown_state, heuristic2, expand2, context...);
 
                 // Multithreaded expansion
-//                std::thread thread1([&](){
-//                    this->explore_state_bottomup_multithread(bottomup_state, heuristic, expand, context...);
-//                });
-//                std::thread thread2([&](){
-//                    this->explore_state_topdown_multithread(topdown_state, heuristic2, expand2, context...);
-//                });
-//                thread1.join();
-//                thread2.join();
+                std::thread thread1([&](){
+                    this->explore_state_bottomup_multithread(bottomup_state, heuristic, expand, context...);
+                });
+                std::thread thread2([&](){
+                    this->explore_state_topdown_multithread(topdown_state, heuristic2, expand2, context...);
+                });
+                thread1.join();
+                thread2.join();
 
                 if (isFound) {
                     std::cout << "Bidirectional Search Meet Each Other" << std::endl;

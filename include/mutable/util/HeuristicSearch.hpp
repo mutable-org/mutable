@@ -1735,25 +1735,10 @@ std::size_t num_##NAME() const { return 0; }
 
                 /// 2. Exit case
                 size_t diff = bottomup_state.size() - topdown_state.size();
-                std::cout << "diff=" << diff
-                          << "\tbottomup_state.size()" << bottomup_state.size()
-                          << "\ttopdown_state.size()" << topdown_state.size() << std::endl;
-
-                assert(diff >= 0 && "Reach minus!");
-
-                // Currently not using diff==1, we have found diff==0 method has better connection
-                //        if (diff == 1) {
-                //            std::cout << "Currently diff==1 Processing...\n";
-                //            /// Build connection from bottomup_state to topdown_state
-                //            const state_type &goal = reverse_the_topdown(topdown_state, bottomup_state);
-                //            return goal;
-                //        }
-                //                if (diff == 0) {
-                //                    std::cout << "BIDIRECTIONALNOW!! diff==0 Processing... \n";
-                //                    /// Naive version of logic
-                //                    const state_type &goal = reverse_the_middle_case(topdown_state, bottomup_state);
-                //                    return goal;
-                //                }
+//                std::cout << "diff=" << diff
+//                          << "\tbottomup_state.size()" << bottomup_state.size()
+//                          << "\ttopdown_state.size()" << topdown_state.size() << std::endl;
+//
 
                 /// 3. Bidirectionally extend to step forward
 //                explore_state_bottomup_multithread(bottomup_state, heuristic, expand, context...);
@@ -1770,7 +1755,7 @@ std::size_t num_##NAME() const { return 0; }
                 thread2.join();
 
                 if (isFound) {
-                    std::cout << "Bidirectional Search Meet Each Other" << std::endl;
+//                    std::cout << "Bidirectional Search Meet Each Other" << std::endl;
                     const state_type &goal = reverse_from_the_meet_point();
                     return goal;
                 }

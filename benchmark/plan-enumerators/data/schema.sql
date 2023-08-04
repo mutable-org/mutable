@@ -1,5 +1,5 @@
-CREATE DATABASE optimizer;
-USE optimizer;
+CREATE DATABASE plan_enumerators;
+USE plan_enumerators;
 
 CREATE TABLE T0
 (

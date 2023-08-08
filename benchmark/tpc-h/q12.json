@@ -1,5 +1,5 @@
 {
-    "tpc_h": [
+    "TPC": [
       { "relations": ["Lineitem"], "size": 30988 },
       { "relations": ["Orders"], "size": 600434 },
       { "relations": ["Lineitem", "Orders"], "size": 12402 },

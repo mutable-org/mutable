@@ -5266,6 +5266,12 @@ class variable_storage<bool, VariableKind::Local, /* CanBeNull= */ false, L>
     requires requires (U &&u) { PrimitiveExpr<bool, L>(primitive_expr_t<U>(std::forward<U>(u))); }
     void operator=(U &&value); // impl delayed because `LocalBit` defined later
 
+    /* Set this value to `true`. */
+    void set_true();
+
+    /* Set this value to `false`. */
+    void set_false();
+
     /** Retrieve value. */
     operator PrimitiveExpr<bool, L>() const; // impl delayed because `LocalBit` defined later
 };
@@ -5301,6 +5307,25 @@ class variable_storage<T, VariableKind::Local, /* CanBeNull= */ true, L>
         this->value_ = val;
         this->is_null_ = bool(is_null) ? is_null : PrimitiveExpr<bool, L>(false);
     }
+
+    /** Set to `true`. */
+    void set_true()
+    requires boolean<T>
+    {
+        value_.set_true();
+        is_null_.set_false();
+    }
+
+    /** Set to `false`. */
+    void set_false()
+    requires boolean<T>
+    {
+        value_.set_false();
+        is_null_.set_false();
+    }
+
+    /** Set to `NULL`. */
+    void set_null() { is_null_.set_true(); }
 
     /** Retrieve value. */
     operator Expr<T, L>() const { return Expr<T, L>(PrimitiveExpr<T, L>(value_), PrimitiveExpr<bool, L>(is_null_)); }
@@ -5551,6 +5576,24 @@ struct Variable<T, Kind, CanBeNull, L>
     template<typename U>
     requires requires (U &&u) { storage_ = std::forward<U>(u); }
     Variable & operator=(U &&value) { storage_ = std::forward<U>(value); return *this; }
+
+    void set_true()
+    requires requires (storage_type s) { { s.set_true() } -> std::same_as<void>; }
+    {
+        storage_.set_true();
+    }
+
+    void set_false()
+    requires requires (storage_type s) { { s.set_false() } -> std::same_as<void>; }
+    {
+        storage_.set_false();
+    }
+
+    void set_null()
+    requires requires (storage_type s) { { s.set_null() } -> std::same_as<void>; }
+    {
+        storage_.set_null();
+    }
 
 
     /*------------------------------------------------------------------------------------------------------------------
@@ -6905,6 +6948,20 @@ inline variable_storage<bool, VariableKind::Local, false, L>::variable_storage()
         return values;
     }())
 { }
+
+template<std::size_t L>
+void variable_storage<bool, VariableKind::Local, false, L>::set_true()
+{
+    for (auto &local_bit : values_)
+        local_bit->set();
+}
+
+template<std::size_t L>
+void variable_storage<bool, VariableKind::Local, false, L>::set_false()
+{
+    for (auto &local_bit : values_)
+        local_bit->clear();
+}
 
 template<std::size_t L>
 template<primitive_convertible U>

@@ -1819,7 +1819,7 @@ void OrderedGrouping::execute(const Match<OrderedGrouping> &M, setup_t setup, pi
                             BLOCK_OPEN(reset_aggs) {
                                 min_max = neutral;
                                 if (is_null)
-                                    *is_null = true;
+                                    is_null->set_true();
                             }
 
                             BLOCK_OPEN(update_aggs) {
@@ -1909,7 +1909,7 @@ void OrderedGrouping::execute(const Match<OrderedGrouping> &M, setup_t setup, pi
                             BLOCK_OPEN(reset_aggs) {
                                 sum = T(0);
                                 if (is_null)
-                                    *is_null = true;
+                                    is_null->set_true();
                             }
 
                             BLOCK_OPEN(update_aggs) {
@@ -2006,7 +2006,7 @@ void OrderedGrouping::execute(const Match<OrderedGrouping> &M, setup_t setup, pi
                     BLOCK_OPEN(reset_aggs) {
                         avg = 0.0;
                         if (is_null)
-                            *is_null = true;
+                            is_null->set_true();
                     }
 
                     BLOCK_OPEN(update_avg_aggs) {
@@ -2684,7 +2684,7 @@ void Aggregation::execute(const Match<Aggregation> &M, setup_t setup, pipeline_t
                                                 };
 #endif
                                             }
-                                            is_null = Bool<L>(false); // at least one non-NULL value is consumed
+                                            is_null.set_false(); // at least one non-NULL value is consumed
                                         }
                                     },
                                     []<typename>() { M_unreachable("invalid type for given number of SIMD lanes"); }
@@ -2740,7 +2740,7 @@ void Aggregation::execute(const Match<Aggregation> &M, setup_t setup, pipeline_t
                                             auto _new_val_pred =
                                                 pred ? Select(*pred, _new_val, PrimitiveExpr<T, L>(T(0))) : _new_val;
                                             sum += _new_val_pred.insist_not_null(); // add new value to old sum
-                                            is_null = Bool<L>(false); // at least one non-NULL value is consumed
+                                            is_null.set_false(); // at least one non-NULL value is consumed
                                         }
                                     },
                                     []<typename>() { M_unreachable("invalid type for given number of SIMD lanes"); }
@@ -2851,7 +2851,7 @@ void Aggregation::execute(const Match<Aggregation> &M, setup_t setup, pipeline_t
                                 auto delta_relative = delta_absolute / running_count;
 
                                 avg += delta_relative; // update old average with new value
-                                is_null = Bool<L>(false); // at least one non-NULL value is consumed
+                                is_null.set_false(); // at least one non-NULL value is consumed
                             }
                         }
                     }

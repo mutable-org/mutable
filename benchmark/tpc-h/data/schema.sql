@@ -1,5 +1,5 @@
-CREATE DATABASE tpc_h;
-USE tpc_h;
+CREATE DATABASE TPC;
+USE TPC;
 
 CREATE TABLE Lineitem (
     l_orderkey      INT(4) NOT NULL,

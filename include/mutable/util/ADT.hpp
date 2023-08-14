@@ -113,6 +113,14 @@ struct SmallBitset
     SmallBitset() : bits_(0) { };
     explicit SmallBitset(uint64_t bits) : bits_(bits) { };
 
+    /** Factory method for creating a SmallBitset with first n bits set */
+    static SmallBitset All(std::size_t n) {
+        M_insist(n <= CAPACITY);
+        if (n == CAPACITY) [[unlikely]]
+            return ~SmallBitset(0);
+        return SmallBitset((uint64_t(1) << n) - uint64_t(1));
+    }
+
     /** Returns the `offset`-th bit.  Requires that `offset` is in range `[0; CAPACITY)`. */
     Proxy<true> operator()(std::size_t offset) const { return Proxy<true>(*this, offset); }
 

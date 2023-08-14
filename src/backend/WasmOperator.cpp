@@ -978,11 +978,11 @@ void HashBasedGrouping::execute(const Match<HashBasedGrouping> &M, setup_t setup
                                                                   : T(std::numeric_limits<type>::lowest());
                                             r.clone().set_value(neutral); // initialize with neutral element +inf or -inf
                                             if (info.entry.nullable())
-                                                r.clone().set_null_bit(Boolx1(true)); // first value is NULL
+                                                r.clone().set_null(); // first value is NULL
                                         } ELSE {
                                             r.clone().set_value(val); // initialize with first value
                                             if (info.entry.nullable())
-                                                r.clone().set_null_bit(Boolx1(false)); // first value is not NULL
+                                                r.clone().set_not_null(); // first value is not NULL
                                         };
                                     }
                                     BLOCK_OPEN(update_aggs) {
@@ -1073,11 +1073,11 @@ void HashBasedGrouping::execute(const Match<HashBasedGrouping> &M, setup_t setup
                                 IF (is_null) {
                                     r.clone().set_value(Doublex1(0.0)); // initialize with neutral element 0
                                     if (info.entry.nullable())
-                                        r.clone().set_null_bit(Boolx1(true)); // first value is NULL
+                                        r.clone().set_null(); // first value is NULL
                                 } ELSE {
                                     r.clone().set_value(val); // initialize with first value
                                     if (info.entry.nullable())
-                                        r.clone().set_null_bit(Boolx1(false)); // first value is not NULL
+                                        r.clone().set_not_null(); // first value is not NULL
                                 };
                             }
                             BLOCK_OPEN(update_avg_aggs) {
@@ -1136,11 +1136,11 @@ void HashBasedGrouping::execute(const Match<HashBasedGrouping> &M, setup_t setup
                                         IF (is_null) {
                                             r.clone().set_value(T(type(0))); // initialize with neutral element 0
                                             if (info.entry.nullable())
-                                                r.clone().set_null_bit(Boolx1(true)); // first value is NULL
+                                                r.clone().set_null(); // first value is NULL
                                         } ELSE {
                                             r.clone().set_value(val); // initialize with first value
                                             if (info.entry.nullable())
-                                                r.clone().set_null_bit(Boolx1(false)); // first value is not NULL
+                                                r.clone().set_not_null(); // first value is not NULL
                                         };
                                     }
                                     BLOCK_OPEN(update_aggs) {

@@ -1386,12 +1386,10 @@ void OrderedGrouping::execute(const Match<OrderedGrouping> &M, setup_t setup, pi
         for (std::size_t idx = 0; idx < aggregates.size(); ++idx) {
             auto &info = aggregates[idx];
 
-            bool is_min = false; ///< flag to indicate whether aggregate function is MIN
             switch (info.fnid) {
                 default:
                     M_unreachable("unsupported aggregate function");
                 case m::Function::FN_MIN:
-                    is_min = true; // set flag and delegate to MAX case
                 case m::Function::FN_MAX: {
                     auto min_max = [&]<typename T>() {
                         auto &[min_max, is_null] = *M_notnull((

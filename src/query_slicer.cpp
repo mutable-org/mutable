@@ -114,7 +114,7 @@ int main(int argc, const char **argv)
     m::AdjacencyMatrix &M = G->adjacency_matrix();
 
     /*----- Emit the queries. ----------------------------------------------------------------------------------------*/
-    const Subproblem All((1UL << G->num_sources()) - 1UL);
+    const Subproblem All = Subproblem::All(G->num_sources());
     auto emit = [&G](Subproblem S) { emit_query_slice(std::cout, *G, S); };
     M.for_each_CSG_undirected(All, emit);
 }

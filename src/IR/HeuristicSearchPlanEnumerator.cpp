@@ -297,7 +297,7 @@ struct SubproblemsArray : Base<SubproblemsArray>
     static SubproblemsArray Top(const PlanTable &PT, const QueryGraph &G, const AdjacencyMatrix &M,
                                 const CostFunction &CF, const CardinalityEstimator &CE)
     {
-        const Subproblem All((1UL << G.num_sources()) - 1UL);
+        const Subproblem All = Subproblem::All(G.num_sources());
         auto subproblems = allocator_.allocate(1);
         subproblems[0] = All;
         return SubproblemsArray(
@@ -880,7 +880,7 @@ struct EdgesBottomUp : Base<EdgesBottomUp>
             Subproblem S = subproblems[datasource_to_subproblem[idx]];
             M_insist(not S.empty(), "reverse index must never point to an empty subproblem");
         }
-        Subproblem All((1UL << G.num_sources()) - 1UL);
+        Subproblem All = Subproblem::All(G.num_sources());
         Subproblem combined;
         unsigned num_subproblems_nonempty = 0;
         for (std::size_t idx = 0; idx != G.num_sources(); ++idx) {
@@ -1174,7 +1174,7 @@ struct EdgePtrBottomUp : Base<EdgePtrBottomUp>
             Subproblem S = subproblems[datasource_to_subproblem[idx]];
             M_insist(not S.empty(), "reverse index must never point to an empty subproblem");
         }
-        Subproblem All((1UL << G.num_sources()) - 1UL);
+        Subproblem All = Subproblem::All(G.num_sources());
         Subproblem combined;
         for (std::size_t idx = 0; idx != G.num_sources(); ++idx) {
             Subproblem S = subproblems[idx];
@@ -1285,7 +1285,7 @@ struct BottomUpComplete : BottomUp
 #endif
 
         const Subproblem marked = state.marked();
-        const Subproblem All((1UL << G.num_sources()) - 1UL);
+        const Subproblem All = Subproblem::All(G.num_sources());
 
         /* Enumerate all potential join pairs and check whether they are connected. */
         for (auto outer_it = state.cbegin(), outer_end = std::prev(state.cend()); outer_it != outer_end; ++outer_it)
@@ -1355,7 +1355,7 @@ struct BottomUpComplete : BottomUp
         state.INCREMENT_NUM_STATES_EXPANDED();
 
         /*----- Enumerate all left sides. -----*/
-        const Subproblem All((1UL << G.num_sources()) - 1UL);
+        const Subproblem All = Subproblem::All(G.num_sources());
         Subproblem X;
         std::size_t i = 0;
         while (X != All) {
@@ -1608,7 +1608,7 @@ struct TopDown
     void reset_marked(State &state, const PlanTable&, const QueryGraph &G, const AdjacencyMatrix&, const CostFunction&,
                       const CardinalityEstimator&)
     {
-        const Subproblem All((1UL << G.num_sources()) - 1UL);
+        const Subproblem All = Subproblem::All(G.num_sources());
         state.mark(All);
     }
 };
@@ -1629,7 +1629,7 @@ struct TopDownComplete : TopDown
         bool has_successor = false;
 #endif
 
-        const Subproblem All((1UL << G.num_sources()) - 1UL);
+        const Subproblem All = Subproblem::All(G.num_sources());
         auto enumerate_ccp = [&](Subproblem S1, Subproblem S2) {
             using std::swap;
 
@@ -2006,7 +2006,7 @@ struct GOO<PlanTable, State, BottomUp>
         }, G);
 
         /*----- Greedily enumerate all joins. -----*/
-        const Subproblem All((1UL << G.num_sources()) - 1UL);
+        const Subproblem All = Subproblem::All(G.num_sources());
         double cost = 0;
         ::GOO{}.for_each_join([&](Subproblem left, Subproblem right) {
             static cnf::CNF condition; // TODO use join condition
@@ -2121,7 +2121,7 @@ struct avg_sel<PlanTable, State, BottomUp>
             std::sort(cardinalities, end); // sort cardinalities in ascending order
         }
 
-        const Subproblem All((1UL << G.num_sources()) - 1UL);
+        const Subproblem All = Subproblem::All(G.num_sources());
         if (not PT[All].model) {
             static cnf::CNF condition;
             PT[All].model = CE.estimate_join_all(G, PT, All, condition);
@@ -2356,7 +2356,7 @@ struct checkpoints<PlanTable, SubproblemsArray>
 
         }
         /* The final *checkpoint* is the goal state. */
-        checkpoints.emplace_back(Subproblem((1UL << G.sources().size()) - 1UL)); // goal state
+        checkpoints.emplace_back(Subproblem::All(G.sources().size())); // goal state
 
         /*----- Perform searches towards checkpoints.  ---------------------------------------------------------------*/
         ///> the heuristic value determined by connecting checkpoints

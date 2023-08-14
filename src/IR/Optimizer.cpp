@@ -255,7 +255,7 @@ Optimizer::optimize_with_plantable(const QueryGraph &G) const
 
         /* Set operator information. */
         auto info = std::make_unique<OperatorInformation>();
-        info->subproblem = Subproblem((1UL << G.sources().size()) - 1UL);
+        info->subproblem = Subproblem::All(G.sources().size());
         info->estimated_cardinality = CE.predict_cardinality(*entry.model);
 
         group_by->info(std::move(info));
@@ -269,7 +269,7 @@ Optimizer::optimize_with_plantable(const QueryGraph &G) const
 
         /* Set operator information. */
         auto info = std::make_unique<OperatorInformation>();
-        info->subproblem = Subproblem((1UL << G.sources().size()) - 1UL);
+        info->subproblem = Subproblem::All(G.sources().size());
         info->estimated_cardinality = CE.predict_cardinality(*entry.model);
 
         agg->info(std::move(info));
@@ -288,7 +288,7 @@ Optimizer::optimize_with_plantable(const QueryGraph &G) const
 
         /* Set operator information. */
         auto info = std::make_unique<OperatorInformation>();
-        info->subproblem = Subproblem((1UL << G.sources().size()) - 1UL);
+        info->subproblem = Subproblem::All(G.sources().size());
         info->estimated_cardinality = projection->child(0)->info().estimated_cardinality;
 
         projection->info(std::move(info));
@@ -303,7 +303,7 @@ Optimizer::optimize_with_plantable(const QueryGraph &G) const
 
         /* Set operator information. */
         auto info = std::make_unique<OperatorInformation>();
-        info->subproblem = Subproblem((1UL << G.sources().size()) - 1UL);
+        info->subproblem = Subproblem::All(G.sources().size());
         info->estimated_cardinality = order_by->child(0)->info().estimated_cardinality;
 
         order_by->info(std::move(info));
@@ -321,7 +321,7 @@ Optimizer::optimize_with_plantable(const QueryGraph &G) const
 
         /* Set operator information. */
         auto info = std::make_unique<OperatorInformation>();
-        info->subproblem = Subproblem((1UL << G.sources().size()) - 1UL);
+        info->subproblem = Subproblem::All(G.sources().size());
         info->estimated_cardinality = CE.predict_cardinality(*entry.model);
 
         limit->info(std::move(info));
@@ -349,7 +349,7 @@ Optimizer::optimize_with_plantable(const QueryGraph &G) const
 
         /* Set operator information. */
         auto info = std::make_unique<OperatorInformation>();
-        info->subproblem = Subproblem((1UL << G.sources().size()) - 1UL);
+        info->subproblem = Subproblem::All(G.sources().size());
         info->estimated_cardinality = projection->child(0)->info().estimated_cardinality;
 
         projection->info(std::move(info));
@@ -371,7 +371,7 @@ void Optimizer::optimize_locally(const QueryGraph &G, PlanTable &PT) const
 #ifndef NDEBUG
     if (Options::Get().statistics) {
         std::size_t num_CSGs = 0, num_CCPs = 0;
-        const SmallBitset All((1UL << G.num_sources()) - 1UL);
+        const SmallBitset All = SmallBitset::All(G.num_sources());
         auto inc_CSGs = [&num_CSGs](SmallBitset) { ++num_CSGs; };
         auto inc_CCPs = [&num_CCPs](SmallBitset, SmallBitset) { ++num_CCPs; };
         G.adjacency_matrix().for_each_CSG_undirected(All, inc_CSGs);
@@ -444,7 +444,7 @@ Optimizer::construct_plan(const QueryGraph &G, const PlanTable &plan_table, Prod
         return construct_plan_impl(s, construct_plan_impl);
     };
 
-    return std::unique_ptr<Producer>(construct_recursive(Subproblem((1UL << G.sources().size()) - 1)));
+    return std::unique_ptr<Producer>(construct_recursive(Subproblem::All(G.sources().size())));
 }
 
 std::vector<Optimizer::projection_type>

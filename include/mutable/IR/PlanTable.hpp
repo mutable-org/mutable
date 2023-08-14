@@ -92,9 +92,9 @@ struct M_EXPORT PlanTableBase : crtp<Actual, PlanTableBase>
     const PlanTableEntry & operator[](Subproblem s) const { return actual().operator[](s); }
 
     /** Returns the entry for the final plan, i.e. the plan that joins all relations. */
-    PlanTableEntry & get_final() { return operator[](Subproblem((1UL << num_sources()) - 1UL)); }
+    PlanTableEntry & get_final() { return operator[](Subproblem::All(num_sources())); }
     /** Returns the entry for the final plan, i.e. the plan that joins all relations. */
-    const PlanTableEntry & get_final() const { return operator[](Subproblem((1UL << num_sources()) - 1UL)); }
+    const PlanTableEntry & get_final() const { return operator[](Subproblem::All(num_sources())); }
 
     /** Returns the cost of the best plan to compute `s`. */
     cost_type c(Subproblem s) const { return operator[](s).cost; }

@@ -218,7 +218,7 @@ int main(int argc, const char **argv)
 template<typename Generator>
 void generate_correlated_cardinalities(table_type &table, const m::QueryGraph &G, Generator &&g)
 {
-    const Subproblem All((1UL << G.num_sources()) - 1UL);
+    const Subproblem All = Subproblem::All(G.num_sources());
     const m::AdjacencyMatrix &M = G.adjacency_matrix();
     std::unordered_map<Subproblem, double, m::SubproblemHash> max_cardinalities;
 
@@ -262,7 +262,7 @@ void generate_correlated_cardinalities(table_type &table, const m::QueryGraph &G
 template<typename Generator>
 void generate_uncorrelated_cardinalities(table_type &table, const m::QueryGraph &G, Generator &&g)
 {
-    const Subproblem All((1UL << G.num_sources()) - 1UL);
+    const Subproblem All = Subproblem::All(G.num_sources());
     const m::AdjacencyMatrix &M = G.adjacency_matrix();
     skewed_distribution<double> selectivity_dist(args.alpha);
     // std::uniform_real_distribution<double> selectivity_dist(0, 1);
@@ -350,7 +350,7 @@ void emit_cardinalities(std::ostream &out, const m::QueryGraph &G, const table_t
 
     out << "{\n    \"" << DB.name << "\": [\n";
     bool first = true;
-    const Subproblem All((1UL << G.num_sources()) - 1UL);
+    const Subproblem All = Subproblem::All(G.num_sources());
 
     /*----- Print singletons aka base relations. -----*/
     for (auto it = All.begin(); it != All.end(); ++it) {

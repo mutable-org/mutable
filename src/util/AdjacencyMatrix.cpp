@@ -84,7 +84,7 @@ AdjacencyMatrix AdjacencyMatrix::minimum_spanning_forest(std::function<double(st
     std::priority_queue<weighted_edge, std::vector<weighted_edge>, std::greater<weighted_edge>> Q;
 
     /* Run Prim's algorithm for each remaining vertex to compute a MSF. */
-    SmallBitset vertices_remaining((1UL << num_vertices_) - 1UL);
+    SmallBitset vertices_remaining = SmallBitset::All(num_vertices_);
 
     while (vertices_remaining) {
         SmallBitset next_vertex = vertices_remaining.begin().as_set();

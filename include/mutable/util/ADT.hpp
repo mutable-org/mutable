@@ -808,7 +808,7 @@ struct GospersHack
         M_insist(k <= n, "invalid enumeration");
         M_insist(n < 64, "n exceeds range");
         GospersHack GH;
-        GH.set_ = SmallBitset((1UL << k) - 1);
+        GH.set_ = SmallBitset::All(k);
         GH.limit_ = 1UL << n;
         return GH;
     }

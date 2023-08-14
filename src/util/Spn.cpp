@@ -59,7 +59,7 @@ std::pair<std::vector<SmallBitset>, std::vector<SmallBitset>>rdc_split(const Mat
         }
     }
 
-    SmallBitset remaining((1UL << num_cols) - 1UL);
+    SmallBitset remaining = SmallBitset::All(num_cols);
     std::vector<SmallBitset> connected_subgraphs;
 
     /* build the connected subgraphs(dependent subsets of attributes) */
@@ -873,7 +873,7 @@ Spn Spn::learn_spn(Eigen::MatrixXf &data, Eigen::MatrixXi &null_matrix, std::vec
         }
     }
 
-    SmallBitset variables((1UL << data.cols()) - 1);
+    SmallBitset variables = SmallBitset::All(data.cols());
 
     auto normalized = normalize_minmax(data);
     LearningData ld(

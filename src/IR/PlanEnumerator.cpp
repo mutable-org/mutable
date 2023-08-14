@@ -276,7 +276,7 @@ void DPccp::operator()(enumerate_tag, PlanTable &PT, const QueryGraph &G, const 
 {
     const AdjacencyMatrix &M = G.adjacency_matrix();
     auto &CE = Catalog::Get().get_database_in_use().cardinality_estimator();
-    const Subproblem All((1UL << G.num_sources()) - 1UL);
+    const Subproblem All = SmallBitset::All(G.num_sources());
     cnf::CNF condition; // TODO use join condition
 
     auto handle_CSG_pair = [&](const Subproblem left, const Subproblem right) {
@@ -631,7 +631,7 @@ struct TDbasic final : PlanEnumeratorCRTP<TDbasic>
         const AdjacencyMatrix &M = G.adjacency_matrix();
         auto &CE = Catalog::Get().get_database_in_use().cardinality_estimator();
 
-        PlanGen(G, M, CF, CE, PT, Subproblem((1UL << n) - 1));
+        PlanGen(G, M, CF, CE, PT, Subproblem::All(n));
     }
 };
 
@@ -669,7 +669,7 @@ struct TDMinCutAGaT final : PlanEnumeratorCRTP<TDMinCutAGaT>
         };
 
         if (G.num_sources() > 1) {
-            const Subproblem All((1UL << G.num_sources()) - 1UL);
+            const Subproblem All = Subproblem::All(G.num_sources());
             MinCutAGaT{}.partition(M, handle_ccp, All);
         }
     }

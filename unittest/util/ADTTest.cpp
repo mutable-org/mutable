@@ -12,7 +12,26 @@ TEST_CASE("SmallBitset", "[core][util]")
     SmallBitset S;
     REQUIRE(S.empty());
     REQUIRE(S.size() == 0);
-    REQUIRE(S.capacity() == 64);
+    REQUIRE(S.capacity() == SmallBitset::CAPACITY);
+
+    SECTION("factory method All()")
+    {
+        // empty bitset
+        SmallBitset S1 = SmallBitset::All(0);
+        REQUIRE(S1.empty());
+        REQUIRE(S1.size() == 0);
+        REQUIRE(S1.capacity() == SmallBitset::CAPACITY);
+
+        // n = 1
+        SmallBitset S2 = SmallBitset::All(1);
+        REQUIRE(not S2.empty());
+        REQUIRE(S2.size() == 1);
+
+        // full bitset
+        SmallBitset S3 = SmallBitset::All(SmallBitset::CAPACITY);
+        REQUIRE(S3.size() == SmallBitset::CAPACITY);
+        REQUIRE(S3.capacity() == SmallBitset::CAPACITY);
+    }
 
     SECTION("setting and checking bits")
     {

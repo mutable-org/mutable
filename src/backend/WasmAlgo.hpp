@@ -127,7 +127,7 @@ struct HashTable
                 *value_ = _value.insist_not_null();
             }
         }
-        ///> Assigns the value of `this` to \p value.
+        ///> Assigns the value of `this` to \p value w/o updating the NULL bit.
         void set_value(value_t value) requires (not IsConst) {
             *value_ = value;
             if (is_null_byte_) {
@@ -135,12 +135,27 @@ struct HashTable
                 is_null_mask_->discard();
             }
         }
-        ///> Assigns the NULL bit of `this` to \p is_null.
+
+        ///> Assigns the NULL bit of `this` to \p is_null.  Does not update/modify the value of `this`.
         void set_null_bit(Boolx1 is_null) requires (not IsConst) {
             value_.discard();
             M_insist(bool(is_null_byte_));
             M_insist(bool(is_null_mask_));
             setbit(*is_null_byte_, is_null, *is_null_mask_);
+        }
+        ///> Sets `this` to NULL.  Does not modify the value of `this`.
+        void set_null() requires (not IsConst) {
+            value_.discard();
+            M_insist(bool(is_null_byte_));
+            M_insist(bool(is_null_mask_));
+            **is_null_byte_ = **is_null_byte_ bitor *is_null_mask_;
+        }
+        ///> Sets `this` to NOT NULL.  Does not modify the value of `this`.
+        void set_not_null() requires (not IsConst) {
+            value_.discard();
+            M_insist(bool(is_null_byte_));
+            M_insist(bool(is_null_mask_));
+            **is_null_byte_ = **is_null_byte_ bitand ~*is_null_mask_;
         }
 
         ///> Compares `this` with \p _value.
@@ -254,7 +269,7 @@ struct HashTable
                 strncpy(addr_, addr, U32x1(addr.size_in_bytes())).discard();
             }
         }
-        ///> Assigns the value of `this` to the string stored at \p addr.
+        ///> Assigns the value of `this` to the string stored at \p addr w/o updating the NULL bit.
         void set_value(NChar addr) requires (not IsConst) {
             M_insist(addr_.length() == addr.length() and
                      addr_.guarantees_terminating_nul() == addr.guarantees_terminating_nul(),
@@ -265,12 +280,26 @@ struct HashTable
                 is_null_mask_->discard();
             }
         }
-        ///> Assigns the NULL bit of `this` to \p is_null.
+        ///> Assigns the NULL bit of `this` to \p is_null.  Does not update/modify the value of `this`.
         void set_null_bit(Boolx1 is_null) requires (not IsConst) {
             addr_.discard();
             M_insist(bool(is_null_byte_));
             M_insist(bool(is_null_mask_));
             setbit(*is_null_byte_, is_null, *is_null_mask_);
+        }
+        ///> Sets `this` to NULL.  Does not modify the value of `this`.
+        void set_null() requires (not IsConst) {
+            addr_.discard();
+            M_insist(bool(is_null_byte_));
+            M_insist(bool(is_null_mask_));
+            **is_null_byte_ = **is_null_byte_ bitor *is_null_mask_;
+        }
+        ///> Sets `this` to NOT NULL.  Does not modify the value of `this`.
+        void set_not_null() requires (not IsConst) {
+            addr_.discard();
+            M_insist(bool(is_null_byte_));
+            M_insist(bool(is_null_mask_));
+            **is_null_byte_ = **is_null_byte_ bitand ~*is_null_mask_;
         }
 
         ///> Compares `this` with the string stored at \p _addr.

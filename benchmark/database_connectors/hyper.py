@@ -208,28 +208,33 @@ sys.stdout.flush()
     # Parse attributes of one table
     @staticmethod
     def parse_attributes(attributes: dict):
-        columns = []
-        for column_name, ty in attributes.items():
-            not_null = NOT_NULLABLE if 'NOT NULL' in ty else NULLABLE
-            ty = ty.split(' ')
-            match (ty[0]):
+        columns = list()
+        for column_name, type_info in attributes.items():
+            ty = type_info.split(' ')
+            match ty[0]:
                 case 'INT':
                     typ = SqlType.int()
-                case 'CHAR':
-                    typ = SqlType.char(int(ty[1]))
-                case 'DECIMAL':
-                    typ = SqlType.numeric(int(ty[1]), int(ty[2]))
-                case 'DATE':
-                    typ = SqlType.date()
-                case 'DOUBLE':
-                    typ = SqlType.double()
-                case 'FLOAT':
-                    typ = SqlType.double()
                 case 'BIGINT':
                     typ = SqlType.big_int()
+                case 'FLOAT':
+                    typ = SqlType.double()
+                case 'DOUBLE':
+                    typ = SqlType.double()
+                case 'DECIMAL':
+                    typ = SqlType.numeric(int(ty[1]), int(ty[2]))
+                case 'CHAR':
+                    typ = SqlType.char(int(ty[1]))
+                case 'DATE':
+                    typ = SqlType.date()
+                case 'DATETIME':
+                    typ = SqlType.timestamp()
                 case _:
                     raise Exception(f"Unknown type given for '{column_name}'")
-            columns.append(TableDefinition.Column(column_name, typ, NOT_NULLABLE))
+
+            # The documentation at https://tableau.github.io/hyper-db/lang_docs/py/index.html lists no means to declare
+            # PRIMARY KEY or UNIQUE constraints.
+            col = TableDefinition.Column(column_name, typ, NOT_NULLABLE if 'NOT NULL' in type_info else NULLABLE)
+            columns.append(col)
         return columns
 
 

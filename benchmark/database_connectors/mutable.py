@@ -230,27 +230,38 @@ in_bold  = lambda x: f'{Style.BRIGHT}{x}{Style.RESET_ALL}'
 # Parse attributes of one table, return as string ready for a CREATE TABLE query
 def parse_attributes(attributes: dict):
     columns = list()
-    for column_name, ty in attributes.items():
-        not_null = 'NOT NULL' if 'NOT NULL' in ty else ''
-        ty = ty.split(' ')
-        match (ty[0]):
+    for column_name, type_info in attributes.items():
+        ty_list = [column_name]
+
+        ty = type_info.split(' ')
+        match ty[0]:
             case 'INT':
-                type = 'INT(4)'
-            case 'CHAR':
-                type = f'CHAR({ty[1]})'
-            case 'DECIMAL':
-                type = f'DECIMAL({ty[1]},{ty[2]})'
-            case 'DATE':
-                type = 'DATE'
-            case 'DOUBLE':
-                type = 'DOUBLE'
-            case 'FLOAT':
-                type = 'FLOAT'
+                ty_list.append('INT(4)')
             case 'BIGINT':
-                type = 'INT(8)'
+                ty_list.append('INT(8)')
+            case 'FLOAT':
+                ty_list.append('FLOAT')
+            case 'DOUBLE':
+                ty_list.append('DOUBLE')
+            case 'DECIMAL':
+                ty_list.append(f'DECIMAL({ty[1]}, {ty[2]})')
+            case 'CHAR':
+                ty_list.append(f'CHAR({ty[1]})')
+            case 'DATE':
+                ty_list.append('DATE')
+            case 'DATETIME':
+                ty_list.append('DATETIME')
             case _:
                 raise Exception(f"Unknown type given for '{column_name}'")
-        columns.append(f'{column_name} {type} {not_null}')
+
+        if 'NOT NULL' in type_info:
+            ty_list.append('NOT NULL')
+        if 'PRIMARY KEY' in type_info:
+            ty_list.append('PRIMARY KEY')
+        if 'UNIQUE' in type_info:
+            ty_list.append('UNIQUE')
+
+        columns.append(' '.join(ty_list))
     return '(' + ',\n'.join(columns) + ')'
 
 

@@ -1,0 +1,93 @@
+description: Foreign key join with key of type INT(4).
+suite: operators
+benchmark: equi-join
+name: 'Foreign Key Join'
+readonly: true
+chart:
+    x:
+        scale: linear
+        type: Q
+        label: Scale factor
+    y:
+        scale: linear
+        type: Q
+        label: "Execution time [ms]"
+data:
+    'Relation':
+        attributes:
+            'id': 'INT NOT NULL PRIMARY KEY'
+            'fid': 'INT NOT NULL'
+            'n2m': 'INT NOT NULL'
+        file: 'benchmark/operators/data/Relation.csv'
+        format: 'csv'
+        delimiter: ','
+        header: 1
+        scale_factors:
+            0.0: 0.0
+            0.1: 0.1
+            0.2: 0.2
+            0.3: 0.3
+            0.4: 0.4
+            0.5: 0.5
+            0.6: 0.6
+            0.7: 0.7
+            0.8: 0.8
+            0.9: 0.9
+            1.0: 1.0
+systems:
+    mutable:
+        configurations:
+            'WasmV8, PAX4M':
+                args: --backend WasmV8 --data-layout PAX4M
+                pattern: '^Execute machine code:.*'
+        cases:
+            0.0: SELECT COUNT(*) FROM Relation R, Relation S WHERE R.id = S.fid;
+            0.1: SELECT COUNT(*) FROM Relation R, Relation S WHERE R.id = S.fid;
+            0.2: SELECT COUNT(*) FROM Relation R, Relation S WHERE R.id = S.fid;
+            0.3: SELECT COUNT(*) FROM Relation R, Relation S WHERE R.id = S.fid;
+            0.4: SELECT COUNT(*) FROM Relation R, Relation S WHERE R.id = S.fid;
+            0.5: SELECT COUNT(*) FROM Relation R, Relation S WHERE R.id = S.fid;
+            0.6: SELECT COUNT(*) FROM Relation R, Relation S WHERE R.id = S.fid;
+            0.7: SELECT COUNT(*) FROM Relation R, Relation S WHERE R.id = S.fid;
+            0.8: SELECT COUNT(*) FROM Relation R, Relation S WHERE R.id = S.fid;
+            0.9: SELECT COUNT(*) FROM Relation R, Relation S WHERE R.id = S.fid;
+            1.0: SELECT COUNT(*) FROM Relation R, Relation S WHERE R.id = S.fid;
+    PostgreSQL:
+        cases:
+            0.0: SELECT COUNT(*) FROM "Relation" R, "Relation" S WHERE R.id = S.fid;
+            0.1: SELECT COUNT(*) FROM "Relation" R, "Relation" S WHERE R.id = S.fid;
+            0.2: SELECT COUNT(*) FROM "Relation" R, "Relation" S WHERE R.id = S.fid;
+            0.3: SELECT COUNT(*) FROM "Relation" R, "Relation" S WHERE R.id = S.fid;
+            0.4: SELECT COUNT(*) FROM "Relation" R, "Relation" S WHERE R.id = S.fid;
+            0.5: SELECT COUNT(*) FROM "Relation" R, "Relation" S WHERE R.id = S.fid;
+            0.6: SELECT COUNT(*) FROM "Relation" R, "Relation" S WHERE R.id = S.fid;
+            0.7: SELECT COUNT(*) FROM "Relation" R, "Relation" S WHERE R.id = S.fid;
+            0.8: SELECT COUNT(*) FROM "Relation" R, "Relation" S WHERE R.id = S.fid;
+            0.9: SELECT COUNT(*) FROM "Relation" R, "Relation" S WHERE R.id = S.fid;
+            1.0: SELECT COUNT(*) FROM "Relation" R, "Relation" S WHERE R.id = S.fid;
+    DuckDB:
+        cases:
+            0.0: SELECT COUNT(*) FROM "Relation" R, "Relation" S WHERE R.id = S.fid;
+            0.1: SELECT COUNT(*) FROM "Relation" R, "Relation" S WHERE R.id = S.fid;
+            0.2: SELECT COUNT(*) FROM "Relation" R, "Relation" S WHERE R.id = S.fid;
+            0.3: SELECT COUNT(*) FROM "Relation" R, "Relation" S WHERE R.id = S.fid;
+            0.4: SELECT COUNT(*) FROM "Relation" R, "Relation" S WHERE R.id = S.fid;
+            0.5: SELECT COUNT(*) FROM "Relation" R, "Relation" S WHERE R.id = S.fid;
+            0.6: SELECT COUNT(*) FROM "Relation" R, "Relation" S WHERE R.id = S.fid;
+            0.7: SELECT COUNT(*) FROM "Relation" R, "Relation" S WHERE R.id = S.fid;
+            0.8: SELECT COUNT(*) FROM "Relation" R, "Relation" S WHERE R.id = S.fid;
+            0.9: SELECT COUNT(*) FROM "Relation" R, "Relation" S WHERE R.id = S.fid;
+            1.0: SELECT COUNT(*) FROM "Relation" R, "Relation" S WHERE R.id = S.fid;
+    HyPer:
+        cases:
+            0.0: SELECT COUNT(*) FROM "Relation" R, "Relation" S WHERE R.id = S.fid;
+            0.1: SELECT COUNT(*) FROM "Relation" R, "Relation" S WHERE R.id = S.fid;
+            0.2: SELECT COUNT(*) FROM "Relation" R, "Relation" S WHERE R.id = S.fid;
+            0.3: SELECT COUNT(*) FROM "Relation" R, "Relation" S WHERE R.id = S.fid;
+            0.4: SELECT COUNT(*) FROM "Relation" R, "Relation" S WHERE R.id = S.fid;
+            0.5: SELECT COUNT(*) FROM "Relation" R, "Relation" S WHERE R.id = S.fid;
+            0.6: SELECT COUNT(*) FROM "Relation" R, "Relation" S WHERE R.id = S.fid;
+            0.7: SELECT COUNT(*) FROM "Relation" R, "Relation" S WHERE R.id = S.fid;
+            0.8: SELECT COUNT(*) FROM "Relation" R, "Relation" S WHERE R.id = S.fid;
+            0.9: SELECT COUNT(*) FROM "Relation" R, "Relation" S WHERE R.id = S.fid;
+            1.0: SELECT COUNT(*) FROM "Relation" R, "Relation" S WHERE R.id = S.fid;

@@ -3323,7 +3323,8 @@ ConditionSet SimpleHashJoin<UniqueBuild, Predicated>::adapt_post_conditions(
 template<bool UniqueBuild, bool Predicated>
 double SimpleHashJoin<UniqueBuild, Predicated>::cost(const Match<SimpleHashJoin> &M)
 {
-    return 1.2 * M.build.info().estimated_cardinality + M.probe.info().estimated_cardinality;
+    return 1.3 * M.build.info().estimated_cardinality +
+           (UniqueBuild ? 1.0 : 1.1) * M.probe.info().estimated_cardinality;
 }
 
 template<bool UniqueBuild, bool Predicated>

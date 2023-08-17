@@ -95,7 +95,7 @@ TEST_CASE("SmallBitset", "[core][util]")
         size_t num_shifts[] = { 0, 1, 62, 63 };
         for (auto ns : num_shifts) {
             SmallBitset SB(1UL << ns);
-            REQUIRE(SB.singleton());
+            REQUIRE(SB.is_singleton());
             REQUIRE(SB.singleton_to_lo_mask().size() == ns);
         }
     }

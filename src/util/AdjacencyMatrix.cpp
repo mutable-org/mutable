@@ -123,7 +123,7 @@ MST_done: /* MST is complete */;
 
 AdjacencyMatrix AdjacencyMatrix::tree_directed_away_from(SmallBitset root)
 {
-    M_insist(root.singleton());
+    M_insist(root.is_singleton());
     AdjacencyMatrix directed_tree(num_vertices_);
     SmallBitset V = root;
     SmallBitset X;

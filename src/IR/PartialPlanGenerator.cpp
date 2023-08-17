@@ -62,7 +62,7 @@ void PartialPlanGenerator::for_each_complete_partial_plan(const PlanTable &PT, c
                 M_insist(not partial_plans.empty());
                 const auto partial_plan = partial_plans.back();
                 partial_plans.pop_back();
-                if (partial_plan.singleton()) {
+                if (partial_plan.is_singleton()) {
                     decision_stack.pop_back();
                     candidates.push_back(partial_plan); // leaves become candidates again
                     continue;
@@ -92,7 +92,7 @@ void PartialPlanGenerator::write_partial_plans_JSON(std::ostream &out, const Que
     /*----- Lambda writes a partial plan tree to `out`, given the root if the tree. -----*/
     auto write_tree = [&](Subproblem root) -> void {
         auto write_tree_rec = [&](Subproblem root, auto &write_tree_rec) -> void {
-            if (root.singleton()) {
+            if (root.is_singleton()) {
                 out << G.sources()[*root.begin()]->name();
             } else {
                 out << "@ ";

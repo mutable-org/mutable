@@ -412,7 +412,7 @@ struct IKKBZ final : PlanEnumeratorCRTP<IKKBZ>
                 const std::size_t R = linearization[i];
                 M_insist(not runner[R]);
                 runner[R] = true;
-                M_insist(not runner.singleton());
+                M_insist(not runner.is_singleton());
                 M_insist(bool(PT[runner].model), "must have computed a model during linearization");
                 M_insist(bool(PT[runner].left), "must have a left subplan");
                 M_insist(bool(PT[runner].right), "must have a right subplan");

@@ -161,7 +161,7 @@ exit:
         std::deque<std::pair<SmallBitset, SmallBitset>> Q;
         for (auto it = source.begin(); it != source.end(); ++it) {
             const SmallBitset I = it.as_set();
-            M_insist(I.singleton());
+            M_insist(I.is_singleton());
             Q.emplace_back(I, source & ~I.mask_to_lo()); // exclude larger sources
 
             while (not Q.empty()) {

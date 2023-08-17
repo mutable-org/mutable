@@ -363,7 +363,7 @@ void emit_cardinalities(std::ostream &out, const m::QueryGraph &G, const table_t
     /*----- Print non-singletons. -----*/
     for (auto entry : table) {
         const Subproblem S = entry.first;
-        if (S.singleton()) continue; // skip singleton
+        if (S.is_singleton()) continue; // skip singleton
         const std::size_t size = entry.second;
 
         /*----- Emit relations. -----*/

@@ -982,7 +982,7 @@ TEST_CASE("AdjacencyMatrix/for_each_CSG_pair_undirected", "[core][util][unit]")
 
         /*----- Ensure that `first` and `second` have been solved. ---------------------------------------------------*/
         auto is_solved = [&CSGs_solved](SmallBitset S) -> bool {
-            return S.singleton() or CSGs_solved.count(S);
+            return S.is_singleton() or CSGs_solved.count(S);
         };
 
         auto make_solved = [&CSGs_solved, &CSGs_enumerated](SmallBitset S) {

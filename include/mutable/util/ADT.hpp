@@ -121,6 +121,12 @@ struct SmallBitset
         return SmallBitset((uint64_t(1) << n) - uint64_t(1));
     }
 
+    /** Factory method for creating a Singleton Smallbitset with \p n -th bit set */
+    static SmallBitset Singleton(std::size_t n) {
+        M_insist(n < CAPACITY);
+        return SmallBitset(uint64_t(1) << n);
+    }
+
     /** Returns the `offset`-th bit.  Requires that `offset` is in range `[0; CAPACITY)`. */
     Proxy<true> operator()(std::size_t offset) const { return Proxy<true>(*this, offset); }
 
@@ -156,7 +162,7 @@ struct SmallBitset
     /** Returns `true` if there are no elements in this `SmallBitset`. */
     bool empty() const { return bits_ == 0; }
     /* Returns `true` if this set is a singleton set, i.e. the set contains exactly one element. */
-    bool singleton() const { return size() == 1; }
+    bool is_singleton() const { return size() == 1; }
 
     /** Returns the highest set bit as a `SmallBitset`. */
     SmallBitset hi() const {
@@ -199,7 +205,7 @@ struct SmallBitset
 
     /** Converts a singleton set to a mask up to -- but not including -- the single, set bit. */
     SmallBitset singleton_to_lo_mask() const {
-        M_insist(singleton(), "not a singleton set");
+        M_insist(is_singleton(), "not a singleton set");
         return SmallBitset(bits_ - 1UL);
     }
 

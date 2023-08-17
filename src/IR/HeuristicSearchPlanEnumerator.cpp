@@ -1694,7 +1694,7 @@ struct TopDownComplete : TopDown
         };
 
         for (const Subproblem S : state) {
-            if (not S.singleton()) { // partition only the first non-singleton
+            if (not S.is_singleton()) { // partition only the first non-singleton
                 MinCutAGaT{}.partition(M, enumerate_ccp, S);
                 break;
             }
@@ -1788,7 +1788,7 @@ struct sum<PlanTable, State, TopDown>
         static cnf::CNF condition; // TODO use join condition
         double distance = 0;
         state.for_each_subproblem([&](const Subproblem S) {
-            if (not S.singleton()) { // skip base relations
+            if (not S.is_singleton()) { // skip base relations
                 if (not PT[S].model)
                     PT[S].model = CE.estimate_join_all(G, PT, S, condition);
                 distance += CE.predict_cardinality(*PT[S].model);
@@ -1823,7 +1823,7 @@ struct sqrt_sum<PlanTable, State, TopDown>
         static cnf::CNF condition; // TODO use join condition
         double distance = 0;
         state.for_each_subproblem([&](const Subproblem S) {
-            if (not S.singleton()) { // skip base relations
+            if (not S.is_singleton()) { // skip base relations
                 if (not PT[S].model)
                     PT[S].model = CE.estimate_join_all(G, PT, S, condition);
                 distance += 2 * std::sqrt(CE.predict_cardinality(*PT[S].model));
@@ -2071,7 +2071,7 @@ struct GOO<PlanTable, State, TopDown>
             const Subproblem S = worklist.back();
             worklist.pop_back();
 
-            if (S.singleton())
+            if (S.is_singleton())
                 continue;
 
             C_min = std::numeric_limits<decltype(C_min)>::infinity();

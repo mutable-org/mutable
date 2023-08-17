@@ -282,7 +282,7 @@ struct SubproblemsArray : Base<SubproblemsArray>
     {
         auto subproblems = allocator_.allocate(G.num_sources());
         for (uint64_t i = 0; i != G.num_sources(); ++i)
-            subproblems[i] = Subproblem(1UL << i);
+            subproblems[i] = Subproblem::Singleton(i);
         return SubproblemsArray(
             /* Context=     */ PT, G, M, CF, CE,
             /* parent=      */ nullptr,
@@ -534,7 +534,7 @@ struct SubproblemTableBottomUp : Base<SubproblemTableBottomUp>
         : SubproblemTableBottomUp(PT, G, M, CF, CE, 0., G.num_sources(), Subproblem(), allocator_.allocate(G.num_sources()))
     {
         for (uint64_t i = 0; i != G.num_sources(); ++i)
-            table_[i] = Subproblem(1UL << i);
+            table_[i] = Subproblem::Singleton(i);
     }
 
     /** Copy c'tor. */
@@ -860,7 +860,7 @@ struct EdgesBottomUp : Base<EdgesBottomUp>
         /*----- Initialize datasource_to_subproblem reverse index. -----*/
         for (std::size_t idx = 0; idx != G.num_sources(); ++idx) {
             new (&datasource_to_subproblem[idx]) int8_t(idx);
-            new (&subproblems[idx]) Subproblem(1UL << idx);
+            new (&subproblems[idx]) Subproblem(Subproblem::Singleton(idx));
         }
 
         /*----- Update index with joins performed so far. -----*/
@@ -1152,7 +1152,7 @@ struct EdgePtrBottomUp : Base<EdgePtrBottomUp>
         /*----- Initialize datasource_to_subproblem reverse index. -----*/
         for (std::size_t idx = 0; idx != G.num_sources(); ++idx) {
             new (&datasource_to_subproblem[idx]) int8_t(idx);
-            new (&subproblems[idx]) Subproblem(1UL << idx);
+            new (&subproblems[idx]) Subproblem(Subproblem::Singleton(idx));
         }
 
         /*----- Update index with joins performed so far. -----*/
@@ -2281,7 +2281,7 @@ struct checkpoints<PlanTable, SubproblemsArray>
                 worklist_.clear();
                 for (std::size_t i = 0; i != subproblems.size(); ++i) {
                     M_insist(worklist_.empty());
-                    const SmallBitset I(1UL << i);
+                    const SmallBitset I = SmallBitset::Singleton(i);
                     worklist_.emplace_back(I, I.singleton_to_lo_mask());
 
                     while (not worklist_.empty()) {

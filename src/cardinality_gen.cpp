@@ -200,7 +200,7 @@ int main(int argc, const char **argv)
         const std::size_t cardinality = args.min_cardinality + delta * dist(g);
         M_insist(args.min_cardinality <= cardinality);
         M_insist(cardinality <= args.max_cardinality);
-        table[Subproblem(1UL << i)] = cardinality;
+        table[Subproblem::Singleton(i)] = cardinality;
     }
 
     /*----- Generate cardinalities. ----------------------------------------------------------------------------------*/
@@ -297,7 +297,7 @@ void generate_uncorrelated_cardinalities(table_type &table, const m::QueryGraph 
         /*----- Compute the selectivity of this join. -----*/
         double cartesian = 1;
         for (auto s : J)
-            cartesian *= table[Subproblem(1UL << s.get().id())];
+            cartesian *= table[Subproblem::Singleton(s.get().id())];
         const double min_selectivity = std::max(args.min_cardinality / cartesian, remaining_selectivity);
         if (min_selectivity < avg_selectivity) {
             /*----- Draw selectivity between min and average. -----*/

@@ -514,10 +514,10 @@ TEST_CASE("AdjacencyMatrix/for_each_CSG_undirected", "[core][util][unit]")
 
     SECTION("4-chain")
     {
-        const SmallBitset A(1UL << 0);
-        const SmallBitset B(1UL << 1);
-        const SmallBitset C(1UL << 2);
-        const SmallBitset D(1UL << 3);
+        const SmallBitset A = SmallBitset::Singleton(0);
+        const SmallBitset B = SmallBitset::Singleton(1);
+        const SmallBitset C = SmallBitset::Singleton(2);
+        const SmallBitset D = SmallBitset::Singleton(3);
 
         /*  A ↔  B
          *  ↕
@@ -752,10 +752,10 @@ TEST_CASE("AdjacencyMatrix/for_each_CSG_undirected", "[core][util][unit]")
 
     SECTION("4 with triangle")
     {
-        const SmallBitset A(1UL << 0);
-        const SmallBitset B(1UL << 1);
-        const SmallBitset C(1UL << 2);
-        const SmallBitset D(1UL << 3);
+        const SmallBitset A = SmallBitset::Singleton(0);
+        const SmallBitset B = SmallBitset::Singleton(1);
+        const SmallBitset C = SmallBitset::Singleton(2);
+        const SmallBitset D = SmallBitset::Singleton(3);
         /*    C
          *   / \
          *  A---D---B
@@ -1023,10 +1023,10 @@ TEST_CASE("AdjacencyMatrix/for_each_CSG_pair_undirected", "[core][util][unit]")
 
     SECTION("4-chain")
     {
-        const SmallBitset A(1UL << 0);
-        const SmallBitset B(1UL << 1);
-        const SmallBitset C(1UL << 2);
-        const SmallBitset D(1UL << 3);
+        const SmallBitset A = SmallBitset::Singleton(0);
+        const SmallBitset B = SmallBitset::Singleton(1);
+        const SmallBitset C = SmallBitset::Singleton(2);
+        const SmallBitset D = SmallBitset::Singleton(3);
         /*  A ↔  B
          *  ↕
          *  C ↔  D
@@ -1123,10 +1123,10 @@ TEST_CASE("AdjacencyMatrix/for_each_CSG_pair_undirected", "[core][util][unit]")
 
     SECTION("4 with triangle")
     {
-        const SmallBitset A(1UL << 0);
-        const SmallBitset B(1UL << 1);
-        const SmallBitset C(1UL << 2);
-        const SmallBitset D(1UL << 3);
+        const SmallBitset A = SmallBitset::Singleton(0);
+        const SmallBitset B = SmallBitset::Singleton(1);
+        const SmallBitset C = SmallBitset::Singleton(2);
+        const SmallBitset D = SmallBitset::Singleton(3);
         /*    C
          *   / \
          *  A---D---B
@@ -1322,7 +1322,7 @@ TEST_CASE("AdjacencyMatrix/tree_directed_away_from", "[core][util][unit]")
 
         SECTION("root 0")
         {
-            const AdjacencyMatrix directed_tree = tree.tree_directed_away_from(SmallBitset(1UL));
+            const AdjacencyMatrix directed_tree = tree.tree_directed_away_from(SmallBitset::Singleton(0));
             AdjacencyMatrix expected(4);
             expected(0, 1) = true;
             expected(0, 2) = true;
@@ -1332,7 +1332,7 @@ TEST_CASE("AdjacencyMatrix/tree_directed_away_from", "[core][util][unit]")
 
         SECTION("root 1")
         {
-            const AdjacencyMatrix directed_tree = tree.tree_directed_away_from(SmallBitset(2UL));
+            const AdjacencyMatrix directed_tree = tree.tree_directed_away_from(SmallBitset::Singleton(1));
             AdjacencyMatrix expected(4);
             expected(1, 0) = true;
             expected(0, 2) = true;
@@ -1342,7 +1342,7 @@ TEST_CASE("AdjacencyMatrix/tree_directed_away_from", "[core][util][unit]")
 
         SECTION("root 2")
         {
-            const AdjacencyMatrix directed_tree = tree.tree_directed_away_from(SmallBitset(1UL << 2));
+            const AdjacencyMatrix directed_tree = tree.tree_directed_away_from(SmallBitset::Singleton(2));
             AdjacencyMatrix expected(4);
             expected(2, 0) = true;
             expected(0, 1) = true;
@@ -1352,7 +1352,7 @@ TEST_CASE("AdjacencyMatrix/tree_directed_away_from", "[core][util][unit]")
 
         SECTION("root 3")
         {
-            const AdjacencyMatrix directed_tree = tree.tree_directed_away_from(SmallBitset(1UL << 3));
+            const AdjacencyMatrix directed_tree = tree.tree_directed_away_from(SmallBitset::Singleton(3));
             AdjacencyMatrix expected(4);
             expected(3, 0) = true;
             expected(0, 1) = true;
@@ -1370,7 +1370,7 @@ TEST_CASE("AdjacencyMatrix/tree_directed_away_from", "[core][util][unit]")
 
         SECTION("root 0")
         {
-            const AdjacencyMatrix directed_tree = tree.tree_directed_away_from(SmallBitset(1UL));
+            const AdjacencyMatrix directed_tree = tree.tree_directed_away_from(SmallBitset::Singleton(0));
             AdjacencyMatrix expected(4);
             expected(0, 1) = true;
             expected(1, 2) = true;
@@ -1380,7 +1380,7 @@ TEST_CASE("AdjacencyMatrix/tree_directed_away_from", "[core][util][unit]")
 
         SECTION("root 1")
         {
-            const AdjacencyMatrix directed_tree = tree.tree_directed_away_from(SmallBitset(2UL));
+            const AdjacencyMatrix directed_tree = tree.tree_directed_away_from(SmallBitset::Singleton(1));
             AdjacencyMatrix expected(4);
             expected(1, 0) = true;
             expected(1, 2) = true;
@@ -1390,7 +1390,7 @@ TEST_CASE("AdjacencyMatrix/tree_directed_away_from", "[core][util][unit]")
 
         SECTION("root 2")
         {
-            const AdjacencyMatrix directed_tree = tree.tree_directed_away_from(SmallBitset(1UL << 2));
+            const AdjacencyMatrix directed_tree = tree.tree_directed_away_from(SmallBitset::Singleton(2));
             AdjacencyMatrix expected(4);
             expected(1, 0) = true;
             expected(2, 1) = true;
@@ -1400,7 +1400,7 @@ TEST_CASE("AdjacencyMatrix/tree_directed_away_from", "[core][util][unit]")
 
         SECTION("root 3")
         {
-            const AdjacencyMatrix directed_tree = tree.tree_directed_away_from(SmallBitset(1UL << 3));
+            const AdjacencyMatrix directed_tree = tree.tree_directed_away_from(SmallBitset::Singleton(3));
             AdjacencyMatrix expected(4);
             expected(1, 0) = true;
             expected(2, 1) = true;

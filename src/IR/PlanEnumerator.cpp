@@ -47,7 +47,7 @@ struct PEall final : PlanEnumeratorCRTP<PEall>
             /* Compute break condition to avoid enumerating symmetric subproblems. */
             uint64_t offset = S.capacity() - __builtin_clzl(uint64_t(S));
             M_insist(offset != 0, "invalid subproblem offset");
-            Subproblem limit(1UL << (offset - 1UL));
+            Subproblem limit = Subproblem::Singleton(offset - 1);
             for (Subproblem S1(least_subset(S)); S1 != limit; S1 = Subproblem(next_subset(S1, S))) {
                 Subproblem S2 = S - S1; // = S \ S1;
                 M_insist(PT.has_plan(S1), "must have found the optimal plan for S1");
@@ -252,7 +252,7 @@ struct DPsubOpt final : PlanEnumeratorCRTP<DPsubOpt>
             /* Compute break condition to avoid enumerating symmetric subproblems. */
             uint64_t offset = S.capacity() - __builtin_clzl(uint64_t(S));
             M_insist(offset != 0, "invalid subproblem offset");
-            Subproblem limit(1UL << (offset - 1));
+            Subproblem limit = Subproblem::Singleton(offset - 1);
             for (Subproblem S1(least_subset(S)); S1 != limit; S1 = Subproblem(next_subset(S1, S))) {
                 Subproblem S2 = S - S1; // = S \ S1;
                 M_insist(M.is_connected(S1, S2), "implied by S inducing a connected subgraph");
@@ -307,8 +307,8 @@ struct IKKBZ final : PlanEnumeratorCRTP<IKKBZ>
     {
         /* Computes the selectivity between two relations, identified by indices `u` and `v`, respectively. */
         auto selectivity = [&](std::size_t u, std::size_t v) {
-            const SmallBitset U(1UL << u);
-            const SmallBitset V(1UL << v);
+            const SmallBitset U = SmallBitset::Singleton(u);
+            const SmallBitset V = SmallBitset::Singleton(v);
             auto &model_u = *PT[U].model;
             auto &model_v = *PT[V].model;
             auto &joined = PT[U|V];
@@ -335,8 +335,8 @@ struct IKKBZ final : PlanEnumeratorCRTP<IKKBZ>
          * "Intuitively, the rank measures the increase in the intermediate result per unit differential cost of doing
          * the join." */
         auto rank = [&](std::size_t parent_id, std::size_t child_id) -> double {
-            const SmallBitset parent(1UL << parent_id);
-            const SmallBitset child(1UL << child_id);
+            const SmallBitset parent = SmallBitset::Singleton(parent_id);
+            const SmallBitset child = SmallBitset::Singleton(child_id);
             M_insist(MST.is_connected(parent, child), "relations must be joinable");
             M_insist(MST.neighbors(parent)[child_id]);
 
@@ -371,7 +371,7 @@ struct IKKBZ final : PlanEnumeratorCRTP<IKKBZ>
 
         /*---- Consider each relation as root and linearize the query tree. -----*/
         for (std::size_t root_id = 0; root_id != G.num_sources(); ++root_id) {
-            Subproblem root(1UL << root_id);
+            Subproblem root = Subproblem::Singleton(root_id);
 
             linearization.clear();
             linearization.emplace_back(root_id);
@@ -386,7 +386,7 @@ struct IKKBZ final : PlanEnumeratorCRTP<IKKBZ>
                 ranked_relation ranked_relation = Q.top();
                 Q.pop();
 
-                const Subproblem R(1UL << ranked_relation.id());
+                const Subproblem R = Subproblem::Singleton(ranked_relation.id());
                 M_insist((joined & R).empty());
                 M_insist(MST.is_connected(joined, R));
                 linearization.emplace_back(ranked_relation.id());
@@ -439,9 +439,9 @@ struct IKKBZ final : PlanEnumeratorCRTP<IKKBZ>
         M_insist(linearization.size() == G.num_sources());
 
         /*----- Reconstruct the right-deep plan from the linearization. -----*/
-        Subproblem right(1UL << linearization[0]);
+        Subproblem right = Subproblem::Singleton(linearization[0]);
         for (std::size_t i = 1; i < G.num_sources(); ++i) {
-            const Subproblem left(1UL << linearization[i]);
+            const Subproblem left = Subproblem::Singleton(linearization[i]);
             cnf::CNF condition; // TODO use join condition
             PT.update(G, CE, CF, left, right, condition);
             right = left | right;
@@ -687,7 +687,7 @@ void m::GOO::operator()(enumerate_tag, PlanTable &PT, const QueryGraph &G, const
     /*----- Initialize subproblems and their neighbors. -----*/
     node nodes[G.num_sources()];
     for (std::size_t i = 0; i != G.num_sources(); ++i) {
-        Subproblem S(1UL << i);
+        Subproblem S = Subproblem::Singleton(i);
         Subproblem N = M.neighbors(S);
         nodes[i] = node(S, N);
     }

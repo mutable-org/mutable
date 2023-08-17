@@ -106,7 +106,7 @@ struct SmallBitset
             const unsigned lz = std::countl_zero(bits_);
             return CHAR_BIT * sizeof(bits_) - 1UL - lz;
         }
-        SmallBitset as_set() const { return SmallBitset(1UL << operator*()); }
+        SmallBitset as_set() const { return SmallBitset::Singleton(operator*()); }
     };
 
     public:
@@ -167,7 +167,7 @@ struct SmallBitset
     /** Returns the highest set bit as a `SmallBitset`. */
     SmallBitset hi() const {
         unsigned lz = std::countl_zero(bits_);
-        return SmallBitset(1UL << (CHAR_BIT * sizeof(bits_) - lz - 1U));
+        return SmallBitset::Singleton(CHAR_BIT * sizeof(bits_) - lz - 1U);
     }
 
     auto begin() const { return iterator(bits_); }

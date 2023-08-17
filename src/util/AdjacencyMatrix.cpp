@@ -21,7 +21,7 @@ AdjacencyMatrix AdjacencyMatrix::transitive_closure_directed() const
             for (std::size_t j = 0; j != num_vertices_; ++j) {
                 if (not closure(i, j)) {
                     const SmallBitset row = closure.m_[i];
-                    const SmallBitset col_mask(1UL << j);
+                    const SmallBitset col_mask = SmallBitset::Singleton(j);
                     for (std::size_t k : row) {
                         M_insist(row[k]);
                         if (closure.m_[k] & col_mask) {
@@ -114,7 +114,7 @@ AdjacencyMatrix AdjacencyMatrix::minimum_spanning_forest(std::function<double(st
             M_insist(vertices_remaining[E.sink], "sink must not yet be in the MSF");
             vertices_remaining[E.sink] = false;
             MSF(E.source, E.sink) = MSF(E.sink, E.source) = true; // add undirected edge to MSF
-            next_vertex = SmallBitset(1UL << E.sink);
+            next_vertex = SmallBitset::Singleton(E.sink);
         }
 MST_done: /* MST is complete */;
     }

@@ -168,7 +168,7 @@ Optimizer::optimize_with_plantable(const QueryGraph &G) const
     /*----- Initialize plan table and compute plans for data sources. ------------------------------------------------*/
     Producer **source_plans = new Producer*[num_sources];
     for (auto &ds : G.sources()) {
-        Subproblem s(1UL << ds->id());
+        Subproblem s = Subproblem::Singleton(ds->id());
         if (auto bt = cast<const BaseTable>(ds.get())) {
             /* Produce a scan for base tables. */
             plan_table[s].cost = 0;

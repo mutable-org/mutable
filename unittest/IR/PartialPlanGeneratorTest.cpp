@@ -78,9 +78,9 @@ TEST_CASE("PartialPlanGenerator/for_each_complete_partial_plan", "[][unit][IR]")
     SECTION("three relations")
     {
         PlanTable PT(3);
-        const Subproblem A(1UL << 0U);
-        const Subproblem B(1UL << 1U);
-        const Subproblem C(1UL << 2U);
+        const Subproblem A = Subproblem::Singleton(0);
+        const Subproblem B = Subproblem::Singleton(1);
+        const Subproblem C = Subproblem::Singleton(2);
 
         PT[A|C].left  = A;
         PT[A|C].right = C;
@@ -98,10 +98,10 @@ TEST_CASE("PartialPlanGenerator/for_each_complete_partial_plan", "[][unit][IR]")
     SECTION("four relations, bushy plan")
     {
         PlanTable PT(4);
-        const Subproblem A(1UL << 0U);
-        const Subproblem B(1UL << 1U);
-        const Subproblem C(1UL << 2U);
-        const Subproblem D(1UL << 3U);
+        const Subproblem A = Subproblem::Singleton(0);
+        const Subproblem B = Subproblem::Singleton(1);
+        const Subproblem C = Subproblem::Singleton(2);
+        const Subproblem D = Subproblem::Singleton(3);
 
         PT[A|B].left  = A;
         PT[A|B].right = B;

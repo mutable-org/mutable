@@ -124,7 +124,7 @@ TEST_CASE("SmallBitset", "[core][util]")
 
             for (auto it = SB.cbegin(); it != SB.cend(); it++) {
                 SmallBitset sub_SB = it.as_set();
-                CHECK(sub_SB == SmallBitset(1ULL << (*it)));
+                CHECK(sub_SB == SmallBitset::Singleton(*it));
                 CHECK(sub_SB.is_subset(SB));
                 CHECK(SB.at(*it));
             }
@@ -151,7 +151,7 @@ TEST_CASE("SmallBitset", "[core][util]")
 
         for (auto rit = SB.crbegin(); rit != SB.crend(); rit++) {
             SmallBitset sub_SB = rit.as_set();
-            CHECK(sub_SB == SmallBitset(1ULL << (*rit)));
+            CHECK(sub_SB == SmallBitset::Singleton(*rit));
             CHECK(sub_SB.is_subset(SB));
             CHECK(SB.at(*rit));
         }

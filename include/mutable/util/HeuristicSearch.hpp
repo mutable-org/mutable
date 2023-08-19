@@ -1581,6 +1581,15 @@ std::size_t num_##NAME() const { return 0; }
                 }, context...);
             }
 
+            void search_bottomup_multithread(heuristic_type &heuristic, expand_type &expand,
+                                            Context &... context) {
+                while (not isFound.load() && not state_manager_bottomup.queues_empty()) {
+                    auto bottomup_node = state_manager_bottomup.pop();
+                    const state_type &bottomup_state = bottomup_node.first;
+                    explore_state_bottomup_multithread(bottomup_state, heuristic, expand, context...);
+                }
+            }
+
             void
             explore_state_bottomup_multithread(const state_type &state, heuristic_type &heuristic, expand_type &expand,
                                                Context &... context) {
@@ -1609,6 +1618,17 @@ std::size_t num_##NAME() const { return 0; }
 
                 }, state, heuristic, expand, context...);
             }
+
+            void search_topdown_multithread(heuristic_type2 &heuristic2,
+                                            expand_type2 &expand2,
+                                            Context &... context) {
+                while (not isFound.load() && not state_manager_topdown.queues_empty()) {
+                    auto topdown_node = state_manager_topdown.pop();
+                    const state_type &topdown_state = topdown_node.first;
+                    explore_state_topdown_multithread(topdown_state, heuristic2, expand2, context...);
+                }
+            }
+
 
             void explore_state_topdown_multithread(const state_type &state, heuristic_type2 &heuristic,
                                                    expand_type2 &expand2,
@@ -1787,41 +1807,23 @@ std::size_t num_##NAME() const { return 0; }
             /// Including front and back - two direction, init and push element - two operations
             /// We can ignore the input initial_state
             std::cout << "Bidirectional Search!!!!Let's rock it!" << std::endl;
-            state_manager_bottomup.template push<false>(std::move(bottom_state), 0, context...);
             state_manager_topdown.template push<false>(std::move(top_state), 0, context...);
-            /// 2. while loop
-            while (not state_manager_bottomup.queues_empty() && not state_manager_topdown.queues_empty()) {
-                auto bottomup_node = state_manager_bottomup.pop();
-                const state_type &bottomup_state = bottomup_node.first;
-                auto topdown_node = state_manager_topdown.pop();
-                const state_type &topdown_state = topdown_node.first;
+            state_manager_bottomup.template push<false>(std::move(bottom_state), 0, context...);
 
-                /// 2. Exit case
-                size_t diff = bottomup_state.size() - topdown_state.size();
-//                std::cout << "diff=" << diff
-//                          << "\tbottomup_state.size()" << bottomup_state.size()
-//                          << "\ttopdown_state.size()" << topdown_state.size() << std::endl;
-//
+            std::thread thread1([&]() {
+                this->search_bottomup_multithread(heuristic, expand, context...);
+            });
+            std::thread thread2([&]() {
+                this->search_topdown_multithread(heuristic2, expand2, context...);
+            });
 
-                /// 3. Bidirectionally extend to step forward
-//                explore_state_bottomup_multithread(bottomup_state, heuristic, expand, context...);
-//                explore_state_topdown_multithread(topdown_state, heuristic2, expand2, context...);
+            thread1.join();
+            thread2.join();
 
-                // Multithreaded expansion
-                std::thread thread1([&](){
-                    this->explore_state_bottomup_multithread(bottomup_state, heuristic, expand, context...);
-                });
-                std::thread thread2([&](){
-                    this->explore_state_topdown_multithread(topdown_state, heuristic2, expand2, context...);
-                });
-                thread1.join();
-                thread2.join();
-
-                if (isFound) {
-//                    std::cout << "Bidirectional Search Meet Each Other" << std::endl;
-                    const state_type &goal = reverse_from_the_meet_point();
-                    return goal;
-                }
+            if (isFound) {
+                std::cout << "Bidirectional Search Meet Each Other" << std::endl;
+                const state_type &goal = reverse_from_the_meet_point();
+                return goal;
             }
             throw std::logic_error("goal state unreachable from provided initial state");
         }

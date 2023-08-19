@@ -1511,7 +1511,7 @@ std::size_t num_##NAME() const { return 0; }
                     /* Context...=      */ Context...
             > state_manager_topdown;
 
-            bool isFound = false;
+            std::atomic<bool> isFound = false;
             std::mutex mutex;
             std::tuple<const state_type *, const state_type *, double> meet_point; // Store the topdown state and bottomup state
 
@@ -1699,6 +1699,69 @@ std::size_t num_##NAME() const { return 0; }
             }
         };
 
+//        template<
+//                heuristic_search_state State,
+//                typename Expand,
+//                typename Expand2,
+//                typename Heuristic,
+//                typename Heuristic2,
+//                typename Config,
+//                typename... Context
+//        >
+//        requires heuristic_search_heuristic<Heuristic, Context...>
+//        const State &biDirectionalSearch<State, Expand, Expand2, Heuristic, Heuristic2, Config, Context...>::search(
+//                state_type bottom_state,
+//                state_type top_state,
+//                expand_type expand,
+//                expand_type2 expand2,
+//                heuristic_type &heuristic,
+//                heuristic_type2 &heuristic2,
+//                Context &... context
+//        ) {
+//            /// Core: we will not change any reconstruct logic in the outside
+//            /// Current is in BottomUpComplete: So we should return a top states
+//            /// 1. Init the Bidirectional State Manager
+//            /// Including front and back - two direction, init and push element - two operations
+//            /// We can ignore the input initial_state
+//            std::cout << "Bidirectional Search!!!!Let's rock it!" << std::endl;
+//            state_manager_bottomup.template push<false>(std::move(bottom_state), 0, context...);
+//            state_manager_topdown.template push<false>(std::move(top_state), 0, context...);
+//            /// 2. while loop
+//            while (not state_manager_bottomup.queues_empty() && not state_manager_topdown.queues_empty()) {
+//                auto bottomup_node = state_manager_bottomup.pop();
+//                const state_type &bottomup_state = bottomup_node.first;
+//                auto topdown_node = state_manager_topdown.pop();
+//                const state_type &topdown_state = topdown_node.first;
+//
+//                /// 2. Exit case
+//                size_t diff = bottomup_state.size() - topdown_state.size();
+////                std::cout << "diff=" << diff
+////                          << "\tbottomup_state.size()" << bottomup_state.size()
+////                          << "\ttopdown_state.size()" << topdown_state.size() << std::endl;
+////
+//
+//                /// 3. Bidirectionally extend to step forward
+////                explore_state_bottomup_multithread(bottomup_state, heuristic, expand, context...);
+////                explore_state_topdown_multithread(topdown_state, heuristic2, expand2, context...);
+//
+//                // Multithreaded expansion
+//                std::thread thread1([&](){
+//                    this->explore_state_bottomup_multithread(bottomup_state, heuristic, expand, context...);
+//                });
+//                std::thread thread2([&](){
+//                    this->explore_state_topdown_multithread(topdown_state, heuristic2, expand2, context...);
+//                });
+//                thread1.join();
+//                thread2.join();
+//
+//                if (isFound) {
+////                    std::cout << "Bidirectional Search Meet Each Other" << std::endl;
+//                    const state_type &goal = reverse_from_the_meet_point();
+//                    return goal;
+//                }
+//            }
+//            throw std::logic_error("goal state unreachable from provided initial state");
+//        }
         template<
                 heuristic_search_state State,
                 typename Expand,

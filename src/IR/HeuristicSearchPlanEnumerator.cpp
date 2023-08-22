@@ -1782,10 +1782,12 @@ struct sum<PlanTable, State, TopDown>
     sum(const PlanTable&, const QueryGraph&, const AdjacencyMatrix&, const CostFunction&, const CardinalityEstimator&)
     { }
 
-    double operator()(const state_type &state, const PlanTable &PT, const QueryGraph &G, const AdjacencyMatrix&,
-                      const CostFunction&, const CardinalityEstimator &CE) const
+    double operator()(const state_type &state, const PlanTable &PT, const QueryGraph &G, const AdjacencyMatrix &M,
+                      const CostFunction &CF, const CardinalityEstimator &CE) const
     {
         static cnf::CNF condition; // TODO use join condition
+        if (state.is_top(PT, G, M, CF, CE))
+            return 0;
         double distance = 0;
         state.for_each_subproblem([&](const Subproblem S) {
             if (not S.is_singleton()) { // skip base relations

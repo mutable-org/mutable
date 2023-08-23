@@ -410,6 +410,7 @@ If not explicitly stated otherwise, this license applies to all files in this pr
 - Make sure you have all the required [preliminaries](doc/preliminaries.md).
 - Read how to [set up mu*t*able](doc/setup.md).
 - Please read our [contribution guideline](doc/contribution-guideline.md).
+- Read how to [perform benchmarks](benchmark/README.md).
 
 ## Important Links
 

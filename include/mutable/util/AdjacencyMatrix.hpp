@@ -34,8 +34,8 @@ struct M_EXPORT AdjacencyMatrix
         operator bool() const { return M_.m_[i_][j_]; }
 
         template<bool C_ = Is_Const>
-        std::enable_if_t<not C_, Proxy&>
-        operator=(bool val) { M_.m_[i_][j_] = val; return *this; }
+        requires (not C_)
+        Proxy & operator=(bool val) { M_.m_[i_][j_] = val; return *this; }
 
         Proxy & operator=(const Proxy<false> &other) {
             static_assert(not C);

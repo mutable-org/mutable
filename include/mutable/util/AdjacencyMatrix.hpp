@@ -127,8 +127,9 @@ exit:
         return neighbors - S;
     }
 
-    /** Returns `true` iff the subproblem `S` is connected.  `S` is connected iff any node in `S` can reach all other
-     * nodes of `S` using only nodes in `S`.  */
+    /** Returns `true` iff the subproblem `S` is connected.
+     * `S` is connected iff any node in `S` can reach all other nodes of `S` using only nodes in `S`.
+     *  Assumes `AdjacencyMatrix` is symmetric, i.e. edges are undirected.  */
     bool is_connected(SmallBitset S) const { return reachable(S.begin().as_set(), S) == S; }
 
     /** Returns `true` iff there is at least one edge (join) between `left` and `right`. */

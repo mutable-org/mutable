@@ -12,7 +12,7 @@ namespace m {
 struct MinCutAGaT
 {
     using Subproblem = SmallBitset;
-    
+
     template<typename Callback>
     void min_cut_advanced_generate_and_test(const AdjacencyMatrix &M, Callback &&callback, const Subproblem S,
                                             const Subproblem C, const Subproblem X, const Subproblem T) const

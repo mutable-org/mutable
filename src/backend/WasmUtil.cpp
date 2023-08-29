@@ -2419,17 +2419,27 @@ void Buffer<IsGlobal>::resume_pipeline(param_t tuple_schema_)
             /*----- Emit setup code *before* compiling data layout to not overwrite its temporary boolean variables. -*/
             setup_();
 
-            /*----- Compile data layout to generate sequential load from buffer. -----*/
             Var<U32x1> load_tuple_id; // default initialized to 0
-            auto [load_inits, loads, load_jumps] =
-                compile_load_sequential(tuple_schema, base_address, layout_, num_simd_lanes, schema_, load_tuple_id);
 
-            /*----- Generate loop for loading entire buffer, with the pipeline emitted into the loop body. -----*/
-            load_inits.attach_to_current();
-            WHILE (load_tuple_id < size) {
-                loads.attach_to_current();
-                pipeline_();
-                load_jumps.attach_to_current();
+            if (tuple_schema.get().num_entries() == 0) {
+                /*----- If no attributes must be loaded, generate a loop just executing the pipeline `size`-times. -----*/
+                WHILE (load_tuple_id < size) {
+                    load_tuple_id += uint32_t(num_simd_lanes);
+                    pipeline_();
+                }
+                base_address.discard(); // since it is not needed
+            } else {
+                /*----- Compile data layout to generate sequential load from buffer. -----*/
+                auto [load_inits, loads, load_jumps] =
+                    compile_load_sequential(tuple_schema, base_address, layout_, num_simd_lanes, schema_, load_tuple_id);
+
+                /*----- Generate loop for loading entire buffer, with the pipeline emitted into the loop body. -----*/
+                load_inits.attach_to_current();
+                WHILE (load_tuple_id < size) {
+                    loads.attach_to_current();
+                    pipeline_();
+                    load_jumps.attach_to_current();
+                }
             }
 
             /*----- Emit teardown code. -----*/
@@ -2484,17 +2494,27 @@ void Buffer<IsGlobal>::resume_pipeline_inline(param_t tuple_schema_) const
     /*----- Emit setup code *before* compiling data layout to not overwrite its temporary boolean variables. -----*/
     setup_();
 
-    /*----- Compile data layout to generate sequential load from buffer. -----*/
     Var<U32x1> load_tuple_id(0); // explicitly (re-)set tuple ID to 0
-    auto [load_inits, loads, load_jumps] =
-        compile_load_sequential(tuple_schema, base_address, layout_, num_simd_lanes, schema_, load_tuple_id);
 
-    /*----- Generate loop for loading entire buffer, with the pipeline emitted into the loop body. -----*/
-    load_inits.attach_to_current();
-    WHILE (load_tuple_id < num_tuples) {
-        loads.attach_to_current();
-        pipeline_();
-        load_jumps.attach_to_current();
+    if (tuple_schema.get().num_entries() == 0) {
+        /*----- If no attributes must be loaded, generate a loop just executing the pipeline `size`-times. -----*/
+        WHILE (load_tuple_id < num_tuples) {
+            load_tuple_id += uint32_t(num_simd_lanes);
+            pipeline_();
+        }
+        base_address.discard(); // since it is not needed
+    } else {
+        /*----- Compile data layout to generate sequential load from buffer. -----*/
+        auto [load_inits, loads, load_jumps] =
+            compile_load_sequential(tuple_schema, base_address, layout_, num_simd_lanes, schema_, load_tuple_id);
+
+        /*----- Generate loop for loading entire buffer, with the pipeline emitted into the loop body. -----*/
+        load_inits.attach_to_current();
+        WHILE (load_tuple_id < num_tuples) {
+            loads.attach_to_current();
+            pipeline_();
+            load_jumps.attach_to_current();
+        }
     }
 
     /*----- Emit teardown code. -----*/

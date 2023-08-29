@@ -351,9 +351,9 @@ using uint_t = typename uint<W>::type;
 
 #ifdef M_ENABLE_SANITY_FIELDS
 #define WASM_INSIST2_(COND, MSG) ({ \
-    auto old = std::exchange(options::insist_no_ternary_logic, false); \
+    auto old = std::exchange(m::options::insist_no_ternary_logic, false); \
     m::wasm::Module::Get().emit_insist((COND), __FILE__, __LINE__, (MSG)); \
-    options::insist_no_ternary_logic = old; \
+    m::options::insist_no_ternary_logic = old; \
 })
 #else
 #define WASM_INSIST2_(COND, MSG) ({ \

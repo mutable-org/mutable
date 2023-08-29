@@ -2,12 +2,12 @@
 
 has_physical_tabs()
 {
-    ! git diff --staged -- $1 | perl -nle "exit 1 if /^\+.*\t/"
+    ! git diff --no-color --staged -- $1 | perl -nle "exit 1 if /^\+.*\t/"
 }
 
 has_trailing_whitespaces()
 {
-    ! git diff --staged -- $1 | perl -nle "exit 1 if /^\+.*\s$/"
+    ! git diff --no-color --staged -- $1 | perl -nle "exit 1 if /^\+.*\s$/"
 }
 
 COMMIT_PASSED=1

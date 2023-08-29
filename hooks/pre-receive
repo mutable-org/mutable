@@ -2,12 +2,12 @@
 
 has_physical_tabs()
 {
-    ! git diff $1...$2 -- $3 | perl -nle "exit 1 if /^\+.*\t/"
+    ! git diff --no-color $1...$2 -- $3 | perl -nle "exit 1 if /^\+.*\t/"
 }
 
 has_trailing_whitespaces()
 {
-    ! git diff $1...$2 -- $3 | perl -nle "exit 1 if /^\+.*\s$/"
+    ! git diff --no-color $1...$2 -- $3 | perl -nle "exit 1 if /^\+.*\s$/"
 }
 
 while read oldsha newsha refname; do

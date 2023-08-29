@@ -120,6 +120,7 @@ DataLayout PAXLayoutFactory::make(std::vector<const Type*> types, std::size_t nu
 
     /*----- Compute attribute offsets in a virtual row. -----*/
     uint64_t offset_in_bits = 0;
+    uint64_t min_size_in_bytes = std::numeric_limits<uint64_t>::max();
     uint64_t alignment_in_bits = 8;
     std::size_t num_not_byte_aligned = 0;
 
@@ -127,6 +128,7 @@ DataLayout PAXLayoutFactory::make(std::vector<const Type*> types, std::size_t nu
         const auto mapped_idx = indices[idx];
         offsets[mapped_idx] = offset_in_bits;
         offset_in_bits += types[mapped_idx]->size();
+        min_size_in_bytes = std::min(min_size_in_bytes, (types[mapped_idx]->size() + 7) / 8);
         alignment_in_bits = std::max(alignment_in_bits, types[mapped_idx]->alignment());
         if (types[mapped_idx]->size() % 8)
             ++num_not_byte_aligned;
@@ -140,9 +142,13 @@ DataLayout PAXLayoutFactory::make(std::vector<const Type*> types, std::size_t nu
         ++num_not_byte_aligned;
 
     /*----- Compute number of rows per block and number of blocks per row. -----*/
+    const auto num_simd_lanes = std::max<std::size_t>(1, 16 / min_size_in_bytes); // possible number of SIMD lanes
     std::size_t num_rows_per_block, num_blocks_per_row;
     if (NTuples == option_) {
         num_rows_per_block = num_tuples_;
+        if (num_rows_per_block > num_simd_lanes)
+            num_rows_per_block =
+                (num_tuples_ / num_simd_lanes) * num_simd_lanes; // floor to multiple of possible number of SIMD lanes
         num_blocks_per_row = 1;
     } else {
         const uint64_t row_size_in_bits = offsets[types.size()] + null_bitmap_size_in_bits; // space for NULL bitmap
@@ -150,6 +156,9 @@ DataLayout PAXLayoutFactory::make(std::vector<const Type*> types, std::size_t nu
          * a PAX block must be byte aligned) for every possibly not byte-aligned attribute column. Null bitmap column is
          * ignored since it is the last column. */
         num_rows_per_block = std::max<std::size_t>(1, (num_bytes_ * 8 - num_not_byte_aligned * 7) / row_size_in_bits);
+        if (num_rows_per_block > num_simd_lanes)
+            num_rows_per_block =
+                (num_rows_per_block / num_simd_lanes) * num_simd_lanes; // floor to multiple of possible number of SIMD lanes
         num_blocks_per_row = (row_size_in_bits + num_bytes_ * 8 - 1UL) / (num_bytes_ * 8);
     }
 

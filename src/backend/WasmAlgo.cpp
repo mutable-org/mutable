@@ -495,6 +495,7 @@ ChainedHashTable<IsGlobal>::ChainedHashTable(const Schema &schema, std::vector<H
     const auto mask_init = capacity_init - 1U;
     const auto high_watermark_absolute_init = capacity_init;
     if constexpr (IsGlobal) {
+        storage_.address_.init(0), // init with nullptr
         storage_.mask_.init(mask_init);
         storage_.high_watermark_absolute_.init(high_watermark_absolute_init);
     } else {
@@ -572,7 +573,7 @@ void ChainedHashTable<IsGlobal>::setup()
     }
 
     if constexpr (IsGlobal) {
-        IF (*num_entries_ == 0U) { // hash table not yet allocated XXX: may allocate multiple times iff predication predicate is never fulfilled
+        IF (storage_.address_.is_nullptr()) { // hash table not yet allocated
             /*----- Allocate memory for initial capacity. -----*/
             *address_ = Module::Allocator().allocate(size_in_bytes(), sizeof(uint32_t));
 
@@ -1418,6 +1419,7 @@ OpenAddressingHashTable<IsGlobal, ValueInPlace>::OpenAddressingHashTable(const S
     const auto mask_init = capacity_init - 1U;
     const auto high_watermark_absolute_init = capacity_init - 1U; // at least one entry must always be unoccupied
     if constexpr (IsGlobal) {
+        storage_.address_.init(0), // init with nullptr
         storage_.mask_.init(mask_init);
         storage_.high_watermark_absolute_.init(high_watermark_absolute_init);
     } else {
@@ -1481,7 +1483,7 @@ void OpenAddressingHashTable<IsGlobal, ValueInPlace>::setup()
     }
 
     if constexpr (IsGlobal) {
-        IF (*num_entries_ == 0U) { // hash table not yet allocated XXX: may allocate multiple times iff predication predicate is never fulfilled
+        IF (storage_.address_.is_nullptr()) { // hash table not yet allocated
             /*----- Allocate memory for initial capacity. -----*/
             *address_ = Module::Allocator().allocate(size_in_bytes(), entry_max_alignment_in_bytes_);
 

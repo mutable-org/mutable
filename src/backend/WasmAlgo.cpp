@@ -1184,7 +1184,7 @@ void ChainedHashTable<IsGlobal>::rehash()
         const Var<Ptr<void>> begin_old(begin());
         const Var<Ptr<void>> end_old(end());
 
-        /*----- Doublex1 capacity. -----*/
+        /*----- Double capacity. -----*/
         *mask_ = (*mask_ << 1U) + 1U;
 
         /*----- Allocate memory for new hash table with updated capacity. -----*/
@@ -2154,7 +2154,7 @@ void OpenAddressingHashTable<IsGlobal, ValueInPlace>::rehash()
         const Var<Ptr<void>> begin_old(begin());
         const Var<Ptr<void>> end_old(end());
 
-        /*----- Doublex1 capacity. -----*/
+        /*----- Double capacity. -----*/
         *mask_ = (*mask_ << 1U) + 1U;
 
         /*----- Allocate memory for new hash table with updated capacity. -----*/

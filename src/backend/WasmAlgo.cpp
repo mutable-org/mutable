@@ -416,6 +416,9 @@ HashTable::set_byte_offsets(std::vector<HashTable::offset_t> &offsets_in_bytes, 
                             HashTable::offset_t initial_offset_in_bytes,
                             HashTable::offset_t initial_max_alignment_in_bytes)
 {
+    if (types.empty())
+        return { initial_offset_in_bytes, initial_max_alignment_in_bytes };
+
     /*----- Collect all indices. -----*/
     std::size_t indices[types.size()];
     std::iota(indices, indices + types.size(), 0);

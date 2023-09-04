@@ -93,13 +93,11 @@ AdjacencyMatrix AdjacencyMatrix::minimum_spanning_forest(std::function<double(st
         /* Prim's algorithm for finding a MST. */
         while (next_vertex) {
             /* Explore edges of `next_vertex`. */
-            M_insist(next_vertex.size() == 1);
+            M_insist(next_vertex.is_singleton());
             const SmallBitset N = neighbors(next_vertex) & vertices_remaining;
             const std::size_t u = *next_vertex.begin();
-            for (std::size_t v : N) {
-                double w = weight(u, v);
-                Q.emplace(u, v, w);
-            }
+            for (std::size_t v : N)
+                Q.emplace(u, v, weight(u, v));
 
             /* Search for the cheapest edge not within the MSF. */
             weighted_edge E;

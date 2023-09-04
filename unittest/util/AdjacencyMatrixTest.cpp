@@ -34,21 +34,26 @@ TEST_CASE("AdjacencyMatrix/Standalone Matrix", "[core][util][unit]")
 
     SECTION("check edges")
     {
+        const AdjacencyMatrix &adjMat_ConstRef = adj_mat;
+
         /* Positive checks. */
-        REQUIRE(adj_mat(0, 2));
-        REQUIRE(adj_mat(2, 0));
+        REQUIRE(adjMat_ConstRef(0, 2));
+        REQUIRE(adjMat_ConstRef(2, 0));
 
-        REQUIRE(adj_mat(0, 3));
-        REQUIRE(adj_mat(3, 0));
+        REQUIRE(adjMat_ConstRef(0, 3));
+        REQUIRE(adjMat_ConstRef(3, 0));
 
-        REQUIRE(adj_mat(1, 3));
-        REQUIRE(adj_mat(3, 1));
+        REQUIRE(adjMat_ConstRef(1, 3));
+        REQUIRE(adjMat_ConstRef(3, 1));
 
-        REQUIRE(adj_mat(2, 3));
-        REQUIRE(adj_mat(3, 2));
+        REQUIRE(adjMat_ConstRef(2, 3));
+        REQUIRE(adjMat_ConstRef(3, 2));
 
         /* Negative checks. */
-        REQUIRE_FALSE(adj_mat(0, 1));
+        REQUIRE_FALSE(adjMat_ConstRef(0, 1));
+        REQUIRE_THROWS_AS(adjMat_ConstRef.at(13, 9), m::out_of_range);
+        REQUIRE_THROWS_AS(adjMat_ConstRef.at(2, 63), m::out_of_range);
+
         REQUIRE_THROWS_AS(adj_mat.at(13, 9), m::out_of_range);
         REQUIRE_THROWS_AS(adj_mat.at(2, 63), m::out_of_range);
     }
@@ -480,6 +485,8 @@ TEST_CASE("AdjacencyMatrix/transitive_closure_undirected", "[core][util][unit]")
          * 0 0 0 1 1
          * 0 0 0 1 1 */
         AdjacencyMatrix closure = M.transitive_closure_undirected();
+        REQUIRE(M != closure);
+
         for (std::size_t i = 0; i != 3; ++i)
             for (std::size_t j = 0; j != 3; ++j)
                 CHECK(closure(i, j));
@@ -1179,6 +1186,12 @@ TEST_CASE("AdjacencyMatrix/for_each_CSG_pair_undirected", "[core][util][unit]")
 TEST_CASE("AdjacencyMatrix/minimum_spanning_forest", "[core][util][unit]")
 {
     auto weight = [](std::size_t u, std::size_t v) -> double { return u + v; };
+
+    SECTION("Empty Graph")
+    {
+        AdjacencyMatrix M;
+        CHECK(M.minimum_spanning_forest(weight) == M);
+    }
 
     SECTION("no edges")
     {

@@ -280,13 +280,13 @@ def genTableFile(Fo: dict):
         # write header
         f.write('/* vim: set filetype=cpp: */\n\n')
         # convert terminals into `TokenType`
-        for key, val in Fo.items():
+        for key, val in sorted(Fo.items()):
             f.write(f'M_FOLLOW( {key.upper().replace("-", "_")}, ({{ ')
 
             token_set = set()
             for e in val:
                 token_set = token_set.union(getTokenTypes(e))
-            f.write(', '.join(token_set))
+            f.write(', '.join(sorted(list(token_set))))
 
             f.write(' }))\n')
 

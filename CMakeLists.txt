@@ -326,6 +326,7 @@ if(${WITH_V8})
     else()
         set(V8_BUILD_ARGS "${V8_BUILD_ARGS} v8_monolithic=true is_component_build=false")
         set(V8_LIBRARIES v8_monolith)
+        set(V8_BUILD_BYPRODUCTS "${PROJECT_BINARY_DIR}/third-party/src/V8-build/out/obj/${CMAKE_STATIC_LIBRARY_PREFIX}v8_monolith${CMAKE_STATIC_LIBRARY_SUFFIX}")
     endif()
     if(${USE_LLD})
         set(V8_BUILD_ARGS "${V8_BUILD_ARGS} use_lld=true")
@@ -353,7 +354,7 @@ if(${WITH_V8})
         COMMAND        cd "${CMAKE_CURRENT_SOURCE_DIR}/third-party/v8/v8/" && gclient sync -D -f
         CONFIGURE_COMMAND gn gen out --root=${CMAKE_CURRENT_SOURCE_DIR}/third-party/v8/v8 --args=${V8_BUILD_ARGS}
         CONFIGURE_HANDLED_BY_BUILD true
-        BUILD_BYPRODUCTS "${PROJECT_BINARY_DIR}/third-party/src/V8-build/out/obj/${CMAKE_STATIC_LIBRARY_PREFIX}v8_monolith${CMAKE_STATIC_LIBRARY_SUFFIX}"
+        BUILD_BYPRODUCTS "${V8_BUILD_BYPRODUCTS}"
         BUILD_COMMAND ninja -C out ${V8_LIBRARIES}
         INSTALL_COMMAND ""
     )

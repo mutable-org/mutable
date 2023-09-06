@@ -28,4 +28,10 @@ TEST_CASE("StringPool internalize", "[core][util][stringpool]")
     auto s2 = pool("hello");
     REQUIRE(pool.size() == 2);
     REQUIRE(s1 == s2);
+
+    auto s3 = pool("");
+    REQUIRE(pool.size() == 3);
+
+    auto s4 = pool("");
+    REQUIRE(s3 == s4);
 }

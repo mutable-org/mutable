@@ -24,6 +24,7 @@ struct StringPool
     std::size_t size() const { return table_.size(); }
 
     const char * operator()(const char *str) {
+        M_notnull(str);
         auto it = table_.find(str);
         if (table_.end() == it) {
             auto copy = strdup(str);

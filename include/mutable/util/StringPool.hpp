@@ -26,13 +26,13 @@ struct StringPool
     const char * operator()(const char *str) {
         M_notnull(str);
         auto it = table_.find(str);
-        if (table_.end() == it) {
-            auto copy = strdup(str);
-            if (not copy)
-                throw runtime_error("strdup(str) failed and returned NULL");
-            it = table_.emplace_hint(it, copy);
-            M_insist(streq(*it, str), "the pooled string differs from the original");
-        }
+
+        if (table_.end() != it) // str exists in table already
+            return *it;
+
+        auto copy = M_notnull(strdup(str));
+        it = table_.emplace_hint(it, copy);
+        M_insist(streq(*it, str), "the pooled string differs from the original");
         return *it;
     }
 

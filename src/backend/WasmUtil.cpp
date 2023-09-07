@@ -646,6 +646,7 @@ compile_data_layout_sequential(const Schema &tuple_schema, Ptr<void> base_addres
                 if (not needs_null_bitmap)
                     continue;
 
+                M_insist_no_ternary_logic();
                 M_insist(not has_null_bitmap, "at most one bitmap may be specified");
                 has_null_bitmap = true;
                 if (bit_stride) { // NULL bitmap with bit stride requires dynamic masking

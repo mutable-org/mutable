@@ -340,6 +340,22 @@ struct SchemaMinimizer : OperatorVisitor
 #define DECLARE(CLASS) void operator()(Const<CLASS> &op) override;
     M_OPERATOR_LIST(DECLARE)
 #undef DECLARE
+
+    private:
+    /** Add the constraints of entries from \p constraints to matching entries in \p schema.  Adapts only the first
+     * \p n entries of \p schema. */
+    void add_constraints(Schema &schema, const Schema &constraints, std::size_t n) {
+        M_insist(n <= schema.num_entries(), "invalid length");
+        for (std::size_t idx = 0; idx < n; ++idx) {
+            auto &e = schema[idx];
+            auto it = constraints.find(e.id);
+            if (it != constraints.end())
+                e.constraints |= it->constraints; // merge constraints
+        }
+    }
+    void add_constraints(Schema &schema, const Schema &constraints) {
+        add_constraints(schema, constraints, schema.num_entries());
+    }
 };
 
 void SchemaMinimizer::operator()(ScanOperator &op)
@@ -372,6 +388,7 @@ void SchemaMinimizer::operator()(FilterOperator &op)
     auto required_by_op = op.filter().get_required(); // add what's required to evaluate the filter predicate
     required |= required_by_op; // add what's required to evaluate the filter predicate
     (*this)(*op.child(0));
+    add_constraints(op.schema(), op.child(0)->schema()); // add constraints from child
 }
 
 void SchemaMinimizer::operator()(DisjunctiveFilterOperator &op) {
@@ -385,6 +402,7 @@ void SchemaMinimizer::operator()(JoinOperator &op)
     for (auto c : const_cast<const JoinOperator&>(op).children()) {
         required = required_from_below & c->schema(); // what we need from this child
         (*this)(*c);
+        add_constraints(op.schema(), op.child(0)->schema()); // add constraints from child
     }
 }
 
@@ -412,8 +430,10 @@ void SchemaMinimizer::operator()(ProjectionOperator &op)
     op.schema() = std::move(ours);
     required = std::move(required_by_op);
     is_top_of_plan_ = false;
-    if (not const_cast<const ProjectionOperator&>(op).children().empty())
+    if (not const_cast<const ProjectionOperator&>(op).children().empty()) {
         (*this)(*op.child(0));
+        add_constraints(op.schema(), op.child(0)->schema()); // add constraints from child
+    }
 }
 
 void SchemaMinimizer::operator()(LimitOperator &op)
@@ -462,6 +482,7 @@ void SchemaMinimizer::operator()(GroupingOperator &op)
     required = std::move(required_by_us);
     is_top_of_plan_ = false;
     (*this)(*op.child(0));
+    add_constraints(op.schema(), op.child(0)->schema(), op.group_by().size()); // add constraints to grouping keys from child
 }
 
 void SchemaMinimizer::operator()(AggregationOperator &op)
@@ -497,6 +518,7 @@ void SchemaMinimizer::operator()(AggregationOperator &op)
     required = std::move(required_by_op);
     is_top_of_plan_ = false;
     (*this)(*op.child(0));
+    /* do not add constraints from child since aggregates are newly computed */
 }
 
 void SchemaMinimizer::operator()(SortingOperator &op)
@@ -513,6 +535,7 @@ void SchemaMinimizer::operator()(SortingOperator &op)
         required |= required_by_op; // add what we require to compute the order
     }
     (*this)(*op.child(0));
+    add_constraints(op.schema(), op.child(0)->schema()); // add constraints from child
 }
 
 void Operator::minimize_schema()

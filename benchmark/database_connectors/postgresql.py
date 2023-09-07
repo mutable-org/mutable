@@ -1,47 +1,53 @@
 from .connector import *
 
-from psycopg2.extras import LoggingConnection, LoggingCursor
 from tqdm import tqdm
-import logging
+from typeguard import typechecked
+from typing import Any
 import os
 import psycopg2
 import psycopg2.extensions
-import shlex
 import subprocess
 import sys
-import time
 
-db_options = {
+db_options: dict[str, str] = {
     'dbname': 'benchmark_tmp',
     'user': 'postgres'
 }
-TMP_SQL_FILE            = 'tmp.sql'
-COMPLETE_TABLE_SUFFIX   = '_complete'
+TMP_SQL_FILE: str            = 'tmp.sql'
+COMPLETE_TABLE_SUFFIX: str   = '_complete'
 
 
 # The connector for PostgreSQL
+@typechecked
 class PostgreSQL(Connector):
 
-    def __init__(self, args = dict()):
-        self.verbose = args.get('verbose', False) # optional
+    def __init__(self, args: dict[str, Any]) -> None:
+        self.verbose = args.get('verbose', False)   # optional
 
     # Runs an experiment one time, all parameters are in 'params'
-    def execute(self, n_runs, params: dict):
-        suite = params['suite']
-        benchmark = params['benchmark']
-        experiment = params['name']
+    def execute(self, n_runs: int, params: dict[str, Any]) -> ConnectorResult:
+        suite: str = params['suite']
+        benchmark: str = params['benchmark']
+        experiment: str = params['name']
         tqdm.write(f'` Perform experiment {suite}/{benchmark}/{experiment} with configuration PostgreSQL.')
         sys.stdout.flush()
 
-        # map that is returned with the measured times
-        measurement_times = dict()
+        config_result: ConfigResult = dict()      # map that is returned with the measured times
 
-        # Check wether tables contain scale factors
-        with_scale_factors = False
+        # Check whether tables contain scale factors
+        with_scale_factors: bool = False
         for table in params['data'].values():
-            if (table.get('scale_factors')):
+            if table.get('scale_factors'):
                 with_scale_factors = True
                 break
+
+        # Variables
+        connection: psycopg2.extensions.connection
+        cursor: psycopg2.extensions.cursor
+        command: str
+        timeout: int
+        benchmark_info: str
+        durations: list[float]
 
         verbose_printed = False
         for _ in range(n_runs):
@@ -68,12 +74,13 @@ class PostgreSQL(Connector):
                         cursor = connection.cursor()
                         # Create tables from tmp tables with scale factor
                         for table_name, table in params['data'].items():
+                            sf: float | int
                             if table.get('scale_factors'):
                                 sf = table['scale_factors'][case]
                             else:
                                 sf = 1
-                            header = int(table.get('header', 0))
-                            num_rows = round((table['lines_in_file'] - header) * sf)
+                            header: int = int(table.get('header', 0))
+                            num_rows: int = round((table['lines_in_file'] - header) * sf)
                             cursor.execute(f'DELETE FROM "{table_name}";')     # empty existing table
                             cursor.execute(f'INSERT INTO "{table_name}" SELECT * FROM "{table_name}{COMPLETE_TABLE_SUFFIX}" LIMIT {num_rows};')    # copy data with scale factor
                     finally:
@@ -102,16 +109,15 @@ class PostgreSQL(Connector):
                     benchmark_info = f"{suite}/{benchmark}/{experiment} [PostgreSQL]"
                     try:
                         durations = self.run_command(command, timeout, benchmark_info)
-                    except ExperimentTimeoutExpired as ex:
-                        if case not in measurement_times.keys():
-                            measurement_times[case] = list()
-                        measurement_times[case].append(TIMEOUT_PER_CASE * 1000)
+                    except ExperimentTimeoutExpired:
+                        if case not in config_result.keys():
+                            config_result[case] = list()
+                        config_result[case].append(TIMEOUT_PER_CASE * 1000)
                     else:
-                        for idx, line in enumerate(durations):
-                            time = float(line.replace("\n", "").replace(",", ".")) # in milliseconds
-                            if case not in measurement_times.keys():
-                                measurement_times[case] = list()
-                            measurement_times[case].append(time)
+                        for idx, time in enumerate(durations):
+                            if case not in config_result.keys():
+                                config_result[case] = list()
+                            config_result[case].append(time)
 
             # Otherwise, tables have to be created just once before the measurements (done above)
             else:
@@ -138,26 +144,25 @@ class PostgreSQL(Connector):
                 benchmark_info = f"{suite}/{benchmark}/{experiment} [PostgreSQL]"
                 try:
                     durations = self.run_command(command, timeout, benchmark_info)
-                except ExperimentTimeoutExpired as ex:
+                except ExperimentTimeoutExpired:
                     for case in params['cases'].keys():
-                        if case not in measurement_times.keys():
-                            measurement_times[case] = list()
-                        measurement_times[case].append(TIMEOUT_PER_CASE * 1000)
+                        if case not in config_result.keys():
+                            config_result[case] = list()
+                        config_result[case].append(TIMEOUT_PER_CASE * 1000)
                 else:
-                    for idx, line in enumerate(durations):
-                        time = float(line.replace("\n", "").replace(",", ".")) # in milliseconds
+                    for idx, time in enumerate(durations):
                         case = list(params['cases'].keys())[idx]
-                        if case not in measurement_times.keys():
-                            measurement_times[case] = list()
-                        measurement_times[case].append(time)
+                        if case not in config_result.keys():
+                            config_result[case] = list()
+                        config_result[case].append(time)
 
             self.clean_up()
 
-        return {'PostgreSQL': measurement_times}
+        return {'PostgreSQL': config_result}
 
 
     # Sets up the database
-    def setup(self):
+    def setup(self) -> None:
         # Delete existing 'benchmark_tmp' database and create a new empty one
         connection = psycopg2.connect(user=db_options['user'])
         try:
@@ -170,7 +175,7 @@ class PostgreSQL(Connector):
 
 
     # Deletes the used temporary database and file
-    def clean_up(self):
+    def clean_up(self) -> None:
         connection = psycopg2.connect(user=db_options['user'])
         try:
             connection.autocommit = True
@@ -183,10 +188,10 @@ class PostgreSQL(Connector):
 
 
     # Parse attributes of one table, return as string ready for a CREATE TABLE query
-    def parse_attributes(self, attributes: dict):
-        columns = list()
+    def parse_attributes(self, attributes: dict[str, str]) -> str:
+        columns: list[str] = list()
         for column_name, type_info in attributes.items():
-            ty_list = [column_name]
+            ty_list: list[str] = [column_name]
 
             ty = type_info.split(' ')
             match ty[0]:
@@ -224,28 +229,28 @@ class PostgreSQL(Connector):
     # Call with 'with_scale_factors'=False if data should be loaded as a whole
     # Call with 'with_scale_factors'=True if data should be placed in tmp tables
     # and copied for each case with different scale factor
-    def create_tables(self, cursor, data: dict, with_scale_factors):
+    def create_tables(self, cursor: psycopg2.extensions.cursor, data: dict[str, dict[str, Any]], with_scale_factors: bool) -> None:
         for table_name, table in data.items():
-            columns = self.parse_attributes(table['attributes'])
+            columns: str = self.parse_attributes(table['attributes'])
 
-            delimiter = table.get('delimiter')
-            header = table.get('header')
-            format = table.get('format')
+            delimiter: str = table.get('delimiter')
+            header: int = table.get('header')
+            format: str = table.get('format')
 
             # Use an additional table with the *complete* data set to quickly recreate the table with the benchmark
             # data, in case of varying scale factor.
-            complete_table_name = table_name + COMPLETE_TABLE_SUFFIX if with_scale_factors else table_name
-            quoted_table_name = f'"{complete_table_name}"'
+            complete_table_name: str = table_name + COMPLETE_TABLE_SUFFIX if with_scale_factors else table_name
+            quoted_table_name: str = f'"{complete_table_name}"'
 
-            create = f"CREATE UNLOGGED TABLE {quoted_table_name} {columns};"
-            copy = f"COPY {quoted_table_name} FROM STDIN"
+            create: str = f"CREATE UNLOGGED TABLE {quoted_table_name} {columns};"
+            copy: str = f"COPY {quoted_table_name} FROM STDIN"
             if delimiter:
-                delim = delimiter.replace("'", "")
+                delim: str = delimiter.replace("'", "")
                 copy += f" WITH DELIMITER \'{delim}\'"
             if format:
                 copy += f" {format.upper()}"
             if header:
-                copy += ' HEADER' if (header==1) else ''
+                copy += ' HEADER' if header == 1 else ''
 
             copy += ";"
 
@@ -260,11 +265,11 @@ class PostgreSQL(Connector):
                 cursor.execute(f'CREATE UNLOGGED TABLE "{table_name}" {columns};')     # Create actual table that will be used for experiment
 
 
-    def run_command(self, command, timeout, benchmark_info):
+    def run_command(self, command, timeout: int, benchmark_info: str) -> list[float]:
         process = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                                    cwd=os.getcwd(), shell=True)
         try:
-            out, err = process.communicate("".encode('latin-1'), timeout=timeout)
+            proc_out, proc_err = process.communicate("".encode('latin-1'), timeout=timeout)
         except subprocess.TimeoutExpired:
             raise ExperimentTimeoutExpired(f'Query timed out after {timeout} seconds')
         finally:
@@ -275,8 +280,8 @@ class PostgreSQL(Connector):
                 except subprocess.TimeoutExpired:
                     process.kill() # kill if process did not terminate in time
 
-        out = out.decode('latin-1')
-        err = err.decode('latin-1')
+        out: str = proc_out.decode('latin-1')
+        err: str = proc_err.decode('latin-1')
 
         assert process.returncode is not None
         if process.returncode or len(err):
@@ -296,7 +301,8 @@ class PostgreSQL(Connector):
                 raise ConnectorException(f'Benchmark failed with return code {process.returncode}.')
 
         # Parse `out` for timings
-        durations = out.split('\n')
+        durations: list[str] = out.split('\n')
         durations.remove('')
+        timings: list[float] = [float(dur.replace("\n", "").replace(",", ".")) for dur in durations]
 
-        return durations
+        return timings

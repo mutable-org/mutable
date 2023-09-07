@@ -4,39 +4,29 @@ from database_connectors import hyperconf
 from tableauhyperapi import HyperProcess, Telemetry, Connection, CreateMode, NOT_NULLABLE, NULLABLE, SqlType, \
         TableDefinition, Inserter, escape_name, escape_string_literal, HyperException, TableName
 from tqdm import tqdm
+from typeguard import typechecked
+from typing import Any
 import os
 import subprocess
 import sys
-import sys
-import time
 
 
-# Used as function for new process to track time / timeout
-def run_multiple_queries(connection, queries, data, queue):
-    times = hyperconf.benchmark_execution_times(connection, queries, data)
-    queue.put(times)
-
-def run_single_query(connection, query):
-    with connection.execute_query(query) as result:
-        for row in result:
-            pass
-
-
+@typechecked
 class HyPer(Connector):
 
-    def __init__(self, args = dict()):
+    def __init__(self, args: dict[str, Any]) -> None:
         self.multithreaded = args.get('multithreaded', False)
-        self.verbose = args.get('verbose', False) # optional
+        self.verbose = args.get('verbose', False)   # optional
 
-    def execute(self, n_runs, params: dict()):
-        suite = params['suite']
-        benchmark = params['benchmark']
-        experiment = params['name']
-        suffix = f' ({get_num_cores()} cores)' if self.multithreaded else ' (single core)'
+    def execute(self, n_runs: int, params: dict[str, Any]) -> ConnectorResult:
+        suite: str = params['suite']
+        benchmark: str = params['benchmark']
+        experiment: str = params['name']
+        suffix: str = f' ({get_num_cores()} cores)' if self.multithreaded else ' (single core)'
         tqdm.write(f'` Perform experiment {suite}/{benchmark}/{experiment} with configuration HyPer{suffix}.')
         sys.stdout.flush()
 
-        path = os.getcwd()
+        path: str = os.getcwd()
         script = f'''
 import sys
 sys.path.insert(0, '{path}/benchmark')
@@ -45,7 +35,7 @@ print(repr(database_connectors.hyper.HyPer._execute({n_runs}, {repr(params)})))
 sys.stdout.flush()
 '''
 
-        args = list(['python3', '-c', script])
+        args: list[str] = ['python3', '-c', script]
 
         # If not multithreaded, limit to a single core
         if not self.multithreaded:
@@ -55,7 +45,7 @@ sys.stdout.flush()
             tqdm.write(f"    $ {' '.join(args)}")
             sys.stdout.flush()
 
-        timeout = n_runs * (DEFAULT_TIMEOUT + TIMEOUT_PER_CASE * len(params['cases']))
+        timeout: int = n_runs * (DEFAULT_TIMEOUT + TIMEOUT_PER_CASE * len(params['cases']))
         process = subprocess.Popen(
             args=args,
             stdout=subprocess.PIPE,
@@ -68,42 +58,41 @@ sys.stdout.flush()
         except subprocess.TimeoutExpired:
             tqdm.write(f'Benchmark timed out after {timeout} seconds')
             # Set execution time of every case of every run to timeout
-            times = [TIMEOUT_PER_CASE*1000 for _ in range(n_runs)]
-            result = {case: times for case in params['cases'].keys()}
-            result = {f'HyPer{suffix}': result}
+            times: list[float] = [float(TIMEOUT_PER_CASE*1000) for _ in range(n_runs)]
+            config_result: ConfigResult = {case: times for case in params['cases'].keys()}
+            result: ConnectorResult = {f'HyPer{suffix}': config_result}
             return result
         finally:
-            if process.poll() is None: # if process is still alive
-                process.terminate() # try to shut down gracefully
+            if process.poll() is None:          # if process is still alive
+                process.terminate()             # try to shut down gracefully
                 try:
-                    process.wait(timeout=15) #give process 15 seconds to terminate
+                    process.wait(timeout=15)    # give process 15 seconds to terminate
                 except subprocess.TimeoutExpired:
-                    process.kill() # kill if process did not terminate in time
+                    process.kill()              # kill if process did not terminate in time
 
         # Check returncode
-        result = None
         if process.returncode == 0:
-            result = eval(process.stdout.read().decode('latin-1'))
+            result: ConnectorResult = eval(process.stdout.read().decode('latin-1'))
         else:
-            raise ConnectorException(f"Process failed with return code {process.returncode}")
+            raise ConnectorException(f"Process failed with return code {process.returncode}. Details:\n{tqdm.write(process.stderr.read().decode('latin-1'))}")
 
-        patched_result = dict()
+        patched_result: ConnectorResult = dict()
         for key, val in result.items():
             patched_result[f'{key}{suffix}'] = val
         return patched_result
 
     @staticmethod
-    def _execute(n_runs, params: dict()):
-        measurement_times = dict()
+    def _execute(n_runs: int, params: dict[str, Any]) -> ConnectorResult:
+        config_result: ConfigResult = dict()
 
-        # Check wether tables contain scale factors
-        with_scale_factors = False
+        # Check whether tables contain scale factors
+        with_scale_factors: bool = False
         for table in params['data'].values():
-            if (table.get('scale_factors')):
+            if table.get('scale_factors'):
                 with_scale_factors = True
                 break
 
-        hyperconf.init() # prepare for measurements
+        hyperconf.init()    # prepare for measurements
 
         for run_id in range(n_runs):
             # If tables contain scale factors, they have to be loaded separately for every case
@@ -112,31 +101,31 @@ sys.stdout.flush()
                     with Connection(endpoint=hyper.endpoint, database='benchmark.hyper', create_mode=CreateMode.CREATE_AND_REPLACE) as connection:
                         # Create tmp tables used for copying
                         for table_name, table in params['data'].items():
-                            columns = HyPer.parse_attributes(table['attributes'])
+                            columns: list[TableDefinition.Column] = HyPer.parse_attributes(table['attributes'])
                             table_tmp = TableDefinition(
                                 table_name=f"{table_name}_tmp",
                                 columns=columns
                             )
                             hyperconf.load_table(connection, table_tmp, table['file'], FORMAT=table['format'], DELIMITER=f"\'{table['delimiter']}\'", HEADER=table['header'])
 
-                            table_def = TableDefinition(
+                            table_def: TableDefinition = TableDefinition(
                                 table_name=table_name,
                                 columns=columns
                             )
                             connection.catalog.create_table(table_def)
-
                         # Execute cases
                         for case, query in params['cases'].items():
                             # Set up tables
                             for table_name, table in params['data'].items():
                                 connection.execute_command(f'DELETE FROM "{table_name}";')  # Empty table first
 
+                                sf: float | int
                                 if table.get('scale_factors'):
                                     sf = table['scale_factors'][case]
                                 else:
                                     sf = 1
-                                header = int(table.get('header', 0))
-                                num_rows = round((table['lines_in_file'] - header) * sf)
+                                header: int = int(table.get('header', 0))
+                                num_rows: int = round((table['lines_in_file'] - header) * sf)
                                 connection.execute_command(f'INSERT INTO "{table_name}" SELECT * FROM "{table_name}_tmp" LIMIT {num_rows};')
 
                             # Execute query
@@ -145,70 +134,72 @@ sys.stdout.flush()
                                     pass
 
                         # Extract results
-                        matches = hyperconf.filter_results(
+                        matches: list[Any] = hyperconf.filter_results(
                             hyperconf.extract_results(),
                             [
                                 lambda x: 'k' in x and x['k'] == 'query-end' and 'v' in x and 'statement' in x['v'] and x['v']['statement'] == 'SELECT'
                             ]
                         )
-                        times = map(lambda m: m['v']['execution-time'] * 1000, matches)
-                        times = list(map(lambda t: f'{t:.3f}', times))
-                        times = times[run_id * len(list(params['cases'].keys())) : ] # get only times of this run, ignore previous runs
-                        times = list(zip(params['cases'].keys(), times))
+                        times: list[float] = list(map(lambda m: m['v']['execution-time'] * 1000, matches))
+                        times = list(map(lambda t: float(f'{t:.3f}'), times))
+                        times = times[run_id * len(list(params['cases'].keys())) : ]    # get only times of this run, ignore previous runs
+                        cases_times: list[tuple[Case, float]] = list(zip(params['cases'].keys(), times))
 
-                        for case, time in times:
-                            if case not in measurement_times.keys():
-                                measurement_times[case] = list()
-                            measurement_times[case].append(time)
+                        for case, time in cases_times:
+                            if case not in config_result.keys():
+                                config_result[case] = list()
+                            config_result[case].append(time)
 
             else:
                 # Otherwise, tables have to be created just once before the measurements
                 with HyperProcess(telemetry=Telemetry.DO_NOT_SEND_USAGE_DATA_TO_TABLEAU) as hyper:
                     with Connection(endpoint=hyper.endpoint, database='benchmark.hyper', create_mode=CreateMode.CREATE_AND_REPLACE) as connection:
-                        table_defs = HyPer.get_tables(params)
-                        queries = HyPer.get_cases_queries(params, table_defs)
-                        data = HyPer.get_data(params, table_defs)
+                        table_defs: dict[str, TableDefinition] = HyPer.get_tables(params)
+                        queries: dict[Case, str] = HyPer.get_cases_queries(params, table_defs)
+                        data: list[tuple[TableDefinition, str, dict]] = HyPer.get_data(params, table_defs)
 
-                        times = hyperconf.benchmark_execution_times(connection, queries.values(), data)
+                        times: list = hyperconf.benchmark_execution_times(connection, list(queries.values()), data)
                         times = times[run_id * len(queries.keys()):]    # get only times of this run, ignore previous runs
-                        times = list(zip(queries.keys(), list(map(lambda t: float(f'{t:.3f}'), times))))
+                        times = list(zip(queries.keys(), list(map(lambda t: f'{t:.3f}', times))))
 
                         for case, time in times:
-                            if case not in measurement_times.keys():
-                                measurement_times[case] = list()
-                            measurement_times[case].append(time)
+                            if case not in config_result.keys():
+                                config_result[case] = list()
+                            config_result[case].append(float(time))
 
                         connection.close()
                         hyper.close()
 
-        return {'HyPer': measurement_times}
+        return {'HyPer': config_result}
 
 
     # returns dict of {table_name: table_def} for each table_def
     @staticmethod
-    def get_tables(params: dict):
-        table_defs = dict()
+    def get_tables(params: dict[str, Any]) -> dict[str, TableDefinition]:
+        table_defs: dict[str, TableDefinition] = dict()
+
         for table_name, table in params['data'].items():
             table_defs[table_name] = HyPer.get_table(table_name, table)
+
         return table_defs
 
 
     @staticmethod
-    def get_table(table_name :str, table: dict):
+    def get_table(table_name: str, table: dict[str, Any]) -> TableDefinition:
         # If table exists, return it
-        table_def = hyperconf.table_defs.get(table_name)
+        table_def: TableDefinition | None = hyperconf.table_defs.get(table_name)
         if table_def:
             return table_def
 
         # Otherwise create a new table_def
-        columns = HyPer.parse_attributes(table['attributes'])
+        columns: list[TableDefinition.Column] = HyPer.parse_attributes(table['attributes'])
         return TableDefinition(table_name=table_name, columns=columns)
 
 
     # Parse attributes of one table
     @staticmethod
-    def parse_attributes(attributes: dict):
-        columns = list()
+    def parse_attributes(attributes: dict[str, str]) -> list[TableDefinition.Column]:
+        columns: list[TableDefinition.Column] = list()
         for column_name, type_info in attributes.items():
             ty = type_info.split(' ')
             match ty[0]:
@@ -238,10 +229,10 @@ sys.stdout.flush()
         return columns
 
 
-    # Returns cases/queries
+    # Returns cases/queries and replaces table names by the corresponding name in its table_def
     @staticmethod
-    def get_cases_queries(params: dict, table_defs: dict):
-        cases_queries = dict()
+    def get_cases_queries(params: dict[str, Any], table_defs: dict[str, TableDefinition]) -> dict[Case, str]:
+        cases_queries: dict[Case, str] = dict()
         for case, query in params['cases'].items():
             for table_name, table_def in table_defs.items():
                 query.replace(table_name, f"{table_def.table_name}")
@@ -251,16 +242,16 @@ sys.stdout.flush()
 
 
     @staticmethod
-    def get_data(params: dict, table_defs: dict):
+    def get_data(params: dict[str, Any], table_defs: dict[str, TableDefinition]) -> list[tuple[TableDefinition, str, dict[str, Any]]]:
         result = []
         for table_name, table in params['data'].items():
-            file = table['file']
-            delimiter = table.get('delimiter', ',')
+            file: str = table['file']
+            delimiter: str = table.get('delimiter', ',')
             if delimiter:
                 delimiter = delimiter.replace("'", "")
-            form = table.get('format', 'csv')
-            header = int(table.get('header', 0))
-            par = {
+            form: str = table.get('format', 'csv')
+            header: int = int(table.get('header', 0))
+            par: dict[str, Any] = {
                 'delimiter': "'" + delimiter + "'",
                 'format': form,
                 'header': header

@@ -1,8 +1,10 @@
 from .connector import *
 
+from colorama import Fore, Style
 from tqdm import tqdm
+from typeguard import typechecked
+from typing import Any
 import os
-import pandas
 import random
 import re
 import subprocess
@@ -15,17 +17,18 @@ class BenchmarkTimeoutException(Exception):
     pass
 
 
+@typechecked
 class Mutable(Connector):
 
-    def __init__(self, args = dict()):
-        self.mutable_binary = args.get('path_to_binary') # required
-        self.verbose = args.get('verbose', False) # optional
+    def __init__(self, args: dict[str, Any]) -> None:
+        self.mutable_binary: str = args['path_to_binary']     # required
+        self.verbose: bool = args.get('verbose', False)       # optional
 
 
-    def execute(self, n_runs, params: dict):
-        result = dict()
+    def execute(self, n_runs: int, params: dict[str, Any]) -> ConnectorResult:
+        result: ConnectorResult = dict()
         for run_id in range(n_runs):
-            exp = self.perform_experiment(run_id, params)
+            exp: dict[str, dict[Case, float]] = self.perform_experiment(run_id, params)
             for config, cases in exp.items():
                 if config not in result.keys():
                     result[config] = dict()
@@ -37,32 +40,30 @@ class Mutable(Connector):
         return result
 
 
-
 #=======================================================================================================================
 # Perform the experiment specified in a YAML file with all provided configurations
 #
 # @param params             the parameters for the experiment
 # @return                   a map from configuration name to {map from case name to measurement}
 #=======================================================================================================================
-    def perform_experiment(self, run_id, params: dict):
-        configs = params.get('configurations')
-        experiment_name = params['name']
-        suite = params['suite']
-        benchmark = params['benchmark']
-        experiment = dict()
+    def perform_experiment(self, run_id: int, params: dict[str, Any]) -> dict[str, dict[Case, float]]:
+        configs: dict[str, Any] = params.get('configurations', dict())
+        experiment_name: str = params['name']
+        suite: str = params['suite']
+        benchmark: str = params['benchmark']
+        experiment: dict[str, dict[Case, float]] = dict()
 
         # Run benchmark under different configurations
         for config_name, config in configs.items():
             config_name = f"mutable (single core, {config_name})"
-            if run_id==0:
+            if run_id == 0:
                 tqdm.write(f'` Perform experiment {suite}/{benchmark}/{experiment_name} with configuration {config_name}.')
                 sys.stdout.flush()
 
-            measurements = self.run_configuration(experiment_name, config_name, config, params)
+            measurements: dict[Case, float] = self.run_configuration(experiment_name, config_name, config, params)
             experiment[config_name] = measurements
 
         return experiment
-
 
 
 #=======================================================================================================================
@@ -74,23 +75,23 @@ class Mutable(Connector):
 # @param config         the configuration of this experiment
 # @return               a map from case name to measurement
 #=======================================================================================================================
-    def run_configuration(self, experiment, config_name, config, yml):
+    def run_configuration(self, experiment: str, config_name: str, config: dict[str, Any], yml: dict[str, Any]) -> dict[Case, float]:
         # Extract YAML settings
-        suite = yml['suite']
-        benchmark = yml['benchmark']
-        is_readonly = yml['readonly']
+        suite: str = yml['suite']
+        benchmark: str = yml['benchmark']
+        is_readonly: bool = yml['readonly']
         assert type(is_readonly) == bool
-        path_to_file = yml['path_to_file']
-        path_to_data = os.path.join('benchmark', suite, 'data')
-        cases = yml['cases']
+        path_to_file: str = yml['path_to_file']
+        path_to_data: str = os.path.join('benchmark', suite, 'data')
+        cases: dict[Case, Any] = yml['cases']
         if 'script' in cases:
             return self.run_repeated_case(cases, config, path_to_file)
 
-        supplementary_args = yml.get('args', None)
-        binargs = yml.get('binargs', None)
+        supplementary_args: str | None = yml.get('args', None)
+        binargs: str | None = yml.get('binargs', None)
 
         # Assemble command
-        command = [ self.mutable_binary, '--benchmark', '--times']
+        command: list[str] = [ self.mutable_binary, '--benchmark', '--times']
         if binargs:
             command.extend(binargs.split(' '))
         if supplementary_args:
@@ -99,27 +100,30 @@ class Mutable(Connector):
             command.extend(config['args'].split(' '))
 
         if is_readonly:
-            tables = yml.get('data')
+            tables: dict[str, dict[str, Any]] | None = yml.get('data')
             if tables:
                 for table in tables.values():
                     is_readonly = is_readonly and (table.get('scale_factors') is None)
 
         # Collect results in dict
-        execution_times = dict()
+        execution_times: dict[Case, float] = dict()
+        timeout: int
+        import_str: str
+        durations: list[float]
         try:
             if is_readonly:
                 # Produce code to load data into tables
-                imports = get_setup_statements(suite, path_to_data, yml['data'], None)
+                imports: list[str] = self.get_setup_statements(suite, path_to_data, yml['data'], None)
 
-                import_str = '\n'.join(imports)
+                import_str= '\n'.join(imports)
                 timeout = DEFAULT_TIMEOUT + TIMEOUT_PER_CASE * len(cases)
-                combined_query = list()
+                combined_query: list[str] = list()
                 combined_query.append(import_str)
                 for case in cases.values():
                     if self.verbose:
-                        print_command(command, import_str + '\n' + case, '    ')
+                        self.print_command(command, import_str + '\n' + case, '    ')
                     combined_query.extend([case])
-                query = '\n'.join(combined_query)
+                query: str = '\n'.join(combined_query)
                 try:
                     durations = self.benchmark_query(command, query, config['pattern'], timeout, path_to_file, False)
                 except BenchmarkTimeoutException as ex:
@@ -138,12 +142,12 @@ class Mutable(Connector):
                 timeout = DEFAULT_TIMEOUT + TIMEOUT_PER_CASE
                 for case, query in cases.items():
                     # Produce code to load data into tables with scale factor
-                    case_imports = get_setup_statements(suite, path_to_data, yml['data'], case)
-                    import_str = '\n'.join(case_imports)
+                    case_imports: list[str] = self.get_setup_statements(suite, path_to_data, yml['data'], case)
+                    import_str= '\n'.join(case_imports)
 
-                    query_str = import_str + '\n' + query
+                    query_str: str = import_str + '\n' + query
                     if self.verbose:
-                        print_command(command, query_str, '    ')
+                        self.print_command(command, query_str, '    ')
                     try:
                         durations = self.benchmark_query(command, query_str, config['pattern'], timeout, path_to_file, False)
                     except BenchmarkTimeoutException as ex:
@@ -152,7 +156,7 @@ class Mutable(Connector):
                         execution_times[case] = timeout * 1000
                     else:
                         if len(durations) != 1:
-                            raise ConnectorException("Expected 1 measurement but got 0.")
+                            raise ConnectorException(f"Expected 1 measurement but got {len(durations)}.")
                         execution_times[case] = durations[0]
         except BenchmarkError as ex:
             tqdm.write(str(ex))
@@ -169,16 +173,17 @@ class Mutable(Connector):
     # @param path_to_file       the path to the YAML file of the current experiment
     # @return                   a map from case name to measurement
     # =======================================================================================================================
-    def run_repeated_case(self, repeat, config, path_to_file):
+    def run_repeated_case(self, repeat: dict[str, Any], config: dict[str, Any], path_to_file: str) -> dict[Case, float]:
         random.seed(42)
         seed_low, seed_high = 0, 2 ** 32 - 1
-        pattern = config['pattern']
-        script = repeat['script']
+        pattern: str = config['pattern']
+        script: str = repeat['script']
 
-        execution_times = dict()  # Collect results in dict
-        timeout = DEFAULT_TIMEOUT + TIMEOUT_PER_CASE
+        execution_times: dict[Case, float] = dict()  # Collect results in dict { case: time }
+        timeout: int = DEFAULT_TIMEOUT + TIMEOUT_PER_CASE
 
-        parse_n_error = BenchmarkError(f"{path_to_file} : 'n' must be either an integer or a list with 1-3 integers.")
+        parse_n_error: BenchmarkError = BenchmarkError(f"{path_to_file} : 'n' must be either an integer or a list with 1-3 integers.")
+        generator: range
         if type(repeat['n']) is int:
             generator = range(repeat['n'])
         elif type(repeat['n']) is list:
@@ -195,21 +200,20 @@ class Mutable(Connector):
 
         for N in generator:
             # Perform case
-            case_seed = random.randint(seed_low, seed_high)
+            case_seed: int = random.randint(seed_low, seed_high)
+            variables: list[str] = [f'{key}={value}' for key, value in config['variables'].items()]
+            cmd: list[str] = ['env', f'N={N}', f'RANDOM={case_seed}'] + variables + ['/bin/bash']
 
-            variables = [f'{key}={value}' for key, value in config['variables'].items()]
-
-            cmd = ['env', f'N={N}', f'RANDOM={case_seed}'] + variables + ['/bin/bash']
             try:
-                durations = self.benchmark_query(cmd, script, pattern, timeout, path_to_file, True)
+                durations: list[float] = self.benchmark_query(cmd, script, pattern, timeout, path_to_file, True)
             except BenchmarkTimeoutException as ex:
                 tqdm.write(str(ex))
                 sys.stdout.flush()
-                execution_times[str(N)] = timeout * 1000
+                execution_times[N] = timeout * 1000
             else:
                 if len(durations) != 1:
                     raise ConnectorException(f"Expected 1 measurement but got {len(durations)}.")
-                execution_times[str(N)] = durations[0]
+                execution_times[N] = durations[0]
 
         return execution_times
 
@@ -219,38 +223,46 @@ class Mutable(Connector):
     # Start the shell with `command` and pass `query` to its stdin.  Search the stdout for timings using the given regex
     # `pattern` and return them as a list.
     #=======================================================================================================================
-    def benchmark_query(self, cmd, query, pattern, timeout, path_to_file, is_script: bool):
+    def benchmark_query(
+        self,
+        cmd: list[str],
+        query: str,
+        pattern: str,
+        timeout: int,
+        path_to_file: str,
+        is_script: bool
+    ) -> list[float]:
         if not is_script:
             cmd = cmd + [ '--quiet', '-' ]
-            query = query.strip().replace('\n', ' ') + '\n' # transform to a one-liner and append new line to submit query
+            query = query.strip().replace('\n', ' ') + '\n'     # transform to a one-liner and append new line to submit query
 
         process = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                                    cwd=os.getcwd())
         try:
-            out, err = process.communicate(query.encode('latin-1'), timeout=timeout)
+            proc_out, proc_err = process.communicate(query.encode('latin-1'), timeout=timeout)
         except subprocess.TimeoutExpired:
             raise BenchmarkTimeoutException(f'Query timed out after {timeout} seconds')
         finally:
-            if process.poll() is None: # if process is still alive
-                process.terminate() # try to shut down gracefully
+            if process.poll() is None:          # if process is still alive
+                process.terminate()             # try to shut down gracefully
                 try:
-                    process.wait(timeout=1) #give process 1 second to terminate
+                    process.wait(timeout=1)     # give process 1 second to terminate
                 except subprocess.TimeoutExpired:
-                    process.kill() # kill if process did not terminate in time
+                    process.kill()              # kill if process did not terminate in time
 
-        out = out.decode('latin-1')
-        err = err.decode('latin-1')
+        out: str = proc_out.decode('latin-1')
+        err: str = proc_err.decode('latin-1')
 
         assert process.returncode is not None
         if process.returncode or len(err):
-            outstr = '\n'.join(out.split('\n')[-20:])
+            outstr: str = '\n'.join(out.split('\n')[-20:])
             tqdm.write(f'''\
     Unexpected failure during execution of benchmark "{path_to_file}" with return code {process.returncode}:''')
             if is_script:
                 tqdm.write(' '.join(cmd))
                 tqdm.write(query)
             else:
-                print_command(cmd, query)
+                self.print_command(cmd, query)
             tqdm.write(f'''\
     ===== stdout =====
     {outstr}
@@ -263,13 +275,13 @@ class Mutable(Connector):
                 raise ConnectorException(f'Benchmark failed with return code {process.returncode}.')
 
         # Parse `out` for timings
-        durations = list()
-        matcher = re.compile(pattern)
+        durations: list[float] = list()
+        matcher: re.Pattern = re.compile(pattern)
         for line in out.split('\n'):
             if matcher.match(line):
                 for s in line.split():
                     try:
-                        dur = float(s)
+                        dur: float = float(s)
                         durations.append(dur)
                     except ValueError:
                         continue
@@ -278,96 +290,98 @@ class Mutable(Connector):
 
 
 
-########################################################################################################################
-# Helper functions
-########################################################################################################################
+    ####################################################################################################################
+    # Helper functions
+    ####################################################################################################################
 
-in_red   = lambda x: f'{Fore.RED}{x}{Style.RESET_ALL}'
-in_green = lambda x: f'{Fore.GREEN}{x}{Style.RESET_ALL}'
-in_bold  = lambda x: f'{Style.BRIGHT}{x}{Style.RESET_ALL}'
-
-
-# Parse attributes of one table, return as string ready for a CREATE TABLE query
-def parse_attributes(attributes: dict):
-    columns = list()
-    for column_name, type_info in attributes.items():
-        ty_list = [column_name]
-
-        ty = type_info.split(' ')
-        match ty[0]:
-            case 'INT':
-                ty_list.append('INT(4)')
-            case 'BIGINT':
-                ty_list.append('INT(8)')
-            case 'FLOAT':
-                ty_list.append('FLOAT')
-            case 'DOUBLE':
-                ty_list.append('DOUBLE')
-            case 'DECIMAL':
-                ty_list.append(f'DECIMAL({ty[1]}, {ty[2]})')
-            case 'CHAR':
-                ty_list.append(f'CHAR({ty[1]})')
-            case 'DATE':
-                ty_list.append('DATE')
-            case 'DATETIME':
-                ty_list.append('DATETIME')
-            case _:
-                raise Exception(f"Unknown type given for '{column_name}'")
-
-        if 'NOT NULL' in type_info:
-            ty_list.append('NOT NULL')
-        if 'PRIMARY KEY' in type_info:
-            ty_list.append('PRIMARY KEY')
-        if 'UNIQUE' in type_info:
-            ty_list.append('UNIQUE')
-
-        columns.append(' '.join(ty_list))
-    return '(' + ',\n'.join(columns) + ')'
+    in_red   = lambda x: f'{Fore.RED}{x}{Style.RESET_ALL}'
+    in_green = lambda x: f'{Fore.GREEN}{x}{Style.RESET_ALL}'
+    in_bold  = lambda x: f'{Style.BRIGHT}{x}{Style.RESET_ALL}'
 
 
-def get_setup_statements(suite, path_to_data, data, case):
-    statements = list()
+    # Parse attributes of one table, return as string ready for a CREATE TABLE query
+    @staticmethod
+    def parse_attributes(attributes: dict[str, str]) -> str:
+        columns: list[str] = list()
+        for column_name, type_info in attributes.items():
+            ty_list: list[str] = [column_name]
 
-    # suite names with a dash ('-') are illegal database names for mutable , e.g. 'plan-enumerators'
-    suite = suite.replace("-", "_")
-    statements.append(f"CREATE DATABASE {suite};")
-    statements.append(f"USE {suite};")
+            ty = type_info.split(' ')
+            match ty[0]:
+                case 'INT':
+                    ty_list.append('INT(4)')
+                case 'BIGINT':
+                    ty_list.append('INT(8)')
+                case 'FLOAT':
+                    ty_list.append('FLOAT')
+                case 'DOUBLE':
+                    ty_list.append('DOUBLE')
+                case 'DECIMAL':
+                    ty_list.append(f'DECIMAL({ty[1]}, {ty[2]})')
+                case 'CHAR':
+                    ty_list.append(f'CHAR({ty[1]})')
+                case 'DATE':
+                    ty_list.append('DATE')
+                case 'DATETIME':
+                    ty_list.append('DATETIME')
+                case _:
+                    raise Exception(f"Unknown type given for '{column_name}'")
 
-    if not data:
+            if 'NOT NULL' in type_info:
+                ty_list.append('NOT NULL')
+            if 'PRIMARY KEY' in type_info:
+                ty_list.append('PRIMARY KEY')
+            if 'UNIQUE' in type_info:
+                ty_list.append('UNIQUE')
+
+            columns.append(' '.join(ty_list))
+        return '(' + ',\n'.join(columns) + ')'
+
+    @staticmethod
+    def get_setup_statements(suite: str, path_to_data: str, data: dict[str, dict[str, Any]], case: Case | None) -> list[str]:
+        statements: list[str] = list()
+
+        # suite names with a dash ('-') are illegal database names for mutable , e.g. 'plan-enumerators'
+        suite = suite.replace("-", "_")
+        statements.append(f"CREATE DATABASE {suite};")
+        statements.append(f"USE {suite};")
+
+        if not data:
+            return statements
+
+        for table_name, table in data.items():
+            # Create a CREATE TABLE statement for current table
+            columns: str = Mutable.parse_attributes(table['attributes'])
+            create: str = f"CREATE TABLE {table_name} {columns};"
+            statements.append(create)
+
+            # Create an IMPORT statement for current table
+            lines: int = table.get('lines_in_file')
+            if not lines:
+                continue    # Only import data when lines are given
+
+            path: str = table.get('file', os.path.join(path_to_data, f'{table_name}.csv'))
+            sf: float | int
+            if table.get('scale_factors') is not None and case is not None:
+                sf = table['scale_factors'][case]
+            else:
+                sf = 1
+            delimiter: str = table.get('delimiter', ',')
+            header: int = int(table.get('header', 0))
+
+            rows: int = lines - header
+            import_str: str = f'IMPORT INTO {table_name} DSV "{path}" ROWS {int(sf * rows)} DELIMITER "{delimiter}"'
+            if header:
+                import_str += ' HAS HEADER SKIP HEADER'
+            statements.append(import_str + ';')
+
         return statements
 
-    for table_name, table in data.items():
-        # Create a CREATE TABLE statement for current table
-        columns = parse_attributes(table['attributes'])
-        create = f"CREATE TABLE {table_name} {columns};"
-        statements.append(create)
-
-        # Create an IMPORT statement for current table
-        lines = table.get('lines_in_file')
-        if not lines:
-            continue    # Only import data when lines are given
-
-        path = table.get('file', os.path.join(path_to_data, f'{table_name}.csv'))
-        if table.get('scale_factors') is not None and case is not None:
-            sf = table['scale_factors'][case]
-        else:
-            sf = 1
-        delimiter = table.get('delimiter', ',')
-        header = int(table.get('header', 0))
-
-        rows = lines - header
-        import_str = f'IMPORT INTO {table_name} DSV "{path}" ROWS {int(sf * rows)} DELIMITER "{delimiter}"'
-        if header:
-            import_str += ' HAS HEADER SKIP HEADER'
-        statements.append(import_str + ';')
-
-    return statements
-
-
-def print_command(command :list, query :str, indent = ''):
-    if command[-1] != '-':
-        command.append('-')
-    query_str = query.strip().replace('\n', ' ').replace('"', '\\"')
-    command_str = ' '.join(command)
-    tqdm.write(f'{indent}$ echo "{query_str}" | {command_str}')
-    sys.stdout.flush()
+    @staticmethod
+    def print_command(command: list[str], query: str, indent: str = '') -> None:
+        if command[-1] != '-':
+            command.append('-')
+        query_str = query.strip().replace('\n', ' ').replace('"', '\\"')
+        command_str = ' '.join(command)
+        tqdm.write(f'{indent}$ echo "{query_str}" | {command_str}')
+        sys.stdout.flush()

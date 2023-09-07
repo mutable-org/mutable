@@ -46,10 +46,7 @@ struct M_EXPORT Parser
 
     Token consume() {
         auto old = tok_;
-        if (lexer.has_next())
-            tok_ = lexer.next();
-        else
-            tok_ = Token();
+        tok_ = lexer.next();
         return old;
     }
 

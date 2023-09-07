@@ -5,22 +5,6 @@
 
 using namespace m;
 
-TEST_CASE("Lexer::has_next()", "[core][lex][unit]")
-{
-    {
-        const char *query = "SELECT";
-        LEXER(query);
-
-        REQUIRE(lexer.has_next());
-    }
-
-    {
-        const char *query = "";
-        LEXER(query);
-
-        REQUIRE_FALSE(lexer.has_next());
-    }
-}
 
 TEST_CASE("Lexer::next()", "[core][lex][unit]")
 {

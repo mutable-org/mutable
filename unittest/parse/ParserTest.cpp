@@ -1012,8 +1012,8 @@ TEST_CASE("Parser::parse_CreateDatabaseStmt()", "[core][parse][unit]")
     test_triple_t triples[] = {
         /* { create database statement, fully-parenthesized create database statement, next token } */
 
-        { "DATABASE d", "CREATE DATABASE d;", TK_EOF },
-        { "DATABASE d, second", "CREATE DATABASE d;", TK_COMMA }
+        { "CREATE DATABASE d", "CREATE DATABASE d;", TK_EOF },
+        { "CREATE DATABASE d, second", "CREATE DATABASE d;", TK_COMMA }
     };
 
     auto parse = [](ast::Parser &p) { return p.parse_CreateDatabaseStmt(); };
@@ -1026,9 +1026,8 @@ TEST_CASE("Parser::parse_CreateDatabaseStmt() sanity tests", "[core][parse][unit
     SECTION("underlying errors")
     {
         const char * statements[] = {
-            "CREATE DATABASE d",
-            "database d",
-            "TABLE d"
+            "CREATE database d",
+            "CREATE TABLE d"
         };
 
         for (auto s : statements) {
@@ -1046,8 +1045,9 @@ TEST_CASE("Parser::parse_CreateDatabaseStmt() sanity tests", "[core][parse][unit
     {
         const char * statements[] = {
             "",
-            "DATABASE ",
-            "DATABASE 0"
+            "CREATE",
+            "CREATE DATABASE ",
+            "CREATE DATABASE 0"
         };
 
         for (auto s : statements) {
@@ -1127,15 +1127,22 @@ TEST_CASE("Parser::parse_CreateTableStmt()", "[core][parse][unit]")
     test_triple_t triples[] = {
         /* { create table statement, fully-parenthesized create table statement, next token } */
 
-        { "TABLE t ( a BOOL )", "CREATE TABLE t\n(\n    a BOOL\n);", TK_EOF },
-        { "TABLE t ( a BOOL PRIMARY KEY )", "CREATE TABLE t\n(\n    a BOOL PRIMARY KEY\n);", TK_EOF },
-        { "TABLE t ( a BOOL NOT NULL )", "CREATE TABLE t\n(\n    a BOOL NOT NULL\n);", TK_EOF },
-        { "TABLE t ( a BOOL UNIQUE )", "CREATE TABLE t\n(\n    a BOOL UNIQUE\n);", TK_EOF },
-        { "TABLE t ( a BOOL CHECK ( 42 * b ) )", "CREATE TABLE t\n(\n    a BOOL CHECK ((42 * b))\n);", TK_EOF },
-        { "TABLE t ( a BOOL REFERENCES B ( a ) )", "CREATE TABLE t\n(\n    a BOOL REFERENCES B(a)\n);", TK_EOF },
-        { "TABLE t ( a BOOL PRIMARY KEY NOT NULL UNIQUE CHECK ( 42 * b ) REFERENCES B ( a ) )",
+        { "CREATE TABLE t ( a BOOL )",
+          "CREATE TABLE t\n(\n    a BOOL\n);", TK_EOF },
+        { "CREATE TABLE t ( a BOOL PRIMARY KEY )",
+          "CREATE TABLE t\n(\n    a BOOL PRIMARY KEY\n);", TK_EOF },
+        { "CREATE TABLE t ( a BOOL NOT NULL )",
+          "CREATE TABLE t\n(\n    a BOOL NOT NULL\n);", TK_EOF },
+        { "CREATE TABLE t ( a BOOL UNIQUE )",
+          "CREATE TABLE t\n(\n    a BOOL UNIQUE\n);", TK_EOF },
+        { "CREATE TABLE t ( a BOOL CHECK ( 42 * b ) )",
+          "CREATE TABLE t\n(\n    a BOOL CHECK ((42 * b))\n);", TK_EOF },
+        { "CREATE TABLE t ( a BOOL REFERENCES B ( a ) )",
+          "CREATE TABLE t\n(\n    a BOOL REFERENCES B(a)\n);", TK_EOF },
+        { "CREATE TABLE t ( a BOOL PRIMARY KEY NOT NULL UNIQUE CHECK ( 42 * b ) REFERENCES B ( a ) )",
           "CREATE TABLE t\n(\n    a BOOL PRIMARY KEY NOT NULL UNIQUE CHECK ((42 * b)) REFERENCES B(a)\n);", TK_EOF },
-        { "TABLE t ( a BOOL, b DOUBLE )", "CREATE TABLE t\n(\n    a BOOL,\n    b DOUBLE\n);", TK_EOF },
+        { "CREATE TABLE t ( a BOOL, b DOUBLE )",
+          "CREATE TABLE t\n(\n    a BOOL,\n    b DOUBLE\n);", TK_EOF },
     };
 
     auto parse = [](ast::Parser &p) { return p.parse_CreateTableStmt(); };
@@ -1148,23 +1155,22 @@ TEST_CASE("Parser::parse_CreateTableStmt() sanity tests", "[core][parse][unit]")
     SECTION("underlying errors")
     {
         const char * statements[] = {
-            "CREATE TABLE t ( a BOOL )",
-            "table t ( a BOOL )",
-            "DATABASE t ( a BOOL )",
-            "TABLE t ( a )",
-            "TABLE t ( a INT )",
-            "TABLE t ( a BOOL PRIMARY )",
-            "TABLE t ( a BOOL NOT )",
-            "TABLE t ( a BOOL CHECK TRUE) )",
-            "TABLE t ( a BOOL CHECK (TRUE )",
-            "TABLE t ( a BOOL CHECK () )",
-            "TABLE t ( a BOOL REFERENCES a )",
-            "TABLE t ( a BOOL REFERENCES () )",
-            "TABLE t ( a BOOL REFERENCES ( 0 ) )",
-            "TABLE t ( a BOOL REFERENCES a b) )",
-            "TABLE t ( a BOOL REFERENCES a (b )",
-            "TABLE t a BOOL )",
-            "TABLE t ( a BOOL "
+            "CREATE table t ( a BOOL )",
+            "CREATE DATABASE t ( a BOOL )",
+            "CREATE TABLE t ( a )",
+            "CREATE TABLE t ( a INT )",
+            "CREATE TABLE t ( a BOOL PRIMARY )",
+            "CREATE TABLE t ( a BOOL NOT )",
+            "CREATE TABLE t ( a BOOL CHECK TRUE) )",
+            "CREATE TABLE t ( a BOOL CHECK (TRUE )",
+            "CREATE TABLE t ( a BOOL CHECK () )",
+            "CREATE TABLE t ( a BOOL REFERENCES a )",
+            "CREATE TABLE t ( a BOOL REFERENCES () )",
+            "CREATE TABLE t ( a BOOL REFERENCES ( 0 ) )",
+            "CREATE TABLE t ( a BOOL REFERENCES a b) )",
+            "CREATE TABLE t ( a BOOL REFERENCES a (b )",
+            "CREATE TABLE t a BOOL )",
+            "CREATE TABLE t ( a BOOL "
         };
 
         for (auto s : statements) {

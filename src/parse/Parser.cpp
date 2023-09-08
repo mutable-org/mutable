@@ -136,25 +136,25 @@ std::unique_ptr<Stmt> Parser::parse_Stmt()
             stmt = std::make_unique<ErrorStmt>(token());
             diag.e(token().pos) << "expected a statement, got " << token().text << '\n';
             consume();
+            recover(follow_set_STATEMENT);
             break;
 
         case TK_SEMICOL: return std::make_unique<EmptyStmt>(consume());
 
-        case TK_Create: {
-            consume();
-            switch (token().type) {
+        case TK_Create:
+            switch (token<1>().type) {
                 default:
                     stmt = std::make_unique<ErrorStmt>(token());
-                    diag.e(token().pos) << "expected a create database statement or a create table statement, got "
-                                        << token().text << '\n';
-                    recover(follow_set_CREATE_DATABASE_STATEMENT);
+                    diag.e(token<1>().pos) << "expected a create database statement or a create table statement, got "
+                                           << token<1>().text << '\n';
+                    consume();
+                    recover(follow_set_STATEMENT);
                     break;
 
                 case TK_Database: stmt = parse_CreateDatabaseStmt(); break;
                 case TK_Table:    stmt = parse_CreateTableStmt(); break;
             }
             break;
-        }
 
         case TK_Use:    stmt = parse_UseDatabaseStmt(); break;
         case TK_Select: stmt = parse_SelectStmt(); break;
@@ -176,7 +176,9 @@ std::unique_ptr<Stmt> Parser::parse_CreateDatabaseStmt()
     bool ok = true;
     Token start = token();
 
-    ok = ok and expect(TK_Database);
+    ok = ok and expect(TK_Create);
+    if (ok)
+        ok = expect(TK_Database);
     Token database_name = token();
     if (ok)
         ok = expect(TK_IDENTIFIER);
@@ -213,8 +215,10 @@ std::unique_ptr<Stmt> Parser::parse_CreateTableStmt()
     Token start = token();
     std::vector<std::unique_ptr<CreateTableStmt::attribute_definition>> attrs;
 
-    /* 'TABLE' identifier '(' */
-    ok = ok and expect(TK_Table);
+    /* 'CREATE' 'TABLE' identifier '(' */
+    ok = ok and expect(TK_Create);
+    if (ok)
+        ok = expect(TK_Table);
     Token table_name = token();
     if (not ok) goto error_recovery;
     if (not expect(TK_IDENTIFIER)) goto error_recovery;

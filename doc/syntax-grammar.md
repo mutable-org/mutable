@@ -20,15 +20,19 @@ command ::= [ statement | INSTRUCTION ] ;
 ##### Statement
 ```
 statement ::= [
-                create_database-statement |
+                create-statement |
                 use_database-statement |
-                create_table-statement |
                 select-statement |
                 insert-statement |
                 update-statement |
                 delete-statement |
                 import-statement
               ] ';' ;
+```
+
+##### Create Statement
+```
+create-statement ::= create_database-statement | create_table-statement ;
 ```
 
 ##### Create Database Statement

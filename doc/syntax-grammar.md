@@ -8,8 +8,10 @@ The syntax of the terminal-tokens is given on the [Tokens](syntax-tokens.md) pag
 
 ## Specification
 
-### Command
+### Commands
 ```
+commands ::= command { command } ;
+
 command ::= [ statement | INSTRUCTION ] ;
 ```
 

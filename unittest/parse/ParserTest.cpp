@@ -72,9 +72,32 @@ TEST_CASE("Parser c'tor", "[core][parse][unit]")
     REQUIRE(err.str().empty());
 
     /* Verify the initial state. */
-    auto &tok = parser.token();
-    REQUIRE(tok == TK_Select);
-    REQUIRE(streq(tok.text, "SELECT"));
+    auto &tok0 = parser.token<0>();
+    REQUIRE(tok0 == TK_Select);
+    REQUIRE(streq(tok0.text, "SELECT"));
+    auto &tok1 = parser.token<1>();
+    REQUIRE(tok1 == TK_ASTERISK);
+    REQUIRE(streq(tok1.text, "*"));
+}
+
+TEST_CASE("Parser::token()", "[core][parse][unit]")
+{
+    {
+        LEXER("SELECT * FROM Tbl WHERE x=42;");
+        ast::Parser parser(lexer);
+
+        REQUIRE(parser.token() == TK_Select);
+        REQUIRE(parser.token<0>() == TK_Select);
+        REQUIRE(parser.token<1>() == TK_ASTERISK);
+    }
+    {
+        LEXER("SELECT * FROM Tbl WHERE x=42;");
+        ast::Parser parser(lexer);
+
+        REQUIRE(parser.token<0>() == TK_Select);
+        REQUIRE(parser.token() == TK_Select);
+        REQUIRE(parser.token<1>() == TK_ASTERISK);
+    }
 }
 
 TEST_CASE("Parser::is()", "[core][parse][unit]")

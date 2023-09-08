@@ -22,31 +22,29 @@ struct M_EXPORT Parser
     Diagnostic &diag;
 
     private:
-
-    Token tok_;
+    std::array<Token, 2> lookahead_;
 
     public:
     explicit Parser(Lexer &lexer)
         : lexer(lexer)
         , diag(lexer.diag)
-        , tok_(Position(lexer.filename), "ERROR", TK_ERROR)
+        , lookahead_({Token(), Token()})
     {
+        consume();
         consume();
     }
 
-    const Token & token() {
-        if (not tok_)
-            tok_ = lexer.next();
-        return tok_;
-    }
+    template<unsigned Idx = 0>
+    const Token & token() { return lookahead_[Idx]; }
 
-    public:
     bool is(const TokenType tt) { return token() == tt; }
     bool no(const TokenType tt) { return token() != tt; }
 
     Token consume() {
-        auto old = tok_;
-        tok_ = lexer.next();
+        auto old = token();
+        for (std::size_t i = 1; i != lookahead_.size(); ++i)
+            lookahead_[i - 1] = lookahead_[i];
+        lookahead_.back() = lexer.next();
         return old;
     }
 

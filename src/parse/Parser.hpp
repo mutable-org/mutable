@@ -62,7 +62,17 @@ struct M_EXPORT Parser
         return false;
     }
 
+    /** Consumes tokens until the first occurence of a token in the follow set \p FS is found. */
     void recover(const follow_set_t &FS) { while (not FS[token().type]) consume(); }
+
+    /** Consumes tokens until the first occurence of a token in the follow set \p FS is found. Constructs an object of
+     * type `T` on \p start and returns a unique pointer to it.  Here, type `T` is either `ErrorStmt` or `ErrorClause`.
+     */
+    template<typename T>
+    std::unique_ptr<T> recover(Token start, const follow_set_t &FS) {
+        recover(FS);
+        return std::make_unique<T>(start);
+    }
 
     std::unique_ptr<Command> parse();
     std::unique_ptr<Instruction> parse_Instruction();

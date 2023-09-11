@@ -7,6 +7,7 @@
 #include <iosfwd>
 #include <map>
 #include <mutable/Options.hpp>
+#include <mutable/util/macro.hpp>
 #include <queue>
 #include <ratio>
 #include <tuple>

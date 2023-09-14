@@ -173,7 +173,7 @@ struct Timer
     duration total() const {
         duration d(0);
         for (auto &m : measurements_)
-            d += m.end - m.begin;
+            d += m.duration();
         return d;
     }
 };

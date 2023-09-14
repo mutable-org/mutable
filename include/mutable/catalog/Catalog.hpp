@@ -269,23 +269,23 @@ struct M_EXPORT Catalog
     /** Returns a reference to the `memory::Allocator`. */
     const memory::Allocator & allocator() const { return *allocator_; }
 
-    /** Creates an internalized copy of the string `str` by adding it to the internal `StringPool`. */
+    /** Creates an internalized copy of the string \p str by adding it to the internal `StringPool`. */
     const char * pool(const char *str) const { return pool_(str); }
-    /** Creates an internalized copy of the string `str` by adding it to the internal `StringPool`. */
+    /** Creates an internalized copy of the string \p str by adding it to the internal `StringPool`. */
     const char * pool(std::string_view str) const { return pool_(str); }
 
     /*===== Database =================================================================================================*/
     /** Creates a new `Database` with the given `name`.  Throws `std::invalid_argument` if a `Database` with the given
      * `name` already exists. */
     Database & add_database(const char *name);
-    /** Returns the `Database` with the given `name`.  Throws `std::out_of_range` if no such `Database` exists. */
+    /** Returns the `Database` with the given \p name.  Throws `std::out_of_range` if no such `Database` exists. */
     Database & get_database(const char *name) const { return *databases_.at(name); }
     /** Returns `true` iff a `Database` with the given \p name exists. */
     bool has_database(const char *name) const { return databases_.contains(name); }
-    /** Drops the `Database` with the given `name`.  Throws `std::out_of_range` if no such `Database` exists or if the
+    /** Drops the `Database` with the \p name.  Throws `std::out_of_range` if no such `Database` exists or if the
      * `Database` is currently in use.  See `get_database_in_use()`. */
     void drop_database(const char *name);
-    /** Drops the `Database` `db`.  Throws `std::out_of_range` if the `db` is currently in use. */
+    /** Drops the `Database` \p db.  Throws `std::out_of_range` if the `db` is currently in use. */
     void drop_database(const Database &db) { return drop_database(db.name); }
 
     /** Returns `true` if *any* `Database` is currently in use. */
@@ -298,13 +298,13 @@ struct M_EXPORT Catalog
     }
     /** Returns a reference to the `Database` that is currently in use, if any.  Throws `std::logic_error` otherwise. */
     const Database & get_database_in_use() const { return const_cast<Catalog*>(this)->get_database_in_use(); }
-    /** Sets the `Database` `db` as the `Database` that is currently in use.  */
+    /** Sets the `Database` \p db as the `Database` that is currently in use.  */
     void set_database_in_use(Database &db) { database_in_use_ = &db; }
     /** Unsets the `Database` that is currenly in use. */
     void unset_database_in_use() { database_in_use_ = nullptr; }
 
     /*===== Functions ================================================================================================*/
-    /** Returns a reference to the `Function` with the given `name`.  Throws `std::out_of_range` if no such `Function`
+    /** Returns a reference to the `Function` with the given \p name.  Throws `std::out_of_range` if no such `Function`
      * exists. */
     const Function * get_function(const char *name) const { return standard_functions_.at(name); }
 

@@ -538,8 +538,8 @@ struct M_EXPORT Database
     auto end_tables() const { return tables_.cend(); }
 
     /*===== Tables ===================================================================================================*/
-    /** Returns a reference to the `Table` with the given `name`.  Throws `std::out_of_range` if no `Table` with the
-     * given `name` exists in this `Database`. */
+    /** Returns a reference to the `Table` with the given \p name.  Throws `std::out_of_range` if no `Table` with the
+     * given \p name exists in this `Database`. */
     Table & get_table(const char *name) const { return *tables_.at(name); }
     /** Adds a new `Table` to this `Database`.  Throws `std::invalid_argument` if a `Table` with the given `name`
      * already exists. */

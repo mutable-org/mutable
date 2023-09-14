@@ -155,6 +155,7 @@ struct Timer
     /** Creates a new `TimingProcess` with the given `name`. */
     TimingProcess create_timing(std::string name) { return TimingProcess(*this, /* ID= */ start(name)); }
 
+    M_LCOV_EXCL_START
     /** Print all finished and in-process timings of `timer` to `out`. */
     friend std::ostream & operator<<(std::ostream &out, const Timer &timer) {
         out << "Timer measurements:\n";
@@ -166,6 +167,7 @@ struct Timer
 
     void dump(std::ostream &out) const;
     void dump() const;
+    M_LCOV_EXCL_STOP
 
     /** Computes the total duration of all `Measurement`s. */
     duration total() const {

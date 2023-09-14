@@ -19,6 +19,7 @@ set(
     util/PositionTest.cpp
     util/SpnTest.cpp
     util/StringPoolTest.cpp
+    util/TimerTest.cpp
 
     # util/container
     util/container/RefCountingHashMapTest.cpp

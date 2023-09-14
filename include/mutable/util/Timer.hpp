@@ -62,9 +62,9 @@ struct Timer
 
         /** Returns `true` iff the `Measurement` is unused, i.e. has not started (and hence also not finished). */
         bool is_unused() const {
-            M_insist(begin != time_point() or end == time_point(),
+            M_insist(has_started() or not has_ended(),
                    "if the measurement hasn't started it must not have ended");
-            return begin == time_point();
+            return not has_started();
         }
         /** Returns `true` iff this `Measurement` has begun. */
         bool has_started() const { return begin != time_point(); }

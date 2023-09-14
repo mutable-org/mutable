@@ -132,13 +132,14 @@ std::unique_ptr<Instruction> Parser::parse_Instruction()
 
 std::unique_ptr<Stmt> Parser::parse_Stmt()
 {
+    Token start = token();
     std::unique_ptr<Stmt> stmt = nullptr;
     switch (token().type) {
         default:
             stmt = std::make_unique<ErrorStmt>(token());
             diag.e(token().pos) << "expected a statement, got " << token().text << '\n';
             consume();
-            return recover<ErrorStmt>(token(), follow_set_STATEMENT);
+            return recover<ErrorStmt>(start, follow_set_STATEMENT);
 
         case TK_SEMICOL: return std::make_unique<EmptyStmt>(consume());
 
@@ -149,7 +150,7 @@ std::unique_ptr<Stmt> Parser::parse_Stmt()
                     diag.e(token<1>().pos) << "expected a create database statement or a create table statement, got "
                                            << token<1>().text << '\n';
                     consume();
-                    return recover<ErrorStmt>(token(), follow_set_STATEMENT);
+                    return recover<ErrorStmt>(start, follow_set_STATEMENT);
 
                 case TK_Database: stmt = parse_CreateDatabaseStmt(); break;
                 case TK_Table:    stmt = parse_CreateTableStmt(); break;

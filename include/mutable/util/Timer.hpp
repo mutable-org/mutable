@@ -39,9 +39,7 @@ struct Timer
         std::string name; ///< the name of this `Measurement`
         time_point begin, end; ///< the begin and end time points of this `Measurement`
 
-        explicit Measurement(std::string name) : name(std::move(name)) { }
-        Measurement(std::string name, time_point begin) : name(std::move(name)), begin(std::move(begin)) { }
-        Measurement(std::string name, time_point begin, time_point end)
+        explicit Measurement(std::string name, time_point begin = time_point(), time_point end = time_point())
             : name(std::move(name))
             , begin(std::move(begin))
             , end(std::move(end))

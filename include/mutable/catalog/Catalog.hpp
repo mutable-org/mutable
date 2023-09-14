@@ -280,6 +280,8 @@ struct M_EXPORT Catalog
     Database & add_database(const char *name);
     /** Returns the `Database` with the given `name`.  Throws `std::out_of_range` if no such `Database` exists. */
     Database & get_database(const char *name) const { return *databases_.at(name); }
+    /** Returns `true` iff a `Database` with the given \p name exists. */
+    bool has_database(const char *name) const { return databases_.contains(name); }
     /** Drops the `Database` with the given `name`.  Throws `std::out_of_range` if no such `Database` exists or if the
      * `Database` is currently in use.  See `get_database_in_use()`. */
     void drop_database(const char *name);

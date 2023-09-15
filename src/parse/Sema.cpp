@@ -1424,12 +1424,10 @@ void Sema::operator()(CreateDatabaseStmt &s)
     Catalog &C = Catalog::Get();
     const char *db_name = s.database_name.text;
 
-    try {
-        C.get_database(db_name);
-        diag.e(s.database_name.pos) << "Database " << db_name << " already exists.\n";
-    } catch (std::out_of_range) {
+    if (not C.has_database(db_name))
         command_ = std::make_unique<CreateDatabase>(db_name);
-    }
+    else
+        diag.e(s.database_name.pos) << "Database " << db_name << " already exists.\n";
 }
 
 void Sema::operator()(UseDatabaseStmt &s)
@@ -1438,14 +1436,10 @@ void Sema::operator()(UseDatabaseStmt &s)
     Catalog &C = Catalog::Get();
     const char *db_name = s.database_name.text;
 
-    try {
-        C.get_database(db_name);
-    } catch (std::out_of_range) {
+    if (C.has_database(db_name))
+        command_ = std::make_unique<UseDatabase>(db_name);
+    else
         diag.e(s.database_name.pos) << "Database " << db_name << " does not exist.\n";
-        return;
-    }
-
-    command_ = std::make_unique<UseDatabase>(db_name);
 }
 
 void Sema::operator()(CreateTableStmt &s)

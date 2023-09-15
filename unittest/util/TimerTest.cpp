@@ -47,3 +47,40 @@ TEST_CASE("Timer::Measurement", "[core][util]")
         REQUIRE(M.is_unused());
     }
 }
+
+TEST_CASE("Timer", "[core][util][timer]")
+{
+    Timer T;
+
+    auto tp0 = new Timer::TimingProcess(T.create_timing("m0"));
+    auto tp1 = new Timer::TimingProcess(T.create_timing("m1"));
+    REQUIRE(T.measurements().size() == 2);
+
+    auto & m0 = T.get("m0");
+    auto & m1 = T.get(1);
+
+    REQUIRE(m0.is_active());
+    REQUIRE(m1.is_active());
+
+    {
+        REQUIRE_THROWS_AS(T.create_timing("m0"), m::invalid_argument);
+        REQUIRE_THROWS_AS(T.get(2), m::out_of_range);
+        REQUIRE_THROWS_AS(T.get("m2"), m::out_of_range);
+    }
+
+    // Timing process destructor will stop its corresponding measurement
+    delete tp0;
+    delete tp1;
+
+    REQUIRE(m0.has_ended());
+    REQUIRE(m1.has_ended());
+    REQUIRE(T.total() >= m0.duration() + m1.duration());
+
+    T.clear();
+    REQUIRE(T.begin() == T.end());
+
+    {
+        REQUIRE_THROWS_AS(T.get(0), m::out_of_range);
+        REQUIRE_THROWS_AS(T.get("m0"), m::out_of_range);
+    }
+}

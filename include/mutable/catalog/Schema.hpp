@@ -558,6 +558,16 @@ struct M_EXPORT Database
     }
     /** Returns `true` iff a `Table` with the given \p name exists. */
     bool has_table(const char *name) const { return tables_.contains(name); }
+    /** Drops the `Table` with the given \p name.  Throws `std::invalid_argument` if no such `Table` exists. */
+    void drop_table(const char *name) {
+        auto it = tables_.find(name);
+        if (it == tables_.end())
+            throw std::invalid_argument("Table of that name does not exist.");
+        delete it->second;
+        tables_.erase(it);
+    };
+    /** Drops the `Table` \p table. */
+    void drop_table(const Table &t) { return drop_table(t.name); }
 
     /*===== Functions ================================================================================================*/
     /** Returns a reference to the `Function` with the given `name`.  First searches this `Database` instance.  If no

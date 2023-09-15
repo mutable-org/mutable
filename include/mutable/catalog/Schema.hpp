@@ -556,6 +556,8 @@ struct M_EXPORT Database
         it = tables_.emplace_hint(it, r->name, r);
         return *it->second;
     }
+    /** Returns `true` iff a `Table` with the given \p name exists. */
+    bool has_table(const char *name) const { return tables_.contains(name); }
 
     /*===== Functions ================================================================================================*/
     /** Returns a reference to the `Function` with the given `name`.  First searches this `Database` instance.  If no

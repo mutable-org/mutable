@@ -255,6 +255,7 @@ def genTableFile(Fo: dict):
     special_tokens = {
         'EOF': {'TK_EOF'},
         'IDENTIFIER': {'TK_IDENTIFIER'},
+        'INSTRUCTION': {'TK_INSTRUCTION'},
         'STRING-LITERAL': {'TK_STRING_LITERAL'},
         'INTEGER-CONSTANT': {'TK_DEC_INT', 'TK_OCT_INT', 'TK_HEX_INT'},
         'DECIMAL-CONSTANT': {'TK_DEC_INT'},

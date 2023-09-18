@@ -12,22 +12,20 @@ The syntax of the terminal-tokens is given on the [Tokens](syntax-tokens.md) pag
 ```
 commands ::= command { command } ;
 
-command ::= [ statement | INSTRUCTION ] ;
+command ::= [ statement | INSTRUCTION ] ';' ;
 ```
 
 ### Statements
 
 ##### Statement
 ```
-statement ::= [
-                create-statement |
-                use_database-statement |
-                select-statement |
-                insert-statement |
-                update-statement |
-                delete-statement |
-                import-statement
-              ] ';' ;
+statement ::= create-statement |
+              use_database-statement |
+              select-statement |
+              insert-statement |
+              update-statement |
+              delete-statement |
+              import-statement ;
 ```
 
 ##### Create Statement

@@ -1415,7 +1415,7 @@ void Sema::operator()(ErrorStmt&)
 
 void Sema::operator()(EmptyStmt&)
 {
-    /* nothing to be done */
+    command_ = std::make_unique<EmptyCommand>();
 }
 
 void Sema::operator()(CreateDatabaseStmt &s)

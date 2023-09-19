@@ -43,6 +43,17 @@ struct DatabaseCommand
     }
 };
 
+struct EmptyCommand : DatabaseCommand
+{
+    public:
+    EmptyCommand() { };
+
+    void accept(DatabaseCommandVisitor &v) override;
+    void accept(ConstDatabaseCommandVisitor &v) const override;
+
+    void execute(Diagnostic &diag) override;
+};
+
 
 /*======================================================================================================================
  * Instructions
@@ -224,7 +235,8 @@ struct CreateTable : DDLCommand
 
 #define M_DATABASE_COMMAND_LIST(X) \
     M_DATABASE_INSTRUCTION_LIST(X) \
-    M_DATABASE_SQL_LIST(X)
+    M_DATABASE_SQL_LIST(X) \
+    X(EmptyCommand)
 
 M_DECLARE_VISITOR(DatabaseCommandVisitor, DatabaseCommand, M_DATABASE_COMMAND_LIST)
 M_DECLARE_VISITOR(ConstDatabaseCommandVisitor, const DatabaseCommand, M_DATABASE_COMMAND_LIST)

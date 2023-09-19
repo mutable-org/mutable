@@ -1,0 +1,32 @@
+description: empty statement positive test
+db: empty
+query: |
+    ;
+required: YES
+
+stages:
+    lexer:
+        out: |
+            -:1:1: ; TK_SEMICOL
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    parser:
+        out: |
+            ;
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    sema:
+        out: NULL
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    end2end:
+        out: NULL
+        err: NULL
+        num_err: 0
+        returncode: 0

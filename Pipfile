@@ -41,6 +41,12 @@ seaborn = "*"
 wand = "*"
 screeninfo = "*"
 cycler = "*"
+typeguard = "*"
+sortedcontainers = "*"
 
 [requires]
 python_version = "3.10"
+
+[dev-packages]
+mypy = "*"
+pytest = "*"

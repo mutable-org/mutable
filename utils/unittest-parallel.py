@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 
-import xml.etree.ElementTree as ET
-import sys
 import argparse
 import os
-import time
-import subprocess
 import re
+import subprocess
+import sys
+import time
+import time
+import xml.etree.ElementTree as ET
 from enum import Enum
 from tqdm import tqdm
 
@@ -23,17 +24,15 @@ class JunitData:
     execution_time = 0.0
     test_cases = []
 
-    def append_data(self, process: subprocess.Popen[bytes], error_type: ErrorType):
+    def append_data(self, stdout: str, stderr: str, error_type: ErrorType):
         # If a process times out we do not want to parse the result. It is just a failure.
         if error_type != ErrorType.NO_ERROR:
             self.failures += 1
             return
-        junit_xml = process.stdout
-        assert(junit_xml is not None)
-        tree = ET.parse(junit_xml)
-        root = tree.getroot()
-        test_suite = root.find('testsuite')
-        assert(test_suite is not None)
+        assert stdout is not None
+        tree = ET.fromstring(stdout)
+        test_suite = tree.find('testsuite')
+        assert test_suite is not None
         self.errors += int(test_suite.attrib['errors'])
         self.failures += int(test_suite.attrib['failures'])
         self.tests += int(test_suite.attrib['tests'])
@@ -55,10 +54,7 @@ class JunitData:
             result_xml.write(sys.stdout.buffer)
 
     def is_failure(self):
-        if (self.errors > 0 or self.failures > 0):
-            return True
-        else:
-            return False
+        return self.errors > 0 or self.failures > 0
 
 
 # data needed for human readable output
@@ -74,7 +70,7 @@ class TestData:
     error_msgs = []
     is_error = False
 
-    def append_data(self, process: subprocess.Popen[bytes], error_type: ErrorType):
+    def append_data(self, stdout: str, stderr: str, error_type: ErrorType):
         # If a process times out we do not want to parse the result. It is just a failure.
         if error_type == ErrorType.TIMEOUT:
             self.timeouts += 1
@@ -82,16 +78,13 @@ class TestData:
             self.failed_test_cases += 1
             self.is_error = True
             return
+
         current_failed_tests = 0
-        content = process.stdout
-        error = process.stderr
-        assert(content is not None)
-        assert(error is not None)
-        content_string = content.read().decode('utf-8')
-        error_string = error.read().decode('utf-8')
+        assert stdout is not None
+        assert stderr is not None
 
         # first match pattern
-        match = re.search(r'All tests passed \((\d+) assertions? in (\d+) test case', content_string)
+        match = re.search(r'All tests passed \((\d+) assertions? in (\d+) test case', stdout)
         if match:
             num_assertions = int(match.group(1))
             num_test_cases = int(match.group(2))
@@ -104,7 +97,7 @@ class TestData:
         else:
             match2 = re.search(
                 r'test cases:\s*(?P<total>\d+)( \|\s*(?P<passed>\d+) passed)?( \|\s*(?P<failed>\d+) failed)?\nassertions:(\s*(?P<a_total>\d+)( \|\s*(?P<a_passed>\d+) passed)?( \|\s*(?P<a_failed>\d+) failed)?)?',
-                content_string
+                stdout
             )
             if match2:
                 self.total_assertions += int(match2.group('a_total')) if match2.group('a_total') is not None else 0
@@ -116,15 +109,15 @@ class TestData:
                 current_failed_tests = int(match2.group('failed')) if match2.group('failed')  is not None else 0
                 self.failed_test_cases += current_failed_tests
             else:
-                print(f'\u001b[31;1mFailed to match output of:\u001b[39;0m')
-                print(content_string)
+                tqdm.write(f'\u001b[31;1mFailed to match output of:\u001b[39;0m')
+                tqdm.write(stdout)
 
         if current_failed_tests > 0:
-            self.error_msgs.append(content_string)
-            self.error_msgs.append(error_string)
+            self.error_msgs.append(stdout)
+            self.error_msgs.append(stderr)
             self.is_error = True
-        elif error_string != '':
-            self.error_msgs.append(error_string)
+        elif stderr != '':
+            self.error_msgs.append(stderr)
 
     def dump(self, _):
         for msg in self.error_msgs:
@@ -159,72 +152,80 @@ def run_tests(args, test_names: list[str], binary_path: str, is_interactive: boo
     max_processes = args.jobs
 
     # used for --stop-fail
-    fail = False
+    failed = False
 
     progress_bar = tqdm(total=len(test_names), position=0, ncols=80, leave=False, bar_format='|{bar}| {n}/{total}', disable=(not is_interactive))
 
     command = ['timeout', '--signal=TERM', '--kill-after=' + str(args.timeout + 2), str(args.timeout), binary_path]
     if (args.report_junit):
-        command.append('-r junit')
+        command += ['-r', 'junit']
 
     # we need to take the execution time by hand because the sum of all
     # junits is vastly inaccurate
     time_start = time.time()
+
+    def handle_returncode(stdout: str, stderr: str, returncode: int):
+        match returncode:
+            # no error
+            case 0 | 1:
+                data.append_data(stdout, stderr, ErrorType.NO_ERROR)
+
+            # timout with SIGTERM or SIGKILL
+            case 124 | 137:
+                data.append_data(stdout, stderr, ErrorType.TIMEOUT)
+
+            # unexpected return code
+            case _:
+                data.append_data(stdout, stderr, ErrorType.UNEXPECTED_RETURN)
 
     running_processes = {}
     # execute tests in parallel until we have max_processes running
     for test_name in test_names:
         test_name = test_name.replace(',', '\\,')
         test_name = f'"{test_name}"'
-        process = subprocess.Popen([*command, test_name], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        process = subprocess.Popen(command + [test_name], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
         running_processes[process.pid] = process
 
-        # if we have max_processes number of processes running wait for a process to finish
-        # and remove the process from the running processes dictionary
+        # if we have max_processes number of processes running, wait for a process to finish and remove the process from
+        # the running processes dictionary
         if len(running_processes) >= max_processes:
-            pid, status = os.wait()
-            returncode = os.waitstatus_to_exitcode(status)
-            finished_process = running_processes[pid]
+            pid, status = os.wait()  # wait for *any* child to exit
+            assert pid in running_processes, 'os.wait() returned unexpected child PID'
+            process = running_processes[pid]
+            assert process.pid == pid, 'PID mismatch'
+            returncode = os.waitstatus_to_exitcode(status)  # get return status from process; don't use Popen.returncode
+            assert returncode is not None
             progress_bar.update(1)
             del running_processes[pid]
-
-            # if process timed out we add as failure
-            if returncode == 124 or returncode == 137:
-                data.append_data(finished_process, ErrorType.TIMEOUT)
-                continue
-            if returncode != 0 and returncode != 1:
-                data.append_data(finished_process, ErrorType.UNEXPECTED_RETURN)
-                continue
-
-            data.append_data(finished_process, ErrorType.NO_ERROR)
-
-            # don't execute further tests on fail if --stop-fail is enabled
-            if returncode == 1 and args.stop_fail:
-                fail = True
+            stdout, stderr = process.communicate()
+            handle_returncode(stdout, stderr, returncode)
+            if args.stop_fail and returncode != 0:  # stop on first failure
+                failed = True
                 break
 
     # wait for the remaining running processes to finish
     for pid, process in running_processes.items():
-        # terminate all processes if one has failed and --stop-fail is enabled
-        if fail:
-            process.terminate()
-            continue
-        process.wait()
+        stdout, stderr = process.communicate()  # wait for process to terminate; consume stdout/stderr to avoid deadlock
         progress_bar.update(1)
-        if process.returncode == 124 or process.returncode == 137:
-            data.append_data(process, ErrorType.TIMEOUT)
-            continue
-        if process.returncode != 0 and process.returncode != 1:
-            data.append_data(process, ErrorType.UNEXPECTED_RETURN)
-            continue
-        data.append_data(process, ErrorType.NO_ERROR)
+        handle_returncode(stdout, stderr, process.returncode)
+        if process.returncode != 0 and args.stop_fail:
+            failed = True
+            break
 
-        # don't execute further tests on fail if --stop-fail is enabled
-        if process.returncode == 1 and args.stop_fail:
-            fail = True
+    if failed:
+        # send SIGTERM to all processes
+        for process in running_processes.values():
+            process.terminate()
+        # wait 10ms for processes to terminate
+        time.sleep(.01)
+        # send SIGKILL if process did not terminate in time
+        for process in running_processes.values():
+            try:
+                process.communicate()  # consume stdout/stderr to avoid deadlock
+            except subprocess.TimeoutExpired:
+                process.kill()
 
     progress_bar.close()
-
     time_end = time.time()
     execution_time = time_end - time_start
     data.execution_time = execution_time
@@ -253,13 +254,12 @@ if __name__ == '__main__':
     if not (os.path.isfile(args.binary_path) and os.access(args.binary_path, os.X_OK)):
         raise ValueError("Not a valid path to an executable.")
 
-
     # Check if interactive terminal
     is_interactive = True if 'TERM' in os.environ else False
 
     # get all the test names
-    list_tests_command = args.binary_path + ' --list-test-names-only --order rand --rng-seed time ' + args.tag
-    output = subprocess.run(list_tests_command, shell=True, stdout=subprocess.PIPE)
+    list_tests_command = [args.binary_path, '--list-test-names-only', '--order', 'rand', '--rng-seed', 'time', args.tag]
+    output = subprocess.run(list_tests_command, stdout=subprocess.PIPE)
     test_names = output.stdout.decode().strip().split('\n')
 
     data = run_tests(args, test_names, args.binary_path, is_interactive)

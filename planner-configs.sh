@@ -44,6 +44,7 @@ declare -A PLANNER_CONFIGS=(
 
     [BU-hanwen-layered-sorted-dynamic2-zero]="--plan-enumerator HeuristicSearch --hs-vertex SubproblemsArray --hs-expand BottomUpComplete --hs-heuristic zero --hs-search hanwen_layered_search_sorted_dynamic_2"
     [BU-hanwen-layered-sorted-dynamic3-zero]="--plan-enumerator HeuristicSearch --hs-vertex SubproblemsArray --hs-expand BottomUpComplete --hs-heuristic zero --hs-search hanwen_layered_search_sorted_dynamic_3"
+    [BIDIRECTIONAL]="--plan-enumerator HeuristicSearch --hs-vertex SubproblemsArray --hs-expand BottomUpComplete --hs-heuristic zero --hs-search BIDIRECTIONAL"
 
     # BottomUp
     [BU-BIDIRECTIONAL-zero]="--plan-enumerator HeuristicSearch --hs-vertex SubproblemsArray --hs-expand BottomUpComplete --hs-heuristic zero --hs-search BIDIRECTIONAL"

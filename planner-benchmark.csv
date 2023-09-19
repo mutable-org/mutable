@@ -1,4 +1,0 @@
-topology,size,planner,cost,time,seed
-cycle,3,DPccp,5700,0.259,17772
-cycle,3,BU-cleanAStar-zero,5700,0.599,17772
-cycle,3,BU-hanwen-layered-zero,,,17772

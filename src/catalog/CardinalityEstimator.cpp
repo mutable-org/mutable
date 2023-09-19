@@ -332,8 +332,9 @@ InjectionCardinalityEstimator::estimate_join(const QueryGraph &G, const DataMode
         return std::make_unique<InjectionCardinalityDataModel>(subproblem, std::min(it->second, max_cardinality));
     } else {
         /* Fallback to CartesianProductEstimator. */
-        std::cerr << "warning: failed to estimate the join of " << left.subproblem_ << " and " << right.subproblem_
-                  << '\n';
+        cs_mutex.lock();
+        std::cerr << "warning: failed to estimate the join of " << left.subproblem_ << " and " << right.subproblem_ << '\n';
+        cs_mutex.unlock();
         auto left_fallback = std::make_unique<CartesianProductEstimator::CartesianProductDataModel>();
         left_fallback->size = left.size_;
         auto right_fallback = std::make_unique<CartesianProductEstimator::CartesianProductDataModel>();
@@ -359,7 +360,10 @@ InjectionCardinalityEstimator::operator()(estimate_join_all_tag, PlanTable &&PT,
         return std::make_unique<InjectionCardinalityDataModel>(to_join, std::min(it->second, max_cardinality));
     } else {
         /* Fallback to cartesian product. */
+        cs_mutex.lock();
         std::cerr << "warning: failed to estimate the join of all data sources in " << to_join << '\n';
+        cs_mutex.unlock();
+
         auto ds_it = to_join.begin();
         std::size_t size = as<const InjectionCardinalityDataModel>(*PT[ds_it.as_set()].model).size_;
         for (; ds_it != to_join.end(); ++ds_it)

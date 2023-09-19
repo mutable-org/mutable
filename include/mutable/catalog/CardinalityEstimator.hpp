@@ -8,6 +8,7 @@
 #include <sstream>
 #include <unordered_map>
 #include <vector>
+#include <mutex>
 
 
 namespace m {
@@ -280,6 +281,7 @@ struct M_EXPORT InjectionCardinalityEstimator : CardinalityEstimatorCRTP<Injecti
     /*==================================================================================================================
      * Model calculation
      *================================================================================================================*/
+    mutable std::mutex cs_mutex;
 
     std::unique_ptr<DataModel> empty_model() const override;
     std::unique_ptr<DataModel> estimate_scan(const QueryGraph &G, Subproblem P) const override;

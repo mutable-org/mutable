@@ -75,9 +75,11 @@ namespace {
 
 constexpr Parser::follow_set_t make_follow_set(std::initializer_list<TokenType> tokens)
 {
-    Parser::follow_set_t F{{false}};
-    for (TokenType tk : tokens)
+    Parser::follow_set_t F{};
+    for (TokenType tk : tokens) {
+        M_insist(tk < TokenType::TokenType_MAX);
         F[tk] = true;
+    }
     return F;
 }
 

@@ -15,7 +15,7 @@ namespace ast {
 
 struct M_EXPORT Parser
 {
-    using follow_set_t = std::array<bool, unsigned(TokenType::TokenType_MAX) + 1U>;
+    using follow_set_t = std::array<bool, unsigned(TokenType::TokenType_MAX) + 1>;
 
     public:
     Lexer      &lexer;
@@ -63,7 +63,7 @@ struct M_EXPORT Parser
     }
 
     /** Consumes tokens until the first occurence of a token in the follow set \p FS is found. */
-    void recover(const follow_set_t &FS) { while (not FS[token().type]) consume(); }
+    void recover(const follow_set_t &FS) { while (token() and not FS[token().type]) consume(); }
 
     /** Consumes tokens until the first occurence of a token in the follow set \p FS is found. Constructs an object of
      * type `T` on \p start and returns a unique pointer to it.  Here, type `T` is either `ErrorStmt` or `ErrorClause`.

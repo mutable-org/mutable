@@ -270,6 +270,10 @@ int main(int argc, const char **argv)
         "-s", "--statistics",                               /* Short, Long      */
         "show some statistics",                             /* Description      */
         [&](bool) { Options::Get().statistics = true; });   /* Callback         */
+    ADD(bool, Options::Get().hanwen_statistics, false,             /* Type, Var, Init  */
+        "-hs", "--hanwen-statistics",                               /* Short, Long      */
+        "show some hanwen statistics",                             /* Description      */
+        [&](bool) { Options::Get().hanwen_statistics = true; });   /* Callback         */
     ADD(bool, Options::Get().echo, false,                   /* Type, Var, Init  */
         nullptr, "--echo",                                  /* Short, Long      */
         "echo statements",                                  /* Description      */

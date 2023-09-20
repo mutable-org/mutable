@@ -45,8 +45,8 @@ MAX_CARDINALITY=10000
 MIN_RELATIONS=3
 # Associative array mapping topologies to their max. number of relations tested
 declare -A TOPOLOGIES=(
-   [chain]=63
-   [cycle]=63
+#   [chain]=63
+#   [cycle]=63
     [star]=15
    [clique]=15
 )
@@ -66,7 +66,14 @@ declare -A TOPOLOGY_STEPS=(
 
 ORDERED_PLANNERS=(
     ###### HANWEN Manuelly Test #####
-    # "DPccp"
+     "DPccp"
+     "BU-A*-zero"
+     "BIDIRECTIONAL"
+     "BIDIRECTIONAL"
+     "BIDIRECTIONAL"
+     "BIDIRECTIONAL"
+     "BIDIRECTIONAL"
+
 #    "IKKBZ"
     # "GOO"
 #    "TD-cleanAStar-zero"
@@ -92,19 +99,19 @@ ORDERED_PLANNERS=(
 #  "BU-hanwen-layered-sorted-dynamic2-zero"
 #   "BU-hanwen-layered-sorted-dynamic3-zero"
 
-"TD-hanwen-layered-sorted2-zero"
-"TD-hanwen-layered-sorted3-zero"
-"TD-hanwen-layered-sorted6-zero"
-"TD-hanwen-layered-sorted10-zero"
-"TD-hanwen-layered-sorted15-zero"
-"TD-hanwen-layered-sorted25-zero"
-
-"TD-hanwen-layered-sorted2-sum"
-"TD-hanwen-layered-sorted3-sum"
-"TD-hanwen-layered-sorted6-sum"
-"TD-hanwen-layered-sorted10-sum"
-"TD-hanwen-layered-sorted15-sum"
-"TD-hanwen-layered-sorted25-sum"
+#"TD-hanwen-layered-sorted2-zero"
+#"TD-hanwen-layered-sorted3-zero"
+#"TD-hanwen-layered-sorted6-zero"
+#"TD-hanwen-layered-sorted10-zero"
+#"TD-hanwen-layered-sorted15-zero"
+#"TD-hanwen-layered-sorted25-zero"
+#
+#"TD-hanwen-layered-sorted2-sum"
+#"TD-hanwen-layered-sorted3-sum"
+#"TD-hanwen-layered-sorted6-sum"
+#"TD-hanwen-layered-sorted10-sum"
+#"TD-hanwen-layered-sorted15-sum"
+#"TD-hanwen-layered-sorted25-sum"
 
 #  "TD-hanwen-layered-zero"
 
@@ -318,7 +325,7 @@ do
                 unset TIME
                 set +m
                 # The following command needs pipefail
-                timeout --signal=TERM --kill-after=3s ${TIMEOUT} taskset -c 2 ${BIN} \
+                ${BIN} \
                     --quiet --dryrun --times \
                     --plan-table-las \
                     ${PLANNER_CONFIG} \
@@ -355,7 +362,7 @@ do
                 then
                     >&2 echo '  `'" Unexpected termination: ERR=${ERR}, PIPESTATUS=(${SAVED_PIPESTATUS[@]}), configuration '${PLANNER}':"
                     >&2 cat << EOF
-timeout --signal=TERM --kill-after=3s ${TIMEOUT} taskset -c 2 ${BIN} \
+${BIN} \
 --quiet --dryrun --times \
 --plan-table-las \
 ${PLANNER_CONFIG} \

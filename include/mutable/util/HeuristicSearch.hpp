@@ -1177,7 +1177,7 @@ std::size_t num_##NAME() const { return 0; }
                 Partitions(Partitions &&) = default;
 
                 ~Partitions() {
-                    if (Options::Get().statistics) {
+                    if (Options::Get().statistics && Options::Get().hanwen_statistics) {
                         std::cout << partitions_.size() << " partitions:";
                         for (auto &P: partitions_)
                             std::cout << "\n  " << P.size();
@@ -1526,7 +1526,7 @@ std::size_t num_##NAME() const { return 0; }
 
             std::atomic<bool> isFound = false;
             std::shared_mutex mutex;
-            int mutex_counter=0;
+            int mutex_counter = 0;
             std::tuple<const state_type *, const state_type *, double> meet_point; // Store the topdown state and bottomup state
 
         public:
@@ -1649,10 +1649,11 @@ std::size_t num_##NAME() const { return 0; }
                         }
 
                         mutex.lock();
-                        isFound=true;
+                        isFound = true;
                         if (update) {
                             mutex_counter++;
-                            std::cout<<"Meet Point: "<<mutex_counter<<" "<< overall_score<<" "<<topdown_state.value()->g()<<" "<<bottomup_state_ptr->g()<<std::endl;
+//                            std::cout << "Meet Point: " << mutex_counter << " " << overall_score << " "
+//                                      << topdown_state.value()->g() << " " << bottomup_state_ptr->g() << std::endl;
                             meet_point = std::make_tuple(topdown_state.value(), bottomup_state_ptr, overall_score);
                         }
                         mutex.unlock();
@@ -1698,8 +1699,8 @@ std::size_t num_##NAME() const { return 0; }
                         isFound = true;
                         if (update) {
                             mutex_counter++;
-                            std::cout << "Meet Point: " << mutex_counter << " " << overall_score << " "
-                                      << topdown_state_ptr->g() << " " << bottomup_state.value()->g() << std::endl;
+//                            std::cout << "Meet Point: " << mutex_counter << " " << overall_score << " "
+//                                      << topdown_state_ptr->g() << " " << bottomup_state.value()->g() << std::endl;
                             meet_point = std::make_tuple(topdown_state_ptr, bottomup_state.value(), overall_score);
                         }
                         mutex.unlock();
@@ -1822,7 +1823,7 @@ std::size_t num_##NAME() const { return 0; }
             /// 1. Init the Bidirectional State Manager
             /// Including front and back - two direction, init and push element - two operations
             /// We can ignore the input initial_state
-            std::cout << "Bidirectional Search!!!!Let's rock it!" << std::endl;
+//            std::cout << "Bidirectional Search!!!!Let's rock it!" << std::endl;
             state_manager_topdown.template push<false>(std::move(top_state), 0, context...);
             state_manager_bottomup.template push<false>(std::move(bottom_state), 0, context...);
 
@@ -1956,7 +1957,7 @@ std::size_t num_##NAME() const { return 0; }
                 Partitions(Partitions &&) = default;
 
                 ~Partitions() {
-                    if (Options::Get().statistics && Options::Get().hanwen_statistics) {
+                    if (Options::Get().statistics) {
                         std::cout << partitions_.size() << " partitions:";
                         for (auto &P: partitions_)
                             std::cout << "\n  " << P.size();

@@ -46,8 +46,8 @@ declare -A TOPOLOGIES=(
 
 ORDERED_PLANNERS=(
     ###### HANWEN Manuelly Test #####
-    "BU-A*-sqrt_sum"
-    "TD-A*-sqrt_sum"
+#    "BU-A*-sqrt_sum"
+#    "TD-A*-sqrt_sum"
     ###### Traditional Planners #####
     # "DPsub"
 #    "DPccp"
@@ -58,7 +58,9 @@ ORDERED_PLANNERS=(
     ##### Heuristic Search #####
     # BottomUp
     ## A*
-#    "BU-A*-zero"
+    "BU-A*-zero"
+    "BU-BIDIRECTIONAL-zero"
+
     # "BU-A*-avg_sel"
 #    "BU-A*-GOO"
     ## beam

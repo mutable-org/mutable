@@ -1534,6 +1534,7 @@ std::size_t num_##NAME() const { return 0; }
             const state_type* global_goal;
             bool reach_goal = false;
             bool resultComfirmed = false;
+            int counter_before_found = 0;
             int counter_topdown = 0;
             int counter_bottomup = 0;
 
@@ -1604,7 +1605,7 @@ std::size_t num_##NAME() const { return 0; }
             }
 
             bool resultNotCorfirmed() {
-                if (!isFound) { return true; }
+                if (!isFound) { counter_before_found++;return true; }
                 /* isFound */
                 bool bottomup_valid = (state_manager_bottomup.top_score() >= std::get<1>(meet_point)->g());
                 if (!bottomup_valid) {
@@ -1688,32 +1689,32 @@ std::size_t num_##NAME() const { return 0; }
                                                    Context &... context) {
                 bidirectional_for_each_successor_topdown([this, &context...](state_type successor, double h) {
                     if (reach_goal || resultComfirmed) { return; }
-//                    state_manager_topdown.push_regular_queue(std::move(successor), h, context...);
+                    state_manager_topdown.push_regular_queue(std::move(successor), h, context...);
                     /* Check visited */
 //                    if (successor.size() < state_manager_bottomup.frontier_level()) { return; }
-                    auto bottomup_state = state_manager_bottomup.check_visited(successor, context...);
-                    auto topdown_state_ptr = state_manager_topdown.push_regular_queue(std::move(successor), h, context...);
-                    if (bottomup_state.has_value()) {
-                        /// found in the topdown, so we need to maintained the state and return
-                        double overall_score = topdown_state_ptr->g() + bottomup_state.value()->g();
-                        bool update = true;
-                        if (isFound) {
-                            // conditionally update here
-                            if (overall_score >= std::get<2>(meet_point)) {
-                                update = false;
-                            }
-                        }
-
-                        mutex.lock();
-                        isFound = true;
-                        if (update) {
-                            mutex_counter++;
-                            std::cout << "Meet Point: " << mutex_counter << " " << overall_score << " "
-                                      << topdown_state_ptr->g() << " " << bottomup_state.value()->g() << std::endl;
-                            meet_point = std::make_tuple(topdown_state_ptr, bottomup_state.value(), overall_score);
-                        }
-                        mutex.unlock();
-                    }
+//                    auto bottomup_state = state_manager_bottomup.check_visited(successor, context...);
+//                    auto topdown_state_ptr = state_manager_topdown.push_regular_queue(std::move(successor), h, context...);
+//                    if (bottomup_state.has_value()) {
+//                        /// found in the topdown, so we need to maintained the state and return
+//                        double overall_score = topdown_state_ptr->g() + bottomup_state.value()->g();
+//                        bool update = true;
+//                        if (isFound) {
+//                            // conditionally update here
+//                            if (overall_score >= std::get<2>(meet_point)) {
+//                                update = false;
+//                            }
+//                        }
+//
+//                        mutex.lock();
+//                        isFound = true;
+//                        if (update) {
+//                            mutex_counter++;
+//                            std::cout << "Meet Point: " << mutex_counter << " " << overall_score << " "
+//                                      << topdown_state_ptr->g() << " " << bottomup_state.value()->g() << std::endl;
+//                            meet_point = std::make_tuple(topdown_state_ptr, bottomup_state.value(), overall_score);
+//                        }
+//                        mutex.unlock();
+//                    }
                 }, state, heuristic, expand2, context...);
             }
 
@@ -1859,7 +1860,8 @@ std::size_t num_##NAME() const { return 0; }
                 return *global_goal;
             }
             const state_type &goal = reverse_from_the_meet_point();
-            std::cout << "counter bottomup " << counter_bottomup << " topdown " << counter_topdown << std::endl;
+            std::cout << "counter_before_found " << counter_before_found << "counter bottomup " << counter_bottomup
+                      << " topdown " << counter_topdown << std::endl;
             return goal;
 
             throw std::logic_error("goal state unreachable from provided initial state");

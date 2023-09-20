@@ -1679,7 +1679,7 @@ std::size_t num_##NAME() const { return 0; }
                                                    expand_type2 &expand2,
                                                    Context &... context) {
                 bidirectional_for_each_successor_topdown([this, &context...](state_type successor, double h) {
-//                    if (reach_goal || resultComfirmed) { return; }
+                    if (reach_goal || resultComfirmed) { return; }
                     /* Check visited */
 //                    if (successor.size() < state_manager_bottomup.frontier_level()) { return; }
                     auto bottomup_state = state_manager_bottomup.check_visited(successor, context...);
@@ -1830,12 +1830,13 @@ std::size_t num_##NAME() const { return 0; }
             std::thread thread1([&]() {
                 this->search_bottomup_multithread(heuristic, expand, context...);
             });
-            setThreadAffinity(thread1,0);
+
+//            setThreadAffinity(thread1, 0);
 
             std::thread thread2([&]() {
                 this->search_topdown_multithread(heuristic2, expand2, context...);
             });
-            setThreadAffinity(thread2,1);
+//            setThreadAffinity(thread2, 1);
 
             thread1.join();
             thread2.join();

@@ -49,6 +49,9 @@ declare -A TOPOLOGIES=(
 #   [cycle]=63
     [star]=15
    [clique]=15
+   [chain]=20
+    [cycle]=20
+
 )
 #declare -A T0OPOLOGIES=(
 #    [chain]=50

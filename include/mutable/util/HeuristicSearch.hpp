@@ -1656,7 +1656,7 @@ std::size_t num_##NAME() const { return 0; }
                             }
                         }
 
-                        mutex.lock();
+//                        mutex.lock();
                         isFound = true;
                         if (update) {
                             mutex_counter++;
@@ -1664,7 +1664,7 @@ std::size_t num_##NAME() const { return 0; }
 //                                      << topdown_state.value()->g() << " " << bottomup_state_ptr->g() << std::endl;
                             meet_point = std::make_tuple(topdown_state.value(), bottomup_state_ptr, overall_score);
                         }
-                        mutex.unlock();
+//                        mutex.unlock();
                     }
 
                 }, state, heuristic, expand, context...);
@@ -1674,7 +1674,7 @@ std::size_t num_##NAME() const { return 0; }
                                             expand_type2 &expand2,
                                             Context &... context) {
                 while (not state_manager_topdown.queues_empty()) {
-                    if (reach_goal || not resultNotCorfirmed()) { return; }
+                    if (reach_goal || resultComfirmed) { return; }
                     auto topdown_node = state_manager_topdown.pop();
                     const state_type &topdown_state = topdown_node.first;
                     if (expand2.is_goal(topdown_state, context...)) { return; }// wait for extension
@@ -1688,32 +1688,32 @@ std::size_t num_##NAME() const { return 0; }
                                                    Context &... context) {
                 bidirectional_for_each_successor_topdown([this, &context...](state_type successor, double h) {
                     if (reach_goal || resultComfirmed) { return; }
-                    state_manager_topdown.push_regular_queue(std::move(successor), h, context...);
+//                    state_manager_topdown.push_regular_queue(std::move(successor), h, context...);
                     /* Check visited */
 //                    if (successor.size() < state_manager_bottomup.frontier_level()) { return; }
-//                    auto bottomup_state = state_manager_bottomup.check_visited(successor, context...);
-//                    auto topdown_state_ptr = state_manager_topdown.push_regular_queue(std::move(successor), h, context...);
-//                    if (bottomup_state.has_value()) {
-//                        /// found in the topdown, so we need to maintained the state and return
-//                        double overall_score = topdown_state_ptr->g() + bottomup_state.value()->g();
-//                        bool update = true;
-//                        if (isFound) {
-//                            // conditionally update here
-//                            if (overall_score >= std::get<2>(meet_point)) {
-//                                update = false;
-//                            }
-//                        }
-//
-//                        mutex.lock();
-//                        isFound = true;
-//                        if (update) {
-//                            mutex_counter++;
-//                            std::cout << "Meet Point: " << mutex_counter << " " << overall_score << " "
-//                                      << topdown_state_ptr->g() << " " << bottomup_state.value()->g() << std::endl;
-//                            meet_point = std::make_tuple(topdown_state_ptr, bottomup_state.value(), overall_score);
-//                        }
-//                        mutex.unlock();
-//                    }
+                    auto bottomup_state = state_manager_bottomup.check_visited(successor, context...);
+                    auto topdown_state_ptr = state_manager_topdown.push_regular_queue(std::move(successor), h, context...);
+                    if (bottomup_state.has_value()) {
+                        /// found in the topdown, so we need to maintained the state and return
+                        double overall_score = topdown_state_ptr->g() + bottomup_state.value()->g();
+                        bool update = true;
+                        if (isFound) {
+                            // conditionally update here
+                            if (overall_score >= std::get<2>(meet_point)) {
+                                update = false;
+                            }
+                        }
+
+                        mutex.lock();
+                        isFound = true;
+                        if (update) {
+                            mutex_counter++;
+                            std::cout << "Meet Point: " << mutex_counter << " " << overall_score << " "
+                                      << topdown_state_ptr->g() << " " << bottomup_state.value()->g() << std::endl;
+                            meet_point = std::make_tuple(topdown_state_ptr, bottomup_state.value(), overall_score);
+                        }
+                        mutex.unlock();
+                    }
                 }, state, heuristic, expand2, context...);
             }
 

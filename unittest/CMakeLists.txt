@@ -4,6 +4,7 @@ set(
 
     # src
     OptionsTest.cpp
+    sanity.cpp
 
     # util
     util/AdjacencyMatrixTest.cpp

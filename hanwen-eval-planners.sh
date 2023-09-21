@@ -36,21 +36,21 @@ CORRELATED=1
 
 
 # outside large loop execution time
-REPETITIONS_PER_NUM_RELATIONS=1
+REPETITIONS_PER_NUM_RELATIONS=3
 
 MIN_CARDINALITY=10
 MAX_CARDINALITY=10000
 
 
-MIN_RELATIONS=3
+MIN_RELATIONS=16
 # Associative array mapping topologies to their max. number of relations tested
 declare -A TOPOLOGIES=(
-#   [chain]=63
-#   [cycle]=63
-    [star]=15
-   [clique]=15
-   [chain]=20
-    [cycle]=20
+#   [chain]=30
+#   [cycle]=32
+#    [star]=19
+   [clique]=16
+#   [chain]=20
+#    [cycle]=20
 
 )
 #declare -A T0OPOLOGIES=(
@@ -76,6 +76,11 @@ ORDERED_PLANNERS=(
      "BIDIRECTIONAL"
      "BIDIRECTIONAL"
      "BIDIRECTIONAL"
+     "BIDIRECTIONAL"
+     "BIDIRECTIONAL"
+     "BIDIRECTIONAL"
+    "BIDIRECTIONAL"
+    "BIDIRECTIONAL"
 
 #    "IKKBZ"
     # "GOO"

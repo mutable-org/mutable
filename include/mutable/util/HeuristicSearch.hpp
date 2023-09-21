@@ -1247,6 +1247,7 @@ std::size_t num_##NAME() const { return 0; }
 
             std::optional<const state_type *> check_visited(state_type &state, Context &... context) {
                 auto &P = partition(state, context...);
+                if (P.size() == 0) { return std::nullopt; }
                 auto it = P.find(state);
                 if (it == P.end())[[likely]] { return std::nullopt; }
                 return &it->first;
@@ -1537,6 +1538,7 @@ std::size_t num_##NAME() const { return 0; }
             int counter_before_found = 0;
             int counter_topdown = 0;
             int counter_bottomup = 0;
+            int counter_topdown_callback = 0;
 
             explicit biDirectionalSearch(Context &... context)
                     : state_manager_bottomup(context...), state_manager_topdown(context...) {}
@@ -1592,7 +1594,6 @@ std::size_t num_##NAME() const { return 0; }
                                                           expand_type2 &expand2,
                                                           Context &... context) {
                 expand2(state, [this, callback = std::move(callback), &heuristic2, &context...](state_type successor) {
-
                     if (auto it = state_manager_topdown.find(successor, context...); it == state_manager_topdown.end(
                             successor, context...)) {
                         const double h = heuristic2(successor, context...);
@@ -1640,7 +1641,7 @@ std::size_t num_##NAME() const { return 0; }
             explore_state_bottomup_multithread(const state_type &state, heuristic_type &heuristic, expand_type &expand,
                                                Context &... context) {
                 bidirectional_for_each_successor_bottomup([this, &context...](state_type successor, double h) {
-                    if (reach_goal || resultComfirmed) { return; }
+                    if (reach_goal || not resultNotCorfirmed()) { return; }
                     /* Check visited */
 //                    if (successor.size() > state_manager_topdown.frontier_level()) { return; }
                     auto topdown_state = state_manager_topdown.check_visited(successor, context...);
@@ -1675,7 +1676,7 @@ std::size_t num_##NAME() const { return 0; }
                                             expand_type2 &expand2,
                                             Context &... context) {
                 while (not state_manager_topdown.queues_empty()) {
-                    if (reach_goal || resultComfirmed) { return; }
+                    if (resultComfirmed || reach_goal) { return; }
                     auto topdown_node = state_manager_topdown.pop();
                     const state_type &topdown_state = topdown_node.first;
                     if (expand2.is_goal(topdown_state, context...)) { return; }// wait for extension
@@ -1688,7 +1689,8 @@ std::size_t num_##NAME() const { return 0; }
                                                    expand_type2 &expand2,
                                                    Context &... context) {
                 bidirectional_for_each_successor_topdown([this, &context...](state_type successor, double h) {
-                    if (reach_goal || resultComfirmed) { return; }
+//                    counter_topdown_callback++;
+                    if (resultComfirmed || reach_goal) { return; }
                     state_manager_topdown.push_regular_queue(std::move(successor), h, context...);
                     /* Check visited */
 //                    if (successor.size() < state_manager_bottomup.frontier_level()) { return; }
@@ -1837,32 +1839,43 @@ std::size_t num_##NAME() const { return 0; }
             state_manager_topdown.template push<false>(std::move(top_state), 0, context...);
             state_manager_bottomup.template push<false>(std::move(bottom_state), 0, context...);
 
-            std::thread thread1([&]() {
-                this->search_bottomup_multithread(heuristic, expand, context...);
-            });
-
-//            setThreadAffinity(thread1, 0);
-
             std::thread thread2([&]() {
                 this->search_topdown_multithread(heuristic2, expand2, context...);
             });
+            thread2.detach();
+
+            std::thread thread1([&]() {
+                this->search_bottomup_multithread(heuristic, expand, context...);
+            });
+            thread1.detach();
+
+//            setThreadAffinity(thread1, 0);
+
+
 //            setThreadAffinity(thread2, 1);
 
-            thread1.join();
-            thread2.join();
+//            thread1.join();
+//            thread2.join();
 
 
-//            std::cout<<"Mutex Counter: "<<mutex_counter<<std::endl;
-//            std::cout << "Bidirectional Search Meet Each Other" << std::endl;
+            while(true){
+                if (reach_goal) {
+                    std::cout << "reach goal haha!" << std::endl;
+                    return *global_goal;
+                }
 
-            if (reach_goal) {
-                std::cout << "reach goal haha!" << std::endl;
-                return *global_goal;
+                if(resultComfirmed){
+                    //            std::cout<<"Mutex Counter: "<<mutex_counter<<std::endl;
+//                    std::cout<<"Top Down Callback Counter "<<counter_topdown_callback<<std::endl;
+                    //            std::cout << "Bidirectional Search Meet Each Other" << std::endl;
+                    const state_type &goal = reverse_from_the_meet_point();
+//                    std::cout << "counter_before_found " << counter_before_found << "counter bottomup " << counter_bottomup
+//                              << " topdown " << counter_topdown << std::endl;
+                    return goal;
+                }
+
+
             }
-            const state_type &goal = reverse_from_the_meet_point();
-            std::cout << "counter_before_found " << counter_before_found << "counter bottomup " << counter_bottomup
-                      << " topdown " << counter_topdown << std::endl;
-            return goal;
 
             throw std::logic_error("goal state unreachable from provided initial state");
         }

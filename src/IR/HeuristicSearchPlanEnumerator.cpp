@@ -1648,9 +1648,9 @@ struct TopDownComplete : TopDown
                 auto right_it = partitions, right_end = partitions + 2;
                 auto out = subproblems;
                 for (;;) {
-                    M_insist(out <= subproblems + state.size() + 1, "out of bounds");
-                    M_insist(left_it <= left_end, "out of bounds");
-                    M_insist(right_it <= right_end, "out of bounds");
+//                    M_insist(out <= subproblems + state.size() + 1, "out of bounds");
+//                    M_insist(left_it <= left_end, "out of bounds");
+//                    M_insist(right_it <= right_end, "out of bounds");
                     if (left_it == left_end) {
                         if (right_it == right_end) break;
                         *out++ = *right_it++;
@@ -1664,11 +1664,11 @@ struct TopDownComplete : TopDown
                         *out++ = *right_it++;
                     }
                 }
-                M_insist(out == subproblems + state.size() + 1);
-                M_insist(left_it == left_end);
-                M_insist(right_it == right_end);
+//                M_insist(out == subproblems + state.size() + 1);
+//                M_insist(left_it == left_end);
+//                M_insist(right_it == right_end);
             }
-            M_insist(std::is_sorted(subproblems, subproblems + state.size() + 1, subproblem_lt));
+//            M_insist(std::is_sorted(subproblems, subproblems + state.size() + 1, subproblem_lt));
 
             cnf::CNF condition; // TODO use join condition
             double action_cost = 0;

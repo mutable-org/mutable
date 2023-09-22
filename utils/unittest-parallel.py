@@ -24,7 +24,7 @@ class JunitData:
     execution_time = 0.0
     test_cases = []
 
-    def append_data(self, stdout: str, stderr: str, error_type: ErrorType):
+    def append_data(self, stdout: str, stderr: str, error_type: ErrorType, test_name: str):
         # If a process times out we do not want to parse the result. It is just a failure.
         if error_type != ErrorType.NO_ERROR:
             self.failures += 1
@@ -68,15 +68,17 @@ class TestData:
     timeouts = 0
     execution_time = 0.0
     error_msgs = []
+    timeouted_tests = []
     is_error = False
 
-    def append_data(self, stdout: str, stderr: str, error_type: ErrorType):
+    def append_data(self, stdout: str, stderr: str, error_type: ErrorType, test_name: str):
         # If a process times out we do not want to parse the result. It is just a failure.
         if error_type == ErrorType.TIMEOUT:
             self.timeouts += 1
             self.total_test_cases += 1
             self.failed_test_cases += 1
             self.is_error = True
+            self.timeouted_tests.append(test_name)
             return
 
         current_failed_tests = 0
@@ -132,6 +134,10 @@ class TestData:
             print(f'assertions: {self.total_assertions:>{digits_total}} | \u001b[32;1m{self.passed_assertions:>{digits_passed}} passed\u001b[39;0m | \u001b[31;1m{self.failed_assertions:>{digits_failed}} failed\u001b[39;0m\n')
             if self.timeouts > 0:
                 print(f'\u001b[31;1mTimeouts: {self.timeouts}\u001b[39;0m\n')
+                print('Tests that timed out:')
+                for timeout_test in self.timeouted_tests:
+                    print(timeout_test)
+
             print(f'Execution time: {self.execution_time}s\n')
         else:
             print(f'\u001b[32;1m===============================================================================\u001b[39;0m')
@@ -164,19 +170,19 @@ def run_tests(args, test_names: list[str], binary_path: str, is_interactive: boo
     # junits is vastly inaccurate
     time_start = time.time()
 
-    def handle_returncode(stdout: str, stderr: str, returncode: int):
+    def handle_returncode(stdout: str, stderr: str, returncode: int, test_name: str):
         match returncode:
             # no error
             case 0 | 1:
-                data.append_data(stdout, stderr, ErrorType.NO_ERROR)
+                data.append_data(stdout, stderr, ErrorType.NO_ERROR, test_name)
 
             # timout with SIGTERM or SIGKILL
             case 124 | 137:
-                data.append_data(stdout, stderr, ErrorType.TIMEOUT)
+                data.append_data(stdout, stderr, ErrorType.TIMEOUT, test_name)
 
             # unexpected return code
             case _:
-                data.append_data(stdout, stderr, ErrorType.UNEXPECTED_RETURN)
+                data.append_data(stdout, stderr, ErrorType.UNEXPECTED_RETURN, test_name)
 
     running_processes = {}
     # execute tests in parallel until we have max_processes running
@@ -184,42 +190,42 @@ def run_tests(args, test_names: list[str], binary_path: str, is_interactive: boo
         test_name = test_name.replace(',', '\\,')
         test_name = f'"{test_name}"'
         process = subprocess.Popen(command + [test_name], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-        running_processes[process.pid] = process
+        running_processes[process.pid] = (process, test_name)
 
         # if we have max_processes number of processes running, wait for a process to finish and remove the process from
         # the running processes dictionary
         if len(running_processes) >= max_processes:
             pid, status = os.wait()  # wait for *any* child to exit
             assert pid in running_processes, 'os.wait() returned unexpected child PID'
-            process = running_processes[pid]
+            process, p_test_name = running_processes[pid]
             assert process.pid == pid, 'PID mismatch'
             returncode = os.waitstatus_to_exitcode(status)  # get return status from process; don't use Popen.returncode
             assert returncode is not None
             progress_bar.update(1)
             del running_processes[pid]
             stdout, stderr = process.communicate()
-            handle_returncode(stdout, stderr, returncode)
+            handle_returncode(stdout, stderr, returncode, p_test_name)
             if args.stop_fail and returncode != 0:  # stop on first failure
                 failed = True
                 break
 
     # wait for the remaining running processes to finish
-    for pid, process in running_processes.items():
+    for pid, (process, p_test_name) in running_processes.items():
         stdout, stderr = process.communicate()  # wait for process to terminate; consume stdout/stderr to avoid deadlock
         progress_bar.update(1)
-        handle_returncode(stdout, stderr, process.returncode)
+        handle_returncode(stdout, stderr, process.returncode, p_test_name)
         if process.returncode != 0 and args.stop_fail:
             failed = True
             break
 
     if failed:
         # send SIGTERM to all processes
-        for process in running_processes.values():
+        for process, test_name in running_processes.values():
             process.terminate()
         # wait 10ms for processes to terminate
         time.sleep(.01)
         # send SIGKILL if process did not terminate in time
-        for process in running_processes.values():
+        for process, test_name in running_processes.values():
             try:
                 process.communicate()  # consume stdout/stderr to avoid deadlock
             except subprocess.TimeoutExpired:

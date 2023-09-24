@@ -2663,6 +2663,7 @@ bool heuristic_search_helper(const char *vertex_str, const char *expand_str, con
         State top_state = expansions::TopDownComplete::template Start<State>(PT, G, M, CF, CE);
 
         try {
+            
 
             H1 h1(PT, G, M, CF, CE);
             H2 h2(PT, G, M, CF, CE);

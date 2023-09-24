@@ -68,7 +68,7 @@ struct M_EXPORT PlanTableBase : crtp<Actual, PlanTableBase>
     PlanTableBase() = default;
 
     public:
-    PlanTableBase(const PlanTableBase&) = delete;
+    PlanTableBase(const PlanTableBase&) = default;
     PlanTableBase(PlanTableBase &&other) : PlanTableBase() { swap(*this, other); }
 
     PlanTableBase & operator=(PlanTableBase other) { swap(*this, other); return *this; }
@@ -248,6 +248,8 @@ struct M_EXPORT PlanTableSmallOrDense : PlanTableBase<PlanTableSmallOrDense>
 
     void dump(std::ostream &out) const;
     void dump() const;
+
+
 };
 
 /** This table represents all explored plans with their sub-plans, estimated size, cost, and further optional

@@ -46,15 +46,11 @@ struct __virtual_crtp_helper
                 struct base_type_helper<false, T>
                 {
                     virtual ReturnType operator()(Tag, T, Args...) = 0;
-
-//                    virtual ReturnType operator()(Tag, T, T, Args...) = 0;
                 };
 
                 template<typename T>
                 struct base_type_helper<true, T> {
                     virtual ReturnType operator()(Tag, T, Args...) const = 0;
-
-//                    virtual ReturnType operator()(Tag, T, T, Args...) const = 0;
                 };
 
                 /*----- Overriding implementation --------------------------------------------------------------------*/

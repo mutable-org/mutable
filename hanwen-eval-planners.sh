@@ -45,10 +45,10 @@ MAX_CARDINALITY=10000
 MIN_RELATIONS=5
 # Associative array mapping topologies to their max. number of relations tested
 declare -A TOPOLOGIES=(
-#   [chain]=30
-#   [cycle]=32
+   [chain]=30
+   [cycle]=32
 #    [star]=16
-   [clique]=16
+#   [clique]=16
 #   [chain]=20
 #    [cycle]=20
 

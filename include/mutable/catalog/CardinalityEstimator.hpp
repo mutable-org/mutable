@@ -45,6 +45,7 @@ struct M_EXPORT DataModel
 
     /** Assigns `this` to the `Subproblem` `s`, i.e. this model now describes the result of evaluating `s`. */
     virtual void assign_to(Subproblem s) = 0;
+
 };
 
 

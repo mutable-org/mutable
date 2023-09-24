@@ -1,14 +1,14 @@
 from database_connectors.connector import *
 from database_connectors import hyperconf
+from benchmark_utils import *
 
 from tableauhyperapi import HyperProcess, Telemetry, Connection, CreateMode, NOT_NULLABLE, NULLABLE, SqlType, \
         TableDefinition, Inserter, escape_name, escape_string_literal, HyperException, TableName
-from tqdm import tqdm
 from typeguard import typechecked
 from typing import Any
 import os
 import subprocess
-import sys
+
 
 
 @typechecked
@@ -23,8 +23,7 @@ class HyPer(Connector):
         benchmark: str = params['benchmark']
         experiment: str = params['name']
         suffix: str = f' ({get_num_cores()} cores)' if self.multithreaded else ' (single core)'
-        tqdm.write(f'` Perform experiment {suite}/{benchmark}/{experiment} with configuration HyPer{suffix}.')
-        sys.stdout.flush()
+        tqdm_print(f'` Perform experiment {suite}/{benchmark}/{experiment} with configuration HyPer{suffix}.')
 
         path: str = os.getcwd()
         script = f'''
@@ -42,8 +41,7 @@ sys.stdout.flush()
             args = ['taskset', '-c', '2'] + args
 
         if self.verbose:
-            tqdm.write(f"    $ {' '.join(args)}")
-            sys.stdout.flush()
+            tqdm_print(f"    $ {' '.join(args)}")
 
         timeout: int = n_runs * (DEFAULT_TIMEOUT + TIMEOUT_PER_CASE * len(params['cases']))
         process = subprocess.Popen(
@@ -56,7 +54,7 @@ sys.stdout.flush()
         try:
             process.wait(timeout=timeout)
         except subprocess.TimeoutExpired:
-            tqdm.write(f'Benchmark timed out after {timeout} seconds')
+            tqdm_print(f'Benchmark timed out after {timeout} seconds')
             # Set execution time of every case of every run to timeout
             times: list[float] = [float(TIMEOUT_PER_CASE*1000) for _ in range(n_runs)]
             config_result: ConfigResult = {case: times for case in params['cases'].keys()}
@@ -74,7 +72,7 @@ sys.stdout.flush()
         if process.returncode == 0:
             result: ConnectorResult = eval(process.stdout.read().decode('latin-1'))
         else:
-            raise ConnectorException(f"Process failed with return code {process.returncode}. Details:\n{tqdm.write(process.stderr.read().decode('latin-1'))}")
+            raise ConnectorException(f"Process failed with return code {process.returncode}. Details:\n{process.stderr.read().decode('latin-1')}")
 
         patched_result: ConnectorResult = dict()
         for key, val in result.items():

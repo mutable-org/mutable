@@ -1,11 +1,10 @@
 from .connector import *
+from benchmark_utils import *
 
-from tqdm import tqdm
 from typeguard import typechecked
 from typing import Any
 import os
 import subprocess
-import sys
 
 
 TMP_DB = 'tmp.duckdb'
@@ -39,8 +38,7 @@ class DuckDB(Connector):
         benchmark: str = params['benchmark']
         experiment: str = params['name']
         configname: str = f'DuckDB ({get_num_cores()} cores)' if self.multithreaded else 'DuckDB (single core)'
-        tqdm.write(f'` Perform experiment {suite}/{benchmark}/{experiment} with configuration {configname}.')
-        sys.stdout.flush()
+        tqdm_print(f'` Perform experiment {suite}/{benchmark}/{experiment} with configuration {configname}.')
 
         self.clean_up()
 
@@ -97,8 +95,7 @@ class DuckDB(Connector):
 
                         if self.verbose and not verbose_printed:
                             verbose_printed = True
-                            tqdm.write(combined_query)
-                            sys.stdout.flush()
+                            tqdm_print(combined_query)
 
                         benchmark_info = f"{suite}/{benchmark}/{experiment} [{configname}]"
                         time: float
@@ -125,8 +122,7 @@ class DuckDB(Connector):
 
                     if self.verbose and not verbose_printed:
                         verbose_printed = True
-                        tqdm.write(combined_query)
-                        sys.stdout.flush()
+                        tqdm_print(combined_query)
 
                     benchmark_info = f"{suite}/{benchmark}/{experiment} [{configname}]"
                     try:
@@ -200,8 +196,7 @@ class DuckDB(Connector):
             out, err = process.communicate(query, timeout=timeout)
         except subprocess.TimeoutExpired:
             process.kill()
-            tqdm.write(f"    ! Query \n'{query}'\n' timed out after {timeout} seconds")
-            sys.stdout.flush()
+            tqdm_print(f"    ! Query \n'{query}'\n' timed out after {timeout} seconds")
             raise ExperimentTimeoutExpired(f'Query timed out after {timeout} seconds')
         finally:
             if process.poll() is None:          # if process is still alive
@@ -213,17 +208,16 @@ class DuckDB(Connector):
 
         if process.returncode or len(err):
             outstr = '\n'.join(out.split('\n')[-20:])
-            tqdm.write(f'''\
+            tqdm_print(f'''\
     Unexpected failure during execution of benchmark "{benchmark_info}" with return code {process.returncode}:''')
-            tqdm.write(command)
-            tqdm.write(f'''\
+            tqdm_print(command)
+            tqdm_print(f'''\
     ===== stdout =====
     {outstr}
     ===== stderr =====
     {err}
     ==================
     ''')
-            sys.stdout.flush()
             if process.returncode:
                 raise ConnectorException(f'Benchmark failed with return code {process.returncode}.')
 

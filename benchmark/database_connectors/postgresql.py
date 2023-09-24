@@ -1,13 +1,13 @@
 from .connector import *
+from benchmark_utils import *
 
-from tqdm import tqdm
 from typeguard import typechecked
 from typing import Any
 import os
 import psycopg2
 import psycopg2.extensions
 import subprocess
-import sys
+
 
 db_options: dict[str, str] = {
     'dbname': 'benchmark_tmp',
@@ -43,8 +43,7 @@ class PostgreSQL(Connector):
         suite: str = params['suite']
         benchmark: str = params['benchmark']
         experiment: str = params['name']
-        tqdm.write(f'` Perform experiment {suite}/{benchmark}/{experiment} with configuration PostgreSQL.')
-        sys.stdout.flush()
+        tqdm_print(f'` Perform experiment {suite}/{benchmark}/{experiment} with configuration PostgreSQL.')
 
         config_result: ConfigResult = dict()      # map that is returned with the measured times
 
@@ -112,12 +111,11 @@ class PostgreSQL(Connector):
                     # Execute query as benchmark and get measurement time
                     command = f"psql -U {db_options['user']} -d {db_options['dbname']} -f {TMP_SQL_FILE} | grep 'Time' | cut -d ' ' -f 2"
                     if self.verbose:
-                        tqdm.write(f"    $ {command}")
+                        tqdm_print(f"    $ {command}")
                         if not verbose_printed:
                             verbose_printed = True
                             with open(TMP_SQL_FILE) as tmp:
-                                tqdm.write("    " + "    ".join(tmp.readlines()))
-                        sys.stdout.flush()
+                                tqdm_print("    " + "    ".join(tmp.readlines()))
 
                     timeout = TIMEOUT_PER_CASE
                     benchmark_info = f"{suite}/{benchmark}/{experiment} [PostgreSQL]"
@@ -147,12 +145,11 @@ class PostgreSQL(Connector):
                 # Execute query file and collect measurement data
                 command = f"psql -U {db_options['user']} -d {db_options['dbname']} -f {TMP_SQL_FILE} | grep 'Time' | cut -d ' ' -f 2"
                 if self.verbose:
-                    tqdm.write(f"    $ {command}")
+                    tqdm_print(f"    $ {command}")
                     if not verbose_printed:
                         verbose_printed = True
                         with open(TMP_SQL_FILE) as tmp:
-                            tqdm.write("    " + "    ".join(tmp.readlines()))
-                    sys.stdout.flush()
+                            tqdm_print("    " + "    ".join(tmp.readlines()))
 
                 timeout = DEFAULT_TIMEOUT + TIMEOUT_PER_CASE * len(params['cases'])
                 benchmark_info = f"{suite}/{benchmark}/{experiment} [PostgreSQL]"
@@ -258,17 +255,17 @@ class PostgreSQL(Connector):
         assert process.returncode is not None
         if process.returncode or len(err):
             outstr = '\n'.join(out.split('\n')[-20:])
-            tqdm.write(f'''\
+            tqdm_print(f'''\
     Unexpected failure during execution of benchmark "{benchmark_info}" with return code {process.returncode}:''')
-            tqdm.write(command)
-            tqdm.write(f'''\
+            tqdm_print(command)
+            tqdm_print(f'''\
     ===== stdout =====
     {outstr}
     ===== stderr =====
     {err}
     ==================
     ''')
-            sys.stdout.flush()
+
             if process.returncode:
                 raise ConnectorException(f'Benchmark failed with return code {process.returncode}.')
 

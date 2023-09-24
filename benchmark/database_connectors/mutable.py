@@ -1,14 +1,14 @@
 from .connector import *
+from benchmark_utils import *
 
 from colorama import Fore, Style
-from tqdm import tqdm
 from typeguard import typechecked
 from typing import Any
 import os
 import random
 import re
 import subprocess
-import sys
+
 
 class BenchmarkError(Exception):
     pass
@@ -71,8 +71,7 @@ class Mutable(Connector):
         for config_name, config in configs.items():
             config_name = f"mutable (single core, {config_name})"
             if run_id == 0:
-                tqdm.write(f'` Perform experiment {suite}/{benchmark}/{experiment_name} with configuration {config_name}.')
-                sys.stdout.flush()
+                tqdm_print(f'` Perform experiment {suite}/{benchmark}/{experiment_name} with configuration {config_name}.')
 
             measurements: dict[Case, float] = self.run_configuration(experiment_name, config_name, config, params)
             experiment[config_name] = measurements
@@ -141,8 +140,7 @@ class Mutable(Connector):
                 try:
                     durations = self.benchmark_query(command, query, config['pattern'], timeout, path_to_file, False)
                 except BenchmarkTimeoutException as ex:
-                    tqdm.write(str(ex))
-                    sys.stdout.flush()
+                    tqdm_print(str(ex))
                     # Add timeout durations
                     for case in cases.keys():
                         execution_times[case] = float(TIMEOUT_PER_CASE * 1000)
@@ -165,16 +163,14 @@ class Mutable(Connector):
                     try:
                         durations = self.benchmark_query(command, query_str, config['pattern'], timeout, path_to_file, False)
                     except BenchmarkTimeoutException as ex:
-                        tqdm.write(str(ex))
-                        sys.stdout.flush()
+                        tqdm_print(str(ex))
                         execution_times[case] = float(timeout * 1000)
                     else:
                         if len(durations) != 1:
                             raise ConnectorException(f"Expected 1 measurement but got {len(durations)}.")
                         execution_times[case] = float(durations[0])
         except BenchmarkError as ex:
-            tqdm.write(str(ex))
-            sys.stdout.flush()
+            tqdm_print(str(ex))
 
         return execution_times
 
@@ -221,8 +217,7 @@ class Mutable(Connector):
             try:
                 durations: list[float] = self.benchmark_query(cmd, script, pattern, timeout, path_to_file, True)
             except BenchmarkTimeoutException as ex:
-                tqdm.write(str(ex))
-                sys.stdout.flush()
+                tqdm_print(str(ex))
                 execution_times[N] = float(timeout * 1000)
             else:
                 if len(durations) != 1:
@@ -270,21 +265,20 @@ class Mutable(Connector):
         assert process.returncode is not None
         if process.returncode or len(err):
             outstr: str = '\n'.join(out.split('\n')[-20:])
-            tqdm.write(f'''\
+            tqdm_print(f'''\
     Unexpected failure during execution of benchmark "{path_to_file}" with return code {process.returncode}:''')
             if is_script:
-                tqdm.write(' '.join(cmd))
-                tqdm.write(query)
+                tqdm_print(' '.join(cmd))
+                tqdm_print(query)
             else:
                 self.print_command(cmd, query)
-            tqdm.write(f'''\
+            tqdm_print(f'''\
     ===== stdout =====
     {outstr}
     ===== stderr =====
     {err}
     ==================
     ''')
-            sys.stdout.flush()
             if process.returncode:
                 raise ConnectorException(f'Benchmark failed with return code {process.returncode}.')
 
@@ -357,5 +351,4 @@ class Mutable(Connector):
             command.append('-')
         query_str = query.strip().replace('\n', ' ').replace('"', '\\"')
         command_str = ' '.join(command)
-        tqdm.write(f'{indent}$ echo "{query_str}" | {command_str}')
-        sys.stdout.flush()
+        tqdm_print(f'{indent}$ echo "{query_str}" | {command_str}')

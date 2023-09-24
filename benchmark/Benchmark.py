@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 from database_connectors import mutable, postgresql, hyper, duckdb, connector
 from database_connectors.connector import *
+from benchmark_utils import *
 
 from git import Repo
 from sqlobject.converters import sqlrepr
@@ -19,6 +20,7 @@ import pandas
 import sys
 import yamale
 import yaml
+
 
 YML_SCHEMA: str = os.path.join('benchmark', '_schema.yml')                      # The validation schema
 
@@ -275,11 +277,9 @@ def perform_experiment(
 
     # Perform benchmark
     try:
-        sys.stdout.flush()
         connector_result: ConnectorResult = conn.execute(N_RUNS, params)
     except connector.ConnectorException as ex:
-        tqdm.write(f"\nAn error occurred for {system} while executing {info.path_to_file}: {str(ex)}\n")
-        sys.stdout.flush()
+        tqdm_print(f"\nAn error occurred for {system} while executing {info.path_to_file}: {str(ex)}\n")
         raise BenchmarkError()
 
     # Add measurements to result
@@ -361,13 +361,11 @@ def run_benchmarks(args: argparse.Namespace) -> None:
     output_csv_file: str | None = args.output
     if output_csv_file:
         if not os.path.isfile(output_csv_file):  # file does not yet exist
-            tqdm.write(f'Writing measurements to \'{output_csv_file}\'.')
-            sys.stdout.flush()
+            tqdm_print(f'Writing measurements to \'{output_csv_file}\'.')
             with open(output_csv_file, 'w') as csv:
                 csv.write('commit,date,version,suite,benchmark,experiment,name,config,case,time,runid\n')
         else:
-            tqdm.write(f'Adding measurements to \'{output_csv_file}\'.')
-            sys.stdout.flush()
+            tqdm_print(f'Adding measurements to \'{output_csv_file}\'.')
 
     # A central object to collect all measurements of all experiments.  Has the following structure:
     #
@@ -399,8 +397,7 @@ def run_benchmarks(args: argparse.Namespace) -> None:
 
         # Validate schema
         if not validate_schema(path_to_file, YML_SCHEMA):
-            tqdm.write(f'Benchmark file "{path_to_file}" violates schema.')
-            sys.stdout.flush()
+            tqdm_print(f'Benchmark file "{path_to_file}" violates schema.')
             continue
 
         with open(path_to_file, 'r') as yml_file:
@@ -425,17 +422,16 @@ def run_benchmarks(args: argparse.Namespace) -> None:
                         continue  # Skip counting files when table does not have a file with data
                     p: str = os.path.join(table['file'])  # Path to file
                     if not os.path.isfile(p):
-                        tqdm.write(f'Table file \'{p}\' not found.  Skipping benchmark.\n', file=sys.stderr)
+                        tqdm_print(f'Table file \'{p}\' not found.  Skipping benchmark.\n', file=sys.stderr)
                         table_access_error = True
                     else:
                         info.experiment_data[table_name]['lines_in_file'] = int(os.popen(f"wc -l < {p}").read())
                 if table_access_error:
                     continue  # At least one table file could not be opened.  Skip benchmark.
 
-            tqdm.write('\n\n==========================================================')
-            tqdm.write(f'Perform benchmarks in \'{path_to_file}\'.')
-            tqdm.write('==========================================================')
-            sys.stdout.flush()
+            tqdm_print('\n\n==========================================================')
+            tqdm_print(f'Perform benchmarks in \'{path_to_file}\'.')
+            tqdm_print('==========================================================')
 
             # Perform experiment for each system
             for system in yml.get('systems', dict()).keys():

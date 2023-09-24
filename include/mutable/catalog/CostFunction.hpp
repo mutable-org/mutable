@@ -58,10 +58,10 @@ struct CostFunction : calculate_filter_cost_tag::base_type
 
     /** Returns the total cost of performing a Join operation. */
     template<typename PlanTable>
-    double calculate_join_cost(const QueryGraph &G, const PlanTable &PT, const PlanTable &PT2, const CardinalityEstimator &CE,
+    double calculate_join_cost(const QueryGraph &G, const PlanTable &PT, const CardinalityEstimator &CE,
                                Subproblem left, Subproblem right, const cnf::CNF &condition) const
     {
-        return operator()(calculate_join_cost_tag{}, PT, PT2, G, CE, left, right, condition);
+        return operator()(calculate_join_cost_tag{}, PT, G, CE, left, right, condition);
     }
 
 

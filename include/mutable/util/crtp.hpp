@@ -45,16 +45,16 @@ struct __virtual_crtp_helper
                 template<typename T>
                 struct base_type_helper<false, T>
                 {
-//                    virtual ReturnType operator()(Tag, T, Args...) = 0;
+                    virtual ReturnType operator()(Tag, T, Args...) = 0;
 
-                    virtual ReturnType operator()(Tag, T, T, Args...) = 0;
+//                    virtual ReturnType operator()(Tag, T, T, Args...) = 0;
                 };
 
                 template<typename T>
                 struct base_type_helper<true, T> {
-//                    virtual ReturnType operator()(Tag, T, Args...) const = 0;
+                    virtual ReturnType operator()(Tag, T, Args...) const = 0;
 
-                    virtual ReturnType operator()(Tag, T, T, Args...) const = 0;
+//                    virtual ReturnType operator()(Tag, T, T, Args...) const = 0;
                 };
 
                 /*----- Overriding implementation --------------------------------------------------------------------*/
@@ -68,8 +68,8 @@ struct __virtual_crtp_helper
                 template<typename Actual, typename T>
                 struct derived_type_helper<false, Actual, T> : virtual base_type_helper<false, T>
                 {
-//                    ReturnType operator()(Tag, T o, T o2, Args... args) {
-                    ReturnType operator()(Tag, T o, T o2, Args... args) override {
+                    ReturnType operator()(Tag, T o, T o2, Args... args) {
+//                    ReturnType operator()(Tag, T o, T o2, Args... args) override {
                         return static_cast<Actual*>(this)->template operator()<T>(
                             Tag{}, o, o2, std::forward<Args>(args)...
                         );
@@ -78,8 +78,8 @@ struct __virtual_crtp_helper
                 template<typename Actual, typename T>
                 struct derived_type_helper<true, Actual, T> : virtual base_type_helper<true, T>
                 {
-                    ReturnType operator()(Tag, T o, T o2, Args... args) const override {
-//                    ReturnType operator()(Tag, T o, T o2, Args... args) const  {
+//                    ReturnType operator()(Tag, T o, T o2, Args... args) const override {
+                    ReturnType operator()(Tag, T o, T o2, Args... args) const  {
                             return static_cast<const Actual*>(this)->template operator()<T>(
                                     Tag{}, o, o2, std::forward<Args>(args)...
                             );

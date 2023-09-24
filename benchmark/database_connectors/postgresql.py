@@ -6,7 +6,6 @@ from typing import Any
 import os
 import psycopg2
 import psycopg2.extensions
-import subprocess
 
 
 db_options: dict[str, str] = {
@@ -63,6 +62,11 @@ class PostgreSQL(Connector):
         durations: list[float]
 
         verbose_printed = False
+
+        # For query execution
+        command = f"psql -U {db_options['user']} -d {db_options['dbname']} -f {TMP_SQL_FILE} | grep 'Time' | cut -d ' ' -f 2"
+        popen_args: dict[str, Any] = {'shell': True}
+        benchmark_info = f"{suite}/{benchmark}/{experiment} [PostgreSQL]"
         for _ in range(n_runs):
             # Set up database
             self.setup()
@@ -109,7 +113,6 @@ class PostgreSQL(Connector):
                         tmp.write(f'set statement_timeout = 0;\n')
 
                     # Execute query as benchmark and get measurement time
-                    command = f"psql -U {db_options['user']} -d {db_options['dbname']} -f {TMP_SQL_FILE} | grep 'Time' | cut -d ' ' -f 2"
                     if self.verbose:
                         tqdm_print(f"    $ {command}")
                         if not verbose_printed:
@@ -118,9 +121,11 @@ class PostgreSQL(Connector):
                                 tqdm_print("    " + "    ".join(tmp.readlines()))
 
                     timeout = TIMEOUT_PER_CASE
-                    benchmark_info = f"{suite}/{benchmark}/{experiment} [PostgreSQL]"
                     try:
-                        durations = self.run_command(command, timeout, benchmark_info)
+                        out: str = self.benchmark_query(command=command, query='', timeout=timeout,
+                                                        popen_args=popen_args, benchmark_info=benchmark_info,
+                                                        verbose=self.verbose)
+                        durations = self.parse_results(out)
                     except ExperimentTimeoutExpired:
                         if case not in config_result.keys():
                             config_result[case] = list()
@@ -143,7 +148,6 @@ class PostgreSQL(Connector):
                     tmp.write(f'set statement_timeout = 0;\n')
 
                 # Execute query file and collect measurement data
-                command = f"psql -U {db_options['user']} -d {db_options['dbname']} -f {TMP_SQL_FILE} | grep 'Time' | cut -d ' ' -f 2"
                 if self.verbose:
                     tqdm_print(f"    $ {command}")
                     if not verbose_printed:
@@ -152,9 +156,11 @@ class PostgreSQL(Connector):
                             tqdm_print("    " + "    ".join(tmp.readlines()))
 
                 timeout = DEFAULT_TIMEOUT + TIMEOUT_PER_CASE * len(params['cases'])
-                benchmark_info = f"{suite}/{benchmark}/{experiment} [PostgreSQL]"
                 try:
-                    durations = self.run_command(command, timeout, benchmark_info)
+                    out: str = self.benchmark_query(command=command, query='', timeout=timeout,
+                                                    popen_args=popen_args, benchmark_info=benchmark_info,
+                                                    verbose=self.verbose)
+                    durations = self.parse_results(out)
                 except ExperimentTimeoutExpired:
                     for case in params['cases'].keys():
                         if case not in config_result.keys():
@@ -234,44 +240,10 @@ class PostgreSQL(Connector):
                 cursor.execute(f'CREATE UNLOGGED TABLE "{table_name}" {columns};')     # Create actual table that will be used for experiment
 
 
-    def run_command(self, command, timeout: int, benchmark_info: str) -> list[float]:
-        process = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                                   cwd=os.getcwd(), shell=True)
-        try:
-            proc_out, proc_err = process.communicate("".encode('latin-1'), timeout=timeout)
-        except subprocess.TimeoutExpired:
-            raise ExperimentTimeoutExpired(f'Query timed out after {timeout} seconds')
-        finally:
-            if process.poll() is None: # if process is still alive
-                process.terminate() # try to shut down gracefully
-                try:
-                    process.wait(timeout=1) # give process 1 second to terminate
-                except subprocess.TimeoutExpired:
-                    process.kill() # kill if process did not terminate in time
-
-        out: str = proc_out.decode('latin-1')
-        err: str = proc_err.decode('latin-1')
-
-        assert process.returncode is not None
-        if process.returncode or len(err):
-            outstr = '\n'.join(out.split('\n')[-20:])
-            tqdm_print(f'''\
-    Unexpected failure during execution of benchmark "{benchmark_info}" with return code {process.returncode}:''')
-            tqdm_print(command)
-            tqdm_print(f'''\
-    ===== stdout =====
-    {outstr}
-    ===== stderr =====
-    {err}
-    ==================
-    ''')
-
-            if process.returncode:
-                raise ConnectorException(f'Benchmark failed with return code {process.returncode}.')
-
-        # Parse `out` for timings
-        durations: list[str] = out.split('\n')
+    # Parse `results` for timings
+    @staticmethod
+    def parse_results(results: str) -> list[float]:
+        durations: list[str] = results.split('\n')
         durations.remove('')
         timings: list[float] = [float(dur.replace("\n", "").replace(",", ".")) for dur in durations]
-
         return timings

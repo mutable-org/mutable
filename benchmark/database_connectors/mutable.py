@@ -7,7 +7,6 @@ from typing import Any
 import os
 import random
 import re
-import subprocess
 
 
 class BenchmarkError(Exception):
@@ -111,6 +110,7 @@ class Mutable(Connector):
             command.extend(supplementary_args.split(' '))
         if config:
             command.extend(config['args'].split(' '))
+        command = command + ['--quiet', '-']
 
         if is_readonly:
             tables: dict[str, dict[str, Any]] | None = yml.get('data')
@@ -128,7 +128,7 @@ class Mutable(Connector):
                 # Produce code to load data into tables
                 imports: list[str] = self.get_setup_statements(suite, path_to_data, yml['data'], None)
 
-                import_str= '\n'.join(imports)
+                import_str = '\n'.join(imports)
                 timeout = DEFAULT_TIMEOUT + TIMEOUT_PER_CASE * len(cases)
                 combined_query: list[str] = list()
                 combined_query.append(import_str)
@@ -138,7 +138,9 @@ class Mutable(Connector):
                     combined_query.extend([case])
                 query: str = '\n'.join(combined_query)
                 try:
-                    durations = self.benchmark_query(command, query, config['pattern'], timeout, path_to_file, False)
+                    out: str = self.benchmark_query(command=command, query=self.prepare_query(query), timeout=timeout,
+                                                    benchmark_info=path_to_file, verbose=self.verbose)
+                    durations = self.parse_results(out, config['pattern'])
                 except BenchmarkTimeoutException as ex:
                     tqdm_print(str(ex))
                     # Add timeout durations
@@ -155,13 +157,15 @@ class Mutable(Connector):
                 for case, query in cases.items():
                     # Produce code to load data into tables with scale factor
                     case_imports: list[str] = self.get_setup_statements(suite, path_to_data, yml['data'], case)
-                    import_str= '\n'.join(case_imports)
+                    import_str = '\n'.join(case_imports)
 
                     query_str: str = import_str + '\n' + query
                     if self.verbose:
                         self.print_command(command, query_str, '    ')
                     try:
-                        durations = self.benchmark_query(command, query_str, config['pattern'], timeout, path_to_file, False)
+                        out: str = self.benchmark_query(command=command, query=self.prepare_query(query_str),
+                                                        timeout=timeout, benchmark_info=path_to_file, verbose=self.verbose)
+                        durations = self.parse_results(out, config['pattern'])
                     except BenchmarkTimeoutException as ex:
                         tqdm_print(str(ex))
                         execution_times[case] = float(timeout * 1000)
@@ -215,9 +219,10 @@ class Mutable(Connector):
             cmd: list[str] = ['env', f'N={N}', f'RANDOM={case_seed}'] + variables + ['/bin/bash']
 
             try:
-                durations: list[float] = self.benchmark_query(cmd, script, pattern, timeout, path_to_file, True)
-            except BenchmarkTimeoutException as ex:
-                tqdm_print(str(ex))
+                out: str = self.benchmark_query(command=cmd, query=script, timeout=timeout,
+                                                benchmark_info=path_to_file, verbose=self.verbose)
+                durations: list[float] = self.parse_results(out, pattern)
+            except BenchmarkTimeoutException:
                 execution_times[N] = float(timeout * 1000)
             else:
                 if len(durations) != 1:
@@ -225,77 +230,6 @@ class Mutable(Connector):
                 execution_times[N] = float(durations[0])
 
         return execution_times
-
-
-
-    #=======================================================================================================================
-    # Start the shell with `command` and pass `query` to its stdin.  Search the stdout for timings using the given regex
-    # `pattern` and return them as a list.
-    #=======================================================================================================================
-    def benchmark_query(
-        self,
-        cmd: list[str],
-        query: str,
-        pattern: str,
-        timeout: int,
-        path_to_file: str,
-        is_script: bool
-    ) -> list[float]:
-        if not is_script:
-            cmd = cmd + [ '--quiet', '-' ]
-            query = query.strip().replace('\n', ' ') + '\n'     # transform to a one-liner and append new line to submit query
-
-        process = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                                   cwd=os.getcwd())
-        try:
-            proc_out, proc_err = process.communicate(query.encode('latin-1'), timeout=timeout)
-        except subprocess.TimeoutExpired:
-            raise BenchmarkTimeoutException(f'Query timed out after {timeout} seconds')
-        finally:
-            if process.poll() is None:          # if process is still alive
-                process.terminate()             # try to shut down gracefully
-                try:
-                    process.wait(timeout=1)     # give process 1 second to terminate
-                except subprocess.TimeoutExpired:
-                    process.kill()              # kill if process did not terminate in time
-
-        out: str = proc_out.decode('latin-1')
-        err: str = proc_err.decode('latin-1')
-
-        assert process.returncode is not None
-        if process.returncode or len(err):
-            outstr: str = '\n'.join(out.split('\n')[-20:])
-            tqdm_print(f'''\
-    Unexpected failure during execution of benchmark "{path_to_file}" with return code {process.returncode}:''')
-            if is_script:
-                tqdm_print(' '.join(cmd))
-                tqdm_print(query)
-            else:
-                self.print_command(cmd, query)
-            tqdm_print(f'''\
-    ===== stdout =====
-    {outstr}
-    ===== stderr =====
-    {err}
-    ==================
-    ''')
-            if process.returncode:
-                raise ConnectorException(f'Benchmark failed with return code {process.returncode}.')
-
-        # Parse `out` for timings
-        durations: list[float] = list()
-        matcher: re.Pattern = re.compile(pattern)
-        for line in out.split('\n'):
-            if matcher.match(line):
-                for s in line.split():
-                    try:
-                        dur: float = float(s)
-                        durations.append(dur)
-                    except ValueError:
-                        continue
-
-        return durations
-
 
 
     ####################################################################################################################
@@ -345,6 +279,31 @@ class Mutable(Connector):
 
         return statements
 
+
+    # Prepare a query for execution
+    @staticmethod
+    def prepare_query(query: str) -> str:
+        return query.strip().replace('\n', ' ') + '\n'
+
+
+    # Parse `results` for timings
+    @staticmethod
+    def parse_results(results: str, pattern: str) -> list[float]:
+        durations: list[float] = list()
+        matcher: re.Pattern = re.compile(pattern)
+        for line in results.split('\n'):
+            if matcher.match(line):
+                for s in line.split():
+                    try:
+                        dur: float = float(s)
+                        durations.append(dur)
+                    except ValueError:
+                        continue
+
+        return durations
+
+
+    # Overrides `print_command` from Connector ABC
     @staticmethod
     def print_command(command: list[str], query: str, indent: str = '') -> None:
         if command[-1] != '-':

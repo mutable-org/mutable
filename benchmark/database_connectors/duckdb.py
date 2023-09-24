@@ -4,7 +4,6 @@ from benchmark_utils import *
 from typeguard import typechecked
 from typing import Any
 import os
-import subprocess
 
 
 TMP_DB = 'tmp.duckdb'
@@ -52,6 +51,11 @@ class DuckDB(Connector):
                 break
 
         verbose_printed: bool = False
+
+        # For query execution
+        command: str = f"./{self.duckdb_cli} {TMP_DB}"
+        popen_args: dict[str, Any] = {'shell': True, 'text': True}
+        benchmark_info: str = f"{suite}/{benchmark}/{experiment} [{configname}]"
         for _ in range(n_runs):
             try:
                 # Used variables
@@ -97,13 +101,14 @@ class DuckDB(Connector):
                             verbose_printed = True
                             tqdm_print(combined_query)
 
-                        benchmark_info = f"{suite}/{benchmark}/{experiment} [{configname}]"
                         time: float
                         try:
-                            time = float(self.run_query(combined_query, timeout, benchmark_info)[0])
-                        except ExperimentTimeoutExpired as ex:
+                            out: str = self.benchmark_query(command=command, query=combined_query, timeout=timeout,
+                                                            popen_args=popen_args, benchmark_info=benchmark_info,
+                                                            verbose=self.verbose, encode_query=False)
+                            time = self.parse_results(out)[0]
+                        except ExperimentTimeoutExpired:
                             time = float(timeout)
-
                         if case not in config_result.keys():
                             config_result[case] = list()
                         config_result[case].append(time)
@@ -124,10 +129,12 @@ class DuckDB(Connector):
                         verbose_printed = True
                         tqdm_print(combined_query)
 
-                    benchmark_info = f"{suite}/{benchmark}/{experiment} [{configname}]"
                     try:
-                        durations: list[float] = self.run_query(combined_query, timeout, benchmark_info)
-                    except ExperimentTimeoutExpired as ex:
+                        out: str = self.benchmark_query(command=command, query=combined_query, timeout=timeout,
+                                                        popen_args=popen_args, benchmark_info=benchmark_info,
+                                                        verbose=self.verbose, encode_query=False)
+                        durations: list[float] = self.parse_results(out)
+                    except ExperimentTimeoutExpired:
                         for case in params['cases'].keys():
                             if case not in config_result.keys():
                                 config_result[case] = list()
@@ -185,46 +192,12 @@ class DuckDB(Connector):
         return statements
 
 
-    def run_query(self, query: str, timeout: int, benchmark_info: str) -> list[float]:
-        command: str = f"./{self.duckdb_cli} {TMP_DB}"
-        if not self.multithreaded:
-            command = 'taskset -c 2 ' + command
-
-        process = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                                   cwd=os.getcwd(), shell=True, text=True)
-        try:
-            out, err = process.communicate(query, timeout=timeout)
-        except subprocess.TimeoutExpired:
-            process.kill()
-            tqdm_print(f"    ! Query \n'{query}'\n' timed out after {timeout} seconds")
-            raise ExperimentTimeoutExpired(f'Query timed out after {timeout} seconds')
-        finally:
-            if process.poll() is None:          # if process is still alive
-                process.terminate()             # try to shut down gracefully
-                try:
-                    process.wait(timeout=1)     # wait for process to terminate
-                except subprocess.TimeoutExpired:
-                    process.kill()              # kill if process did not terminate in time
-
-        if process.returncode or len(err):
-            outstr = '\n'.join(out.split('\n')[-20:])
-            tqdm_print(f'''\
-    Unexpected failure during execution of benchmark "{benchmark_info}" with return code {process.returncode}:''')
-            tqdm_print(command)
-            tqdm_print(f'''\
-    ===== stdout =====
-    {outstr}
-    ===== stderr =====
-    {err}
-    ==================
-    ''')
-            if process.returncode:
-                raise ConnectorException(f'Benchmark failed with return code {process.returncode}.')
-
-        # Parse `out` for timings
-        durations_str: str = os.popen(f"echo '{out}'" + " | grep 'Run Time' | cut -d ' ' -f 5 | awk '{print $1 * 1000;}'").read()
+    # Parse `results` for timings
+    @staticmethod
+    def parse_results(results: str) -> list[float]:
+        durations_str: str = os.popen(
+            f"echo '{results}'" + " | grep 'Run Time' | cut -d ' ' -f 5 | awk '{print $1 * 1000;}'").read()
         durations: list[str] = durations_str.split('\n')
         durations.remove('')
         timings: list[float] = [float(dur.replace("\n", "").replace(",", ".")) for dur in durations]
-
         return timings

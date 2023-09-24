@@ -1,5 +1,9 @@
+from benchmark_utils import *
+
+import os
+import subprocess
 from abc import ABC, abstractmethod
-from typing import TypeAlias, Callable
+from typing import TypeAlias, Callable, Sequence, Any
 import multiprocessing
 
 DEFAULT_TIMEOUT: int  = 60   # seconds
@@ -86,3 +90,67 @@ class Connector(ABC):
 
             columns.append(' '.join(typeList))
         return '(' + ',\n'.join(columns) + ')'
+
+
+    #===================================================================================================================
+    # Start the shell with `command` and pass `query` to its stdin.  If the process does not respond after `timeout`
+    # milliseconds, raise a ExperimentTimeoutExpired().  Return the stdout of the process containing the
+    # measured results.  Parsing these results is expected to happen inside the connector.
+    #===================================================================================================================
+    def benchmark_query(
+        self,
+        command: str | bytes | Sequence[str | bytes],
+        query: str,
+        timeout: int,
+        benchmark_info: str,
+        verbose: bool,
+        popen_args: dict[str, Any] = dict(),
+        encode_query: bool = True,
+    ) -> str:
+        process = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                   cwd=os.getcwd(), **popen_args)
+        try:
+            if encode_query:
+                proc_out, proc_err = process.communicate(query.encode('latin-1'), timeout=timeout)
+            else:
+                proc_out, proc_err = process.communicate(query, timeout=timeout)
+        except subprocess.TimeoutExpired:
+            if verbose:
+                tqdm_print(f"    ! Query \n'{query}'\n' timed out after {timeout} seconds")
+            raise ExperimentTimeoutExpired(f'Query timed out after {timeout} seconds')
+        finally:
+            if process.poll() is None:          # if process is still alive
+                process.terminate()             # try to shut down gracefully
+                try:
+                    process.wait(timeout=1)     # give process 1 second to terminate
+                except subprocess.TimeoutExpired:
+                    process.kill()              # kill if process did not terminate in time
+
+        out: str = proc_out.decode('latin-1') if encode_query else proc_out
+        err: str = proc_err.decode('latin-1') if encode_query else proc_err
+
+        assert process.returncode is not None
+        if process.returncode or len(err):
+            outstr: str = '\n'.join(out.split('\n')[-20:])
+            tqdm_print(f'''\
+    Unexpected failure during execution of benchmark "{benchmark_info}" with return code {process.returncode}:''')
+            self.print_command(command, query)
+            tqdm_print(f'''\
+    ===== stdout =====
+    {outstr}
+    ===== stderr =====
+    {err}
+    ==================
+    ''')
+            if process.returncode:
+                raise ConnectorException(f'Benchmark failed with return code {process.returncode}.')
+
+        return out
+
+    @staticmethod
+    def print_command(command: list[str], query: str, indent: str = '') -> None:
+        indent = '    '
+        query_str = query.strip().replace('\n', ' ').replace('"', '\\"')
+        command_str = ' '.join(command)
+        tqdm_print(f'{indent}Command: {command_str}')
+        tqdm_print(f'{indent}Query: {query_str}')

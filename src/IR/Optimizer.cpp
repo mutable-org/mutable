@@ -230,7 +230,7 @@ Optimizer::optimize_with_plantable(const QueryGraph &G) const
         source->info(std::move(source_info));
     }
 
-    optimize_locally(G, plan_table, plan_table2);
+    optimize_locally(G, plan_table);
     std::unique_ptr<Producer> plan = construct_plan(G, plan_table, source_plans);
     auto &entry = plan_table.get_final();
 
@@ -354,7 +354,7 @@ Optimizer::optimize_with_plantable(const QueryGraph &G) const
 }
 
 template<typename PlanTable>
-void Optimizer::optimize_locally(const QueryGraph &G, PlanTable &PT, PlanTable &PT2) const
+void Optimizer::optimize_locally(const QueryGraph &G, PlanTable &PT) const
 {
     Catalog &C = Catalog::Get();
     auto &DB = C.get_database_in_use();
@@ -372,7 +372,7 @@ void Optimizer::optimize_locally(const QueryGraph &G, PlanTable &PT, PlanTable &
 //    }
 #endif
 
-    M_TIME_EXPR(plan_enumerator()(G, cost_function(), PT, PT2), "Plan enumeration", C.timer());
+    M_TIME_EXPR(plan_enumerator()(G, cost_function(), PT), "Plan enumeration", C.timer());
 
     if (Options::Get().statistics) {
         std::cout << "Est. total cost: " << PT.get_final().cost

@@ -36,7 +36,7 @@ struct DPsize final : PlanEnumeratorCRTP<DPsize>
     using base_type::operator();
 
     template<typename PlanTable>
-    void operator()(enumerate_tag, PlanTable &PT, PlanTable &PT2, const QueryGraph &G, const CostFunction &CF) const {
+    void operator()(enumerate_tag, PlanTable &PT, const QueryGraph &G, const CostFunction &CF) const {
         auto &sources = G.sources();
         std::size_t n = sources.size();
         const AdjacencyMatrix &M = G.adjacency_matrix();
@@ -236,7 +236,7 @@ struct DPsubOpt final : PlanEnumeratorCRTP<DPsubOpt>
  *====================================================================================================================*/
 
 template<typename PlanTable>
-void DPccp::operator()(enumerate_tag, PlanTable &PT, PlanTable &PT2, const QueryGraph &G, const CostFunction &CF) const
+void DPccp::operator()(enumerate_tag, PlanTable &PT,  const QueryGraph &G, const CostFunction &CF) const
 {
     const AdjacencyMatrix &M = G.adjacency_matrix();
     auto &CE = Catalog::Get().get_database_in_use().cardinality_estimator();

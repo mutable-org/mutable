@@ -21,15 +21,15 @@ struct TrainedCostFunction : CostFunctionCRTP<TrainedCostFunction>
         , grouping_model_(std::move(grouping_model)) {}
 
     template<typename PlanTable>
-    double operator()(calculate_filter_cost_tag, PlanTable &&PT, PlanTable &&PT2, const QueryGraph &G,
+    double operator()(calculate_filter_cost_tag, PlanTable &&PT, const QueryGraph &G,
                       const CardinalityEstimator &CE, Subproblem sub, const cnf::CNF &condition) const;
 
     template<typename PlanTable>
-    double operator()(calculate_join_cost_tag, PlanTable &&PT, PlanTable &&PT2, const QueryGraph &G, const CardinalityEstimator &CE,
+    double operator()(calculate_join_cost_tag, PlanTable &&PT, const QueryGraph &G, const CardinalityEstimator &CE,
                       Subproblem left, Subproblem right, const cnf::CNF &condition) const;
 
     template<typename PlanTable>
-    double operator()(calculate_grouping_cost_tag, PlanTable &&PT, PlanTable &&PT2, const QueryGraph &G,
+    double operator()(calculate_grouping_cost_tag, PlanTable &&PT, const QueryGraph &G,
                       const CardinalityEstimator &CE, Subproblem sub,
                       const std::vector<const ast::Expr*> &group_by) const;
 };

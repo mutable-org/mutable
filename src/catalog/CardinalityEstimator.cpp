@@ -118,7 +118,7 @@ CartesianProductEstimator::estimate_join(const QueryGraph&, const DataModel &_le
 
 template<typename PlanTable>
 std::unique_ptr<DataModel>
-CartesianProductEstimator::operator()(estimate_join_all_tag, PlanTable &&PT, PlanTable &&PT2, const QueryGraph&, Subproblem to_join,
+CartesianProductEstimator::operator()(estimate_join_all_tag, PlanTable &&PT, const QueryGraph&, Subproblem to_join,
                                       const cnf::CNF&) const
 {
     M_insist(not to_join.empty());
@@ -131,11 +131,11 @@ CartesianProductEstimator::operator()(estimate_join_all_tag, PlanTable &&PT, Pla
 
 template
 std::unique_ptr<DataModel>
-CartesianProductEstimator::operator()(estimate_join_all_tag, const PlanTableSmallOrDense&, const PlanTableSmallOrDense&,const QueryGraph&,
+CartesianProductEstimator::operator()(estimate_join_all_tag, const PlanTableSmallOrDense&,const QueryGraph&,
                                       Subproblem, const cnf::CNF&) const;
 template
 std::unique_ptr<DataModel>
-CartesianProductEstimator::operator()(estimate_join_all_tag, const PlanTableLargeAndSparse&, const PlanTableLargeAndSparse&, const QueryGraph&,
+CartesianProductEstimator::operator()(estimate_join_all_tag, const PlanTableLargeAndSparse&, const QueryGraph&,
                                       Subproblem, const cnf::CNF&) const;
 
 std::size_t CartesianProductEstimator::predict_cardinality(const DataModel &data) const
@@ -346,7 +346,7 @@ InjectionCardinalityEstimator::estimate_join(const QueryGraph &G, const DataMode
 
 template<typename PlanTable>
 std::unique_ptr<DataModel>
-InjectionCardinalityEstimator::operator()(estimate_join_all_tag, PlanTable &&PT, PlanTable &&PT2, const QueryGraph &G,
+InjectionCardinalityEstimator::operator()(estimate_join_all_tag, PlanTable &&PT, const QueryGraph &G,
                                           Subproblem to_join, const cnf::CNF&) const
 {
 //    std::unique_lock<std::mutex> lock(cs_mutex);
@@ -726,7 +726,7 @@ SpnEstimator::estimate_join(const QueryGraph&, const DataModel &_left, const Dat
 
 template<typename PlanTable>
 std::unique_ptr<DataModel>
-SpnEstimator::operator()(estimate_join_all_tag, PlanTable &&PT, PlanTable &&PT2, const QueryGraph&, Subproblem to_join,
+SpnEstimator::operator()(estimate_join_all_tag, PlanTable &&PT, const QueryGraph&, Subproblem to_join,
                          const cnf::CNF &condition) const
 {
     M_insist(not to_join.empty());

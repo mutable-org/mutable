@@ -409,7 +409,7 @@ struct M_EXPORT SpnEstimator : CardinalityEstimatorCRTP<SpnEstimator>
 
     template<typename PlanTable>
     std::unique_ptr<DataModel>
-    operator()(estimate_join_all_tag, PlanTable &&PT, PlanTable &&PT2, const QueryGraph &G, Subproblem to_join,
+    operator()(estimate_join_all_tag, PlanTable &&PT, const QueryGraph &G, Subproblem to_join,
                const cnf::CNF &condition) const;
 
 

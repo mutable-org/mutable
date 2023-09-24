@@ -14,15 +14,15 @@ namespace m {
 struct CostFunctionCout : CostFunctionCRTP<CostFunctionCout>
 {
     template<typename PlanTable>
-    double operator()(calculate_filter_cost_tag, const PlanTable &PT, const QueryGraph &G,
+    double operator()(calculate_filter_cost_tag, const PlanTable &PT, const PlanTable &PT2, const QueryGraph &G,
                       const CardinalityEstimator &CE, Subproblem sub, const cnf::CNF &condition) const
     {
         return double(CE.predict_cardinality(*PT[sub].model)) + PT[sub].cost;
     }
 
     template<typename PlanTable>
-    double operator()(calculate_join_cost_tag, const PlanTable &PT, const QueryGraph &G, const CardinalityEstimator &CE,
-                      Subproblem left, Subproblem right, const cnf::CNF &condition) const
+    double operator()(calculate_join_cost_tag, const PlanTable &PT, const PlanTable &PT2, const QueryGraph &G,
+            const CardinalityEstimator &CE, Subproblem left, Subproblem right, const cnf::CNF &condition) const
     {
         return /* |T| =        */ double(CE.predict_cardinality(*PT[left|right].model)) +
                /* C_out(T_1) = */ PT[left].cost +
@@ -30,7 +30,7 @@ struct CostFunctionCout : CostFunctionCRTP<CostFunctionCout>
     }
 
     template<typename PlanTable>
-    double operator()(calculate_grouping_cost_tag, const PlanTable &PT, const QueryGraph &G,
+    double operator()(calculate_grouping_cost_tag, const PlanTable &PT, const PlanTable &PT2, const QueryGraph &G,
                       const CardinalityEstimator &CE, Subproblem sub,
                       const std::vector<const ast::Expr*> &group_by) const
     {

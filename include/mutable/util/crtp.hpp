@@ -45,12 +45,16 @@ struct __virtual_crtp_helper
                 template<typename T>
                 struct base_type_helper<false, T>
                 {
-                    virtual ReturnType operator()(Tag, T, Args...) = 0;
+//                    virtual ReturnType operator()(Tag, T, Args...) = 0;
+
+                    virtual ReturnType operator()(Tag, T, T, Args...) = 0;
                 };
+
                 template<typename T>
-                struct base_type_helper<true, T>
-                {
-                    virtual ReturnType operator()(Tag, T, Args...) const = 0;
+                struct base_type_helper<true, T> {
+//                    virtual ReturnType operator()(Tag, T, Args...) const = 0;
+
+                    virtual ReturnType operator()(Tag, T, T, Args...) const = 0;
                 };
 
                 /*----- Overriding implementation --------------------------------------------------------------------*/
@@ -64,20 +68,23 @@ struct __virtual_crtp_helper
                 template<typename Actual, typename T>
                 struct derived_type_helper<false, Actual, T> : virtual base_type_helper<false, T>
                 {
-                    ReturnType operator()(Tag, T o, Args... args) override {
+//                    ReturnType operator()(Tag, T o, T o2, Args... args) {
+                    ReturnType operator()(Tag, T o, T o2, Args... args) override {
                         return static_cast<Actual*>(this)->template operator()<T>(
-                            Tag{}, o, std::forward<Args>(args)...
+                            Tag{}, o, o2, std::forward<Args>(args)...
                         );
                     }
                 };
                 template<typename Actual, typename T>
                 struct derived_type_helper<true, Actual, T> : virtual base_type_helper<true, T>
                 {
-                    ReturnType operator()(Tag, T o, Args... args) const override {
-                        return static_cast<const Actual*>(this)->template operator()<T>(
-                            Tag{}, o, std::forward<Args>(args)...
-                        );
-                    }
+                    ReturnType operator()(Tag, T o, T o2, Args... args) const override {
+//                    ReturnType operator()(Tag, T o, T o2, Args... args) const  {
+                            return static_cast<const Actual*>(this)->template operator()<T>(
+                                    Tag{}, o, o2, std::forward<Args>(args)...
+                            );
+                        }
+
                 };
 
                 /*----- Enforce template instantiation ---------------------------------------------------------------*/
@@ -88,24 +95,24 @@ struct __virtual_crtp_helper
                 template<typename Actual, typename T>
                 struct template_instantiation_helper<false, Actual, T>
                 {
-                    // ReturnType (Actual::template *operator()<T>)(Args...) instance;
-                    // virtual ~template_instantiation_helper() { }
-                    // template_instantiation_helper() {
-                    //     std::declval<Actual>().template operator()<T>(
-                    //         Tag{}, std::declval<T>(), std::declval<Args>()...
-                    //     );
-                    // }
+//                     ReturnType (Actual::template *operator()<T>)(Args...) instance;
+//                     virtual ~template_instantiation_helper() { }
+//                     template_instantiation_helper() {
+//                         std::declval<Actual>().template operator()<T>(
+//                             Tag{}, std::declval<T>(), std::declval<Args>()...
+//                         );
+//                     }
                 };
                 template<typename Actual, typename T>
                 struct template_instantiation_helper<true, Actual, T>
                 {
-                    // ReturnType (const Actual::template *operator()<T>)(Args...) instance;
-                    // virtual ~template_instantiation_helper() { }
-                    // template_instantiation_helper() {
-                    //     std::declval<const Actual>().template operator()<T>(
-                    //         Tag{}, std::declval<T>(), std::declval<Args>()...
-                    //     );
-                    // }
+//                     ReturnType (const Actual::template *operator()<T>)(Args...) instance;
+//                     virtual ~template_instantiation_helper() { }
+//                     template_instantiation_helper() {
+//                         std::declval<const Actual>().template operator()<T>(
+//                             Tag{}, std::declval<T>(), std::declval<Args>()...
+//                         );
+//                     }
                 };
 
                 /*----- The types to inherit from --------------------------------------------------------------------*/

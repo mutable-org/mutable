@@ -118,7 +118,7 @@ CartesianProductEstimator::estimate_join(const QueryGraph&, const DataModel &_le
 
 template<typename PlanTable>
 std::unique_ptr<DataModel>
-CartesianProductEstimator::operator()(estimate_join_all_tag, PlanTable &&PT, const QueryGraph&, Subproblem to_join,
+CartesianProductEstimator::operator()(estimate_join_all_tag, PlanTable &&PT, PlanTable &&PT2, const QueryGraph&, Subproblem to_join,
                                       const cnf::CNF&) const
 {
     M_insist(not to_join.empty());
@@ -131,11 +131,11 @@ CartesianProductEstimator::operator()(estimate_join_all_tag, PlanTable &&PT, con
 
 template
 std::unique_ptr<DataModel>
-CartesianProductEstimator::operator()(estimate_join_all_tag, const PlanTableSmallOrDense&, const QueryGraph&,
+CartesianProductEstimator::operator()(estimate_join_all_tag, const PlanTableSmallOrDense&, const PlanTableSmallOrDense&,const QueryGraph&,
                                       Subproblem, const cnf::CNF&) const;
 template
 std::unique_ptr<DataModel>
-CartesianProductEstimator::operator()(estimate_join_all_tag, const PlanTableLargeAndSparse&, const QueryGraph&,
+CartesianProductEstimator::operator()(estimate_join_all_tag, const PlanTableLargeAndSparse&, const PlanTableLargeAndSparse&, const QueryGraph&,
                                       Subproblem, const cnf::CNF&) const;
 
 std::size_t CartesianProductEstimator::predict_cardinality(const DataModel &data) const
@@ -318,6 +318,7 @@ std::unique_ptr<DataModel>
 InjectionCardinalityEstimator::estimate_join(const QueryGraph &G, const DataModel &_left, const DataModel &_right,
                                              const cnf::CNF &condition) const
 {
+//    std::unique_lock<std::mutex> lock(cs_mutex_1);
     auto &left  = as<const InjectionCardinalityDataModel>(_left);
     auto &right = as<const InjectionCardinalityDataModel>(_right);
 
@@ -332,9 +333,7 @@ InjectionCardinalityEstimator::estimate_join(const QueryGraph &G, const DataMode
         return std::make_unique<InjectionCardinalityDataModel>(subproblem, std::min(it->second, max_cardinality));
     } else {
         /* Fallback to CartesianProductEstimator. */
-        cs_mutex.lock();
         std::cerr << "warning: failed to estimate the join of " << left.subproblem_ << " and " << right.subproblem_ << '\n';
-        cs_mutex.unlock();
         auto left_fallback = std::make_unique<CartesianProductEstimator::CartesianProductDataModel>();
         left_fallback->size = left.size_;
         auto right_fallback = std::make_unique<CartesianProductEstimator::CartesianProductDataModel>();
@@ -347,23 +346,21 @@ InjectionCardinalityEstimator::estimate_join(const QueryGraph &G, const DataMode
 
 template<typename PlanTable>
 std::unique_ptr<DataModel>
-InjectionCardinalityEstimator::operator()(estimate_join_all_tag, PlanTable &&PT, const QueryGraph &G,
+InjectionCardinalityEstimator::operator()(estimate_join_all_tag, PlanTable &&PT, PlanTable &&PT2, const QueryGraph &G,
                                           Subproblem to_join, const cnf::CNF&) const
 {
+//    std::unique_lock<std::mutex> lock(cs_mutex);
     const char *id = make_identifier(G, to_join);
     if (auto it = cardinality_table_.find(id); it != cardinality_table_.end()) {
         /* Clamp injected cardinality to at most the cardinality of the cartesian product of the join's children
          * since it cannot produce more tuples than that. */
         std::size_t max_cardinality = 1;
-        for (auto it = to_join.begin(); it != to_join.end(); ++it)
-            max_cardinality *= as<const InjectionCardinalityDataModel>(*PT[it.as_set()].model).size_;
+        for (auto itt = to_join.begin(); itt != to_join.end(); ++itt)
+            max_cardinality *= as<const InjectionCardinalityDataModel>(*PT[itt.as_set()].model).size_;
         return std::make_unique<InjectionCardinalityDataModel>(to_join, std::min(it->second, max_cardinality));
     } else {
         /* Fallback to cartesian product. */
-        cs_mutex.lock();
         std::cerr << "warning: failed to estimate the join of all data sources in " << to_join << '\n';
-        cs_mutex.unlock();
-
         auto ds_it = to_join.begin();
         std::size_t size = as<const InjectionCardinalityDataModel>(*PT[ds_it.as_set()].model).size_;
         for (; ds_it != to_join.end(); ++ds_it)
@@ -410,6 +407,7 @@ M_LCOV_EXCL_STOP
 
 const char * InjectionCardinalityEstimator::make_identifier(const QueryGraph &G, const Subproblem S) const
 {
+//    std::unique_lock<std::mutex> lock(cs_mutex_ii);
     static thread_local std::vector<const char*> names;
     names.clear();
     for (auto id : S)
@@ -728,7 +726,7 @@ SpnEstimator::estimate_join(const QueryGraph&, const DataModel &_left, const Dat
 
 template<typename PlanTable>
 std::unique_ptr<DataModel>
-SpnEstimator::operator()(estimate_join_all_tag, PlanTable &&PT, const QueryGraph&, Subproblem to_join,
+SpnEstimator::operator()(estimate_join_all_tag, PlanTable &&PT, PlanTable &&PT2, const QueryGraph&, Subproblem to_join,
                          const cnf::CNF &condition) const
 {
     M_insist(not to_join.empty());

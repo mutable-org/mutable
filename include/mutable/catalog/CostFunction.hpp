@@ -50,27 +50,27 @@ struct CostFunction : calculate_filter_cost_tag::base_type
 
     /** Returns the total cost of performing a Filter operation. */
     template<typename PlanTable>
-    double calculate_filter_cost(const QueryGraph &G, const PlanTable &PT, const CardinalityEstimator &CE,
+    double calculate_filter_cost(const QueryGraph &G, const PlanTable &PT, const PlanTable &PT2, const CardinalityEstimator &CE,
                                  Subproblem sub, const cnf::CNF &condition) const
     {
-        return operator()(calculate_filter_cost_tag{}, PT, G, CE, sub, condition);
+        return operator()(calculate_filter_cost_tag{}, PT, PT2, G, CE, sub, condition);
     }
 
     /** Returns the total cost of performing a Join operation. */
     template<typename PlanTable>
-    double calculate_join_cost(const QueryGraph &G, const PlanTable &PT, const CardinalityEstimator &CE,
+    double calculate_join_cost(const QueryGraph &G, const PlanTable &PT, const PlanTable &PT2, const CardinalityEstimator &CE,
                                Subproblem left, Subproblem right, const cnf::CNF &condition) const
     {
-        return operator()(calculate_join_cost_tag{}, PT, G, CE, left, right, condition);
+        return operator()(calculate_join_cost_tag{}, PT, PT2, G, CE, left, right, condition);
     }
 
 
     /** Returns the total cost of performing a Grouping operation. */
     template<typename PlanTable>
-    double calculate_grouping_cost(const QueryGraph &G, const PlanTable &PT, const CardinalityEstimator &CE,
+    double calculate_grouping_cost(const QueryGraph &G, const PlanTable &PT, const PlanTable &PT2, const CardinalityEstimator &CE,
                                    Subproblem sub, const std::vector<const ast::Expr*> &group_by) const
     {
-        return operator()(calculate_grouping_cost_tag{}, PT, G, CE, sub, group_by);
+        return operator()(calculate_grouping_cost_tag{}, PT, PT2, G, CE, sub, group_by);
     }
 };
 

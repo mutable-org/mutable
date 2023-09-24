@@ -55,7 +55,7 @@ struct M_EXPORT Optimizer
     private:
     /** Optimizes a plan table after initialization of the data source entries. */
     template<typename PlanTable>
-    void optimize_locally(const QueryGraph &G, PlanTable &plan_table) const;
+    void optimize_locally(const QueryGraph &G, PlanTable &plan_table, PlanTable &plan_table2) const;
 
     /** Constructs an operator tree given a solved plan table and the plans to compute the data sources of the query. */
     template<typename PlanTable>

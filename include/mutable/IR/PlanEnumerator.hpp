@@ -27,8 +27,8 @@ struct M_EXPORT PlanEnumerator : enumerate_tag::base_type
 
     /** Enumerate subplans and fill plan table. */
     template<typename PlanTable>
-    void operator()(const QueryGraph &G, const CostFunction &CF, PlanTable &PT) const {
-        operator()(enumerate_tag{}, PT, G, CF);
+    void operator()(const QueryGraph &G, const CostFunction &CF, PlanTable &PT, PlanTable& PT2) const {
+        operator()(enumerate_tag{}, PT, PT2, G, CF);
     }
 };
 
@@ -46,7 +46,7 @@ struct M_EXPORT DPccp final : PlanEnumeratorCRTP<DPccp>
     using base_type::operator();
 
     template<typename PlanTable>
-    void operator()(enumerate_tag, PlanTable &PT, const QueryGraph &G, const CostFunction &CF) const;
+    void operator()(enumerate_tag, PlanTable &PT, PlanTable &PT2, const QueryGraph &G, const CostFunction &CF) const;
 };
 
 /** Greedy operator ordering. */

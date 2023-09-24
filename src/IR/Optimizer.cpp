@@ -160,6 +160,7 @@ std::pair<std::unique_ptr<Producer>, PlanTable>
 Optimizer::optimize_with_plantable(const QueryGraph &G) const
 {
     PlanTable plan_table(G);
+    PlanTable plan_table2(G); // Adding for parallel !!!!
     const auto num_sources = G.sources().size();
     auto &C = Catalog::Get();
     auto &DB = C.get_database_in_use();
@@ -176,6 +177,8 @@ Optimizer::optimize_with_plantable(const QueryGraph &G) const
             /* Produce a scan for base tables. */
             plan_table[s].cost = 0;
             plan_table[s].model = CE.estimate_scan(G, s);
+            plan_table2[s].cost = 0;
+            plan_table2[s].model = CE.estimate_scan(G, s);
             auto &store = bt->table().store();
             auto source = new ScanOperator(store, bt->name());
             source_plans[ds->id()] = source;
@@ -227,7 +230,7 @@ Optimizer::optimize_with_plantable(const QueryGraph &G) const
         source->info(std::move(source_info));
     }
 
-    optimize_locally(G, plan_table);
+    optimize_locally(G, plan_table, plan_table2);
     std::unique_ptr<Producer> plan = construct_plan(G, plan_table, source_plans);
     auto &entry = plan_table.get_final();
 
@@ -351,7 +354,7 @@ Optimizer::optimize_with_plantable(const QueryGraph &G) const
 }
 
 template<typename PlanTable>
-void Optimizer::optimize_locally(const QueryGraph &G, PlanTable &PT) const
+void Optimizer::optimize_locally(const QueryGraph &G, PlanTable &PT, PlanTable &PT2) const
 {
     Catalog &C = Catalog::Get();
     auto &DB = C.get_database_in_use();
@@ -369,7 +372,7 @@ void Optimizer::optimize_locally(const QueryGraph &G, PlanTable &PT) const
 //    }
 #endif
 
-    M_TIME_EXPR(plan_enumerator()(G, cost_function(), PT), "Plan enumeration", C.timer());
+    M_TIME_EXPR(plan_enumerator()(G, cost_function(), PT, PT2), "Plan enumeration", C.timer());
 
     if (Options::Get().statistics) {
         std::cout << "Est. total cost: " << PT.get_final().cost

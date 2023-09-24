@@ -9,7 +9,7 @@ using namespace m::ast;
 
 
 template<typename PlanTable>
-double TrainedCostFunction::operator()(calculate_filter_cost_tag, PlanTable &&PT, const QueryGraph &G,
+double TrainedCostFunction::operator()(calculate_filter_cost_tag, PlanTable &&PT, PlanTable &&PT2, const QueryGraph &G,
                                        const CardinalityEstimator &CE, Subproblem sub, const cnf::CNF &condition) const
 {
     auto cardinality = CE.predict_cardinality(*PT[sub].model);
@@ -27,7 +27,7 @@ double TrainedCostFunction::operator()(calculate_filter_cost_tag, PlanTable &&PT
 }
 
 template<typename PlanTable>
-double TrainedCostFunction::operator()(calculate_join_cost_tag, PlanTable &&PT, const QueryGraph &G,
+double TrainedCostFunction::operator()(calculate_join_cost_tag, PlanTable &&PT, PlanTable &&PT2, const QueryGraph &G,
                                        const CardinalityEstimator &CE, Subproblem left, Subproblem right,
                                        const cnf::CNF &condition) const
 {
@@ -54,7 +54,7 @@ double TrainedCostFunction::operator()(calculate_join_cost_tag, PlanTable &&PT, 
 }
 
 template<typename PlanTable>
-double TrainedCostFunction::operator()(calculate_grouping_cost_tag, PlanTable &&PT, const QueryGraph&,
+double TrainedCostFunction::operator()(calculate_grouping_cost_tag, PlanTable &&PT, PlanTable &&PT2, const QueryGraph&,
                                        const CardinalityEstimator &CE, Subproblem sub,
                                        const std::vector<const Expr*>&) const
 {
@@ -66,27 +66,27 @@ double TrainedCostFunction::operator()(calculate_grouping_cost_tag, PlanTable &&
 }
 
 template
-double TrainedCostFunction::operator()<const PlanTableSmallOrDense&>(calculate_filter_cost_tag, const PlanTableSmallOrDense &PT, const QueryGraph &G,
+double TrainedCostFunction::operator()<const PlanTableSmallOrDense&>(calculate_filter_cost_tag, const PlanTableSmallOrDense &PT, const PlanTableSmallOrDense &PT2,const QueryGraph &G,
                                        const CardinalityEstimator &CE, Subproblem sub, const cnf::CNF &condition) const;
 template
-double TrainedCostFunction::operator()<const PlanTableLargeAndSparse&>(calculate_filter_cost_tag, const PlanTableLargeAndSparse &PT, const QueryGraph &G,
+double TrainedCostFunction::operator()<const PlanTableLargeAndSparse&>(calculate_filter_cost_tag, const PlanTableLargeAndSparse &PT, const PlanTableLargeAndSparse &PT2, const QueryGraph &G,
                                        const CardinalityEstimator &CE, Subproblem sub, const cnf::CNF &condition) const;
 
 
 template
-double TrainedCostFunction::operator()<const PlanTableSmallOrDense&>(calculate_join_cost_tag, const PlanTableSmallOrDense &PT, const QueryGraph &G,
+double TrainedCostFunction::operator()<const PlanTableSmallOrDense&>(calculate_join_cost_tag, const PlanTableSmallOrDense &PT, const PlanTableSmallOrDense &PT2, const QueryGraph &G,
                                        const CardinalityEstimator &CE, Subproblem left, Subproblem right,
                                        const cnf::CNF &condition) const;
 template
-double TrainedCostFunction::operator()<const PlanTableLargeAndSparse&>(calculate_join_cost_tag, const PlanTableLargeAndSparse &PT, const QueryGraph &G,
+double TrainedCostFunction::operator()<const PlanTableLargeAndSparse&>(calculate_join_cost_tag, const PlanTableLargeAndSparse &PT, const PlanTableLargeAndSparse &PT2, const QueryGraph &G,
                                        const CardinalityEstimator &CE, Subproblem left, Subproblem right,
                                        const cnf::CNF &condition) const;
 
 template
-double TrainedCostFunction::operator()<const PlanTableSmallOrDense&>(calculate_grouping_cost_tag, const PlanTableSmallOrDense &PT, const QueryGraph&,
+double TrainedCostFunction::operator()<const PlanTableSmallOrDense&>(calculate_grouping_cost_tag, const PlanTableSmallOrDense &PT, const PlanTableSmallOrDense &PT2,const QueryGraph&,
                                        const CardinalityEstimator &CE, Subproblem sub,
                                        const std::vector<const Expr*>&) const;
 template
-double TrainedCostFunction::operator()<const PlanTableLargeAndSparse&>(calculate_grouping_cost_tag, const PlanTableLargeAndSparse &PT, const QueryGraph&,
+double TrainedCostFunction::operator()<const PlanTableLargeAndSparse&>(calculate_grouping_cost_tag, const PlanTableLargeAndSparse &PT, const PlanTableLargeAndSparse &PT2, const QueryGraph&,
                                        const CardinalityEstimator &CE, Subproblem sub,
                                        const std::vector<const Expr*>&) const;

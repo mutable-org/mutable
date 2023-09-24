@@ -204,7 +204,7 @@ struct M_EXPORT CartesianProductEstimator : CardinalityEstimatorCRTP<CartesianPr
 
     template<typename PlanTable>
     std::unique_ptr<DataModel>
-    operator()(estimate_join_all_tag, PlanTable &&PT, const QueryGraph &G, Subproblem to_join,
+    operator()(estimate_join_all_tag, PlanTable &&PT, PlanTable && PT2, const QueryGraph &G, Subproblem to_join,
                const cnf::CNF &condition) const;
 
 
@@ -282,6 +282,8 @@ struct M_EXPORT InjectionCardinalityEstimator : CardinalityEstimatorCRTP<Injecti
      * Model calculation
      *================================================================================================================*/
     mutable std::mutex cs_mutex;
+    mutable std::mutex cs_mutex_1;
+    mutable std::mutex cs_mutex_ii;
 
     std::unique_ptr<DataModel> empty_model() const override;
     std::unique_ptr<DataModel> estimate_scan(const QueryGraph &G, Subproblem P) const override;
@@ -407,7 +409,7 @@ struct M_EXPORT SpnEstimator : CardinalityEstimatorCRTP<SpnEstimator>
 
     template<typename PlanTable>
     std::unique_ptr<DataModel>
-    operator()(estimate_join_all_tag, PlanTable &&PT, const QueryGraph &G, Subproblem to_join,
+    operator()(estimate_join_all_tag, PlanTable &&PT, PlanTable &&PT2, const QueryGraph &G, Subproblem to_join,
                const cnf::CNF &condition) const;
 
 

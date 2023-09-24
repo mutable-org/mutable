@@ -203,7 +203,9 @@ std::unique_ptr<To> M_EXPORT cast(std::unique_ptr<From> &v) {
  */
 template<typename To, typename From>
 requires (not is_unique_ptr<From>) and (not is_reference_wrapper<From>)
-To * M_EXPORT as(From *v) { M_insist(cast<To>(v)); return static_cast<To*>(v); }
+To * M_EXPORT as(From *v) {
+    M_insist(cast<To>(v));
+    return static_cast<To*>(v); }
 
 template<typename To, typename From>
 requires (not is_unique_ptr<From>) and (not is_reference_wrapper<From>)

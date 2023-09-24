@@ -66,6 +66,23 @@ namespace search_states {
 #define COUNTERS
 #endif
 
+    class CommonBase {
+    public:
+        static std::mutex PT_mutex;
+        static int TopdownCounter;
+        static int BottomUpCounter;
+        static void PrintStatistics() {
+            std::cout << "Topdown counter: " << TopdownCounter
+                        << "Bottomup counter: "<<BottomUpCounter
+                            <<std::endl;
+        }
+    };
+
+    int CommonBase::TopdownCounter=0;
+    int CommonBase::BottomUpCounter=0;
+
+    std::mutex CommonBase::PT_mutex;
+
 /** A state in the search space.
  *
  * A state consists of the accumulated costs of actions to reach this state from the from initial state and a desciption
@@ -1302,8 +1319,8 @@ struct BottomUpComplete : BottomUp
                 M_insist((*outer_it & *inner_it).empty(), "subproblems must not overlap");
 
 //                We will ignore many path if we continue here
-//                if (subproblem_lt(*inner_it, marked)) // *inner_it < marked, implies *outer_it < marked
-//                    continue; // prune symmetrical paths
+                if (subproblem_lt(*inner_it, marked)) // *inner_it < marked, implies *outer_it < marked
+                    continue; // prune symmetrical paths
 
                 if (neighbors & *inner_it) { // inner and outer are joinable.
                     /* Compute joined subproblem. */
@@ -1316,12 +1333,13 @@ struct BottomUpComplete : BottomUp
                         if (it == outer_it) continue; // skip outer
                         else if (it == inner_it) new(ptr++) Subproblem(joined); // replace inner
                         else new(ptr++) Subproblem(*it);
-
                     }
                     M_insist(std::is_sorted(subproblems, subproblems + state.size() - 1, subproblem_lt));
 
                     /* Compute total cost. */
                     cnf::CNF condition; // TODO use join condition
+                    CommonBase::PT_mutex.lock();
+                    CommonBase::BottomUpCounter++;
                     if (not PT[joined].model) {
                         auto &model_left  = *PT[*outer_it].model;
                         auto &model_right = *PT[*inner_it].model;
@@ -1329,6 +1347,7 @@ struct BottomUpComplete : BottomUp
                         PT[joined].cost = 0;
                     }
                     const double action_cost = joined == All ? 0 : CE.predict_cardinality(*PT[joined].model);
+                    CommonBase::PT_mutex.unlock();
 
                     /* Create new search state. */
                     SubproblemsArray S(
@@ -1648,9 +1667,9 @@ struct TopDownComplete : TopDown
                 auto right_it = partitions, right_end = partitions + 2;
                 auto out = subproblems;
                 for (;;) {
-//                    M_insist(out <= subproblems + state.size() + 1, "out of bounds");
-//                    M_insist(left_it <= left_end, "out of bounds");
-//                    M_insist(right_it <= right_end, "out of bounds");
+                    M_insist(out <= subproblems + state.size() + 1, "out of bounds");
+                    M_insist(left_it <= left_end, "out of bounds");
+                    M_insist(right_it <= right_end, "out of bounds");
                     if (left_it == left_end) {
                         if (right_it == right_end) break;
                         *out++ = *right_it++;
@@ -1664,19 +1683,23 @@ struct TopDownComplete : TopDown
                         *out++ = *right_it++;
                     }
                 }
-//                M_insist(out == subproblems + state.size() + 1);
-//                M_insist(left_it == left_end);
-//                M_insist(right_it == right_end);
+                M_insist(out == subproblems + state.size() + 1);
+                M_insist(left_it == left_end);
+                M_insist(right_it == right_end);
             }
-//            M_insist(std::is_sorted(subproblems, subproblems + state.size() + 1, subproblem_lt));
+            M_insist(std::is_sorted(subproblems, subproblems + state.size() + 1, subproblem_lt));
 
             cnf::CNF condition; // TODO use join condition
             double action_cost = 0;
             if ((S1|S2) != All)
             {
-                if (not PT[S1|S2].model)
-                    PT[S1|S2].model = CE.estimate_join_all(G, PT, S1|S2, condition);
+                CommonBase::PT_mutex.lock();
+                CommonBase::TopdownCounter++;
+                if (not PT[S1|S2].model) {
+                    PT[S1 | S2].model = CE.estimate_join_all(G, PT, S1 | S2, condition);
+                }
                 action_cost = CE.predict_cardinality(*PT[S1|S2].model);
+                CommonBase::PT_mutex.unlock();
             }
 
             /* Create new search state. */
@@ -2625,7 +2648,8 @@ template<
         template<typename, typename, typename, typename, typename...> typename Search
 >
 bool heuristic_search_helper(const char *vertex_str, const char *expand_str, const char *heuristic_str,
-                             const char *search_str, PlanTable &PT, const QueryGraph &G, const AdjacencyMatrix &M,
+                             const char *search_str, PlanTable &PT, PlanTable &PT2,
+                             const QueryGraph &G, const AdjacencyMatrix &M,
                              const CostFunction &CF, const CardinalityEstimator &CE) {
     /// Entrance for the BiDirectional
     /// For now changing to the LayeredBidirectionalSearch using same entrance
@@ -2636,12 +2660,12 @@ bool heuristic_search_helper(const char *vertex_str, const char *expand_str, con
         using H2 = heuristics::zero<PlanTable, State, expansions::TopDownComplete>;
         State::RESET_STATE_COUNTERS();
         State bottom_state = expansions::BottomUpComplete::template Start<State>(PT, G, M, CF, CE);
-        State top_state = expansions::TopDownComplete::template Start<State>(PT, G, M, CF, CE);
+        State top_state = expansions::TopDownComplete::template Start<State>(PT2, G, M, CF, CE);
 
         try {
 
             H1 h1(PT, G, M, CF, CE);
-            H2 h2(PT, G, M, CF, CE);
+            H2 h2(PT2, G, M, CF, CE);
 
             using search_algorithm = m::ai::biDirectionalSearch<
                     State,
@@ -2660,17 +2684,17 @@ bool heuristic_search_helper(const char *vertex_str, const char *expand_str, con
                                          expansions::BottomUpComplete{},
                                          expansions::TopDownComplete{},
                                          h1, h2,
-                                         PT, G, M, CF, CE);
+                                         PT, PT2, G, M, CF, CE);
 
             /// Ultimate target
             /// reconstruct_plan_bidirection(goal, PT, G, CE, CF);
             reconstruct_plan_bottom_up(goal, PT, G, CE, CF);
-
+            search_states::CommonBase::PrintStatistics();
 
         } catch (std::logic_error err) {
             std::cerr << "search " << search_str << '+' << vertex_str << '+' << expand_str << '+' << heuristic_str
                       << " did not reach a goal state, fall back to DPccp" << std::endl;
-            DPccp{}(G, CF, PT);
+            DPccp{}(G, CF, PT, PT2);
         }
         return true;
     }
@@ -2710,7 +2734,7 @@ bool heuristic_search_helper(const char *vertex_str, const char *expand_str, con
 
             /// Ultimate target
             /// reconstruct_plan_bidirection(goal, PT, G, CE, CF);
-            reconstruct_plan_bottom_up(goal, PT, G, CE, CF);
+//            reconstruct_plan_bottom_up(goal, PT, G, CE, CF);
 
 
         } catch (std::logic_error err) {
@@ -2781,7 +2805,7 @@ struct HeuristicSearch final : PlanEnumeratorCRTP<HeuristicSearch>
     using base_type::operator();
 
     template<typename PlanTable>
-    void operator()(enumerate_tag, PlanTable &PT, const QueryGraph &G, const CostFunction &CF) const {
+    void operator()(enumerate_tag, PlanTable &PT, PlanTable &PT2, const QueryGraph &G, const CostFunction &CF) const {
         Catalog &C = Catalog::Get();
         auto &CE = C.get_database_in_use().cardinality_estimator();
         const AdjacencyMatrix &M = G.adjacency_matrix();
@@ -2793,7 +2817,7 @@ struct HeuristicSearch final : PlanEnumeratorCRTP<HeuristicSearch>
                                     expansions::EXPAND, \
                                     heuristics::HEURISTIC, \
                                     SEARCH \
-                                   >(#STATE, #EXPAND, #HEURISTIC, #SEARCH, PT, G, M, CF, CE)) \
+                                   >(#STATE, #EXPAND, #HEURISTIC, #SEARCH, PT, PT2, G, M, CF, CE)) \
         { \
             goto matched_heuristic_search; \
         }

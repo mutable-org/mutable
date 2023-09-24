@@ -371,12 +371,12 @@ InjectionCardinalityEstimator::operator()(estimate_join_all_tag, PlanTable &&PT,
 
 template
 std::unique_ptr<DataModel>
-InjectionCardinalityEstimator::operator()(estimate_join_all_tag, const PlanTableSmallOrDense&, const PlanTableSmallOrDense&, const QueryGraph&,
+InjectionCardinalityEstimator::operator()(estimate_join_all_tag, const PlanTableSmallOrDense&, const QueryGraph&,
                                           Subproblem, const cnf::CNF&) const;
 
 template
 std::unique_ptr<DataModel>
-InjectionCardinalityEstimator::operator()(estimate_join_all_tag, const PlanTableLargeAndSparse&, const PlanTableLargeAndSparse&, const QueryGraph&,
+InjectionCardinalityEstimator::operator()(estimate_join_all_tag, const PlanTableLargeAndSparse&, const QueryGraph&,
                                           Subproblem, const cnf::CNF&) const;
 
 std::size_t InjectionCardinalityEstimator::predict_cardinality(const DataModel &data) const

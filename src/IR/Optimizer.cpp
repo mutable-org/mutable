@@ -486,7 +486,7 @@ std::pair<std::unique_ptr<Producer>, PLANTABLE> \
 Optimizer::optimize_with_plantable(const QueryGraph &G) const; \
 template \
 void \
-Optimizer::optimize_locally(const QueryGraph &G, PLANTABLE &plan_table, PLANTABLE &plan_table2) const; \
+Optimizer::optimize_locally(const QueryGraph &G, PLANTABLE &plan_table) const; \
 template \
 std::unique_ptr<Producer> \
 Optimizer::construct_plan(const QueryGraph &G, const PLANTABLE &plan_table, Producer * const *source_plans) const

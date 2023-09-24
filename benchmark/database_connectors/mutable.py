@@ -24,6 +24,20 @@ class Mutable(Connector):
         self.mutable_binary: str = args['path_to_binary']     # required
         self.verbose: bool = args.get('verbose', False)       # optional
 
+    MUTABLE_TYPE_PARSER: dict[str, Callable[[list[str]], str]] = {
+        'INT':         lambda ty: 'INT(4)',
+        'BIGINT':      lambda ty: 'INT(8)',
+        'FLOAT':       lambda ty: 'FLOAT',
+        'DOUBLE':      lambda ty: 'DOUBLE',
+        'DECIMAL':     lambda ty: f'DECIMAL({ty[1]}, {ty[2]})',
+        'CHAR':        lambda ty: f'CHAR({ty[1]})',
+        'DATE':        lambda ty: 'DATE',
+        'DATETIME':    lambda ty: 'DATETIME',
+        'NOT NULL':    lambda ty: 'NOT NULL',
+        'PRIMARY KEY': lambda ty: 'PRIMARY KEY',
+        'UNIQUE':      lambda ty: 'UNIQUE',
+    }
+
 
     def execute(self, n_runs: int, params: dict[str, Any]) -> ConnectorResult:
         result: ConnectorResult = dict()
@@ -298,47 +312,7 @@ class Mutable(Connector):
     in_green = lambda x: f'{Fore.GREEN}{x}{Style.RESET_ALL}'
     in_bold  = lambda x: f'{Style.BRIGHT}{x}{Style.RESET_ALL}'
 
-
-    # Parse attributes of one table, return as string ready for a CREATE TABLE query
-    @staticmethod
-    def parse_attributes(attributes: dict[str, str]) -> str:
-        columns: list[str] = list()
-        for column_name, type_info in attributes.items():
-            ty_list: list[str] = [column_name]
-
-            ty = type_info.split(' ')
-            match ty[0]:
-                case 'INT':
-                    ty_list.append('INT(4)')
-                case 'BIGINT':
-                    ty_list.append('INT(8)')
-                case 'FLOAT':
-                    ty_list.append('FLOAT')
-                case 'DOUBLE':
-                    ty_list.append('DOUBLE')
-                case 'DECIMAL':
-                    ty_list.append(f'DECIMAL({ty[1]}, {ty[2]})')
-                case 'CHAR':
-                    ty_list.append(f'CHAR({ty[1]})')
-                case 'DATE':
-                    ty_list.append('DATE')
-                case 'DATETIME':
-                    ty_list.append('DATETIME')
-                case _:
-                    raise Exception(f"Unknown type given for '{column_name}'")
-
-            if 'NOT NULL' in type_info:
-                ty_list.append('NOT NULL')
-            if 'PRIMARY KEY' in type_info:
-                ty_list.append('PRIMARY KEY')
-            if 'UNIQUE' in type_info:
-                ty_list.append('UNIQUE')
-
-            columns.append(' '.join(ty_list))
-        return '(' + ',\n'.join(columns) + ')'
-
-    @staticmethod
-    def get_setup_statements(suite: str, path_to_data: str, data: dict[str, dict[str, Any]], case: Case | None) -> list[str]:
+    def get_setup_statements(self, suite: str, path_to_data: str, data: dict[str, dict[str, Any]], case: Case | None) -> list[str]:
         statements: list[str] = list()
 
         # suite names with a dash ('-') are illegal database names for mutable , e.g. 'plan-enumerators'
@@ -351,7 +325,7 @@ class Mutable(Connector):
 
         for table_name, table in data.items():
             # Create a CREATE TABLE statement for current table
-            columns: str = Mutable.parse_attributes(table['attributes'])
+            columns: str = Connector.parse_attributes(self.MUTABLE_TYPE_PARSER, table['attributes'])
             create: str = f"CREATE TABLE {table_name} {columns};"
             statements.append(create)
 

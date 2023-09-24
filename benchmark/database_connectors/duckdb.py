@@ -19,6 +19,20 @@ class DuckDB(Connector):
         self.verbose = args.get('verbose', False)               # optional
         self.multithreaded = args.get('multithreaded', False)   # optional
 
+    DUCKDB_TYPE_PARSER: dict[str, Callable[[list[str]], str]] = {
+        'INT':         lambda ty: 'INT',
+        'BIGINT':      lambda ty: 'BIGINT',
+        'FLOAT':       lambda ty: 'FLOAT',
+        'DOUBLE':      lambda ty: 'DOUBLE',
+        'DECIMAL':     lambda ty: f'DECIMAL({ty[1]}, {ty[2]})',
+        'CHAR':        lambda ty: f'CHAR({ty[1]})',
+        'DATE':        lambda ty: 'DATE',
+        'DATETIME':    lambda ty: 'DATETIME',
+        'NOT NULL':    lambda ty: 'NOT NULL',
+        'PRIMARY KEY': lambda ty: 'PRIMARY KEY',
+        'UNIQUE':      lambda ty: 'UNIQUE',
+    }
+
     # Runs an experiment 'n_runs' times, all parameters are in 'params'
     def execute(self, n_runs: int, params: dict[str, Any]) -> ConnectorResult:
         suite: str = params['suite']
@@ -141,44 +155,6 @@ class DuckDB(Connector):
             os.remove(TMP_DB)
 
 
-    # Parse attributes of one table, return as string
-    def parse_attributes(self, attributes: dict[str, str]) -> str:
-        columns: list[str] = list()
-        for column_name, type_info in attributes.items():
-            ty_list: list[str] = [column_name]
-
-            ty = type_info.split(' ')
-            match ty[0]:
-                case 'INT':
-                    ty_list.append('INT')
-                case 'BIGINT':
-                    ty_list.append('BIGINT')
-                case 'FLOAT':
-                    ty_list.append('FLOAT')
-                case 'DOUBLE':
-                    ty_list.append('DOUBLE')
-                case 'DECIMAL':
-                    ty_list.append(f'DECIMAL({ty[1]}, {ty[2]})')
-                case 'CHAR':
-                    ty_list.append(f'CHAR({ty[1]})')
-                case 'DATE':
-                    ty_list.append('DATE')
-                case 'DATETIME':
-                    ty_list.append('DATETIME')
-                case _:
-                    raise Exception(f"Unknown type given for '{column_name}'")
-
-            if 'NOT NULL' in type_info:
-                ty_list.append('NOT NULL')
-            if 'PRIMARY KEY' in type_info:
-                ty_list.append('PRIMARY KEY')
-            if 'UNIQUE' in type_info:
-                ty_list.append('UNIQUE')
-
-            columns.append(' '.join(ty_list))
-        return '(' + ',\n'.join(columns) + ')'
-
-
     # Creates tables in the database and copies contents of given files into them
     # Call with 'with_scale_factors'=False if data should be loaded as a whole
     # Call with 'with_scale_factors'=True if data should be placed in tmp tables
@@ -186,7 +162,7 @@ class DuckDB(Connector):
     def generate_create_table_stmts(self, data: dict[str, dict[str, Any]], with_scale_factors: bool) -> list[str]:
         statements: list[str] = list()
         for table_name, table in data.items():
-            columns: str = self.parse_attributes(table['attributes'])
+            columns: str = Connector.parse_attributes(self.DUCKDB_TYPE_PARSER, table['attributes'])
 
             if with_scale_factors:
                 table_name += "_tmp"

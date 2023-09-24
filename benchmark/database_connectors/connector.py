@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import TypeAlias
+from typing import TypeAlias, Callable
 import multiprocessing
 
 DEFAULT_TIMEOUT: int  = 60   # seconds
@@ -62,3 +62,27 @@ class Connector(ABC):
     @abstractmethod
     def execute(self, n_runs: int, params: dict) -> ConnectorResult:
         pass
+
+    # Parse attributes of one table, return as string
+    @staticmethod
+    def parse_attributes(typeParser: dict[str, Callable[[list[str]], str]], attributes: dict[str, str]) -> str:
+        columns: list[str] = list()
+        for columnName, typeInfo in attributes.items():
+            typeList: list[str] = [columnName]
+
+            ty = typeInfo.split(' ')
+            if ty[0] in typeParser:
+                parse = typeParser[ty[0]]
+                typeList.append(parse(ty))
+            else:
+                raise AttributeTypeUnknown(f"Unknown type given for '{columnName}'")
+
+            if 'NOT NULL' in typeInfo and 'NOT NULL' in typeParser:
+                typeList.append(typeParser['NOT NULL'](ty))
+            if 'PRIMARY KEY' in typeInfo and 'PRIMARY KEY' in typeParser:
+                typeList.append(typeParser['PRIMARY KEY'](ty))
+            if 'UNIQUE' in typeInfo and 'UNIQUE' in typeParser:
+                typeList.append(typeParser['UNIQUE'](ty))
+
+            columns.append(' '.join(typeList))
+        return '(' + ',\n'.join(columns) + ')'

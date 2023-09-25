@@ -818,6 +818,20 @@ struct M_EXPORT CreateDatabaseStmt : Stmt
     void accept(ConstASTCommandVisitor &v) const override;
 };
 
+struct M_EXPORT DropDatabaseStmt : Stmt
+{
+    Token database_name;
+    bool has_if_exists;
+
+    explicit DropDatabaseStmt(Token database_name, bool has_if_exists)
+        : database_name(database_name)
+        , has_if_exists(has_if_exists)
+    { }
+
+    void accept(ASTCommandVisitor &v) override;
+    void accept(ConstASTCommandVisitor &v) const override;
+};
+
 struct M_EXPORT UseDatabaseStmt : Stmt
 {
     Token database_name;
@@ -849,6 +863,20 @@ struct M_EXPORT CreateTableStmt : Stmt
     CreateTableStmt(Token table_name, std::vector<std::unique_ptr<attribute_definition>> attributes)
             : table_name(table_name)
             , attributes(std::move(attributes))
+    { }
+
+    void accept(ASTCommandVisitor &v) override;
+    void accept(ConstASTCommandVisitor &v) const override;
+};
+
+struct M_EXPORT DropTableStmt : Stmt
+{
+    std::vector<std::unique_ptr<Token>> table_names;
+    bool has_if_exists;
+
+    DropTableStmt(std::vector<std::unique_ptr<Token>> table_names, bool has_if_exists)
+        : table_names(std::move(table_names))
+        , has_if_exists(has_if_exists)
     { }
 
     void accept(ASTCommandVisitor &v) override;
@@ -966,7 +994,9 @@ struct M_EXPORT DSVImportStmt : ImportStmt
     X(m::ast::EmptyStmt) \
     X(m::ast::CreateDatabaseStmt) \
     X(m::ast::UseDatabaseStmt) \
+    X(m::ast::DropDatabaseStmt) \
     X(m::ast::CreateTableStmt) \
+    X(m::ast::DropTableStmt) \
     X(m::ast::SelectStmt) \
     X(m::ast::InsertStmt) \
     X(m::ast::UpdateStmt) \

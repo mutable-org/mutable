@@ -196,6 +196,20 @@ struct CreateDatabase : DDLCommand
     void execute(Diagnostic &diag) override;
 };
 
+struct DropDatabase : DDLCommand
+{
+    private:
+    const char *db_name_;
+
+    public:
+    DropDatabase(const char *db_name) : db_name_(M_notnull(db_name)) { }
+
+    void accept(DatabaseCommandVisitor &v) override;
+    void accept(ConstDatabaseCommandVisitor &v) const override;
+
+    void execute(Diagnostic &diag) override;
+};
+
 struct UseDatabase : DDLCommand
 {
     private:
@@ -224,10 +238,32 @@ struct CreateTable : DDLCommand
     void execute(Diagnostic &diag) override;
 };
 
+struct DropTable : DDLCommand
+{
+    private:
+    std::vector<const char *> table_names_;
+
+    public:
+    DropTable(std::vector<const char *>table_names) : table_names_(std::move(table_names))
+    {
+#ifndef NDEBUG
+        for (auto t : table_names_)
+            M_notnull(t);
+#endif
+    }
+
+    void accept(DatabaseCommandVisitor &v) override;
+    void accept(ConstDatabaseCommandVisitor &v) const override;
+
+    void execute(Diagnostic &diag) override;
+};
+
 #define M_DATABASE_DDL_LIST(X)\
     X(CreateDatabase) \
+    X(DropDatabase) \
     X(UseDatabase) \
-    X(CreateTable)
+    X(CreateTable) \
+    X(DropTable)
 
 #define M_DATABASE_SQL_LIST(X) \
     M_DATABASE_DML_LIST(X) \

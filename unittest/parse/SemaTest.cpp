@@ -1897,6 +1897,59 @@ TEST_CASE("Sema/Statements/CreateDatabase", "[core][parse][sema]")
 
 }
 
+TEST_CASE("Sema/Statements/DropDatabase", "[core][parse][sema]")
+{
+    Catalog::Clear();
+
+    /* Create a dummy DB to test on. */
+    Catalog &C = Catalog::Get();
+    const char *db_name = C.pool("mydb");
+    C.add_database(db_name);
+
+    SECTION("Drop Database Statement is ok.")
+    {
+        LEXER("DROP DATABASE mydb;");
+        Parser parser(lexer);
+        auto stmt = as<DropDatabaseStmt>(parser.parse());
+        REQUIRE(diag.num_errors() == 0);
+        REQUIRE(err.str().empty());
+        Sema sema(diag);
+        sema(*stmt);
+
+        REQUIRE(diag.num_errors() == 0);
+        REQUIRE(err.str().empty());
+    }
+
+    SECTION("Drop Database Statement for db which does not exist.")
+    {
+        LEXER("DROP DATABASE foo;");
+        Parser parser(lexer);
+        auto stmt = as<DropDatabaseStmt>(parser.parse());
+        REQUIRE(diag.num_errors() == 0);
+        REQUIRE(err.str().empty());
+        Sema sema(diag);
+        sema(*stmt);
+
+        REQUIRE(diag.num_errors() == 1);
+        REQUIRE(not err.str().empty());
+    }
+
+    // Only warning, no error expected
+    SECTION("Drop Database Statement with IF EXISTS for db which does not exist.")
+    {
+        LEXER("DROP DATABASE IF EXISTS foo;");
+        Parser parser(lexer);
+        auto stmt = as<DropDatabaseStmt>(parser.parse());
+        REQUIRE(diag.num_errors() == 0);
+        REQUIRE(err.str().empty());
+        Sema sema(diag);
+        sema(*stmt);
+
+        REQUIRE(diag.num_errors() == 0);
+        REQUIRE(err.str().empty());
+    }
+}
+
 TEST_CASE("Sema/Statements/UseDatabase", "[core][parse][sema]")
 {
     Catalog::Clear();
@@ -2233,6 +2286,77 @@ TEST_CASE("Sema/Statements/CreateTable", "[core][parse][sema]")
                 }
             }
         }
+    }
+}
+
+TEST_CASE("Sema/Statements/DropTable", "[core][parse][sema]")
+{
+    Catalog::Clear();
+
+    /* Create a dummy DB and a dummy table. */
+    Catalog &C = Catalog::Get();
+    const char *db_name = "mydb";
+    auto &DB = C.add_database(db_name);
+    C.set_database_in_use(DB);
+    auto &table = DB.add_table(C.pool("mytable"));
+    table.push_back(C.pool("a"), Type::Get_Boolean(Type::TY_Vector));
+
+    SECTION("Drop Table Statement is ok.")
+    {
+        LEXER("DROP TABLE mytable;");
+        Parser parser(lexer);
+        auto stmt = as<DropTableStmt>(parser.parse());
+        REQUIRE(diag.num_errors() == 0);
+        REQUIRE(err.str().empty());
+        Sema sema(diag);
+        sema(*stmt);
+
+        REQUIRE(diag.num_errors() == 0);
+        REQUIRE(err.str().empty());
+    }
+
+    SECTION("Drop Table Statement for table which does not exist.")
+    {
+        LEXER("DROP TABLE foo;");
+        Parser parser(lexer);
+        auto stmt = as<DropTableStmt>(parser.parse());
+        REQUIRE(diag.num_errors() == 0);
+        REQUIRE(err.str().empty());
+        Sema sema(diag);
+        sema(*stmt);
+
+        REQUIRE(diag.num_errors() == 1);
+        REQUIRE(not err.str().empty());
+    }
+
+    // Only warning, no error expected
+    SECTION("Drop Table Statement with IF EXISTS for table which does not exist.")
+    {
+        LEXER("DROP TABLE IF EXISTS foo;");
+        Parser parser(lexer);
+        auto stmt = as<DropTableStmt>(parser.parse());
+        REQUIRE(diag.num_errors() == 0);
+        REQUIRE(err.str().empty());
+        Sema sema(diag);
+        sema(*stmt);
+
+        REQUIRE(diag.num_errors() == 0);
+        REQUIRE(err.str().empty());
+    }
+
+    // Only warning, no error expected
+    SECTION("Drop Table Statement with IF EXISTS for two tables one of which does not exist.")
+    {
+        LEXER("DROP TABLE IF EXISTS foo, mytable;");
+        Parser parser(lexer);
+        auto stmt = as<DropTableStmt>(parser.parse());
+        REQUIRE(diag.num_errors() == 0);
+        REQUIRE(err.str().empty());
+        Sema sema(diag);
+        sema(*stmt);
+
+        REQUIRE(diag.num_errors() == 0);
+        REQUIRE(err.str().empty());
     }
 }
 

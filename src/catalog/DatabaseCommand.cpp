@@ -190,6 +190,17 @@ void CreateDatabase::execute(Diagnostic &diag)
     }
 }
 
+void DropDatabase::execute(Diagnostic &diag)
+{
+    try {
+        Catalog::Get().drop_database(db_name_);
+        if (not Options::Get().quiet)
+            diag.out() << "Dropped database " << db_name_ << ".\n";
+    } catch (std::invalid_argument) {
+        diag.err() << "Database " << db_name_ << " does not exist.\n";
+    }
+}
+
 void UseDatabase::execute(Diagnostic &diag)
 {
     auto &C = Catalog::Get();
@@ -218,6 +229,23 @@ void CreateTable::execute(Diagnostic &diag)
 
     if (not Options::Get().quiet)
         diag.out() << "Created table " << table->name << ".\n";
+}
+
+void DropTable::execute(Diagnostic &diag)
+{
+    auto &C = Catalog::Get();
+    auto &DB = C.get_database_in_use();
+
+    for (auto &table_name : table_names_) {
+        try {
+            DB.drop_table(table_name);
+            if (not Options::Get().quiet)
+                diag.out() << "Dropped table " << table_name << ".\n";
+            // XXX: This should automatically drop all indexes on `table_name`, too.
+        } catch (std::invalid_argument) {
+            diag.err() << "Table " << table_name << " does not exist in Database " << DB.name << ".\n";
+        }
+    }
 }
 
 

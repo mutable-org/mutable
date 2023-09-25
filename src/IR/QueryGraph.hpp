@@ -74,8 +74,10 @@ struct GraphBuilder : ast::ConstASTCommandVisitor
     void operator()(Const<ast::ErrorStmt>&) { M_unreachable("graph must not contain errors"); }
     void operator()(Const<ast::EmptyStmt>&) { /* nothing to be done */ }
     void operator()(Const<ast::CreateDatabaseStmt>&) { M_unreachable("not implemented"); }
+    void operator()(Const<ast::DropDatabaseStmt>&) { M_unreachable("not implemented"); }
     void operator()(Const<ast::UseDatabaseStmt>&) { M_unreachable("not implemented"); }
     void operator()(Const<ast::CreateTableStmt>&) { M_unreachable("not implemented"); }
+    void operator()(Const<ast::DropTableStmt>&) { M_unreachable("not implemented"); }
     void operator()(Const<ast::SelectStmt> &s);
     void operator()(Const<ast::InsertStmt>&) { M_unreachable("not implemented"); }
     void operator()(Const<ast::UpdateStmt>&) { M_unreachable("not implemented"); }

@@ -265,6 +265,15 @@ void ASTDumper::operator()(Const<CreateDatabaseStmt> &s)
     indent() << "CreateDatabaseStmt: '" << s.database_name.text << "' (" << s.database_name.pos << ')';
 }
 
+void ASTDumper::operator()(Const<DropDatabaseStmt> &s)
+{
+    indent() << "DropDatabaseStmt: '" << s.database_name.text << "' (" << s.database_name.pos << ')';
+    ++indent_;
+    if (s.has_if_exists)
+        indent() << "if exists: true";
+    --indent_;
+}
+
 void ASTDumper::operator()(Const<UseDatabaseStmt> &s)
 {
     indent() << "UseDatabaseStmt: '" << s.database_name.text << "' (" << s.database_name.pos << ')';
@@ -301,6 +310,20 @@ void ASTDumper::operator()(Const<CreateTableStmt> &s)
         --indent_;
     }
     --indent_;
+    --indent_;
+}
+
+void ASTDumper::operator()(Const<DropTableStmt> &s)
+{
+    indent() << "DropTableStmt:";
+    ++indent_;
+    indent() << "tables";
+    ++indent_;
+    for (auto &table_name : s.table_names)
+        indent() << table_name->text << " (" << table_name->pos << ')';
+    --indent_;
+    if (s.has_if_exists)
+        indent() << "if exists: true";
     --indent_;
 }
 

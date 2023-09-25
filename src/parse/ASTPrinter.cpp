@@ -194,6 +194,14 @@ void ASTPrinter::operator()(Const<CreateDatabaseStmt> &s)
     out << "CREATE DATABASE " << s.database_name.text << ';';
 }
 
+void ASTPrinter::operator()(Const<DropDatabaseStmt> &s)
+{
+    out << "DROP DATABASE ";
+    if (s.has_if_exists)
+        out << "IF EXISTS ";
+    out << s.database_name.text << ';';
+}
+
 void ASTPrinter::operator()(Const<UseDatabaseStmt> &s)
 {
     out << "USE " << s.database_name.text << ';';
@@ -212,6 +220,19 @@ void ASTPrinter::operator()(Const<CreateTableStmt> &s)
         }
     }
     out << "\n);";
+}
+
+void ASTPrinter::operator()(Const<DropTableStmt> &s)
+{
+    out << "DROP TABLE ";
+    if (s.has_if_exists)
+        out << "IF EXISTS ";
+    for (auto it = s.table_names.cbegin(), end = s.table_names.cend(); it != end; ++it) {
+        auto &table_name = *it;
+        if (it != s.table_names.cbegin()) out << ", ";
+        out << table_name->text;
+    }
+    out << ';';
 }
 
 void ASTPrinter::operator()(Const<SelectStmt> &s)

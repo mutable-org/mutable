@@ -41,6 +41,7 @@ set(
 
     # catalog
     catalog/CardinalityEstimatorTest.cpp
+    catalog/DatabaseCommandTest.cpp
     catalog/SchemaTest.cpp
     catalog/TypeTest.cpp
 

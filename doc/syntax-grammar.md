@@ -15,11 +15,12 @@ commands ::= command { command } ;
 command ::= [ statement | INSTRUCTION ] ';' ;
 ```
 
-### Statements
+---
 
-##### Statement
+### Statements
 ```
 statement ::= create-statement |
+              drop-statement |
               use_database-statement |
               select-statement |
               insert-statement |
@@ -28,7 +29,7 @@ statement ::= create-statement |
               import-statement ;
 ```
 
-##### Create Statement
+#### Create Statements
 ```
 create-statement ::= create_database-statement | create_table-statement ;
 ```
@@ -36,11 +37,6 @@ create-statement ::= create_database-statement | create_table-statement ;
 ##### Create Database Statement
 ```
 create_database-statement ::= 'CREATE' 'DATABASE' IDENTIFIER ;
-```
-
-##### Use Database Statement
-```
-use_database-statement ::= 'USE' IDENTIFIER ;
 ```
 
 ##### Create Table Statement
@@ -54,7 +50,27 @@ constraint ::= 'PRIMARY' 'KEY' |
                'REFERENCES' IDENTIFIER '(' IDENTIFIER ')' ;
 ```
 
-##### Select Statement
+#### Drop Statements
+```
+drop-statement ::= drop_database-statement | drop_table-statement ;
+```
+
+##### Drop Database Statement
+```
+drop_database-statement ::= 'DROP' 'DATABASE' [ 'IF' 'EXISTS' ] IDENTIFIER ;
+```
+
+##### Drop Table Statement
+```
+drop_table-statement ::= 'DROP' 'TABLE' [ 'IF' 'EXISTS' ] IDENTIFIER { ',' IDENTIFIER } ;
+```
+
+#### Use Database Statement
+```
+use_database-statement ::= 'USE' IDENTIFIER ;
+```
+
+#### Select Statement
 ```
 select-statement ::= select-clause
                      [ from-clause ]
@@ -65,29 +81,31 @@ select-statement ::= select-clause
                      [ limit-clause ] ;
 ```
 
-##### Insert Statement
+#### Insert Statement
 ```
 insert-statement ::= 'INSERT' 'INTO' IDENTIFIER 'VALUES' tuple { ',' tuple } ;
 
 tuple ::= '(' ( 'DEFAULT' | 'NULL' | expression ) { ',' ( 'DEFAULT' | 'NULL' | expression ) } ')' ;
 ```
 
-##### Update Statement
+#### Update Statement
 ```
 update-statement ::= update-clause [ where-clause ] ;
 ```
 
-##### Delete Statement
+#### Delete Statement
 ```
 delete-statement ::= 'DELETE' 'FROM' IDENTIFIER [ where-clause ] ;
 ```
 
-##### Import Statement
+#### Import Statement
 ```
 import-statement ::= 'IMPORT' 'INTO' IDENTIFIER (
                          'DSV' STRING-LITERAL [ 'ROWS' INTEGER-CONSTANT ] [ 'DELIMITER' STRING-LITERAL ] [ 'ESCAPE' STRING-LITERAL ] [ 'QUOTE' STRING-LITERAL ] [ 'HAS' 'HEADER' ] [ 'SKIP' 'HEADER' ]
                      ) ;
 ```
+
+---
 
 ### Clauses
 
@@ -98,9 +116,9 @@ select-clause ::= 'SELECT' ( '*' | expression [ [ 'AS' ] IDENTIFIER ] ) { ',' ex
 
 ##### From Clause
 ```
-table-or-select-statement ::= IDENTIFIER [ [ 'AS' ] IDENTIFIER ] | '(' select-statement ')' [ 'AS' ] IDENTIFIER ;
-
 from-clause ::= 'FROM' table-or-select-statement { ',' table-or-select-statement } ;
+
+table-or-select-statement ::= IDENTIFIER [ [ 'AS' ] IDENTIFIER ] | '(' select-statement ')' [ 'AS' ] IDENTIFIER ;
 ```
 
 ##### Where Clause
@@ -132,6 +150,8 @@ limit-clause ::= 'LIMIT' INTEGER-CONSTANT [ 'OFFSET' INTEGER-CONSTANT ] ;
 ```
 update-clause ::= 'UPDATE' IDENTIFIER 'SET' IDENTIFIER '=' expression { ',' IDENTIFIER '=' expression } ;
 ```
+
+---
 
 ### Expressions
 
@@ -182,6 +202,8 @@ logical-or-expression ::= logical-or-expression 'OR' logical-and-expression |
 ```
 expression ::= logical-or-expression ;
 ```
+
+---
 
 ### Types
 

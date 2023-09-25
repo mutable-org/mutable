@@ -1065,6 +1065,49 @@ TEST_CASE("Parser::parse_CreateDatabaseStmt() sanity tests", "[core][parse][unit
     }
 }
 
+TEST_CASE("Parser::parse_DropDatabaseStmt()", "[core][parse][unit]")
+{
+    test_triple_t triples[] = {
+        /* { drop database statement, fully-parenthesized drop database statement, next token } */
+
+        { "DROP DATABASE d", "DROP DATABASE d;", TK_EOF },
+        { "DROP DATABASE d, second", "DROP DATABASE d;", TK_COMMA },
+        { "DROP DATABASE IF EXISTS d", "DROP DATABASE IF EXISTS d;", TK_EOF },
+        { "DROP DATABASE IF EXISTS d, second", "DROP DATABASE IF EXISTS d;", TK_COMMA }
+    };
+
+    auto parse = [](ast::Parser &p) { return p.parse_DropDatabaseStmt(); };
+    for (auto triple : triples)
+        test_parse_positive<ast::DropDatabaseStmt, ast::Stmt>(triple, parse);
+}
+
+TEST_CASE("Parser::parse_DropDatabaseStmt() sanity tests", "[core][parse][unit]")
+{
+    const char * statements[] = {
+        "",
+        "DROP",
+        "DROP d",
+        "drop DATABASE d",
+        "DROP database d",
+        "DROP DATABASE IF d",
+        "DROP DATABASE IF exists d",
+        "DROP DATABASE 1"
+    };
+
+    for (auto s : statements) {
+        LEXER(s);
+        ast::Parser parser(lexer);
+        auto ast = parser.parse_DropDatabaseStmt();
+        if (diag.num_errors() == 0)
+            std::cerr << "UNEXPECTED PASS for input \"" << s << '"' << std::endl;
+        CHECK(diag.num_errors() > 0);
+        CHECK_FALSE(err.str().empty());
+        if (not is<ast::ErrorStmt>(ast))
+            std::cerr << "Input \"" << s << "\" is not parsed as ErrorStmt" << std::endl;
+        CHECK(is<ast::ErrorStmt>(ast));
+    }
+}
+
 TEST_CASE("Parser::parse_UseDatabaseStmt()", "[core][parse][unit]")
 {
     test_triple_t triples[] = {
@@ -1207,6 +1250,53 @@ TEST_CASE("Parser::parse_CreateTableStmt() sanity tests", "[core][parse][unit]")
                 std::cerr << "Input \"" << s << "\" is not parsed as ErrorStmt" << std::endl;
             CHECK(is<ast::ErrorStmt>(ast));
         }
+    }
+}
+
+TEST_CASE("Parser::parse_DropTableStmt()", "[core][parse][unit]")
+{
+    test_triple_t triples[] = {
+        /* { create table statement, fully-parenthesized create table statement, next token } */
+
+        { "DROP TABLE t", "DROP TABLE t;", TK_EOF },
+        { "DROP TABLE t1, t2", "DROP TABLE t1, t2;", TK_EOF },
+        { "DROP TABLE IF EXISTS t", "DROP TABLE IF EXISTS t;", TK_EOF },
+        { "DROP TABLE IF EXISTS t1, t2", "DROP TABLE IF EXISTS t1, t2;", TK_EOF },
+    };
+
+    auto parse = [](ast::Parser &p) { return p.parse_DropTableStmt(); };
+    for (auto triple : triples)
+        test_parse_positive<ast::DropTableStmt, ast::Stmt>(triple, parse);
+}
+
+TEST_CASE("Parser::parse_DropTableStmt() sanity tests", "[core][parse][unit]")
+{
+    const char * statements[] = {
+        "DROP t",
+        "drop TABLE t",
+        "DROP table t",
+        "DROP TABLE IF t",
+        "DROP TABLE IF exists t",
+        "DROP TABLE 1",
+        "DROP TABLE t, 1",
+        "DROP TABLE IF EXISTS 1",
+        "",
+        "DROP",
+        "DROP TABLE",
+        "DROP TABLE IF EXISTS",
+    };
+
+    for (auto s : statements) {
+        LEXER(s);
+        ast::Parser parser(lexer);
+        auto ast = parser.parse_DropTableStmt();
+        if (diag.num_errors() == 0)
+            std::cerr << "UNEXPECTED PASS for input \"" << s << '"' << std::endl;
+        CHECK(diag.num_errors() > 0);
+        CHECK_FALSE(err.str().empty());
+        if (not is<ast::ErrorStmt>(ast))
+            std::cerr << "Input \"" << s << "\" is not parsed as ErrorStmt" << std::endl;
+        CHECK(is<ast::ErrorStmt>(ast));
     }
 }
 

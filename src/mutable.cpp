@@ -240,6 +240,8 @@ void m::execute_statement(Diagnostic &diag, const ast::Stmt &stmt, const bool is
         }
     } else if (auto S = cast<const ast::CreateDatabaseStmt>(&stmt)) {
         C.add_database(S->database_name.text);
+    } else if (auto S = cast<const ast::DropDatabaseStmt>(&stmt)) {
+        M_unreachable("not implemented");
     } else if (auto S = cast<const ast::UseDatabaseStmt>(&stmt)) {
         auto &DB = C.get_database(S->database_name.text);
         C.set_database_in_use(DB);
@@ -274,6 +276,8 @@ void m::execute_statement(Diagnostic &diag, const ast::Stmt &stmt, const bool is
 
         T.layout(C.data_layout());
         T.store(C.create_store(T));
+    } else if (auto S = cast<const ast::DropTableStmt>(&stmt)) {
+        M_unreachable("not implemented");
     } else if (auto S = cast<const ast::DSVImportStmt>(&stmt)) {
         auto &DB = C.get_database_in_use();
         auto &T = DB.get_table(S->table_name.text);

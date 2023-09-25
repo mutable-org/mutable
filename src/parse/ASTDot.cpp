@@ -336,12 +336,22 @@ void ASTDot::operator()(Const<CreateDatabaseStmt>&)
     // TODO implement
 }
 
+void ASTDot::operator()(Const<DropDatabaseStmt>&)
+{
+    // TODO implement
+}
+
 void ASTDot::operator()(Const<UseDatabaseStmt>&)
 {
     // TODO implement
 }
 
 void ASTDot::operator()(Const<CreateTableStmt>&)
+{
+    // TODO implement
+}
+
+void ASTDot::operator()(Const<DropTableStmt>&)
 {
     // TODO implement
 }

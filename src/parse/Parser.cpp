@@ -157,6 +157,20 @@ std::unique_ptr<Stmt> Parser::parse_Stmt()
             }
             break;
 
+        case TK_Drop:
+            switch (token<1>().type) {
+                default:
+                    stmt = std::make_unique<ErrorStmt>(token());
+                    diag.e(token().pos) << "expected a drop database, table, or index statement, got "
+                                        << token().text << '\n';
+                    consume();
+                    return recover<ErrorStmt>(start, follow_set_STATEMENT);
+
+                case TK_Database: stmt = parse_DropDatabaseStmt(); break;
+                case TK_Table:    stmt = parse_DropTableStmt(); break;
+            }
+            break;
+
         case TK_Use:    stmt = parse_UseDatabaseStmt(); break;
         case TK_Select: stmt = parse_SelectStmt(); break;
         case TK_Insert: stmt = parse_InsertStmt(); break;
@@ -190,6 +204,35 @@ std::unique_ptr<Stmt> Parser::parse_CreateDatabaseStmt()
         return recover<ErrorStmt>(start, follow_set_STATEMENT);
 
     return std::make_unique<CreateDatabaseStmt>(database_name);
+}
+
+std::unique_ptr<Stmt> Parser::parse_DropDatabaseStmt()
+{
+    Token start = token();
+
+    /* 'DROP' 'DATABASE' */
+    if (not expect(TK_Drop)) {
+        consume();
+        return recover<ErrorStmt>(start, follow_set_STATEMENT);
+    }
+
+    if (not expect(TK_Database))
+        return recover<ErrorStmt>(start, follow_set_STATEMENT);
+
+    /* [ 'IF' 'EXISTS' ] */
+    bool has_if_exists = false;
+    if (accept(TK_If)) {
+        if (not expect(TK_Exists))
+            return recover<ErrorStmt>(start, follow_set_STATEMENT);
+        has_if_exists = true;
+    }
+
+    /* identifier */
+    Token database_name = token();
+    if (not expect(TK_IDENTIFIER))
+        return recover<ErrorStmt>(start, follow_set_STATEMENT);
+
+    return std::make_unique<DropDatabaseStmt>(database_name, has_if_exists);
 }
 
 std::unique_ptr<Stmt> Parser::parse_UseDatabaseStmt()
@@ -311,6 +354,39 @@ exit_constraints:
         return recover<ErrorStmt>(start, follow_set_STATEMENT);
 
     return std::make_unique<CreateTableStmt>(table_name, std::move(attrs));
+}
+
+std::unique_ptr<Stmt> Parser::parse_DropTableStmt()
+{
+    Token start = token();
+
+    /* 'DROP' 'TABLE' */
+    if (not expect(TK_Drop)) {
+        consume();
+        return recover<ErrorStmt>(start, follow_set_STATEMENT);
+    }
+
+    if (not expect(TK_Table))
+        return recover<ErrorStmt>(start, follow_set_STATEMENT);
+
+    /* [ 'IF' 'EXISTS' ] */
+    bool has_if_exists = false;
+    if (accept(TK_If)) {
+        if (not expect(TK_Exists))
+            return recover<ErrorStmt>(start, follow_set_STATEMENT);
+        has_if_exists = true;
+    }
+
+    /* identifier { ',' identifier } */
+    std::vector<std::unique_ptr<Token>> table_names;
+    do {
+        Token table_name = token();
+        if (not expect(TK_IDENTIFIER))
+            return recover<ErrorStmt>(start, follow_set_STATEMENT);
+        table_names.emplace_back(std::make_unique<Token>(table_name));
+    } while (accept(TK_COMMA));
+
+    return std::make_unique<DropTableStmt>(std::move(table_names), has_if_exists);
 }
 
 std::unique_ptr<Stmt> Parser::parse_SelectStmt()

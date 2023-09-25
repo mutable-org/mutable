@@ -1430,6 +1430,29 @@ void Sema::operator()(CreateDatabaseStmt &s)
         diag.e(s.database_name.pos) << "Database " << db_name << " already exists.\n";
 }
 
+void Sema::operator()(DropDatabaseStmt &s)
+{
+    RequireContext RCtx(this, s);
+    Catalog &C = Catalog::Get();
+    const char *db_name = s.database_name.text;
+
+    if (C.has_database_in_use()) {
+        if (C.get_database_in_use().name == db_name) {
+            diag.e(s.database_name.pos) << "Database " << db_name << " is in use.\n";
+            return;
+        }
+    }
+
+    if (C.has_database(db_name))
+        command_ = std::make_unique<DropDatabase>(db_name);
+    else {
+        if (s.has_if_exists)
+            command_ = std::make_unique<EmptyCommand>();
+        else
+            diag.e(s.database_name.pos) << "Database " << db_name << " does not exist.\n";
+    }
+}
+
 void Sema::operator()(UseDatabaseStmt &s)
 {
     RequireContext RCtx(this, s);
@@ -1553,6 +1576,37 @@ void Sema::operator()(CreateTableStmt &s)
 
     if (not is_nested() and not diag.num_errors())
         command_ = std::make_unique<CreateTable>(std::move(T));
+}
+
+void Sema::operator()(DropTableStmt &s)
+{
+    RequireContext RCtx(this, s);
+    Catalog &C = Catalog::Get();
+
+    if (not C.has_database_in_use()) {
+        diag.err() << "No database selected.\n";
+        return;
+    }
+    auto &DB = C.get_database_in_use();
+
+    bool ok = true;
+    std::vector<const char *> table_names;
+    for (auto &tok : s.table_names) {
+        const char *table_name = tok->text;
+        if (DB.has_table(table_name))
+            table_names.emplace_back(std::move(table_name));
+        else {
+            if (not s.has_if_exists) {
+                diag.e(tok->pos) << "Table " << table_name << " does not exist in database " << DB.name << ".\n";
+                ok = false;
+            } else {
+                diag.n(tok->pos) << "Table " << table_name << " does not exist in database " << DB.name << ". "
+                                 << "Skipping.\n";
+            }
+        }
+    }
+    if (ok)
+        command_ = std::make_unique<DropTable>(std::move(table_names));
 }
 
 void Sema::operator()(SelectStmt &s)

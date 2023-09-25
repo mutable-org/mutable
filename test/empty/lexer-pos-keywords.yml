@@ -19,8 +19,10 @@ query: |
     DELIMITER
     DESC
     DOUBLE
+    DROP
     DSV
     ESCAPE
+    EXISTS
     FALSE
     FLOAT
     FROM
@@ -28,6 +30,7 @@ query: |
     HAS
     HAVING
     HEADER
+    IF
     IMPORT
     INSERT
     INT
@@ -80,44 +83,47 @@ stages:
             -:16:1: DELIMITER TK_Delimiter
             -:17:1: DESC TK_Descending
             -:18:1: DOUBLE TK_Double
-            -:19:1: DSV TK_Dsv
-            -:20:1: ESCAPE TK_Escape
-            -:21:1: FALSE TK_False
-            -:22:1: FLOAT TK_Float
-            -:23:1: FROM TK_From
-            -:24:1: GROUP TK_Group
-            -:25:1: HAS TK_Has
-            -:26:1: HAVING TK_Having
-            -:27:1: HEADER TK_Header
-            -:28:1: IMPORT TK_Import
-            -:29:1: INSERT TK_Insert
-            -:30:1: INT TK_Int
-            -:31:1: INTO TK_Into
-            -:32:1: KEY TK_Key
-            -:33:1: LIKE TK_Like
-            -:34:1: LIMIT TK_Limit
-            -:35:1: NOT TK_Not
-            -:36:1: NULL TK_Null
-            -:37:1: OFFSET TK_Offset
-            -:38:1: ON TK_On
-            -:39:1: OR TK_Or
-            -:40:1: ORDER TK_Order
-            -:41:1: PRIMARY TK_Primary
-            -:42:1: QUOTE TK_Quote
-            -:43:1: REFERENCES TK_References
-            -:44:1: RESTRICT TK_Restrict
-            -:45:1: ROWS TK_Rows
-            -:46:1: SELECT TK_Select
-            -:47:1: SET TK_Set
-            -:48:1: SKIP TK_Skip
-            -:49:1: TABLE TK_Table
-            -:50:1: TRUE TK_True
-            -:51:1: UNIQUE TK_Unique
-            -:52:1: UPDATE TK_Update
-            -:53:1: USE TK_Use
-            -:54:1: VALUES TK_Values
-            -:55:1: VARCHAR TK_Varchar
-            -:56:1: WHERE TK_Where
+            -:19:1: DROP TK_Drop
+            -:20:1: DSV TK_Dsv
+            -:21:1: ESCAPE TK_Escape
+            -:22:1: EXISTS TK_Exists
+            -:23:1: FALSE TK_False
+            -:24:1: FLOAT TK_Float
+            -:25:1: FROM TK_From
+            -:26:1: GROUP TK_Group
+            -:27:1: HAS TK_Has
+            -:28:1: HAVING TK_Having
+            -:29:1: HEADER TK_Header
+            -:30:1: IF TK_If
+            -:31:1: IMPORT TK_Import
+            -:32:1: INSERT TK_Insert
+            -:33:1: INT TK_Int
+            -:34:1: INTO TK_Into
+            -:35:1: KEY TK_Key
+            -:36:1: LIKE TK_Like
+            -:37:1: LIMIT TK_Limit
+            -:38:1: NOT TK_Not
+            -:39:1: NULL TK_Null
+            -:40:1: OFFSET TK_Offset
+            -:41:1: ON TK_On
+            -:42:1: OR TK_Or
+            -:43:1: ORDER TK_Order
+            -:44:1: PRIMARY TK_Primary
+            -:45:1: QUOTE TK_Quote
+            -:46:1: REFERENCES TK_References
+            -:47:1: RESTRICT TK_Restrict
+            -:48:1: ROWS TK_Rows
+            -:49:1: SELECT TK_Select
+            -:50:1: SET TK_Set
+            -:51:1: SKIP TK_Skip
+            -:52:1: TABLE TK_Table
+            -:53:1: TRUE TK_True
+            -:54:1: UNIQUE TK_Unique
+            -:55:1: UPDATE TK_Update
+            -:56:1: USE TK_Use
+            -:57:1: VALUES TK_Values
+            -:58:1: VARCHAR TK_Varchar
+            -:59:1: WHERE TK_Where
         err: NULL
         num_err: 0
         returncode: 0

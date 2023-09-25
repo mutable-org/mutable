@@ -1,0 +1,22 @@
+description: DROP DATABASE with constant sanity testing
+db: ddl
+query: |
+    DROP DATABASE 42;
+required: YES
+
+stages:
+    lexer:
+        out: |
+            -:1:1: DROP TK_Drop
+            -:1:6: DATABASE TK_Database
+            -:1:15: 42 TK_DEC_INT
+            -:1:17: ; TK_SEMICOL
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    parser:
+        out: NULL
+        err: NULL
+        num_err: NULL
+        returncode: 1

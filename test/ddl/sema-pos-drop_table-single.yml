@@ -1,0 +1,29 @@
+description: DROP TABLE single positive test
+db: ddl
+query: |
+    DROP TABLE tab0;
+required: YES
+
+stages:
+    lexer:
+        out: |
+            -:1:1: DROP TK_Drop
+            -:1:6: TABLE TK_Table
+            -:1:12: tab0 TK_IDENTIFIER
+            -:1:16: ; TK_SEMICOL
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    parser:
+        out: |
+            DROP TABLE tab0;
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    sema:
+        out: NULL
+        err: NULL
+        num_err: 0
+        returncode: 0

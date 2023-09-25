@@ -1,0 +1,29 @@
+description: DROP DATABASE in use sanity test
+db: ddl
+query: |
+    DROP DATABASE db0;
+required: YES
+
+stages:
+    lexer:
+        out: |
+            -:1:1: DROP TK_Drop
+            -:1:6: DATABASE TK_Database
+            -:1:15: db0 TK_IDENTIFIER
+            -:1:18: ; TK_SEMICOL
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    parser:
+        out: |
+            DROP DATABASE db0;
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    sema:
+        out: NULL
+        err: NULL
+        num_err: 1
+        returncode: 1

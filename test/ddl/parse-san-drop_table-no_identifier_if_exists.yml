@@ -1,0 +1,24 @@
+description: DROP TABLE IF EXISTS with constant sanity testing
+db: ddl
+query: |
+    DROP TABLE IF EXISTS 42;
+required: YES
+
+stages:
+    lexer:
+        out: |
+            -:1:1: DROP TK_Drop
+            -:1:6: TABLE TK_Table
+            -:1:12: IF TK_If
+            -:1:15: EXISTS TK_Exists
+            -:1:22: 42 TK_DEC_INT
+            -:1:24: ; TK_SEMICOL
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    parser:
+        out: NULL
+        err: NULL
+        num_err: NULL
+        returncode: 1

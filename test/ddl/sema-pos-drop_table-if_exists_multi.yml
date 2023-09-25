@@ -1,0 +1,33 @@
+description: DROP TABLE IF EXISTS multiple positive test
+db: ddl
+query: |
+    DROP TABLE IF EXISTS tab0, anytab;
+required: YES
+
+stages:
+    lexer:
+        out: |
+            -:1:1: DROP TK_Drop
+            -:1:6: TABLE TK_Table
+            -:1:12: IF TK_If
+            -:1:15: EXISTS TK_Exists
+            -:1:22: tab0 TK_IDENTIFIER
+            -:1:26: , TK_COMMA
+            -:1:28: anytab TK_IDENTIFIER
+            -:1:34: ; TK_SEMICOL
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    parser:
+        out: |
+            DROP TABLE IF EXISTS tab0, anytab;
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    sema:
+        out: NULL
+        err: NULL
+        num_err: 0
+        returncode: 0

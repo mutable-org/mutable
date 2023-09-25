@@ -1,0 +1,31 @@
+description: DROP DATABASE IF EXISTS non-existing positive test
+db: ddl
+query: |
+    DROP DATABASE IF EXISTS anydb;
+required: YES
+
+stages:
+    lexer:
+        out: |
+          -:1:1: DROP TK_Drop
+          -:1:6: DATABASE TK_Database
+          -:1:15: IF TK_If
+          -:1:18: EXISTS TK_Exists
+          -:1:25: anydb TK_IDENTIFIER
+          -:1:30: ; TK_SEMICOL
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    parser:
+        out: |
+          DROP DATABASE IF EXISTS anydb;
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    sema:
+        out: NULL
+        err: NULL
+        num_err: 0
+        returncode: 0

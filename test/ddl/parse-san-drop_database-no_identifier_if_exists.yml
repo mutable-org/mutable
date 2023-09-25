@@ -1,0 +1,24 @@
+description: DROP DATABASE IF EXISTS with constant sanity testing
+db: ddl
+query: |
+    DROP DATABASE IF EXIST 42;
+required: YES
+
+stages:
+    lexer:
+        out: |
+            -:1:1: DROP TK_Drop
+            -:1:6: DATABASE TK_Database
+            -:1:15: IF TK_If
+            -:1:18: EXIST TK_IDENTIFIER
+            -:1:24: 42 TK_DEC_INT
+            -:1:26: ; TK_SEMICOL
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    parser:
+        out: NULL
+        err: NULL
+        num_err: NULL
+        returncode: 1

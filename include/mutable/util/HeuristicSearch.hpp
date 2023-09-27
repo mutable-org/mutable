@@ -1526,12 +1526,10 @@ std::size_t num_##NAME() const { return 0; }
             > state_manager_topdown;
 
             std::atomic<bool> isFound = false;
-            std::shared_mutex mutex;
             int mutex_counter = 0;
             std::tuple<const state_type *, const state_type *, double> meet_point; // Store the topdown state and bottomup state
 
         public:
-            bool canContinue = true;
             const state_type* global_goal;
             bool reach_goal = false;
             bool resultComfirmed = false;
@@ -1606,7 +1604,7 @@ std::size_t num_##NAME() const { return 0; }
             }
 
             bool resultNotCorfirmed() {
-                if (!isFound) { counter_before_found++;return true; }
+                if (!isFound) {counter_before_found++;return true;}
                 /* isFound */
                 bool bottomup_valid = (state_manager_bottomup.top_score() >= std::get<1>(meet_point)->g());
                 if (!bottomup_valid) {
@@ -1627,7 +1625,7 @@ std::size_t num_##NAME() const { return 0; }
                 try {
                     while (not state_manager_bottomup.queues_empty()) {
                         if (reach_goal || not resultNotCorfirmed()) {
-//                            std::cout << "Thread Message: Bottomup Search Finished" << std::endl;
+                            std::cout << "Thread Message: Bottomup Search Finished" << std::endl;
                             return;
                         }
                         auto bottomup_node = state_manager_bottomup.pop();
@@ -1635,13 +1633,13 @@ std::size_t num_##NAME() const { return 0; }
                         if (expand.is_goal(bottomup_state, context...)) {
                             reach_goal = true;
                             global_goal = &bottomup_state;
-//                            std::cout << "[goal]Thread Message: Bottomup Search Finished" << std::endl;
+                            std::cout << "[goal]Thread Message: Bottomup Search Finished" << std::endl;
                             return;
                         }
                         explore_state_bottomup_multithread(bottomup_state, heuristic, expand, context...);
                     }
                 } catch (const std::logic_error e) {
-//                    std::cout << "[ERR]Catch bottomup" << std::endl;
+                    std::cout << "[ERR]Catch bottomup" << std::endl;
                     return;
                 }
 
@@ -1670,14 +1668,14 @@ std::size_t num_##NAME() const { return 0; }
                             }
                         }
 
-
                         isFound = true;
                         if (update) {
                             mutex_counter++;
-//                            std::cout << "Meet Point: " << mutex_counter << " " << overall_score << "\t"
-//                                      << topdown_state.value()->g() <<" "<<topdown_state.value()->size()<<"\t"
-//                                      << bottomup_state_ptr->g()<<" "<<bottomup_state_ptr->size()
-//                                      << std::endl;
+                            std::cout << "Meet Point: " << mutex_counter << " " << overall_score << "\t"
+                                      << topdown_state.value()->g() << " " << topdown_state.value()->size() << "\t"
+                                      << bottomup_state_ptr->g() << " " << bottomup_state_ptr->size()<< "\t"
+                                      << "Meet Point status "<< resultComfirmed
+                                      << std::endl;
                             meet_point = std::make_tuple(topdown_state.value(), bottomup_state_ptr, overall_score);
                         }
                     }
@@ -1690,6 +1688,7 @@ std::size_t num_##NAME() const { return 0; }
                 try {
                     while (not state_manager_topdown.queues_empty()) {
                         if (resultComfirmed || reach_goal) {
+                            std::cout<<"1679 line: "<<resultComfirmed<<std::endl;
                             return;
                         }
                         auto topdown_node = state_manager_topdown.pop();
@@ -1701,7 +1700,7 @@ std::size_t num_##NAME() const { return 0; }
                         explore_state_topdown_multithread(topdown_state, heuristic2, expand2, context...);
                     }
                 } catch (const std::logic_error &e) {
-//                    std::cout << "[ERR]Catch topdown" << std::endl;
+                    std::cout << "[ERR]Catch topdown" << std::endl;
                     return;
                 }
 
@@ -1716,7 +1715,7 @@ std::size_t num_##NAME() const { return 0; }
                             counter_topdown_callback++;
                             if (resultComfirmed || reach_goal) {
                                 throw std::logic_error("topdown");
-//                                std::cout << "[in]Thread Message: Topdown Search Finished" << std::endl;
+                                std::cout << "[in]Thread Message: Topdown Search Finished" << std::endl;
 //                                return;
                             }
                             state_manager_topdown.push_regular_queue(std::move(successor), h, context...);
@@ -1884,15 +1883,10 @@ std::size_t num_##NAME() const { return 0; }
 //            thread2.join();
 
             while(true){
-                if (reach_goal) {
-                    std::cout << "[!!!here]reach goal haha!" << std::endl;
-                    return *global_goal;
-                }
-
                 if(resultComfirmed){
-                    std::cout<<"[!!!here]resultConfirmed"<<std::endl;
-                    std::cout<<"Mutex Counter: "<<mutex_counter<<std::endl;
-                    std::cout<<"Top Down Callback Counter "<<counter_topdown_callback<<std::endl;
+                    std::cout << "[!!!here]resultConfirmed" << std::endl;
+                    std::cout << "Mutex Counter: " << mutex_counter << std::endl;
+                    std::cout << "Top Down Callback Counter "<<counter_topdown_callback<<std::endl;
                     //            std::cout << "Bidirectional Search Meet Each Other" << std::endl;
                     const state_type &goal = reverse_from_the_meet_point();
 //                    std::cout << "counter_before_found " << counter_before_found << "counter bottomup " << counter_bottomup
@@ -1901,6 +1895,10 @@ std::size_t num_##NAME() const { return 0; }
                     return goal;
                 }
 
+                if (reach_goal) {
+                    std::cout << "[!!!here]reach goal haha!" << std::endl;
+                    return *global_goal;
+                }
             }
 
 

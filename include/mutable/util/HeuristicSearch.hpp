@@ -1613,11 +1613,11 @@ std::size_t num_##NAME() const { return 0; }
                     counter_bottomup++;
                     return true;
                 }
-                bool topdown_valid = (state_manager_topdown.top_score() >= std::get<0>(meet_point)->g());
-                if (!topdown_valid) {
-                    counter_topdown++;
-                    return true;
-                }
+//                bool topdown_valid = (state_manager_topdown.top_score() >= std::get<0>(meet_point)->g());
+//                if (!topdown_valid) {
+//                    counter_topdown++;
+//                    return true;
+//                }
                 resultComfirmed = true;
                 return false;
             }
@@ -1719,35 +1719,8 @@ std::size_t num_##NAME() const { return 0; }
                             counter_topdown_callback++;
                             if (resultComfirmed || reach_goal) {
                                 throw std::logic_error("topdown");
-                                std::cout << "[in]Thread Message: Topdown Search Finished" << std::endl;
-//                                return;
                             }
                             state_manager_topdown.push_regular_queue(std::move(successor), h, context...);
-                            /* Check visited */
-//                    if (successor.size() < state_manager_bottomup.frontier_level()) { return; }
-//                    auto bottomup_state = state_manager_bottomup.check_visited(successor, context...);
-//                    auto topdown_state_ptr = state_manager_topdown.push_regular_queue(std::move(successor), h, context...);
-//                    if (bottomup_state.has_value()) {
-//                        /// found in the topdown, so we need to maintained the state and return
-//                        double overall_score = topdown_state_ptr->g() + bottomup_state.value()->g();
-//                        bool update = true;
-//                        if (isFound) {
-//                            // conditionally update here
-//                            if (overall_score >= std::get<2>(meet_point)) {
-//                                update = false;
-//                            }
-//                        }
-//
-//                        mutex.lock();
-//                        isFound = true;
-//                        if (update) {
-//                            mutex_counter++;
-//                            std::cout << "Meet Point: " << mutex_counter << " " << overall_score << " "
-//                                      << topdown_state_ptr->g() << " " << bottomup_state.value()->g() << std::endl;
-//                            meet_point = std::make_tuple(topdown_state_ptr, bottomup_state.value(), overall_score);
-//                        }
-//                        mutex.unlock();
-//                    }
                         }, state, heuristic, expand2, context...);
             }
 
@@ -1893,8 +1866,8 @@ std::size_t num_##NAME() const { return 0; }
                     std::cout << "Top Down Callback Counter "<<counter_topdown_callback<<std::endl;
                     //            std::cout << "Bidirectional Search Meet Each Other" << std::endl;
                     const state_type &goal = reverse_from_the_meet_point();
-//                    std::cout << "counter_before_found " << counter_before_found << "counter bottomup " << counter_bottomup
-//                              << " topdown " << counter_topdown << std::endl;
+                    std::cout << "counter_before_found " << counter_before_found << "counter bottomup " << counter_bottomup
+                              << " topdown " << counter_topdown << std::endl;
 
                     return goal;
                 }

@@ -7,6 +7,7 @@
 #include <mutable/mutable-config.hpp>
 #include <mutable/util/crtp.hpp>
 #include <mutable/util/macro.hpp>
+#include <mutable/util/MinCutAGaT.hpp>
 #include <unordered_map>
 
 
@@ -87,6 +88,7 @@ struct M_EXPORT GOO : PlanEnumeratorCRTP<GOO>
         bool operator&(const node &other) const { return can_merge_with(other); }
     };
 
+    /** Enumerate the sequence of joins that yield the smallest subproblem in each step. */
     template<typename Callback, typename PlanTable>
     void for_each_join(Callback &&callback, PlanTable &PT, const QueryGraph &G, const AdjacencyMatrix &M,
                        const CostFunction&, const CardinalityEstimator &CE, node *begin, node *end) const
@@ -129,6 +131,63 @@ struct M_EXPORT GOO : PlanEnumeratorCRTP<GOO>
             *left += *right; // merge `right` into `left`
             swap(*right, *--end); // erase old `right`
         }
+    }
+
+    template<typename PlanTable>
+    void operator()(enumerate_tag, PlanTable &PT, const QueryGraph &G, const CostFunction &CF) const;
+};
+
+/** Top-down version of greedy operator ordering. */
+struct M_EXPORT TDGOO : PlanEnumeratorCRTP<TDGOO>
+{
+    using base_type = PlanEnumeratorCRTP<TDGOO>;
+    using base_type::operator();
+
+    /** Enumerate the sequence of graph cuts that yield the smallest subproblems in each step.  Joins are enumerated in
+     * bottom-up fashion. */
+    template<typename Callback, typename PlanTable>
+    void for_each_join(Callback &&callback, PlanTable &PT, const QueryGraph &G, const AdjacencyMatrix &M,
+                       const CostFunction&, const CardinalityEstimator &CE, std::vector<Subproblem> subproblems) const
+    {
+        std::vector<Subproblem> worklist(std::move(subproblems));
+        worklist.reserve(G.num_sources());
+        std::vector<std::pair<Subproblem, Subproblem>> joins;
+        joins.reserve(G.num_sources() - 1);
+
+        while (not worklist.empty()) {
+            const Subproblem top = worklist.back();
+            worklist.pop_back();
+            if (top.is_singleton())
+                continue; // nothing to be done for singletons
+
+            double C_min = std::numeric_limits<decltype(C_min)>::infinity();
+            Subproblem min_left, min_right;
+            auto enumerate_ccp = [&](Subproblem left, Subproblem right) -> void {
+                if (not PT[left].model)
+                    PT[left].model = CE.estimate_join_all(G, PT, left, cnf::CNF{}); // TODO: use actual condition
+                if (not PT[right].model)
+                    PT[right].model = CE.estimate_join_all(G, PT, right, cnf::CNF{}); // TODO: use actual condition
+                const double C = CE.predict_cardinality(*PT[left].model) + CE.predict_cardinality(*PT[right].model);
+                if (C < C_min) {
+                    C_min = C;
+                    min_left = left;
+                    min_right = right;
+                }
+            };
+            MinCutAGaT{}.partition(M, enumerate_ccp, top);
+
+            /*----- Save joins on a stack to process them later in reverse order (bottom up). -----*/
+            M_insist(not min_left.empty(), "no partition found");
+            M_insist(not min_right.empty(), "no partition found");
+            joins.emplace_back(min_left, min_right); // save join to stack
+
+            worklist.emplace_back(min_left);
+            worklist.emplace_back(min_right);
+        }
+
+        /*----- Issue callback for joins in bottom-up fashion. -----*/
+        for (auto it = joins.crbegin(); it != joins.crend(); ++it)
+            callback(it->first, it->second);
     }
 
     template<typename PlanTable>

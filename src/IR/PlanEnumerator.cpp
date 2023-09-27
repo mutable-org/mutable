@@ -13,7 +13,6 @@
 #include <mutable/util/fn.hpp>
 #include <mutable/util/list_allocator.hpp>
 #include <mutable/util/malloc_allocator.hpp>
-#include <mutable/util/MinCutAGaT.hpp>
 #include <queue>
 #include <set>
 #include <type_traits>
@@ -675,12 +674,14 @@ struct TDMinCutAGaT final : PlanEnumeratorCRTP<TDMinCutAGaT>
     }
 };
 
+
 /*======================================================================================================================
  * GOO
  *====================================================================================================================*/
 
 template<typename PlanTable>
-void m::GOO::operator()(enumerate_tag, PlanTable &PT, const QueryGraph &G, const CostFunction &CF) const {
+void m::GOO::operator()(enumerate_tag, PlanTable &PT, const QueryGraph &G, const CostFunction &CF) const
+{
     const AdjacencyMatrix &M = G.adjacency_matrix();
     auto &CE = Catalog::Get().get_database_in_use().cardinality_estimator();
 
@@ -699,6 +700,30 @@ void m::GOO::operator()(enumerate_tag, PlanTable &PT, const QueryGraph &G, const
     }, PT, G, M, CF, CE, nodes, nodes + G.num_sources());
 }
 
+
+/*======================================================================================================================
+ * TDGOO
+ *====================================================================================================================*/
+
+template<typename PlanTable>
+void m::TDGOO::operator()(enumerate_tag, PlanTable &PT, const QueryGraph &G, const CostFunction &CF) const
+{
+    const AdjacencyMatrix &M = G.adjacency_matrix();
+    auto &CE = Catalog::Get().get_database_in_use().cardinality_estimator();
+
+    const Subproblem All = Subproblem::All(G.num_sources());
+    std::vector<Subproblem> worklist;
+    worklist.reserve(G.num_sources());
+    worklist.emplace_back(All);
+
+    /*----- Compute a plan with top-down GOO. -----*/
+    auto update_PT = [&](Subproblem left, Subproblem right) {
+        PT.update(G, CE, CF, left, right, cnf::CNF{}); // TODO: use actual condition
+    };
+    for_each_join(update_PT, PT, G, M, CF, CE, std::move(worklist));
+}
+
+
 __attribute__((constructor(202)))
 static void register_plan_enumerators()
 {
@@ -712,6 +737,7 @@ static void register_plan_enumerators()
     REGISTER(DPsub,        "subset-based subproblem enumeration");
     REGISTER(DPsubOpt,     "optimized DPsub: does not enumerate symmetric subproblems");
     REGISTER(GOO,          "Greedy Operator Ordering");
+    REGISTER(TDGOO,        "Top-down variant of Greedy Operator Ordering");
     REGISTER(IKKBZ,        "greedy algorithm by IK/KBZ, ordering joins by rank");
     REGISTER(LinearizedDP, "DP with search space linearization based on IK/KBZ");
     REGISTER(TDbasic,      "basic top-down join enumeration using generate-and-test partitioning");

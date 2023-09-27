@@ -1528,6 +1528,8 @@ std::size_t num_##NAME() const { return 0; }
             std::atomic<bool> isFound = false;
             int mutex_counter = 0;
             std::tuple<const state_type *, const state_type *, double> meet_point; // Store the topdown state and bottomup state
+            int topdown_search_finished_layer = -1;
+            int bottomup_search_finished_layer =  -1;
 
         public:
             const state_type* global_goal;
@@ -1677,6 +1679,8 @@ std::size_t num_##NAME() const { return 0; }
                                       << "Meet Point status "<< resultComfirmed
                                       << std::endl;
                             meet_point = std::make_tuple(topdown_state.value(), bottomup_state_ptr, overall_score);
+                            topdown_search_finished_layer = topdown_state.value()->size() - 1;
+                            bottomup_search_finished_layer = bottomup_state_ptr->size() + 1;
                         }
                     }
                 }, state, heuristic, expand, context...);

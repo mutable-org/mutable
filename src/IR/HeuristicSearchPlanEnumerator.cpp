@@ -2654,8 +2654,6 @@ bool heuristic_search_helper(const char *vertex_str, const char *expand_str, con
     /// Entrance for the BiDirectional
     /// For now changing to the LayeredBidirectionalSearch using same entrance
     if (std::strcmp(options::search, "BIDIRECTIONAL") == 0) {
-//        std::cout << "\nCurrently in the entrance for the BiDirectional" << std::endl;
-
         using H1 = heuristics::zero<PlanTable, State, expansions::BottomUpComplete>;
         using H2 = heuristics::zero<PlanTable, State, expansions::TopDownComplete>;
         State::RESET_STATE_COUNTERS();

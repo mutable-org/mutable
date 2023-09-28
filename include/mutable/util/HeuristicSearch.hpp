@@ -1094,6 +1094,7 @@ std::size_t num_##NAME() const { return 0; }
 
             static constexpr bool detect_duplicates = true;
 
+
         private:
             ///> type for a pointer to an entry in the map of states
             using pointer_type = void *;
@@ -1525,11 +1526,16 @@ std::size_t num_##NAME() const { return 0; }
                     /* Context...=      */ Context...
             > state_manager_topdown;
 
+            int meet_limit = 0;
+
+            void set_meet_limit(int ml) {
+                meet_limit = ml;
+            }
+
             std::atomic<bool> isFound = false;
 //            int mutex_counter = 0;
             std::tuple<const state_type *, const state_type *, double> meet_point; // Store the topdown state and bottomup state
-            int topdown_search_finished_layer = -1;
-            int bottomup_search_finished_layer =  -1;
+            int meet_point_counter=0;
 
         public:
             const state_type* global_goal;
@@ -1680,6 +1686,11 @@ std::size_t num_##NAME() const { return 0; }
 //                                      << "Meet Point status "<< resultComfirmed
 //                                      << std::endl;
                             meet_point = std::make_tuple(topdown_state.value(), bottomup_state_ptr, overall_score);
+                            meet_point_counter++;
+                            if (meet_point_counter >= meet_limit) {
+                                resultComfirmed = true;
+                            }
+
 //                            topdown_search_finished_layer = topdown_state.value()->size() - 1;
 //                            bottomup_search_finished_layer = bottomup_state_ptr->size() + 1;
                         }
@@ -1843,6 +1854,7 @@ std::size_t num_##NAME() const { return 0; }
 //            std::cout << "Bidirectional Search!!!!Let's rock it!" << std::endl;
             state_manager_topdown.template push<false>(std::move(top_state), 0, context...);
             state_manager_bottomup.template push<false>(std::move(bottom_state), 0, context...);
+            set_meet_limit(1);
 
             std::thread thread2([&]() {
                 this->search_topdown_multithread(heuristic2, expand2, context...);

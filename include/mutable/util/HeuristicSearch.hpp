@@ -1526,7 +1526,7 @@ std::size_t num_##NAME() const { return 0; }
             > state_manager_topdown;
 
             std::atomic<bool> isFound = false;
-            int mutex_counter = 0;
+//            int mutex_counter = 0;
             std::tuple<const state_type *, const state_type *, double> meet_point; // Store the topdown state and bottomup state
             int topdown_search_finished_layer = -1;
             int bottomup_search_finished_layer =  -1;
@@ -1673,15 +1673,15 @@ std::size_t num_##NAME() const { return 0; }
 
                         isFound = true;
                         if (update) {
-                            mutex_counter++;
+//                            mutex_counter++;
 //                            std::cout << "Meet Point: " << mutex_counter << " " << overall_score << "\t"
 //                                      << topdown_state.value()->g() << " " << topdown_state.value()->size() << "\t"
 //                                      << bottomup_state_ptr->g() << " " << bottomup_state_ptr->size()<< "\t"
 //                                      << "Meet Point status "<< resultComfirmed
 //                                      << std::endl;
                             meet_point = std::make_tuple(topdown_state.value(), bottomup_state_ptr, overall_score);
-                            topdown_search_finished_layer = topdown_state.value()->size() - 1;
-                            bottomup_search_finished_layer = bottomup_state_ptr->size() + 1;
+//                            topdown_search_finished_layer = topdown_state.value()->size() - 1;
+//                            bottomup_search_finished_layer = bottomup_state_ptr->size() + 1;
                         }
                     }
                 }, state, heuristic, expand, context...);
@@ -1862,19 +1862,19 @@ std::size_t num_##NAME() const { return 0; }
 
             while(true){
                 if(resultComfirmed){
-                    std::cout << "[!!!here]resultConfirmed" << std::endl;
-                    std::cout << "Mutex Counter: " << mutex_counter << std::endl;
-                    std::cout << "Top Down Callback Counter "<<counter_topdown_callback<<std::endl;
+//                    std::cout << "[!!!here]resultConfirmed" << std::endl;
+//                    std::cout << "Mutex Counter: " << mutex_counter << std::endl;
+//                    std::cout << "Top Down Callback Counter "<<counter_topdown_callback<<std::endl;
                     //            std::cout << "Bidirectional Search Meet Each Other" << std::endl;
                     const state_type &goal = reverse_from_the_meet_point();
-                    std::cout << "counter_before_found " << counter_before_found << "counter bottomup " << counter_bottomup
-                              << " topdown " << counter_topdown << std::endl;
+//                    std::cout << "counter_before_found " << counter_before_found << "counter bottomup " << counter_bottomup
+//                              << " topdown " << counter_topdown << std::endl;
 
                     return goal;
                 }
 
                 if (reach_goal) {
-                    std::cout << "[!!!here]reach goal haha!" << std::endl;
+//                    std::cout << "[!!!here]reach goal haha!" << std::endl;
                     return *global_goal;
                 }
             }
@@ -1987,10 +1987,10 @@ std::size_t num_##NAME() const { return 0; }
 
                 ~Partitions() {
                     if (Options::Get().statistics) {
-                        std::cout << partitions_.size() << " partitions:";
-                        for (auto &P: partitions_)
-                            std::cout << "\n  " << P.size();
-                        std::cout << std::endl;
+//                        std::cout << partitions_.size() << " partitions:";
+//                        for (auto &P: partitions_)
+//                            std::cout << "\n  " << P.size();
+//                        std::cout << std::endl;
                     }
                 }
 

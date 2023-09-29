@@ -102,8 +102,8 @@ struct M_EXPORT PlanTableBase : crtp<Actual, PlanTableBase>
     /** Returns true iff the plan table has a plan for `s`. */
     bool has_plan(Subproblem s) const { return actual().has_plan(s); }
 
-    /** Update the entry for `left` joined with `right` (`left|right`) by considering plan `left` join `right` of cost
-     * `c`.  The entry's plan and cost is changed *only* if `c` is less than the cost of the currently best plan. */
+    /** Update the entry for `left` joined with `right` (`left|right`) by considering plan `left` join `right`.  The
+     * entry's plan and cost is changed *only* if the plan's cost is less than the cost of the currently best plan. */
     void update(const QueryGraph &G, const CardinalityEstimator &CE, const CostFunction &CF,
                 Subproblem left, Subproblem right, const cnf::CNF &condition)
     {

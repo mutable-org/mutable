@@ -280,4 +280,15 @@ WHERE A.id = C.aid AND A.id = D.aid AND B.id = D.bid AND C.id = D.cid;";
         PE(G, C_out, plan_table);
         REQUIRE(expected == plan_table);
     }
+
+    SECTION("GOO")
+    {
+        make_entry(A, C); // smallest join result
+        make_entry(B, D); // smallest join result
+        make_entry(A|C, B|D);
+
+        auto &PE = Catalog::Get().plan_enumerator("GOO");
+        PE(G, C_out, plan_table);
+        REQUIRE(expected == plan_table);
+    }
 }

@@ -109,6 +109,21 @@ SELECT * \
 FROM A, B, C, D \
 WHERE A.id = C.aid AND A.id = D.aid AND B.id = D.bid AND C.id = D.cid;";
 
+    /* Cardinalities:
+     *  A        5
+     *  B       10
+     *  C        8
+     *  D       12
+     *  AC      40
+     *  AD      60
+     *  BD     120
+     *  CD      96
+     *  ABD    600
+     *  ACD    480
+     *  BCD    960
+     *  ABCD  4800
+     */
+
     Diagnostic diag(false, std::cout, std::cerr);
     auto stmt = m::statement_from_string(diag, query);
     REQUIRE(not diag.num_errors());

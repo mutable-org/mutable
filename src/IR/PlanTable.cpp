@@ -33,7 +33,9 @@ std::ostream & m::operator<<(std::ostream &out, const PlanTableSmallOrDense &PT)
         entry.model ? std::ceil(std::log10(CE.predict_cardinality(*entry.model))) : 0,
         4
     );
-    const uint64_t cost_len = std::max<uint64_t>(std::ceil(std::log10(entry.cost)), 4);
+    const uint64_t cost_len = std::isinf(entry.cost)
+                              ? 3 // infinity will print as "inf", hence strlen("inf")
+                              : std::max<uint64_t>(std::ceil(std::log10(entry.cost)), 4);
     const uint64_t sub_len  = std::max<uint64_t>(PT.num_sources(), 5);
 
     out << std::left << "Plan Table:\n"

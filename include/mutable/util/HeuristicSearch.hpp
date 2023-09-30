@@ -1533,9 +1533,9 @@ std::size_t num_##NAME() const { return 0; }
             }
 
             std::atomic<bool> isFound = false;
-//            int mutex_counter = 0;
+//          int mutex_counter = 0;
             std::tuple<const state_type *, const state_type *, double> meet_point; // Store the topdown state and bottomup state
-            int meet_point_counter=0;
+            int meet_point_counter = 0;
 
         public:
             const state_type* global_goal;

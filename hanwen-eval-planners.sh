@@ -36,7 +36,7 @@ CORRELATED=1
 
 
 # outside large loop execution time
-REPETITIONS_PER_NUM_RELATIONS=1
+REPETITIONS_PER_NUM_RELATIONS=5
 
 MIN_CARDINALITY=10
 MAX_CARDINALITY=10000
@@ -45,8 +45,8 @@ MAX_CARDINALITY=10000
 MIN_RELATIONS=10
 # Associative array mapping topologies to their max. number of relations tested
 declare -A TOPOLOGIES=(
-   [chain]=30
-   [cycle]=30
+#   [chain]=30
+#   [cycle]=30
     [star]=20
    [clique]=20
 #   [chain]=20

@@ -42,13 +42,13 @@ MIN_CARDINALITY=10
 MAX_CARDINALITY=10000
 
 
-MIN_RELATIONS=5
+MIN_RELATIONS=10
 # Associative array mapping topologies to their max. number of relations tested
 declare -A TOPOLOGIES=(
    [chain]=30
-   [cycle]=32
-#    [star]=16
-#   [clique]=16
+   [cycle]=30
+    [star]=20
+   [clique]=20
 #   [chain]=20
 #    [cycle]=20
 
@@ -69,19 +69,23 @@ declare -A TOPOLOGY_STEPS=(
 
 ORDERED_PLANNERS=(
     ###### HANWEN Manuelly Test #####
-     "DPccp"
+#     "DPccp"
      "BU-A*-zero"
      "BIDIRECTIONAL"
      "BIDIRECTIONAL"
      "BIDIRECTIONAL"
      "BIDIRECTIONAL"
-     "BIDIRECTIONAL"
-     "BIDIRECTIONAL"
-     "BIDIRECTIONAL"
-     "BIDIRECTIONAL"
-    "BIDIRECTIONAL"
-    "BIDIRECTIONAL"
-    "BIDIRECTIONAL"
+
+#     "BIDIRECTIONAL"
+#     "BIDIRECTIONAL"
+#     "BIDIRECTIONAL"
+#     "BIDIRECTIONAL"
+#     "BIDIRECTIONAL"
+#     "BIDIRECTIONAL"
+#     "BIDIRECTIONAL"
+#    "BIDIRECTIONAL"
+#    "BIDIRECTIONAL"
+#    "BIDIRECTIONAL"
 
 
 

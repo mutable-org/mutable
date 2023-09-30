@@ -1689,6 +1689,7 @@ std::size_t num_##NAME() const { return 0; }
                             meet_point_counter++;
                             if (meet_point_counter >= meet_limit) {
                                 resultComfirmed = true;
+                                throw std::logic_error("bottomup");
                             }
 
 //                            topdown_search_finished_layer = topdown_state.value()->size() - 1;

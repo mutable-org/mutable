@@ -1318,7 +1318,7 @@ struct BottomUpComplete : BottomUp
                 M_insist(subproblem_lt(*outer_it, *inner_it), "subproblems must be sorted");
                 M_insist((*outer_it & *inner_it).empty(), "subproblems must not overlap");
 
-//                We will ignore many path if we continue here
+//              We will ignore many path if we continue here
                 if (subproblem_lt(*inner_it, marked)) // *inner_it < marked, implies *outer_it < marked
                     continue; // prune symmetrical paths
 

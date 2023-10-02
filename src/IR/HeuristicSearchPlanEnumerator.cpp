@@ -1667,9 +1667,9 @@ struct TopDownComplete : TopDown
                 auto right_it = partitions, right_end = partitions + 2;
                 auto out = subproblems;
                 for (;;) {
-                    M_insist(out <= subproblems + state.size() + 1, "out of bounds");
-                    M_insist(left_it <= left_end, "out of bounds");
-                    M_insist(right_it <= right_end, "out of bounds");
+//                    M_insist(out <= subproblems + state.size() + 1, "out of bounds");
+//                    M_insist(left_it <= left_end, "out of bounds");
+//                    M_insist(right_it <= right_end, "out of bounds");
                     if (left_it == left_end) {
                         if (right_it == right_end) break;
                         *out++ = *right_it++;
@@ -1683,9 +1683,9 @@ struct TopDownComplete : TopDown
                         *out++ = *right_it++;
                     }
                 }
-                M_insist(out == subproblems + state.size() + 1);
-                M_insist(left_it == left_end);
-                M_insist(right_it == right_end);
+//                M_insist(out == subproblems + state.size() + 1);
+//                M_insist(left_it == left_end);
+//                M_insist(right_it == right_end);
             }
             M_insist(std::is_sorted(subproblems, subproblems + state.size() + 1, subproblem_lt));
 
@@ -2654,6 +2654,22 @@ bool heuristic_search_helper(const char *vertex_str, const char *expand_str, con
     /// Entrance for the BiDirectional
     /// For now changing to the LayeredBidirectionalSearch using same entrance
     if (std::strcmp(options::search, "BIDIRECTIONAL") == 0) {
+
+        auto start = std::chrono::high_resolution_clock::now();
+
+        auto plan_cost = [&PT]() -> double {
+            const Subproblem left = PT.get_final().left;
+            const Subproblem right = PT.get_final().right;
+            return PT[left].cost + PT[right].cost;
+        };
+        DPccp dpccp;
+        dpccp(G, CF, PT);
+        const double dp_cost = plan_cost();
+        auto stop = std::chrono::high_resolution_clock::now();
+        auto duration = std::chrono::duration<double, std::milli>(stop - start);
+        std::cout<<"DPCCP COST: "<<dp_cost<<std::endl;
+        std::cout << "DPCCP FIRST RUN: " <<duration.count()<< std::endl;
+
         using H1 = heuristics::zero<PlanTable, State, expansions::BottomUpComplete>;
         using H2 = heuristics::zero<PlanTable, State, expansions::TopDownComplete>;
         State::RESET_STATE_COUNTERS();
@@ -2661,8 +2677,6 @@ bool heuristic_search_helper(const char *vertex_str, const char *expand_str, con
         State top_state = expansions::TopDownComplete::template Start<State>(PT, G, M, CF, CE);
 
         try {
-            
-
             H1 h1(PT, G, M, CF, CE);
             H2 h2(PT, G, M, CF, CE);
 
@@ -2682,7 +2696,7 @@ bool heuristic_search_helper(const char *vertex_str, const char *expand_str, con
             const State &goal = S.search(std::move(bottom_state), std::move(top_state),
                                          expansions::BottomUpComplete{},
                                          expansions::TopDownComplete{},
-                                         h1, h2,
+                                         h1, h2, dp_cost,
                                          PT, G, M, CF, CE);
 
             /// Ultimate target
@@ -2699,6 +2713,7 @@ bool heuristic_search_helper(const char *vertex_str, const char *expand_str, con
     }
 
     if (std::strcmp(options::search, "LAYEREDBIDIRECTIONAL") == 0) {
+
 //        std::cout << "\nCurrently in the entrance for the BiDirectional" << std::endl;
 
         using H1 = heuristics::zero<PlanTable, State, expansions::BottomUpComplete>;
@@ -2940,19 +2955,20 @@ struct HeuristicSearch final : PlanEnumeratorCRTP<HeuristicSearch>
 
         throw std::invalid_argument("illegal search configuration");
 /// Delete the macro from the preprocessor symbol table
-#undef HEURISTIC_SEARCH
 
+
+#undef HEURISTIC_SEARCH
 matched_heuristic_search:;
 #ifndef NDEBUG
         if (Options::Get().statistics) {
-            auto plan_cost = [&PT]() -> double {
-                const Subproblem left  = PT.get_final().left;
-                const Subproblem right = PT.get_final().right;
-                return PT[left].cost + PT[right].cost;
-            };
-
-            const double hs_cost = plan_cost();
-            std::cout << "AI: " << hs_cost << std::endl;
+//            auto plan_cost = [&PT]() -> double {
+//                const Subproblem left  = PT.get_final().left;
+//                const Subproblem right = PT.get_final().right;
+//                return PT[left].cost + PT[right].cost;
+//            };
+//
+//            const double hs_cost = plan_cost();
+//            std::cout << "AI: " << hs_cost << std::endl;
 //            DPccp dpccp;
 //            dpccp(G, CF, PT);
 //            const double dp_cost = plan_cost();

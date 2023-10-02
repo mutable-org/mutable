@@ -737,7 +737,7 @@ namespace m {
         ) {
             /* Initialize queue with initial state. */
             state_manager_.template push<use_beam_search and is_monotone>(std::move(initial_state), 0, context...);
-
+            std::cout << "DPCCP FIRST RUN: " <<0<< std::endl;
             /* Run work list algorithm. */
             while (not state_manager_.queues_empty()) {
                 M_insist(not(is_monotone and use_beam_search) or not state_manager_.is_beam_queue_empty(),
@@ -1536,6 +1536,10 @@ std::size_t num_##NAME() const { return 0; }
 //          int mutex_counter = 0;
             std::tuple<const state_type *, const state_type *, double> meet_point; // Store the topdown state and bottomup state
             int meet_point_counter = 0;
+            double outside_target=0;
+            void set_outside_target(double t) {
+                outside_target = t;
+            }
 
         public:
             const state_type* global_goal;
@@ -1562,6 +1566,11 @@ std::size_t num_##NAME() const { return 0; }
             const State &search(state_type bottom_state, state_type top_state,
                                 expand_type expand, expand_type2 expand2,
                                 heuristic_type &heuristic, heuristic_type2 &heuristic2,
+                                Context &... context);
+            const State &search(state_type bottom_state, state_type top_state,
+                                expand_type expand, expand_type2 expand2,
+                                heuristic_type &heuristic, heuristic_type2 &heuristic2,
+                                double dp_cost,
                                 Context &... context);
 
             /** Resets the state of the search. */
@@ -1670,7 +1679,6 @@ std::size_t num_##NAME() const { return 0; }
                         double overall_score = topdown_state.value()->g() + bottomup_state_ptr->g();
                         bool update = true;
                         if (isFound) {
-                            // conditionally update here
                             double pre_score = std::get<2>(meet_point);
                             if (overall_score >= pre_score) {
                                 update = false;
@@ -1687,10 +1695,15 @@ std::size_t num_##NAME() const { return 0; }
 //                                      << std::endl;
                             meet_point = std::make_tuple(topdown_state.value(), bottomup_state_ptr, overall_score);
                             meet_point_counter++;
-                            if (meet_point_counter >= meet_limit) {
+                            if(std::fabs(overall_score - outside_target) < 1){
+                                std::cout<<"target!"<<std::endl;
                                 resultComfirmed = true;
                                 throw std::logic_error("bottomup");
                             }
+//                            if (meet_point_counter >= meet_limit) {
+//                                resultComfirmed = true;
+//                                throw std::logic_error("bottomup");
+//                            }
 
 //                            topdown_search_finished_layer = topdown_state.value()->size() - 1;
 //                            bottomup_search_finished_layer = bottomup_state_ptr->size() + 1;
@@ -1776,6 +1789,7 @@ std::size_t num_##NAME() const { return 0; }
             friend std::ostream &operator<<(std::ostream &out, const biDirectionalSearch &AStar) {
                 return out << AStar.state_manager_ << ", used cached heuristic value "
                            << AStar.num_cached_heuristic_value()
+                           << AStar.num_cached_heuristic_value()
                            << " times";
             }
 
@@ -1845,6 +1859,7 @@ std::size_t num_##NAME() const { return 0; }
                 expand_type2 expand2,
                 heuristic_type &heuristic,
                 heuristic_type2 &heuristic2,
+//                double dpccp_cost,
                 Context &... context
         ) {
             /// Core: we will not change any reconstruct logic in the outside
@@ -1855,7 +1870,80 @@ std::size_t num_##NAME() const { return 0; }
 //            std::cout << "Bidirectional Search!!!!Let's rock it!" << std::endl;
             state_manager_topdown.template push<false>(std::move(top_state), 0, context...);
             state_manager_bottomup.template push<false>(std::move(bottom_state), 0, context...);
-            set_meet_limit(1);
+//            set_meet_limit(1);
+//            set_outside_target(dpccp_cost);
+
+
+
+            std::thread thread2([&]() {
+                this->search_topdown_multithread(heuristic2, expand2, context...);
+            });
+            thread2.detach();
+
+            std::thread thread1([&]() {
+                this->search_bottomup_multithread(heuristic, expand, context...);
+            });
+            thread1.detach();
+
+//            setThreadAffinity(thread1, 0);
+//            setThreadAffinity(thread2, 1);
+
+//            thread1.join();
+//            thread2.join();
+
+            while(true){
+                if(resultComfirmed){
+//                    std::cout << "[!!!here]resultConfirmed" << std::endl;
+//                    std::cout << "Mutex Counter: " << mutex_counter << std::endl;
+//                    std::cout << "Top Down Callback Counter "<<counter_topdown_callback<<std::endl;
+                    //            std::cout << "Bidirectional Search Meet Each Other" << std::endl;
+                    const state_type &goal = reverse_from_the_meet_point();
+//                    std::cout << "counter_before_found " << counter_before_found << "counter bottomup " << counter_bottomup
+//                              << " topdown " << counter_topdown << std::endl;
+
+                    return goal;
+                }
+
+                if (reach_goal) {
+//                    std::cout << "[!!!here]reach goal haha!" << std::endl;
+                    return *global_goal;
+                }
+            }
+
+
+            throw std::logic_error("goal state unreachable from provided initial state");
+        }
+
+        template<
+                heuristic_search_state State,
+                typename Expand,
+                typename Expand2,
+                typename Heuristic,
+                typename Heuristic2,
+                typename Config,
+                typename... Context
+        >
+        requires heuristic_search_heuristic<Heuristic, Context...>
+        const State &biDirectionalSearch<State, Expand, Expand2, Heuristic, Heuristic2, Config, Context...>::search(
+                state_type bottom_state,
+                state_type top_state,
+                expand_type expand,
+                expand_type2 expand2,
+                heuristic_type &heuristic,
+                heuristic_type2 &heuristic2,
+                double dpccp_cost,
+                Context &... context
+        ) {
+            /// Core: we will not change any reconstruct logic in the outside
+            /// Current is in BottomUpComplete: So we should return a top states
+            /// 1. Init the Bidirectional State Manager
+            /// Including front and back - two direction, init and push element - two operations
+            /// We can ignore the input initial_state
+//            std::cout << "Bidirectional Search!!!!Let's rock it!" << std::endl;
+            state_manager_topdown.template push<false>(std::move(top_state), 0, context...);
+            state_manager_bottomup.template push<false>(std::move(bottom_state), 0, context...);
+//            set_meet_limit(1);
+            set_outside_target(dpccp_cost);
 
             std::thread thread2([&]() {
                 this->search_topdown_multithread(heuristic2, expand2, context...);

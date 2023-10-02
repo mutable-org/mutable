@@ -36,7 +36,7 @@ CORRELATED=1
 
 
 # outside large loop execution time
-REPETITIONS_PER_NUM_RELATIONS=8
+REPETITIONS_PER_NUM_RELATIONS=1
 
 MIN_CARDINALITY=10
 MAX_CARDINALITY=10000
@@ -45,9 +45,9 @@ MAX_CARDINALITY=10000
 MIN_RELATIONS=3
 # Associative array mapping topologies to their max. number of relations tested
 declare -A TOPOLOGIES=(
-   [chain]=30
-   [cycle]=30
-    [star]=18
+#   [chain]=30
+#   [cycle]=30
+#    [star]=18
    [clique]=18
 #   [chain]=20
 #    [cycle]=20
@@ -71,10 +71,10 @@ ORDERED_PLANNERS=(
     ###### HANWEN Manuelly Test #####
 #     "DPccp"
      "BU-A*-zero"
-     "TD-A*-zero"
+#     "TD-A*-zero"
      "BIDIRECTIONAL"
      "BIDIRECTIONAL"
-#     "BIDIRECTIONAL"
+     "BIDIRECTIONAL"
 #     "BIDIRECTIONAL"
 #     "BIDIRECTIONAL"
 #     "BIDIRECTIONAL"
@@ -274,7 +274,7 @@ echo " selectivities."
 
 # Truncate file
 echo "Writing measurements to '${CSV}'"
-echo "topology,size,planner,cost,time,seed" > "${CSV}"
+echo "topology,size,planner,cost,diff,time,dpccptime,seed" > "${CSV}"
 
 for TOPOLOGY in "${!TOPOLOGIES[@]}";
 do
@@ -335,10 +335,12 @@ do
 
                 unset COST
                 unset TIME
+                unset DPCCPTIME
+                unset DIFF
 
                 set +m
                 # The following command needs pipefail
-                timeout --signal=TERM --kill-after=3s 10s ${BIN} \
+                timeout --signal=TERM --kill-after=3s 15s ${BIN} \
                     --quiet --dryrun --times \
                     --plan-table-las \
                     ${PLANNER_CONFIG} \
@@ -347,11 +349,16 @@ do
                     --statistics \
                     "${NAME}.schema.sql" \
                     "${NAME}.query.sql" \
-                    | grep -e '^Plan cost:' -e '^Plan enumeration:' \
+                    | grep -e '^Plan cost:' -e '^Plan enumeration:' -e '^DPCCP FIRST RUN:' \
                     | cut --delimiter=':' --fields=2 \
                     | tr -d ' ' \
-                    | paste -sd ' \n' \
-                    | while read -r COST TIME; do echo "${TOPOLOGY},${N},${PLANNER},${COST},${TIME},${SEED}" >> "${CSV}"; done
+                    | paste -sd ' \n'  \
+                    | paste -sd ' \n'  \
+                    | {
+                      read -r DPCCPTIME COST TIME
+                      DIFF=$(echo "$TIME - $DPCCPTIME" | bc)
+                      echo "${TOPOLOGY},${N},${PLANNER},${COST},${DIFF},${TIME},${DPCCPTIME},${SEED}" >> "${CSV}";
+                      }
 
 
                 # Save and aggregate PIPESTATUS

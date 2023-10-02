@@ -91,8 +91,6 @@ class Mutable(Connector):
         # Extract YAML settings
         suite: str = yml['suite']
         benchmark: str = yml['benchmark']
-        is_readonly: bool = yml['readonly']
-        assert type(is_readonly) == bool
         path_to_file: str = yml['path_to_file']
         path_to_data: str = os.path.join('benchmark', suite, 'data')
         cases: dict[Case, Any] = yml['cases']
@@ -112,19 +110,14 @@ class Mutable(Connector):
             command.extend(config['args'].split(' '))
         command = command + ['--quiet', '-']
 
-        if is_readonly:
-            tables: dict[str, dict[str, Any]] | None = yml.get('data')
-            if tables:
-                for table in tables.values():
-                    is_readonly = is_readonly and (table.get('scale_factors') is None)
-
         # Collect results in dict
         execution_times: dict[Case, float] = dict()
         timeout: int
         import_str: str
         durations: list[float]
         try:
-            if is_readonly:
+            if not self.check_execute_single_cases(yml):
+                # All cases can be executed at once
                 # Produce code to load data into tables
                 imports: list[str] = self.get_setup_statements(suite, path_to_data, yml['data'], None)
 
@@ -153,6 +146,7 @@ class Mutable(Connector):
                     for case, dur in zip(list(cases.keys()), durations):
                         execution_times[case] = float(dur)
             else:
+                # Each case has to be executed singly
                 timeout = DEFAULT_TIMEOUT + TIMEOUT_PER_CASE
                 for case, query in cases.items():
                     # Produce code to load data into tables with scale factor

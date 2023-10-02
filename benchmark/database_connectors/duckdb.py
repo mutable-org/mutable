@@ -42,14 +42,6 @@ class DuckDB(Connector):
         self.clean_up()
 
         config_result: ConfigResult = dict()
-
-        # Check whether tables contain scale factors
-        with_scale_factors: bool = False
-        for table in params['data'].values():
-            if table.get('scale_factors'):
-                with_scale_factors = True
-                break
-
         verbose_printed: bool = False
 
         # For query execution
@@ -64,10 +56,10 @@ class DuckDB(Connector):
                 benchmark_info: str
 
                 # Set up database
-                create_tbl_stmts: list[str] = self.generate_create_table_stmts(params['data'], with_scale_factors)
+                create_tbl_stmts: list[str] = self.generate_create_table_stmts(params['data'], self.check_with_scale_factors(params))
 
-                # If tables contain scale factors, they have to be loaded separately for every case
-                if with_scale_factors or not bool(params.get('readonly')):
+                if self.check_execute_single_cases(params):
+                    # Execute cases singly
                     timeout = DEFAULT_TIMEOUT + TIMEOUT_PER_CASE
                     # Write cases/queries to a file that will be passed to the command to execute
                     for i in range(len(params['cases'])):
@@ -113,8 +105,8 @@ class DuckDB(Connector):
                             config_result[case] = list()
                         config_result[case].append(time)
 
-                # Otherwise, tables have to be created just once before the measurements (done above)
                 else:
+                    # Otherwise, tables have to be created just once before the measurements (done above)
                     timeout = DEFAULT_TIMEOUT + TIMEOUT_PER_CASE * len(params['cases'])
 
                     statements = create_tbl_stmts

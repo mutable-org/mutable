@@ -83,18 +83,11 @@ sys.stdout.flush()
     def _execute(n_runs: int, params: dict[str, Any]) -> ConnectorResult:
         config_result: ConfigResult = dict()
 
-        # Check whether tables contain scale factors
-        with_scale_factors: bool = False
-        for table in params['data'].values():
-            if table.get('scale_factors'):
-                with_scale_factors = True
-                break
-
         hyperconf.init()    # prepare for measurements
 
         for run_id in range(n_runs):
             # If tables contain scale factors, they have to be loaded separately for every case
-            if with_scale_factors or not bool(params.get('readonly')):
+            if Connector.check_execute_single_cases(params):
                 with HyperProcess(telemetry=Telemetry.DO_NOT_SEND_USAGE_DATA_TO_TABLEAU) as hyper:
                     with Connection(endpoint=hyper.endpoint, database='benchmark.hyper', create_mode=CreateMode.CREATE_AND_REPLACE) as connection:
                         # Create tmp tables used for copying

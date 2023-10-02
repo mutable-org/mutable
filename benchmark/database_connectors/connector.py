@@ -64,7 +64,7 @@ class Connector(ABC):
     #           4: [1108.702, 1234.56]
     #   }
     @abstractmethod
-    def execute(self, n_runs: int, params: dict) -> ConnectorResult:
+    def execute(self, n_runs: int, params: dict[str, Any]) -> ConnectorResult:
         pass
 
     # Parse attributes of one table, return as string
@@ -90,6 +90,23 @@ class Connector(ABC):
 
             columns.append(' '.join(typeList))
         return '(' + ',\n'.join(columns) + ')'
+
+
+    # Check whether all cases of an experiment should be executed together or each one singly.
+    # Single execution is needed if the benchmark is not readonly or if there is at least one
+    # table that has different scale factors for different cases.
+    @staticmethod
+    def check_execute_single_cases(params: dict[str, Any]) -> bool:
+        readonly: bool = params.get('readonly', False)
+        return not readonly or Connector.check_with_scale_factors(params)
+
+
+    @staticmethod
+    def check_with_scale_factors(params: dict[str, Any]) -> bool:
+        for table in params.get('data', dict()).values():
+            if table.get('scale_factors'):
+                return True
+        return False
 
 
     #===================================================================================================================

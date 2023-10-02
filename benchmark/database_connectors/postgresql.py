@@ -46,13 +46,6 @@ class PostgreSQL(Connector):
 
         config_result: ConfigResult = dict()      # map that is returned with the measured times
 
-        # Check whether tables contain scale factors
-        with_scale_factors: bool = False
-        for table in params['data'].values():
-            if table.get('scale_factors'):
-                with_scale_factors = True
-                break
-
         # Variables
         connection: psycopg2.extensions.connection
         cursor: psycopg2.extensions.cursor
@@ -77,13 +70,13 @@ class PostgreSQL(Connector):
                 connection.autocommit = True
                 cursor = connection.cursor()
                 cursor.execute("set jit=off;")
-                self.create_tables(cursor, params['data'], with_scale_factors)
+                self.create_tables(cursor, params['data'], self.check_with_scale_factors(params))
             finally:
                 connection.close()
                 del connection
 
-            # If tables contain scale factors, they have to be loaded separately for every case
-            if with_scale_factors or not params.get('readonly', False):
+            if self.check_execute_single_cases(params):
+                # If tables contain scale factors, they have to be loaded separately for every case
                 for case, query_stmt in params['cases'].items():
                     connection = psycopg2.connect(**db_options)
                     try:
@@ -136,8 +129,8 @@ class PostgreSQL(Connector):
                                 config_result[case] = list()
                             config_result[case].append(float(time))
 
-            # Otherwise, tables have to be created just once before the measurements (done above)
             else:
+                # Otherwise, tables have to be created just once before the measurements (done above)
                 # Write cases/queries to a file that will be passed to the command to execute
                 with open(TMP_SQL_FILE, "w") as tmp:
                     tmp.write(f'set statement_timeout = {TIMEOUT_PER_CASE * 1000:.0f};\n')

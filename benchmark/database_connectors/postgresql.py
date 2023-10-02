@@ -233,10 +233,6 @@ class PostgreSQL(Connector):
         for table_name, table in data.items():
             columns: str = self.parse_attributes(table['attributes'])
 
-            delimiter: str = table.get('delimiter')
-            header: int = table.get('header')
-            format: str = table.get('format')
-
             # Use an additional table with the *complete* data set to quickly recreate the table with the benchmark
             # data, in case of varying scale factor.
             complete_table_name: str = table_name + COMPLETE_TABLE_SUFFIX if with_scale_factors else table_name
@@ -244,13 +240,13 @@ class PostgreSQL(Connector):
 
             create: str = f"CREATE UNLOGGED TABLE {quoted_table_name} {columns};"
             copy: str = f"COPY {quoted_table_name} FROM STDIN"
-            if delimiter:
-                delim: str = delimiter.replace("'", "")
+            if 'delimiter' in table:
+                delim: str = table['delimiter'].replace("'", "")
                 copy += f" WITH DELIMITER \'{delim}\'"
-            if format:
-                copy += f" {format.upper()}"
-            if header:
-                copy += ' HEADER' if header == 1 else ''
+            if 'format' in table:
+                copy += f" {table['format'].upper()}"
+            if 'header' in table:
+                copy += ' HEADER' if table['header'] == 1 else ''
 
             copy += ";"
 

@@ -188,22 +188,18 @@ class DuckDB(Connector):
         for table_name, table in data.items():
             columns: str = self.parse_attributes(table['attributes'])
 
-            delimiter: str = table.get('delimiter')
-            header: int = table.get('header')
-            format: str = table.get('format')
-
             if with_scale_factors:
                 table_name += "_tmp"
 
             create: str = f'CREATE TABLE "{table_name}" {columns};'
             copy: str = f'COPY "{table_name}" FROM \'{table["file"]}\' ( '
-            if delimiter:
-                delim = delimiter.replace("'", "")
+            if 'delimiter' in table:
+                delim = table['delimiter'].replace("'", "")
                 copy += f" DELIMITER \'{delim}\',"
-            if format:
-                copy += f" FORMAT {format.upper()},"
-            if header:
-                copy += f" HEADER," if (header==1) else ""
+            if 'format' in table:
+                copy += f" FORMAT {table['format'].upper()},"
+            if 'header' in table:
+                copy += f" HEADER," if table['header'] == 1 else ""
 
             copy = copy[:-1] + " );"
 

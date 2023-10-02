@@ -356,9 +356,9 @@ class Mutable(Connector):
             statements.append(create)
 
             # Create an IMPORT statement for current table
-            lines: int = table.get('lines_in_file')
-            if not lines:
+            if 'lines_in_file' not in table:
                 continue    # Only import data when lines are given
+            lines: int = table['lines_in_file']
 
             path: str = table.get('file', os.path.join(path_to_data, f'{table_name}.csv'))
             sf: float | int

@@ -296,8 +296,9 @@ def perform_experiment(
                 if name in config_name:
                     if 'args' in conf:
                         config = conf['args']
-                    else:
-                        config = conf
+                    elif 'variables' in conf:
+                        config = ' '.join([f'{key}={value}' for key, value in conf['variables'].items()])
+                    break
 
         measurements_list: list[list[str | int | float]] = list()
         for case, times in config_result.items():
@@ -420,10 +421,9 @@ def run_benchmarks(args: argparse.Namespace) -> None:
             if info.experiment_data:
                 table_access_error: bool = False
                 for table_name, table in info.experiment_data.items():
-                    p: str = table.get('file')  # Path to file
-                    if not p:
+                    if 'file' not in table:
                         continue  # Skip counting files when table does not have a file with data
-                    p = os.path.join(p)
+                    p: str = os.path.join(table['file'])  # Path to file
                     if not os.path.isfile(p):
                         tqdm.write(f'Table file \'{p}\' not found.  Skipping benchmark.\n', file=sys.stderr)
                         table_access_error = True

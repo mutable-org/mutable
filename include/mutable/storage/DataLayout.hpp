@@ -93,7 +93,7 @@ struct M_EXPORT DataLayout
         void accept(ConstDataLayoutVisitor &v) const override;
     };
 
-    /** An internal node of the recursive data layout model.  It holds one or oore child `Node`s and stores the offset
+    /** An internal node of the recursive data layout model.  It holds one or more child `Node`s and stores the offset
      * and stride for each child.  The offset and stride are relative within this `INode`. */
     struct M_EXPORT INode : Node
     {

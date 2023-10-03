@@ -390,7 +390,7 @@ int main(int argc, const char **argv)
     /*------ Plugins -------------------------------------------------------------------------------------------------*/
     ADD(const char*, Options::Get().plugins, nullptr,                                   /* Type, Var, Init  */
         nullptr, "--plugins",                                                           /* Short, Long      */
-        "A comma seperated list of libraries that are loaded dynamically.",             /* Description      */
+        "A comma separated list of libraries that are loaded dynamically.",             /* Description      */
         [&](const char *str) { load_plugins(str); });                  /* Callback         */
 #undef ADD
     AP.parse_args(argc, argv);

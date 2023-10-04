@@ -32,6 +32,7 @@ query: |
     HEADER
     IF
     IMPORT
+    INDEX
     INSERT
     INT
     INTO
@@ -57,6 +58,7 @@ query: |
     UNIQUE
     UPDATE
     USE
+    USING
     VALUES
     VARCHAR
     WHERE
@@ -96,34 +98,36 @@ stages:
             -:29:1: HEADER TK_Header
             -:30:1: IF TK_If
             -:31:1: IMPORT TK_Import
-            -:32:1: INSERT TK_Insert
-            -:33:1: INT TK_Int
-            -:34:1: INTO TK_Into
-            -:35:1: KEY TK_Key
-            -:36:1: LIKE TK_Like
-            -:37:1: LIMIT TK_Limit
-            -:38:1: NOT TK_Not
-            -:39:1: NULL TK_Null
-            -:40:1: OFFSET TK_Offset
-            -:41:1: ON TK_On
-            -:42:1: OR TK_Or
-            -:43:1: ORDER TK_Order
-            -:44:1: PRIMARY TK_Primary
-            -:45:1: QUOTE TK_Quote
-            -:46:1: REFERENCES TK_References
-            -:47:1: RESTRICT TK_Restrict
-            -:48:1: ROWS TK_Rows
-            -:49:1: SELECT TK_Select
-            -:50:1: SET TK_Set
-            -:51:1: SKIP TK_Skip
-            -:52:1: TABLE TK_Table
-            -:53:1: TRUE TK_True
-            -:54:1: UNIQUE TK_Unique
-            -:55:1: UPDATE TK_Update
-            -:56:1: USE TK_Use
-            -:57:1: VALUES TK_Values
-            -:58:1: VARCHAR TK_Varchar
-            -:59:1: WHERE TK_Where
+            -:32:1: INDEX TK_Index
+            -:33:1: INSERT TK_Insert
+            -:34:1: INT TK_Int
+            -:35:1: INTO TK_Into
+            -:36:1: KEY TK_Key
+            -:37:1: LIKE TK_Like
+            -:38:1: LIMIT TK_Limit
+            -:39:1: NOT TK_Not
+            -:40:1: NULL TK_Null
+            -:41:1: OFFSET TK_Offset
+            -:42:1: ON TK_On
+            -:43:1: OR TK_Or
+            -:44:1: ORDER TK_Order
+            -:45:1: PRIMARY TK_Primary
+            -:46:1: QUOTE TK_Quote
+            -:47:1: REFERENCES TK_References
+            -:48:1: RESTRICT TK_Restrict
+            -:49:1: ROWS TK_Rows
+            -:50:1: SELECT TK_Select
+            -:51:1: SET TK_Set
+            -:52:1: SKIP TK_Skip
+            -:53:1: TABLE TK_Table
+            -:54:1: TRUE TK_True
+            -:55:1: UNIQUE TK_Unique
+            -:56:1: UPDATE TK_Update
+            -:57:1: USE TK_Use
+            -:58:1: USING TK_Using
+            -:59:1: VALUES TK_Values
+            -:60:1: VARCHAR TK_Varchar
+            -:61:1: WHERE TK_Where
         err: NULL
         num_err: 0
         returncode: 0

@@ -327,6 +327,44 @@ void ASTDumper::operator()(Const<DropTableStmt> &s)
     --indent_;
 }
 
+void ASTDumper::operator()(Const<CreateIndexStmt> &s)
+{
+    indent() << "CreateIndexStmt:";
+    ++indent_;
+
+    if (s.has_unique)
+        indent() << "unique: true";
+    if (s.has_if_not_exists)
+        indent() << "if not exists: true";
+    if (s.index_name)
+        indent() << "index name: " << s.index_name.text;
+    if (s.method)
+        indent() << "method: " << s.method.text;
+
+    indent() << "table name: " << s.table_name.text;
+    indent() << "fields";
+    ++indent_;
+    for (auto &expr : s.key_fields) (*this)(*expr);
+    --indent_;
+    --indent_;
+}
+
+void ASTDumper::operator()(Const<DropIndexStmt> &s)
+{
+    indent() << "DropIndexStmt:";
+    ++indent_;
+
+    if (s.has_if_exists)
+        indent() << "if exists: true";
+
+    indent() << "indexes";
+    ++indent_;
+    for (auto &idx : s.index_names) indent() << (*idx).text;
+    --indent_;
+    --indent_;
+
+}
+
 void ASTDumper::operator()(Const<SelectStmt> &s)
 {
     indent() << "SelectStmt";

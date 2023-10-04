@@ -356,6 +356,16 @@ void ASTDot::operator()(Const<DropTableStmt>&)
     // TODO implement
 }
 
+void ASTDot::operator()(Const<CreateIndexStmt>&)
+{
+    // TODO implement
+}
+
+void ASTDot::operator()(Const<DropIndexStmt>&)
+{
+    // TODO implement
+}
+
 void ASTDot::operator()(Const<SelectStmt> &s)
 {
     out << '\n';

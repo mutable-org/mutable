@@ -883,6 +883,43 @@ struct M_EXPORT DropTableStmt : Stmt
     void accept(ConstASTCommandVisitor &v) const override;
 };
 
+struct M_EXPORT CreateIndexStmt : Stmt
+{
+    bool has_unique;
+    bool has_if_not_exists;
+    Token index_name;
+    Token table_name;
+    Token method;
+    std::vector<std::unique_ptr<Expr>> key_fields;
+
+    CreateIndexStmt(bool has_unique, bool has_if_not_exists, Token index_name, Token table_name, Token method,
+                    std::vector<std::unique_ptr<Expr>> key_fields)
+        : has_unique(has_unique)
+        , has_if_not_exists(has_if_not_exists)
+        , index_name(index_name)
+        , table_name(table_name)
+        , method(method)
+        , key_fields(std::move(key_fields))
+    { }
+
+    void accept(ASTCommandVisitor &v) override;
+    void accept(ConstASTCommandVisitor &v) const override;
+};
+
+struct M_EXPORT DropIndexStmt : Stmt
+{
+    std::vector<std::unique_ptr<Token>> index_names;
+    bool has_if_exists;
+
+    DropIndexStmt(std::vector<std::unique_ptr<Token>> index_names, bool has_if_exists)
+        : index_names(std::move(index_names))
+        , has_if_exists(has_if_exists)
+    { }
+
+    void accept(ASTCommandVisitor &v) override;
+    void accept(ConstASTCommandVisitor &v) const override;
+};
+
 /** A SQL select statement. */
 struct M_EXPORT SelectStmt : Stmt
 {
@@ -997,6 +1034,8 @@ struct M_EXPORT DSVImportStmt : ImportStmt
     X(m::ast::DropDatabaseStmt) \
     X(m::ast::CreateTableStmt) \
     X(m::ast::DropTableStmt) \
+    X(m::ast::CreateIndexStmt) \
+    X(m::ast::DropIndexStmt) \
     X(m::ast::SelectStmt) \
     X(m::ast::InsertStmt) \
     X(m::ast::UpdateStmt) \

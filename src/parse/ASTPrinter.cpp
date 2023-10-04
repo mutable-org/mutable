@@ -235,6 +235,42 @@ void ASTPrinter::operator()(Const<DropTableStmt> &s)
     out << ';';
 }
 
+void ASTPrinter::operator()(Const<CreateIndexStmt> &s)
+{
+    out << "CREATE ";
+    if (s.has_unique)
+        out << "UNIQUE ";
+    out << "INDEX ";
+    if (s.has_if_not_exists)
+        out << "IF NOT EXISTS ";
+    if (s.index_name)
+        out << s.index_name.text << ' ';
+    out << "ON " << s.table_name.text;
+    if (s.method)
+        out << " USING " << s.method.text;
+    out << "\n(";
+    for (auto it = s.key_fields.cbegin(), end = s.key_fields.cend(); it != end; ++it) {
+        auto &field = *it;
+        if (it != s.key_fields.cbegin()) out << ',';
+        out << "\n    ";
+        (*this)(*field);
+    }
+    out << "\n);";
+}
+
+void ASTPrinter::operator()(Const<DropIndexStmt> &s)
+{
+    out << "DROP INDEX ";
+    if (s.has_if_exists)
+        out << "IF EXISTS ";
+    for (auto it = s.index_names.cbegin(), end = s.index_names.cend(); it != end; ++it) {
+        auto &idx = *it;
+        if (it != s.index_names.cbegin()) out << ", ";
+        out << idx->text;
+    }
+    out << ';';
+}
+
 void ASTPrinter::operator()(Const<SelectStmt> &s)
 {
     bool was_nested = is_nested_;

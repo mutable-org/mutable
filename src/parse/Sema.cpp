@@ -1609,6 +1609,34 @@ void Sema::operator()(DropTableStmt &s)
         command_ = std::make_unique<DropTable>(std::move(table_names));
 }
 
+void Sema::operator()(CreateIndexStmt &s)
+{
+    RequireContext RCtx(this, s);
+    Catalog &C = Catalog::Get();
+
+    if (not C.has_database_in_use()) {
+        diag.err() << "No database selected.\n";
+        return;
+    }
+
+    // TODO create an actual `CreateIndex` command
+    command_ = std::make_unique<EmptyCommand>();
+}
+
+void Sema::operator()(DropIndexStmt &s)
+{
+    RequireContext RCtx(this, s);
+    Catalog &C = Catalog::Get();
+
+    if (not C.has_database_in_use()) {
+        diag.err() << "No database selected.\n";
+        return;
+    }
+
+    // TODO create an actual `DropIndex` command
+    command_ = std::make_unique<EmptyCommand>();
+}
+
 void Sema::operator()(SelectStmt &s)
 {
     RequireContext RCtx(this, s);

@@ -84,6 +84,8 @@ struct M_EXPORT Parser
     std::unique_ptr<Stmt> parse_UseDatabaseStmt();
     std::unique_ptr<Stmt> parse_CreateTableStmt();
     std::unique_ptr<Stmt> parse_DropTableStmt();
+    std::unique_ptr<Stmt> parse_CreateIndexStmt();
+    std::unique_ptr<Stmt> parse_DropIndexStmt();
     std::unique_ptr<Stmt> parse_SelectStmt();
     std::unique_ptr<Stmt> parse_InsertStmt();
     std::unique_ptr<Stmt> parse_UpdateStmt();

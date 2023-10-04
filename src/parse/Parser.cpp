@@ -154,6 +154,8 @@ std::unique_ptr<Stmt> Parser::parse_Stmt()
 
                 case TK_Database: stmt = parse_CreateDatabaseStmt(); break;
                 case TK_Table:    stmt = parse_CreateTableStmt(); break;
+                case TK_Unique:
+                case TK_Index:    stmt = parse_CreateIndexStmt(); break;
             }
             break;
 
@@ -168,6 +170,7 @@ std::unique_ptr<Stmt> Parser::parse_Stmt()
 
                 case TK_Database: stmt = parse_DropDatabaseStmt(); break;
                 case TK_Table:    stmt = parse_DropTableStmt(); break;
+                case TK_Index:    stmt = parse_DropIndexStmt(); break;
             }
             break;
 
@@ -387,6 +390,124 @@ std::unique_ptr<Stmt> Parser::parse_DropTableStmt()
     } while (accept(TK_COMMA));
 
     return std::make_unique<DropTableStmt>(std::move(table_names), has_if_exists);
+}
+
+std::unique_ptr<Stmt> Parser::parse_CreateIndexStmt()
+{
+    Token start = token();
+
+    /* 'CREATE' [ 'UNIQUE' ] 'INDEX' */
+    if (not expect(TK_Create))
+        return recover<ErrorStmt>(start, follow_set_STATEMENT);
+
+    bool has_unique = false;
+    if (accept(TK_Unique))
+        has_unique = true;
+
+    if (not expect(TK_Index))
+        return recover<ErrorStmt>(start, follow_set_STATEMENT);
+
+    /* [ [ 'IF' 'NOT' 'EXISTS' ] identifier ] */
+    bool has_if_not_exists = false;
+    Token index_name = Token();
+    if (accept(TK_If)) {
+        if (not expect(TK_Not))
+            return recover<ErrorStmt>(start, follow_set_STATEMENT);
+        if (not expect(TK_Exists))
+            return recover<ErrorStmt>(start, follow_set_STATEMENT);
+        has_if_not_exists = true;
+        index_name = token();
+        if (not expect(TK_IDENTIFIER))
+            return recover<ErrorStmt>(start, follow_set_STATEMENT);
+    } else if (token().type == TK_IDENTIFIER)
+        index_name = consume();
+
+    /* 'ON' identifier */
+    if (not expect(TK_On))
+        return recover<ErrorStmt>(start, follow_set_STATEMENT);
+
+    Token table_name = token();
+    if (not expect(TK_IDENTIFIER))
+        return recover<ErrorStmt>(start, follow_set_STATEMENT);
+
+    /* [ 'USING' identifier */
+    Token method = Token();
+    if (accept(TK_Using)) {
+        if (token().type != TK_IDENTIFIER and token().type != TK_Default) {
+            diag.e(token().pos) << "expected an identifier or DEFAULT, got " << token().text << '\n';
+            return recover<ErrorStmt>(start, follow_set_STATEMENT);
+        }
+        method = consume();
+    }
+
+    /* '(' key_field { ',' key_field } ')' */
+    if (not expect(TK_LPAR))
+        return recover<ErrorStmt>(start, follow_set_STATEMENT);
+    std::vector<std::unique_ptr<Expr>> key_fields;
+    do {
+        switch (token().type) {
+            /* identifier */
+            case TK_IDENTIFIER: {
+                auto id = std::make_unique<Designator>(consume());
+                key_fields.emplace_back(std::move(id));
+                break;
+            }
+            /* '(' expression ')' */
+            case TK_LPAR: {
+                auto expr = parse_Expr();
+                key_fields.emplace_back(std::move(expr));
+                break;
+            }
+            default: {
+                diag.e(token().pos) << "expected an identifier or expression, got " << token().text << '\n';
+                return recover<ErrorStmt>(start, follow_set_STATEMENT);
+            }
+        }
+    } while(accept(TK_COMMA));
+    if (not expect(TK_RPAR))
+        return recover<ErrorStmt>(start, follow_set_STATEMENT);
+
+    return std::make_unique<CreateIndexStmt>(
+        /* has_unique=        */ has_unique,
+        /* has_if_not_exists= */ has_if_not_exists,
+        /* index_name=        */ index_name,
+        /* table_name=        */ table_name,
+        /* method=            */ method,
+        /* key_fields=        */ std::move(key_fields)
+    );
+}
+
+std::unique_ptr<Stmt> Parser::parse_DropIndexStmt()
+{
+    Token start = token();
+
+    /* 'DROP' 'INDEX' */
+    if (not expect(TK_Drop)) {
+        consume();
+        return recover<ErrorStmt>(start, follow_set_STATEMENT);
+    }
+
+    if (not expect(TK_Index))
+        return recover<ErrorStmt>(start, follow_set_STATEMENT);
+
+    /* [ 'IF' 'EXISTS' ] */
+    bool has_if_exists = false;
+    if (accept(TK_If)) {
+        if (not expect(TK_Exists))
+            return recover<ErrorStmt>(start, follow_set_STATEMENT);
+        has_if_exists = true;
+    }
+
+    /* identifier { ',' identifier } */
+    std::vector<std::unique_ptr<Token>> index_names;
+    do {
+        Token index_name = token();
+        if (not expect(TK_IDENTIFIER))
+            return recover<ErrorStmt>(start, follow_set_STATEMENT);
+        index_names.emplace_back(std::make_unique<Token>(index_name));
+    } while (accept(TK_COMMA));
+
+    return std::make_unique<DropIndexStmt>(std::move(index_names), has_if_exists);
 }
 
 std::unique_ptr<Stmt> Parser::parse_SelectStmt()

@@ -1300,6 +1300,138 @@ TEST_CASE("Parser::parse_DropTableStmt() sanity tests", "[core][parse][unit]")
     }
 }
 
+TEST_CASE("Parser::parse_CreateIndexStmt()", "[core][parse][unit]")
+{
+    test_triple_t triples[] = {
+        /* { create index statement, fully-parenthesized create table statement, next token } */
+
+        { "CREATE INDEX ON t (a)",
+          "CREATE INDEX ON t\n(\n    a\n);", TK_EOF },
+        { "CREATE UNIQUE INDEX ON t (a)",
+          "CREATE UNIQUE INDEX ON t\n(\n    a\n);", TK_EOF },
+        { "CREATE INDEX idx ON t (a)",
+          "CREATE INDEX idx ON t\n(\n    a\n);", TK_EOF },
+        { "CREATE INDEX IF NOT EXISTS idx ON t (a)",
+          "CREATE INDEX IF NOT EXISTS idx ON t\n(\n    a\n);", TK_EOF },
+        { "CREATE INDEX idx ON t USING DEFAULT (a)",
+          "CREATE INDEX idx ON t USING DEFAULT\n(\n    a\n);", TK_EOF },
+        { "CREATE INDEX ON t (a, (a+b), c)",
+          "CREATE INDEX ON t\n(\n    a,\n    (a + b),\n    c\n);", TK_EOF },
+        { "CREATE UNIQUE INDEX IF NOT EXISTS idx ON t USING DEFAULT (a, (a+b), c)",
+          "CREATE UNIQUE INDEX IF NOT EXISTS idx ON t USING DEFAULT\n(\n    a,\n    (a + b),\n    c\n);", TK_EOF },
+    };
+
+    auto parse = [](ast::Parser &p) { return p.parse_CreateIndexStmt(); };
+    for (auto triple : triples)
+        test_parse_positive<ast::CreateIndexStmt, ast::Stmt>(triple, parse);
+}
+
+TEST_CASE("Parser::parse_CreateIndexStmt() sanity tests", "[core][parse][unit]")
+{
+    SECTION("underlying errors")
+    {
+        const char * statements[] = {
+            /* erroneous expressions */
+            "CREATE INDEX ON t ( (a+) )",
+            "CREATE INDEX ON t ( (OR b) )",
+            "CREATE INDEX ON t ( (NOT) )",
+            "CREATE INDEX ON t ( (a==b) )",
+        };
+
+        for (auto s : statements) {
+            LEXER(s);
+            ast::Parser parser(lexer);
+            auto ast = parser.parse_CreateIndexStmt();
+            if (diag.num_errors() == 0)
+                std::cerr << "UNEXPECTED PASS for input \"" << s << '"' << std::endl;
+            CHECK(diag.num_errors() > 0);
+            CHECK_FALSE(err.str().empty());
+        }
+    }
+
+    SECTION("newly generated errors")
+    {
+        const char * statements[] = {
+            /* incomplete statements */
+            "",
+            "CREATE",
+            "CREATE UNIQUE",
+            "CREATE INDEX",
+            "CREATE INDEX ON",
+            "CREATE INDEX ON t",
+            "CREATE INDEX ON t USING",
+            "CREATE INDEX ON t USING DEFAULT",
+            "CREATE INDEX ON t ( )",
+            "CREATE INDEX ON t ( a",
+            "CREATE INDEX ON t ( a, )",
+            "CREATE INDEX ON t ( a, b",
+            "CREATE INDEX IF NOT EXISTS ON t ( a )",
+            /* expresion without parentheses */
+            "CREATE INDEX ON t ( a+b )",
+        };
+
+        for (auto s : statements) {
+            LEXER(s);
+            ast::Parser parser(lexer);
+            auto ast = parser.parse_CreateIndexStmt();
+            if (diag.num_errors() == 0)
+                std::cerr << "UNEXPECTED PASS for input \"" << s << '"' << std::endl;
+            CHECK(diag.num_errors() > 0);
+            CHECK_FALSE(err.str().empty());
+            if (not is<ast::ErrorStmt>(ast))
+                std::cerr << "Input \"" << s << "\" is not parsed as ErrorStmt" << std::endl;
+            CHECK(is<ast::ErrorStmt>(ast));
+        }
+    }
+}
+
+TEST_CASE("Parser::parse_DropIndexStmt()", "[core][parse][unit]")
+{
+    test_triple_t triples[] = {
+        /* { drop index statement, fully-parenthesized create table statement, next token } */
+
+        { "DROP INDEX i", "DROP INDEX i;", TK_EOF },
+        { "DROP INDEX i0, i1", "DROP INDEX i0, i1;", TK_EOF },
+        { "DROP INDEX IF EXISTS i", "DROP INDEX IF EXISTS i;", TK_EOF },
+        { "DROP INDEX IF EXISTS i0, i1", "DROP INDEX IF EXISTS i0, i1;", TK_EOF },
+    };
+
+    auto parse = [](ast::Parser &p) { return p.parse_DropIndexStmt(); };
+    for (auto triple : triples)
+        test_parse_positive<ast::DropIndexStmt, ast::Stmt>(triple, parse);
+}
+
+TEST_CASE("Parser::parse_DropIndexStmt() sanity tests", "[core][parse][unit]")
+{
+    const char * statements[] = {
+        "DROP i",
+        "drop INDEX i",
+        "DROP index i",
+        "DROP INDEX IF i",
+        "DROP INDEX IF exists i",
+        "DROP INDEX 1",
+        "DROP INDEX i, 1",
+        "DROP INDEX IF EXISTS 1",
+        "",
+        "DROP",
+        "DROP INDEX",
+        "DROP INDEX IF EXISTS",
+    };
+
+    for (auto s : statements) {
+        LEXER(s);
+        ast::Parser parser(lexer);
+        auto ast = parser.parse_DropIndexStmt();
+        if (diag.num_errors() == 0)
+            std::cerr << "UNEXPECTED PASS for input \"" << s << '"' << std::endl;
+        CHECK(diag.num_errors() > 0);
+        CHECK_FALSE(err.str().empty());
+        if (not is<ast::ErrorStmt>(ast))
+            std::cerr << "Input \"" << s << "\" is not parsed as ErrorStmt" << std::endl;
+        CHECK(is<ast::ErrorStmt>(ast));
+    }
+}
+
 TEST_CASE("Parser::parse_InsertStmt()", "[core][parse][unit]")
 {
     test_triple_t triples[] = {

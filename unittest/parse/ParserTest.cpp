@@ -1256,7 +1256,7 @@ TEST_CASE("Parser::parse_CreateTableStmt() sanity tests", "[core][parse][unit]")
 TEST_CASE("Parser::parse_DropTableStmt()", "[core][parse][unit]")
 {
     test_triple_t triples[] = {
-        /* { create table statement, fully-parenthesized create table statement, next token } */
+        /* { drop table statement, fully-parenthesized create table statement, next token } */
 
         { "DROP TABLE t", "DROP TABLE t;", TK_EOF },
         { "DROP TABLE t1, t2", "DROP TABLE t1, t2;", TK_EOF },

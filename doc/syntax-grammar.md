@@ -31,7 +31,7 @@ statement ::= create-statement |
 
 #### Create Statements
 ```
-create-statement ::= create_database-statement | create_table-statement ;
+create-statement ::= create_database-statement | create_table-statement | create_index-statement ;
 ```
 
 ##### Create Database Statement
@@ -50,9 +50,16 @@ constraint ::= 'PRIMARY' 'KEY' |
                'REFERENCES' IDENTIFIER '(' IDENTIFIER ')' ;
 ```
 
+##### Create Index Statement
+```
+create_index-statement ::= 'CREATE' [ 'UNIQUE' ] 'INDEX' [ [ 'IF' 'NOT' 'EXISTS' ] IDENTIFIER ] ON IDENTIFIER [ 'USING' ( 'DEFAULT' | IDENTIFIER ) ] '(' key_field { ',' key_field } ')' ;
+
+key_field ::= IDENTIFIER | '(' expression ')' ;
+```
+
 #### Drop Statements
 ```
-drop-statement ::= drop_database-statement | drop_table-statement ;
+drop-statement ::= drop_database-statement | drop_table-statement | drop_index-statement ;
 ```
 
 ##### Drop Database Statement
@@ -63,6 +70,11 @@ drop_database-statement ::= 'DROP' 'DATABASE' [ 'IF' 'EXISTS' ] IDENTIFIER ;
 ##### Drop Table Statement
 ```
 drop_table-statement ::= 'DROP' 'TABLE' [ 'IF' 'EXISTS' ] IDENTIFIER { ',' IDENTIFIER } ;
+```
+
+##### Drop Index Statement
+```
+drop_index-statement ::= 'DROP' 'INDEX' [ 'IF' 'EXISTS' ] IDENTIFIER { ',' IDENTIFIER } ;
 ```
 
 #### Use Database Statement

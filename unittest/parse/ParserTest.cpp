@@ -1231,11 +1231,11 @@ TEST_CASE("Parser::parse_CreateTableStmt() sanity tests", "[core][parse][unit]")
     {
         const char * statements[] = {
             "",
-            "TABLE ( a BOOL )",
-            "TABLE 0 ( a BOOL )",
-            "TABLE t ( 0 BOOL )",
-            "TABLE t ( BOOL )",
-            "TABLE t ( a BOOL, )"
+            "CREATE TABLE ( a BOOL )",
+            "CREATE TABLE 0 ( a BOOL )",
+            "CREATE TABLE t ( 0 BOOL )",
+            "CREATE TABLE t ( BOOL )",
+            "CREATE TABLE t ( a BOOL, )"
         };
 
         for (auto s : statements) {

@@ -541,6 +541,7 @@ publish:github-repository:
         - git remote add github git@github.com:mutable-org/mutable.git
         - git fetch gitlab
         - git push --tags github gitlab/$CI_DEFAULT_BRANCH:$CI_DEFAULT_BRANCH
+        - git push github $CI_DEFAULT_BRANCH:pr-target
 
 
 publish:github-release:

@@ -666,6 +666,10 @@ struct range
 {
     using iterator_type = It;
 
+    ///> whether the iterator supports reversing
+    static constexpr bool reversible = requires { typename std::reverse_iterator<It>; } and
+                                       requires (It it) { std::make_reverse_iterator(it); };
+
     private:
     It begin_, end_;
 
@@ -675,6 +679,18 @@ struct range
 
     It begin() const { return begin_; }
     It end() const { return end_; }
+    It cbegin() const { return begin_; }
+    It cend() const { return end_; }
+
+    std::reverse_iterator<It> rbegin() const requires reversible { return std::make_reverse_iterator(end_); }
+    std::reverse_iterator<It> rend() const requires reversible { return std::make_reverse_iterator(begin_); }
+    std::reverse_iterator<It> crbegin() const requires reversible { return std::make_reverse_iterator(end_); }
+    std::reverse_iterator<It> crend() const requires reversible { return std::make_reverse_iterator(begin_); }
+
+    /** Returns this `range` reversed. */
+    range<std::reverse_iterator<It>> reverse() const requires reversible {
+        return range<std::reverse_iterator<It>>(rbegin(), rend());
+    }
 };
 
 template<typename It, typename Fn>

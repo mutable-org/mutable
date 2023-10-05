@@ -656,3 +656,74 @@ TEST_CASE("doubly_linked_list", "[core][util]")
         }
     }
 }
+
+TEST_CASE("range", "[core][util]")
+{
+    std::vector<int> vec{42, 13, 4};
+
+    SECTION("range on forward iterator")
+    {
+        range range(vec.cbegin(), vec.cend());
+        auto it = range.begin();
+        REQUIRE(it != range.end());
+        CHECK(*it == 42);
+        ++it;
+        REQUIRE(it != range.end());
+        CHECK(*it == 13);
+        ++it;
+        REQUIRE(it != range.end());
+        CHECK(*it == 4);
+        ++it;
+        CHECK(it == range.end());
+    }
+
+    SECTION("range on reverse iterator")
+    {
+        range range(vec.crbegin(), vec.crend());
+        auto it = range.begin();
+        REQUIRE(it != range.end());
+        CHECK(*it == 4);
+        ++it;
+        REQUIRE(it != range.end());
+        CHECK(*it == 13);
+        ++it;
+        REQUIRE(it != range.end());
+        CHECK(*it == 42);
+        ++it;
+        CHECK(it == range.end());
+    }
+
+    SECTION("reverse range on forward iterator")
+    {
+        range range(vec.cbegin(), vec.cend());
+        auto reversed = range.reverse();
+        auto it = reversed.begin();
+        REQUIRE(it != reversed.end());
+        CHECK(*it == 4);
+        ++it;
+        REQUIRE(it != reversed.end());
+        CHECK(*it == 13);
+        ++it;
+        REQUIRE(it != reversed.end());
+        CHECK(*it == 42);
+        ++it;
+        CHECK(it == reversed.end());
+    }
+
+    SECTION("reverse range on reverse iterator")
+    {
+        range range(vec.crbegin(), vec.crend());
+        auto reversed = range.reverse();
+        auto it = reversed.begin();
+        REQUIRE(it != reversed.end());
+        CHECK(*it == 42);
+        ++it;
+        REQUIRE(it != reversed.end());
+        CHECK(*it == 13);
+        ++it;
+        REQUIRE(it != reversed.end());
+        CHECK(*it == 4);
+        ++it;
+        CHECK(it == reversed.end());
+    }
+}

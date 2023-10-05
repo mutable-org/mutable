@@ -36,40 +36,38 @@ class DuckDB(Connector):
         suite: str = params['suite']
         benchmark: str = params['benchmark']
         experiment: str = params['name']
+        cases: dict[Case, Any] = params['cases']
         configname: str = f'DuckDB ({get_num_cores()} cores)' if self.multithreaded else 'DuckDB (single core)'
         tqdm_print(f'` Perform experiment {suite}/{benchmark}/{experiment} with configuration {configname}.')
 
         self.clean_up()
 
         config_result: ConfigResult = dict()
-        verbose_printed: bool = False
+        for case in cases.keys():
+            config_result[case] = list()
 
         # For query execution
         command: str = f"./{self.duckdb_cli} {TMP_DB}"
         popen_args: dict[str, Any] = {'shell': True, 'text': True}
         benchmark_info: str = f"{suite}/{benchmark}/{experiment} [{configname}]"
-        for _ in range(n_runs):
-            try:
-                # Used variables
-                statements: list[str]
-                combined_query: str
-                benchmark_info: str
 
-                # Set up database
-                create_tbl_stmts: list[str] = self.generate_create_table_stmts(params['data'], self.check_with_scale_factors(params))
+        try:
+            # Set up database
+            create_tbl_stmts: list[str] = self.generate_create_table_stmts(params['data'], self.check_with_scale_factors(params))
 
-                if self.check_execute_single_cases(params):
-                    # Execute cases singly
-                    timeout = DEFAULT_TIMEOUT + TIMEOUT_PER_CASE
-                    # Write cases/queries to a file that will be passed to the command to execute
-                    for i in range(len(params['cases'])):
-                        case: Case = list(params['cases'].keys())[i]
-                        query_stmt: str = list(params['cases'].values())[i]
+            if self.check_execute_single_cases(params):
+                # Execute cases singly
+                timeout: int = DEFAULT_TIMEOUT + TIMEOUT_PER_CASE
+
+                for run in range(n_runs):
+                    for i in range(len(cases)):
+                        case: Case = list(cases.keys())[i]
+                        query_stmt: str = list(cases.values())[i]
 
                         statements: list[str] = list()
                         if i == 0:
                             # Also use the create_tbl_stmts in this case
-                            statements = create_tbl_stmts
+                            statements.extend(create_tbl_stmts)
 
                         # Create tables from tmp tables with scale factor
                         for table_name, table in params['data'].items():
@@ -87,10 +85,9 @@ class DuckDB(Connector):
                         statements.append(query_stmt)   # Actual query from this case
                         statements.append(".timer off")
 
-                        combined_query = "\n".join(statements)
+                        combined_query: str = "\n".join(statements)
 
-                        if self.verbose and not verbose_printed:
-                            verbose_printed = True
+                        if self.verbose and run == 0:
                             tqdm_print(combined_query)
 
                         time: float
@@ -98,48 +95,55 @@ class DuckDB(Connector):
                             out: str = self.benchmark_query(command=command, query=combined_query, timeout=timeout,
                                                             popen_args=popen_args, benchmark_info=benchmark_info,
                                                             verbose=self.verbose, encode_query=False)
-                            time = self.parse_results(out)[0]
+                            durations: list[float] = self.parse_results(out)
+                            if len(durations) != 1:
+                                raise ConnectorException(f"Expected 1 measurement but got {len(durations)}.")
+                            time = durations[0]
                         except ExperimentTimeoutExpired:
                             time = float(timeout)
-                        if case not in config_result.keys():
-                            config_result[case] = list()
                         config_result[case].append(time)
 
-                else:
-                    # Otherwise, tables have to be created just once before the measurements (done above)
-                    timeout = DEFAULT_TIMEOUT + TIMEOUT_PER_CASE * len(params['cases'])
+                    self.clean_up()
 
-                    statements = create_tbl_stmts
-                    statements.append(".timer on")
-                    for case_query in params['cases'].values():
+
+            else:
+                # Otherwise, tables have to be created just once before the measurements (done above)
+                timeout: int = DEFAULT_TIMEOUT + TIMEOUT_PER_CASE * len(cases) * n_runs
+
+                statements: list[str] = list()
+                statements.extend(create_tbl_stmts)
+
+                statements.append(".timer on")
+                for _ in range(n_runs):
+                    for case_query in cases.values():
                         statements.append(case_query)
-                    statements.append(".timer off")
+                statements.append(".timer off")
 
-                    combined_query = "\n".join(statements)
+                combined_query: str = "\n".join(statements)
 
-                    if self.verbose and not verbose_printed:
-                        verbose_printed = True
-                        tqdm_print(combined_query)
+                if self.verbose:
+                    tqdm_print(combined_query)
 
-                    try:
-                        out: str = self.benchmark_query(command=command, query=combined_query, timeout=timeout,
-                                                        popen_args=popen_args, benchmark_info=benchmark_info,
-                                                        verbose=self.verbose, encode_query=False)
-                        durations: list[float] = self.parse_results(out)
-                    except ExperimentTimeoutExpired:
-                        for case in params['cases'].keys():
-                            if case not in config_result.keys():
-                                config_result[case] = list()
-                            config_result[case].append(float(timeout * 1000))
-                    else:
-                        for idx, time in enumerate(durations):
-                            case: Case = list(params['cases'].keys())[idx]
-                            if case not in config_result.keys():
-                                config_result[case] = list()
-                            config_result[case].append(float(time))
+                try:
+                    out: str = self.benchmark_query(command=command, query=combined_query, timeout=timeout,
+                                                    popen_args=popen_args, benchmark_info=benchmark_info,
+                                                    verbose=self.verbose, encode_query=False)
+                    durations: list[float] = self.parse_results(out)
+                except ExperimentTimeoutExpired:
+                    for _ in range(n_runs):
+                        for case in cases.keys():
+                            config_result[case].append(float(TIMEOUT_PER_CASE * 1000))
+                else:
+                    if len(durations) != n_runs * len(cases):
+                        raise ConnectorException(
+                            f"Expected {n_runs * len(cases)} measurements but got {len(durations)}.")
+                    for i in range(n_runs):
+                        run_durations: list[float] = durations[i * len(cases): (i + 1) * len(cases)]
+                        for case, dur in zip(list(cases.keys()), run_durations):
+                            config_result[case].append(float(dur))
 
-            finally:
-                self.clean_up()
+        finally:
+            self.clean_up()
 
         return { configname: config_result }
 

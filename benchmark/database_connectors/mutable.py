@@ -9,13 +9,6 @@ import random
 import re
 
 
-class BenchmarkError(Exception):
-    pass
-
-class BenchmarkTimeoutException(Exception):
-    pass
-
-
 @typechecked
 class Mutable(Connector):
 
@@ -39,43 +32,16 @@ class Mutable(Connector):
 
 
     def execute(self, n_runs: int, params: dict[str, Any]) -> ConnectorResult:
-        result: ConnectorResult = dict()
-        for run_id in range(n_runs):
-            exp: dict[str, dict[Case, float]] = self.perform_experiment(run_id, params)
-            for config, cases in exp.items():
-                if config not in result.keys():
-                    result[config] = dict()
-                for case, time in cases.items():
-                    if case not in result[config].keys():
-                        result[config][case] = list()
-                    result[config][case].append(time)
-
-        return result
-
-
-#=======================================================================================================================
-# Perform the experiment specified in a YAML file with all provided configurations
-#
-# @param params             the parameters for the experiment
-# @return                   a map from configuration name to {map from case name to measurement}
-#=======================================================================================================================
-    def perform_experiment(self, run_id: int, params: dict[str, Any]) -> dict[str, dict[Case, float]]:
         configs: dict[str, Any] = params.get('configurations', dict())
-        experiment_name: str = params['name']
-        suite: str = params['suite']
-        benchmark: str = params['benchmark']
-        experiment: dict[str, dict[Case, float]] = dict()
+        result: ConnectorResult = dict()
 
-        # Run benchmark under different configurations
+        # Run experiment under different configurations
         for config_name, config in configs.items():
             config_name = f"mutable (single core, {config_name})"
-            if run_id == 0:
-                tqdm_print(f'` Perform experiment {suite}/{benchmark}/{experiment_name} with configuration {config_name}.')
+            measurements: ConfigResult = self.run_configuration(n_runs, config_name, config, params)
+            result[config_name] = measurements
 
-            measurements: dict[Case, float] = self.run_configuration(experiment_name, config_name, config, params)
-            experiment[config_name] = measurements
-
-        return experiment
+        return result
 
 
 #=======================================================================================================================
@@ -85,17 +51,21 @@ class Mutable(Connector):
 # @param config_name    the name of this configuration
 # @param yml            the loaded YAML file
 # @param config         the configuration of this experiment
-# @return               a map from case name to measurement
+# @return               a config result
 #=======================================================================================================================
-    def run_configuration(self, experiment: str, config_name: str, config: dict[str, Any], yml: dict[str, Any]) -> dict[Case, float]:
+    def run_configuration(self, n_runs: int, config_name: str, config: dict[str, Any], yml: dict[str, Any]) -> ConfigResult:
         # Extract YAML settings
         suite: str = yml['suite']
         benchmark: str = yml['benchmark']
+        experiment_name: str = yml['name']
         path_to_file: str = yml['path_to_file']
         path_to_data: str = os.path.join('benchmark', suite, 'data')
         cases: dict[Case, Any] = yml['cases']
+
+        tqdm_print(f'` Perform experiment {suite}/{benchmark}/{experiment_name} with configuration {config_name}.')
+
         if 'script' in cases:
-            return self.run_repeated_case(cases, config, path_to_file)
+            return self.run_repeated_case(n_runs, cases, config, path_to_file)
 
         supplementary_args: str | None = yml.get('args', None)
         binargs: str | None = yml.get('binargs', None)
@@ -110,44 +80,50 @@ class Mutable(Connector):
             command.extend(config['args'].split(' '))
         command = command + ['--quiet', '-']
 
-        # Collect results in dict
-        execution_times: dict[Case, float] = dict()
+        # Variables
         timeout: int
         import_str: str
         durations: list[float]
-        try:
-            if not self.check_execute_single_cases(yml):
-                # All cases can be executed at once
-                # Produce code to load data into tables
-                imports: list[str] = self.get_setup_statements(suite, path_to_data, yml['data'], None)
 
-                import_str = '\n'.join(imports)
-                timeout = DEFAULT_TIMEOUT + TIMEOUT_PER_CASE * len(cases)
-                combined_query: list[str] = list()
-                combined_query.append(import_str)
-                for case in cases.values():
-                    if self.verbose:
-                        self.print_command(command, import_str + '\n' + case, '    ')
-                    combined_query.extend([case])
-                query: str = '\n'.join(combined_query)
-                try:
-                    out: str = self.benchmark_query(command=command, query=self.prepare_query(query), timeout=timeout,
-                                                    benchmark_info=path_to_file, verbose=self.verbose)
-                    durations = self.parse_results(out, config['pattern'])
-                except BenchmarkTimeoutException as ex:
-                    tqdm_print(str(ex))
-                    # Add timeout durations
+        # Init config result
+        config_result: ConfigResult = dict()
+        for case in cases.keys():
+            config_result[case] = list()
+
+        if not self.check_execute_single_cases(yml):
+            # All cases can be executed at once
+            # Produce code to load data into tables
+            imports: list[str] = self.get_setup_statements(suite, path_to_data, yml['data'], None)
+            import_str = '\n'.join(imports)
+
+            combined_query: list[str] = list()
+            combined_query.append(import_str)
+            for _ in range(n_runs):
+                combined_query.extend(list(cases.values()))
+            query: str = '\n'.join(combined_query)
+
+            timeout = DEFAULT_TIMEOUT + TIMEOUT_PER_CASE * len(cases) * n_runs
+            try:
+                out: str = self.benchmark_query(command=command, query=self.prepare_query(query), timeout=timeout,
+                                                benchmark_info=path_to_file, verbose=self.verbose)
+                durations = self.parse_results(out, config['pattern'])
+            except ExperimentTimeoutExpired:
+                # Add timeout durations
+                for _ in range(n_runs):
                     for case in cases.keys():
-                        execution_times[case] = float(TIMEOUT_PER_CASE * 1000)
-                else:
-                    if len(durations) != len(cases):
-                        raise ConnectorException(f"Expected {len(cases)} measurements but got {len(durations)}.")
-                    # Add measured times
-                    for case, dur in zip(list(cases.keys()), durations):
-                        execution_times[case] = float(dur)
+                        config_result[case].append(float(TIMEOUT_PER_CASE * 1000))
             else:
-                # Each case has to be executed singly
-                timeout = DEFAULT_TIMEOUT + TIMEOUT_PER_CASE
+                if len(durations) != n_runs * len(cases):
+                    raise ConnectorException(f"Expected {n_runs * len(cases)} measurements but got {len(durations)}.")
+                # Add measured times
+                for i in range(n_runs):
+                    run_durations: list[float] = durations[i * len(cases) : (i+1) * len(cases)]
+                    for case, dur in zip(list(cases.keys()), run_durations):
+                        config_result[case].append(float(dur))
+        else:
+            # Each case has to be executed singly
+            timeout = DEFAULT_TIMEOUT + TIMEOUT_PER_CASE
+            for _ in range(n_runs):
                 for case, query in cases.items():
                     # Produce code to load data into tables with scale factor
                     case_imports: list[str] = self.get_setup_statements(suite, path_to_data, yml['data'], case)
@@ -160,17 +136,14 @@ class Mutable(Connector):
                         out: str = self.benchmark_query(command=command, query=self.prepare_query(query_str),
                                                         timeout=timeout, benchmark_info=path_to_file, verbose=self.verbose)
                         durations = self.parse_results(out, config['pattern'])
-                    except BenchmarkTimeoutException as ex:
-                        tqdm_print(str(ex))
-                        execution_times[case] = float(timeout * 1000)
+                    except ExperimentTimeoutExpired:
+                        config_result[case].append(float(timeout * 1000))
                     else:
                         if len(durations) != 1:
                             raise ConnectorException(f"Expected 1 measurement but got {len(durations)}.")
-                        execution_times[case] = float(durations[0])
-        except BenchmarkError as ex:
-            tqdm_print(str(ex))
+                        config_result[case].append(durations[0])
 
-        return execution_times
+        return config_result
 
 
     # =======================================================================================================================
@@ -179,18 +152,14 @@ class Mutable(Connector):
     # @param repeat             the repeated case
     # @param config             the configuration to use for execution
     # @param path_to_file       the path to the YAML file of the current experiment
-    # @return                   a map from case name to measurement
+    # @return                   a config result
     # =======================================================================================================================
-    def run_repeated_case(self, repeat: dict[str, Any], config: dict[str, Any], path_to_file: str) -> dict[Case, float]:
-        random.seed(42)
-        seed_low, seed_high = 0, 2 ** 32 - 1
+    def run_repeated_case(self, n_runs: int, repeat: dict[str, Any], config: dict[str, Any], path_to_file: str) -> ConfigResult:
         pattern: str = config['pattern']
         script: str = repeat['script']
-
-        execution_times: dict[Case, float] = dict()  # Collect results in dict { case: time }
         timeout: int = DEFAULT_TIMEOUT + TIMEOUT_PER_CASE
 
-        parse_n_error: BenchmarkError = BenchmarkError(f"{path_to_file} : 'n' must be either an integer or a list with 1-3 integers.")
+        parse_n_error: ConnectorException = ConnectorException(f"{path_to_file} : 'n' must be either an integer or a list with 1-3 integers.")
         generator: range
         if type(repeat['n']) is int:
             generator = range(repeat['n'])
@@ -206,24 +175,32 @@ class Mutable(Connector):
         else:
             raise parse_n_error
 
+        # Collect results in dict
+        config_result: ConfigResult = dict()
         for N in generator:
-            # Perform case
-            case_seed: int = random.randint(seed_low, seed_high)
-            variables: list[str] = [f'{key}={value}' for key, value in config['variables'].items()]
-            cmd: list[str] = ['env', f'N={N}', f'RANDOM={case_seed}'] + variables + ['/bin/bash']
+            config_result[N] = list()
 
-            try:
-                out: str = self.benchmark_query(command=cmd, query=script, timeout=timeout,
-                                                benchmark_info=path_to_file, verbose=self.verbose)
-                durations: list[float] = self.parse_results(out, pattern)
-            except BenchmarkTimeoutException:
-                execution_times[N] = float(timeout * 1000)
-            else:
-                if len(durations) != 1:
-                    raise ConnectorException(f"Expected 1 measurement but got {len(durations)}.")
-                execution_times[N] = float(durations[0])
+        for _ in range(n_runs):
+            random.seed(42)
+            seed_low, seed_high = 0, 2 ** 32 - 1
+            for N in generator:
+                # Perform case
+                case_seed: int = random.randint(seed_low, seed_high)
+                variables: list[str] = [f'{key}={value}' for key, value in config['variables'].items()]
+                cmd: list[str] = ['env', f'N={N}', f'RANDOM={case_seed}'] + variables + ['/bin/bash']
 
-        return execution_times
+                try:
+                    out: str = self.benchmark_query(command=cmd, query=script, timeout=timeout,
+                                                    benchmark_info=path_to_file, verbose=self.verbose)
+                    durations: list[float] = self.parse_results(out, pattern)
+                except ExperimentTimeoutExpired:
+                    config_result[N].append(float(timeout * 1000))
+                else:
+                    if len(durations) != 1:
+                        raise ConnectorException(f"Expected 1 measurement but got {len(durations)}.")
+                    config_result[N].append(durations[0])
+
+        return config_result
 
 
     ####################################################################################################################

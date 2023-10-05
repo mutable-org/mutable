@@ -83,11 +83,15 @@ sys.stdout.flush()
     def _execute(n_runs: int, params: dict[str, Any]) -> ConnectorResult:
         config_result: ConfigResult = dict()
 
+        cases: dict[Case, Any] = params['cases']
+        for case in cases.keys():
+            config_result[case] = list()
+
         hyperconf.init()    # prepare for measurements
 
-        for run_id in range(n_runs):
-            # If tables contain scale factors, they have to be loaded separately for every case
-            if Connector.check_execute_single_cases(params):
+        # If tables contain scale factors, they have to be loaded separately for every case
+        if Connector.check_execute_single_cases(params):
+            for _ in range(n_runs):
                 with HyperProcess(telemetry=Telemetry.DO_NOT_SEND_USAGE_DATA_TO_TABLEAU) as hyper:
                     with Connection(endpoint=hyper.endpoint, database='benchmark.hyper', create_mode=CreateMode.CREATE_AND_REPLACE) as connection:
                         # Create tmp tables used for copying
@@ -105,7 +109,7 @@ sys.stdout.flush()
                             )
                             connection.catalog.create_table(table_def)
                         # Execute cases
-                        for case, query in params['cases'].items():
+                        for case, query in cases.items():
                             # Set up tables
                             for table_name, table in params['data'].items():
                                 connection.execute_command(f'DELETE FROM "{table_name}";')  # Empty table first
@@ -123,43 +127,45 @@ sys.stdout.flush()
                             with connection.execute_query(query) as result:
                                 for row in result:
                                     pass
-
-                        # Extract results
-                        matches: list[Any] = hyperconf.filter_results(
-                            hyperconf.extract_results(),
-                            [
-                                lambda x: 'k' in x and x['k'] == 'query-end' and 'v' in x and 'statement' in x['v'] and x['v']['statement'] == 'SELECT'
-                            ]
-                        )
-                        times: list[float] = list(map(lambda m: float(m['v']['execution-time'] * 1000), matches))
-                        times = list(map(lambda t: float(f'{t:.3f}'), times))
-                        times = times[run_id * len(list(params['cases'].keys())) : ]    # get only times of this run, ignore previous runs
-                        cases_times: list[tuple[Case, float]] = list(zip(params['cases'].keys(), times))
-
-                        for case, time in cases_times:
-                            if case not in config_result.keys():
-                                config_result[case] = list()
-                            config_result[case].append(time)
-
-            else:
-                # Otherwise, tables have to be created just once before the measurements
-                with HyperProcess(telemetry=Telemetry.DO_NOT_SEND_USAGE_DATA_TO_TABLEAU) as hyper:
-                    with Connection(endpoint=hyper.endpoint, database='benchmark.hyper', create_mode=CreateMode.CREATE_AND_REPLACE) as connection:
-                        table_defs: dict[str, TableDefinition] = HyPer.get_tables(params)
-                        queries: dict[Case, str] = HyPer.get_cases_queries(params, table_defs)
-                        data: list[tuple[TableDefinition, str, dict]] = HyPer.get_data(params, table_defs)
-
-                        times: list = hyperconf.benchmark_execution_times(connection, list(queries.values()), data)
-                        times = times[run_id * len(queries.keys()):]    # get only times of this run, ignore previous runs
-                        times = list(zip(queries.keys(), list(map(lambda t: f'{t:.3f}', times))))
-
-                        for case, time in times:
-                            if case not in config_result.keys():
-                                config_result[case] = list()
-                            config_result[case].append(float(time))
-
                         connection.close()
                         hyper.close()
+
+                # Extract results
+                matches: list[Any] = hyperconf.filter_results(
+                    hyperconf.extract_results(),
+                    [
+                        lambda x: 'k' in x and x['k'] == 'query-end' and 'v' in x and 'statement' in x['v'] and x['v']['statement'] == 'SELECT'
+                    ]
+                )
+                times: list[float] = list(map(lambda m: float(m['v']['execution-time'] * 1000), matches))
+                times = list(map(lambda t: float(f'{t:.3f}'), times))
+                times = times[ - len(cases) : ]    # get only times of this run, ignore previous runs
+                for case, time in zip(cases.keys(), times):
+                    config_result[case].append(time)
+
+        else:
+            # Otherwise, tables have to be created just once before the measurements
+            with HyperProcess(telemetry=Telemetry.DO_NOT_SEND_USAGE_DATA_TO_TABLEAU) as hyper:
+                with Connection(endpoint=hyper.endpoint, database='benchmark.hyper', create_mode=CreateMode.CREATE_AND_REPLACE) as connection:
+                    table_defs: dict[str, TableDefinition] = HyPer.get_tables(params)
+                    queries: dict[Case, str] = HyPer.get_cases_queries(params, table_defs)
+                    data: list[tuple[TableDefinition, str, dict]] = HyPer.get_data(params, table_defs)
+
+                    all_queries: list[str] = list()
+                    for _ in range(n_runs):
+                        all_queries.extend(queries.values())
+                    times: list = hyperconf.benchmark_execution_times(connection, all_queries, data)
+
+                    for run_id in range(n_runs):
+                        # get only times of this run, ignore previous runs
+                        this_run: list = times[run_id * len(queries) : (run_id + 1) * len(queries)]
+                        this_run = list(zip(queries, list(map(lambda t: f'{t:.3f}', this_run))))
+
+                        for case, time in this_run:
+                            config_result[case].append(float(time))
+
+                    connection.close()
+                    hyper.close()
 
         return {'HyPer': config_result}
 

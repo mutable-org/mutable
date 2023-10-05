@@ -37,14 +37,17 @@ class PostgreSQL(Connector):
         'UNIQUE':      lambda ty: 'UNIQUE',
     }
 
-    # Runs an experiment one time, all parameters are in 'params'
+    # Runs an experiment n_runs time, all parameters are in 'params'
     def execute(self, n_runs: int, params: dict[str, Any]) -> ConnectorResult:
         suite: str = params['suite']
         benchmark: str = params['benchmark']
         experiment: str = params['name']
+        cases: dict[Case, Any] = params['cases']
         tqdm_print(f'` Perform experiment {suite}/{benchmark}/{experiment} with configuration PostgreSQL.')
 
         config_result: ConfigResult = dict()      # map that is returned with the measured times
+        for case in cases.keys():
+            config_result[case] = list()
 
         # Variables
         connection: psycopg2.extensions.connection
@@ -60,24 +63,14 @@ class PostgreSQL(Connector):
         command = f"psql -U {db_options['user']} -d {db_options['dbname']} -f {TMP_SQL_FILE} | grep 'Time' | cut -d ' ' -f 2"
         popen_args: dict[str, Any] = {'shell': True}
         benchmark_info = f"{suite}/{benchmark}/{experiment} [PostgreSQL]"
-        for _ in range(n_runs):
-            # Set up database
-            self.setup()
 
-            # Connect to database and set up tables
-            connection = psycopg2.connect(**db_options)
-            try:
-                connection.autocommit = True
-                cursor = connection.cursor()
-                cursor.execute("set jit=off;")
-                self.create_tables(cursor, params['data'], self.check_with_scale_factors(params))
-            finally:
-                connection.close()
-                del connection
+        if self.check_execute_single_cases(params):
+            # If tables contain scale factors, they have to be loaded separately for every case
+            for _ in range(n_runs):
+                # Prepare db
+                self.prepare_db(params)
 
-            if self.check_execute_single_cases(params):
-                # If tables contain scale factors, they have to be loaded separately for every case
-                for case, query_stmt in params['cases'].items():
+                for case, query_stmt in cases.items():
                     connection = psycopg2.connect(**db_options)
                     try:
                         connection.autocommit = True
@@ -105,6 +98,9 @@ class PostgreSQL(Connector):
                         tmp.write("\\timing off\n")
                         tmp.write(f'set statement_timeout = 0;\n')
 
+                    # with open(TMP_SQL_FILE) as tmp:
+                    #     tqdm_print("    " + "    ".join(tmp.readlines()) + '\n\n')
+
                     # Execute query as benchmark and get measurement time
                     if self.verbose:
                         tqdm_print(f"    $ {command}")
@@ -120,53 +116,56 @@ class PostgreSQL(Connector):
                                                         verbose=self.verbose)
                         durations = self.parse_results(out)
                     except ExperimentTimeoutExpired:
-                        if case not in config_result.keys():
-                            config_result[case] = list()
                         config_result[case].append(float(TIMEOUT_PER_CASE * 1000))
                     else:
-                        for idx, time in enumerate(durations):
-                            if case not in config_result.keys():
-                                config_result[case] = list()
-                            config_result[case].append(float(time))
+                        if len(durations) != 1:
+                            raise ConnectorException(f"Expected 1 measurement but got {len(durations)}.")
+                        config_result[case].append(durations[0])
 
-            else:
-                # Otherwise, tables have to be created just once before the measurements (done above)
-                # Write cases/queries to a file that will be passed to the command to execute
-                with open(TMP_SQL_FILE, "w") as tmp:
-                    tmp.write(f'set statement_timeout = {TIMEOUT_PER_CASE * 1000:.0f};\n')
-                    tmp.write("\\timing on\n")
-                    for case_query in params['cases'].values():
+                self.clean_up()
+
+        else:
+            # Prepare db
+            self.prepare_db(params)
+
+            # Otherwise, tables have to be created just once before the measurements (done above)
+            # Write cases/queries to a file that will be passed to the command to execute
+            with open(TMP_SQL_FILE, "w") as tmp:
+                tmp.write(f'set statement_timeout = {TIMEOUT_PER_CASE * 1000:.0f};\n')
+                tmp.write("\\timing on\n")
+                for _ in range(n_runs):
+                    for case_query in cases.values():
                         tmp.write(case_query + '\n')
-                    tmp.write("\\timing off\n")
-                    tmp.write(f'set statement_timeout = 0;\n')
+                tmp.write("\\timing off\n")
+                tmp.write(f'set statement_timeout = 0;\n')
 
-                # Execute query file and collect measurement data
-                if self.verbose:
-                    tqdm_print(f"    $ {command}")
-                    if not verbose_printed:
-                        verbose_printed = True
-                        with open(TMP_SQL_FILE) as tmp:
-                            tqdm_print("    " + "    ".join(tmp.readlines()))
+            # Execute query file and collect measurement data
+            if self.verbose:
+                tqdm_print(f"    $ {command}")
+                if not verbose_printed:
+                    verbose_printed = True
+                    with open(TMP_SQL_FILE) as tmp:
+                        tqdm_print("    " + "    ".join(tmp.readlines()))
 
-                timeout = DEFAULT_TIMEOUT + TIMEOUT_PER_CASE * len(params['cases'])
-                try:
-                    out: str = self.benchmark_query(command=command, query='', timeout=timeout,
-                                                    popen_args=popen_args, benchmark_info=benchmark_info,
-                                                    verbose=self.verbose)
-                    durations = self.parse_results(out)
-                except ExperimentTimeoutExpired:
-                    for case in params['cases'].keys():
-                        if case not in config_result.keys():
-                            config_result[case] = list()
+            timeout = DEFAULT_TIMEOUT + TIMEOUT_PER_CASE * len(cases) * n_runs
+            try:
+                out: str = self.benchmark_query(command=command, query='', timeout=timeout,
+                                                popen_args=popen_args, benchmark_info=benchmark_info,
+                                                verbose=self.verbose)
+                durations = self.parse_results(out)
+            except ExperimentTimeoutExpired:
+                for _ in range(n_runs):
+                    for case in cases.keys():
                         config_result[case].append(float(TIMEOUT_PER_CASE * 1000))
-                else:
-                    for idx, time in enumerate(durations):
-                        case = list(params['cases'].keys())[idx]
-                        if case not in config_result.keys():
-                            config_result[case] = list()
-                        config_result[case].append(float(time))
+            else:
+                if len(durations) != n_runs * len(cases):
+                    raise ConnectorException(f"Expected {n_runs * len(cases)} measurements but got {len(durations)}.")
+                for i in range(n_runs):
+                    run_durations: list[float] = durations[i * len(cases) : (i + 1) * len(cases)]
+                    for case, dur in zip(list(cases.keys()), run_durations):
+                        config_result[case].append(float(dur))
 
-            self.clean_up()
+        self.clean_up()
 
         return {'PostgreSQL': config_result}
 
@@ -195,6 +194,22 @@ class PostgreSQL(Connector):
             connection.close()
             if os.path.exists(TMP_SQL_FILE):
                 os.remove(TMP_SQL_FILE)
+
+
+    def prepare_db(self, params: dict[str, Any]) -> None:
+        # Set up database
+        self.setup()
+
+        # Connect to database and set up tables
+        connection = psycopg2.connect(**db_options)
+        try:
+            connection.autocommit = True
+            cursor = connection.cursor()
+            cursor.execute("set jit=off;")
+            self.create_tables(cursor, params['data'], self.check_execute_single_cases(params))
+        finally:
+            connection.close()
+            del connection
 
 
     # Creates tables in the database and copies contents of given files into them

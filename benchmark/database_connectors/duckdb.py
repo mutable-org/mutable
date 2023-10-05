@@ -89,9 +89,9 @@ class DuckDB(Connector):
                         benchmark_info = f"{suite}/{benchmark}/{experiment} [{configname}]"
                         time: float
                         try:
-                            time = self.run_query(combined_query, timeout, benchmark_info)[0]
+                            time = float(self.run_query(combined_query, timeout, benchmark_info)[0])
                         except ExperimentTimeoutExpired as ex:
-                            time = timeout
+                            time = float(timeout)
 
                         if case not in config_result.keys():
                             config_result[case] = list()
@@ -121,13 +121,13 @@ class DuckDB(Connector):
                         for case in params['cases'].keys():
                             if case not in config_result.keys():
                                 config_result[case] = list()
-                            config_result[case].append(timeout * 1000)
+                            config_result[case].append(float(timeout * 1000))
                     else:
                         for idx, time in enumerate(durations):
                             case: Case = list(params['cases'].keys())[idx]
                             if case not in config_result.keys():
                                 config_result[case] = list()
-                            config_result[case].append(time)
+                            config_result[case].append(float(time))
 
             finally:
                 self.clean_up()

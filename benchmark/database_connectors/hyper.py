@@ -140,7 +140,7 @@ sys.stdout.flush()
                                 lambda x: 'k' in x and x['k'] == 'query-end' and 'v' in x and 'statement' in x['v'] and x['v']['statement'] == 'SELECT'
                             ]
                         )
-                        times: list[float] = list(map(lambda m: m['v']['execution-time'] * 1000, matches))
+                        times: list[float] = list(map(lambda m: float(m['v']['execution-time'] * 1000), matches))
                         times = list(map(lambda t: float(f'{t:.3f}'), times))
                         times = times[run_id * len(list(params['cases'].keys())) : ]    # get only times of this run, ignore previous runs
                         cases_times: list[tuple[Case, float]] = list(zip(params['cases'].keys(), times))

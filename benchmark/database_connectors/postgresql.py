@@ -112,12 +112,12 @@ class PostgreSQL(Connector):
                     except ExperimentTimeoutExpired:
                         if case not in config_result.keys():
                             config_result[case] = list()
-                        config_result[case].append(TIMEOUT_PER_CASE * 1000)
+                        config_result[case].append(float(TIMEOUT_PER_CASE * 1000))
                     else:
                         for idx, time in enumerate(durations):
                             if case not in config_result.keys():
                                 config_result[case] = list()
-                            config_result[case].append(time)
+                            config_result[case].append(float(time))
 
             # Otherwise, tables have to be created just once before the measurements (done above)
             else:
@@ -148,13 +148,13 @@ class PostgreSQL(Connector):
                     for case in params['cases'].keys():
                         if case not in config_result.keys():
                             config_result[case] = list()
-                        config_result[case].append(TIMEOUT_PER_CASE * 1000)
+                        config_result[case].append(float(TIMEOUT_PER_CASE * 1000))
                 else:
                     for idx, time in enumerate(durations):
                         case = list(params['cases'].keys())[idx]
                         if case not in config_result.keys():
                             config_result[case] = list()
-                        config_result[case].append(time)
+                        config_result[case].append(float(time))
 
             self.clean_up()
 

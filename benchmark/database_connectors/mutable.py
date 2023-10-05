@@ -131,13 +131,13 @@ class Mutable(Connector):
                     sys.stdout.flush()
                     # Add timeout durations
                     for case in cases.keys():
-                        execution_times[case] = TIMEOUT_PER_CASE * 1000
+                        execution_times[case] = float(TIMEOUT_PER_CASE * 1000)
                 else:
                     if len(durations) != len(cases):
                         raise ConnectorException(f"Expected {len(cases)} measurements but got {len(durations)}.")
                     # Add measured times
                     for case, dur in zip(list(cases.keys()), durations):
-                        execution_times[case] = dur
+                        execution_times[case] = float(dur)
             else:
                 timeout = DEFAULT_TIMEOUT + TIMEOUT_PER_CASE
                 for case, query in cases.items():
@@ -153,11 +153,11 @@ class Mutable(Connector):
                     except BenchmarkTimeoutException as ex:
                         tqdm.write(str(ex))
                         sys.stdout.flush()
-                        execution_times[case] = timeout * 1000
+                        execution_times[case] = float(timeout * 1000)
                     else:
                         if len(durations) != 1:
                             raise ConnectorException(f"Expected 1 measurement but got {len(durations)}.")
-                        execution_times[case] = durations[0]
+                        execution_times[case] = float(durations[0])
         except BenchmarkError as ex:
             tqdm.write(str(ex))
             sys.stdout.flush()
@@ -209,11 +209,11 @@ class Mutable(Connector):
             except BenchmarkTimeoutException as ex:
                 tqdm.write(str(ex))
                 sys.stdout.flush()
-                execution_times[N] = timeout * 1000
+                execution_times[N] = float(timeout * 1000)
             else:
                 if len(durations) != 1:
                     raise ConnectorException(f"Expected 1 measurement but got {len(durations)}.")
-                execution_times[N] = durations[0]
+                execution_times[N] = float(durations[0])
 
         return execution_times
 

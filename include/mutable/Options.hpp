@@ -26,6 +26,7 @@ struct M_EXPORT Options
     bool list_plan_enumerators;
     bool list_backends;
     bool list_cost_functions;
+    bool list_schedulers;
 
     /*----- Shell configuration --------------------------------------------------------------------------------------*/
     bool has_color;

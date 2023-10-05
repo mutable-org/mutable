@@ -365,6 +365,14 @@ int main(int argc, const char **argv)
             show_any_help = true;
         }
     );
+    ADD(bool, Options::Get().list_schedulers, false,        /* Type, Var, Init  */
+        nullptr, "--list-schedulers",                       /* Short, Long      */
+        "list all available schedulers",                    /* Description      */
+        [&](bool) {                                         /* Callback         */
+            Options::Get().list_schedulers = true;
+            show_any_help = true;
+        }
+    );
     ADD(bool, Options::Get().list_cost_functions, false,          /* Type, Var, Init  */
         nullptr, "--list-cost-functions",                         /* Short, Long      */
         "list all available cost functions",                      /* Description      */
@@ -482,6 +490,19 @@ Immanuel Haffner\
                 std::cout << "    -    " << cost_function.second.description();
         }
         std::cout << "\n    (Use --train-cost-models to train a cost function on your specific hardware)";
+        std::cout << std::endl;
+    }
+
+    if (Options::Get().list_schedulers) {
+        std::cout << "List of available schedulers:";
+        std::size_t max_len = 0;
+        range schedulers(C.schedulers_cbegin(), C.schedulers_cend());
+        for (auto &scheduler : schedulers) max_len = std::max(max_len, strlen(scheduler.first));
+        for (auto &scheduler : schedulers) {
+            std::cout << "\n    " << std::setw(max_len) << std::left << scheduler.first;
+            if (scheduler.second.description())
+                std::cout << "    -    " << scheduler.second.description();
+        }
         std::cout << std::endl;
     }
 

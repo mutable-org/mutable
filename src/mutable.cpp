@@ -87,7 +87,7 @@ void m::process_stream(std::istream &in, const char *filename, Diagnostic diag)
 
         M_insist(not err == bool(cmd), "when there are no errors, Sema must have returned a command");
         if (not err and cmd)
-            cmd->execute(diag);
+            C.scheduler().schedule_command(std::move(cmd), diag);
 
         if (Options::Get().times) {
             using namespace std::chrono;

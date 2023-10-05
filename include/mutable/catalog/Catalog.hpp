@@ -7,6 +7,7 @@
 #include <mutable/catalog/CardinalityEstimator.hpp>
 #include <mutable/catalog/CostFunction.hpp>
 #include <mutable/catalog/DatabaseCommand.hpp>
+#include <mutable/catalog/Scheduler.hpp>
 #include <mutable/catalog/Schema.hpp>
 #include <mutable/IR/PlanEnumerator.hpp>
 #include <mutable/storage/DataLayoutFactory.hpp>
@@ -320,6 +321,7 @@ struct M_EXPORT Catalog
     ComponentSet<BackendFactory> backends_;
     ComponentSet<CostFunction> cost_functions_;
     ComponentSet<DatabaseInstructionFactory> instructions_;
+    ComponentSet<Scheduler> schedulers_;
 
     public:
     /*===== Stores ===================================================================================================*/
@@ -521,6 +523,29 @@ struct M_EXPORT Catalog
     auto instructions_end() const { return instructions_.end(); }
     auto instructions_cbegin() const { return instructions_.begin(); }
     auto instructions_cend() const { return instructions_.end(); }
+
+    /*===== Schedulers =================================================================================================*/
+    /** Registers a new `Scheduler` with the given `name`. */
+    void register_scheduler(const char *name, std::unique_ptr<Scheduler> scheduler, const char *description = nullptr) {
+        schedulers_.add(pool(name), Component<Scheduler>(description, std::move(scheduler)));
+    }
+    /** Sets the default `Scheduler` to use. */
+    void default_scheduler(const char *name) { schedulers_.set_default(pool(name)); }
+    /** Returns `true` iff the `Catalog` has a default `Scheduler`. */
+    bool has_default_scheduler() const { return schedulers_.has_default(); }
+    /** Returns a reference to the default `Scheduler`. */
+    Scheduler & scheduler() const { return schedulers_.get_default(); }
+    /** Returns a reference to the `Scheduler` with the given `name`. */
+    Scheduler & scheduler(const char *name) const { return schedulers_.get(pool(name)); }
+    /** Returns the name of the default `Scheduler`. */
+    const char * default_scheduler_name() const { return schedulers_.get_default_name(); }
+
+    auto schedulers_begin()        { return schedulers_.begin(); }
+    auto schedulers_end()          { return schedulers_.end(); }
+    auto schedulers_begin()  const { return schedulers_.begin(); }
+    auto schedulers_end()    const { return schedulers_.end(); }
+    auto schedulers_cbegin() const { return schedulers_begin(); }
+    auto schedulers_cend()   const { return schedulers_end(); }
 };
 
 }

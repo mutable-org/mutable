@@ -136,4 +136,18 @@ static void add_catalog_args()
             }
         }
     );
+    C.arg_parser().add<const char*>(
+        /* group=       */ "Catalog",
+        /* short=       */ nullptr,
+        /* long=        */ "--scheduler",
+        /* description= */ "query scheduler to use",
+        [&C] (const char *str) {
+            try {
+                C.default_scheduler(str);
+            } catch (std::invalid_argument) {
+                std::cerr << "There is no query scheduler with the name \"" << str << "\".\n";
+                std::exit(EXIT_FAILURE);
+            }
+        }
+    );
 }

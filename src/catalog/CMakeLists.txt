@@ -7,6 +7,7 @@ add_library(
     CostModel.cpp
     DatabaseCommand.cpp
     Schema.cpp
+    SerialScheduler.cpp
     SpnWrapper.cpp
     TrainedCostFunction.cpp
     Type.cpp

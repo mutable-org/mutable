@@ -695,10 +695,7 @@ void GOO::operator()(enumerate_tag, PlanTable &PT, const QueryGraph &G, const Co
     }
 
     /*----- Greedyly enumerate joins, thereby computing a plan. -----*/
-    for_each_join([&](const Subproblem left, const Subproblem right){
-        static cnf::CNF condition;
-        PT.update(G, CE, CF, left, right, condition);
-    }, PT, G, M, CF, CE, nodes, nodes + G.num_sources());
+    compute_plan(PT, G, M, CF, CE, nodes, nodes + G.num_sources());
 }
 
 

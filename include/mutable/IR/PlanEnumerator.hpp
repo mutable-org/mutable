@@ -136,6 +136,16 @@ struct M_EXPORT GOO : PlanEnumeratorCRTP<GOO>
             swap(*right, *--end); // erase old `right`
         }
     }
+    template<typename PlanTable>
+    void compute_plan(PlanTable &PT, const QueryGraph &G, const AdjacencyMatrix &M,
+                      const CostFunction &CF, const CardinalityEstimator &CE, node *begin, node *end) const
+    {
+       /** Starting at the state described by the node array, we greedyly enumerate joins and thereby compute a plan.*/
+        for_each_join([&](const Subproblem left, const Subproblem right){
+            static cnf::CNF condition;
+            PT.update(G, CE, CF, left, right, condition);
+        }, PT, G, M, CF, CE, begin, end);
+    }
 
     template<typename PlanTable>
     void operator()(enumerate_tag, PlanTable &PT, const QueryGraph &G, const CostFunction &CF) const;

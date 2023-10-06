@@ -207,6 +207,8 @@ void UseDatabase::execute(Diagnostic &diag)
     try {
         auto &DB = C.get_database(db_name_);
         C.set_database_in_use(DB);
+        if (not Options::Get().quiet)
+            diag.out() << "Using database " << db_name_ << ".\n";
     } catch (std::out_of_range) {
         diag.err() << "Database " << db_name_ << " does not exist.\n";
     }

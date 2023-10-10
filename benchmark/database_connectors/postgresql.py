@@ -52,7 +52,6 @@ class PostgreSQL(Connector):
         # Variables
         connection: psycopg2.extensions.connection
         cursor: psycopg2.extensions.cursor
-        command: str
         timeout: int
         benchmark_info: str
         durations: list[float]
@@ -60,7 +59,7 @@ class PostgreSQL(Connector):
         verbose_printed = False
 
         # For query execution
-        command = f"psql -U {db_options['user']} -d {db_options['dbname']} -f {TMP_SQL_FILE} | grep 'Time' | cut -d ' ' -f 2"
+        command: str = f"psql -U {db_options['user']} -d {db_options['dbname']} -f {TMP_SQL_FILE} | grep 'Time' | cut -d ' ' -f 2"
         popen_args: dict[str, Any] = {'shell': True}
         benchmark_info = f"{suite}/{benchmark}/{experiment} [PostgreSQL]"
 
@@ -98,16 +97,9 @@ class PostgreSQL(Connector):
                         tmp.write("\\timing off\n")
                         tmp.write(f'set statement_timeout = 0;\n')
 
-                    # with open(TMP_SQL_FILE) as tmp:
-                    #     tqdm_print("    " + "    ".join(tmp.readlines()) + '\n\n')
-
                     # Execute query as benchmark and get measurement time
                     if self.verbose:
-                        tqdm_print(f"    $ {command}")
-                        if not verbose_printed:
-                            verbose_printed = True
-                            with open(TMP_SQL_FILE) as tmp:
-                                tqdm_print("    " + "    ".join(tmp.readlines()))
+                        self.print_command(command, '')
 
                     timeout = TIMEOUT_PER_CASE
                     try:
@@ -141,11 +133,7 @@ class PostgreSQL(Connector):
 
             # Execute query file and collect measurement data
             if self.verbose:
-                tqdm_print(f"    $ {command}")
-                if not verbose_printed:
-                    verbose_printed = True
-                    with open(TMP_SQL_FILE) as tmp:
-                        tqdm_print("    " + "    ".join(tmp.readlines()))
+                self.print_command(command, '')
 
             timeout = DEFAULT_TIMEOUT + TIMEOUT_PER_CASE * len(cases) * n_runs
             try:
@@ -255,3 +243,15 @@ class PostgreSQL(Connector):
         durations.remove('')
         timings: list[float] = [float(dur.replace("\n", "").replace(",", ".")) for dur in durations]
         return timings
+
+
+    # Overrides `print_command` from Connector ABC
+    def print_command(self, command: str | bytes | Sequence[str | bytes], query: str, indent: str = '') -> None:
+        # postgres connector only uses str as command
+        if command is not str:
+            pass
+        indent = '    '
+        tqdm_print(f'{indent}$ {command}')
+        tqdm_print(f'{indent}Content of `tmp.sql:`')
+        with open(TMP_SQL_FILE) as tmp:
+            tqdm_print(indent + indent.join(tmp.readlines()))

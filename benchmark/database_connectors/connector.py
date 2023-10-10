@@ -164,10 +164,7 @@ class Connector(ABC):
 
         return out
 
-    @staticmethod
-    def print_command(command: list[str], query: str, indent: str = '') -> None:
-        indent = '    '
-        query_str = query.strip().replace('\n', ' ').replace('"', '\\"')
-        command_str = ' '.join(command)
-        tqdm_print(f'{indent}Command: {command_str}')
-        tqdm_print(f'{indent}Query: {query_str}')
+
+    # Connector should override this method
+    def print_command(self, command: str | bytes | Sequence[str | bytes], query: str, indent: str = '') -> None:
+        pass

@@ -275,8 +275,11 @@ class Mutable(Connector):
 
 
     # Overrides `print_command` from Connector ABC
-    @staticmethod
-    def print_command(command: list[str], query: str, indent: str = '') -> None:
+    def print_command(self, command: str | bytes | Sequence[str | bytes], query: str, indent: str = '') -> None:
+        # mutable connector only uses list[str] as command
+        if command is not list[str]:
+            pass
+        indent = '    '
         if command[-1] != '-':
             command.append('-')
         query_str = query.strip().replace('\n', ' ').replace('"', '\\"')

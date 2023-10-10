@@ -88,7 +88,7 @@ class DuckDB(Connector):
                         combined_query: str = "\n".join(statements)
 
                         if self.verbose and run == 0:
-                            tqdm_print(combined_query)
+                            self.print_command(command, combined_query)
 
                         time: float
                         try:
@@ -122,7 +122,7 @@ class DuckDB(Connector):
                 combined_query: str = "\n".join(statements)
 
                 if self.verbose:
-                    tqdm_print(combined_query)
+                    self.print_command(command, combined_query)
 
                 try:
                     out: str = self.benchmark_query(command=command, query=combined_query, timeout=timeout,
@@ -197,3 +197,14 @@ class DuckDB(Connector):
         durations.remove('')
         timings: list[float] = [float(dur.replace("\n", "").replace(",", ".")) for dur in durations]
         return timings
+
+
+    # Overrides `print_command` from Connector ABC
+    def print_command(self, command: str | bytes | Sequence[str | bytes], query: str, indent: str = '') -> None:
+        # duckdb connector only uses str as command
+        if command is not str:
+            pass
+        indent = '    '
+        query_str = query.strip().replace('\n', ' ').replace('"', '\\"')
+        tqdm_print(f'{indent}$ {command}')
+        tqdm_print(f'{indent}Queries: {query_str}')

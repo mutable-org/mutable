@@ -27,6 +27,7 @@ struct M_EXPORT Options
     bool list_backends;
     bool list_cost_functions;
     bool list_schedulers;
+    bool list_table_properties;
 
     /*----- Shell configuration --------------------------------------------------------------------------------------*/
     bool has_color;

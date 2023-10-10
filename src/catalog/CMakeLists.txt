@@ -9,6 +9,7 @@ add_library(
     Schema.cpp
     SerialScheduler.cpp
     SpnWrapper.cpp
+    TableFactory.cpp
     TrainedCostFunction.cpp
     Type.cpp
 )

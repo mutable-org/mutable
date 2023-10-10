@@ -65,16 +65,20 @@ def colordiff(actual, expected):
 
 def get_feature_options(feature):
     shell = BINARIES['shell']
-    stream = os.popen(f'{shell} --list-{feature}s')
+    stream = os.popen(f'{shell} --list-{feature}')
     stream.readline() # skip headline
     options = list()
     for line in stream:
         options.append(line.split()[0])
     return options
 
-def enumerate_feature_options(feature):
-    options = get_feature_options(feature)
+def enumerate_feature_options(feature, feature_plural=None, optional=False):
+    if feature_plural is None:
+        feature_plural = f'{feature}s'
+    options = get_feature_options(feature_plural)
     flags = list()
+    if optional:
+        flags.append([])
     for opt in options:
         flags.append([ f'--{feature}', opt ])
     return flags
@@ -293,7 +297,8 @@ def end2end_command(test_case):
     configurations = list()
     data_layout_options = enumerate_feature_options('data-layout')
     backend_options = enumerate_feature_options('backend')
-    for combination in itertools.product(data_layout_options, backend_options):
+    table_property_options = enumerate_feature_options('table-properties', 'table-properties', True)
+    for combination in itertools.product(data_layout_options, backend_options, table_property_options):
         configurations.append(list(itertools.chain.from_iterable(combination)))
     if 'join' in test_case.filename:
         configurations.extend(enumerate_feature_options('plan-enumerator'))

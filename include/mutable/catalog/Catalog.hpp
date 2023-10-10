@@ -7,6 +7,7 @@
 #include <mutable/catalog/CardinalityEstimator.hpp>
 #include <mutable/catalog/CostFunction.hpp>
 #include <mutable/catalog/DatabaseCommand.hpp>
+#include <mutable/catalog/TableFactory.hpp>
 #include <mutable/catalog/Scheduler.hpp>
 #include <mutable/catalog/Schema.hpp>
 #include <mutable/IR/PlanEnumerator.hpp>
@@ -323,6 +324,9 @@ struct M_EXPORT Catalog
     ComponentSet<DatabaseInstructionFactory> instructions_;
     ComponentSet<Scheduler> schedulers_;
 
+    using TableFactoryDecoratorCallback = std::function<std::unique_ptr<TableFactory>(std::unique_ptr<TableFactory>)>;
+    ComponentSet<TableFactoryDecoratorCallback> table_properties_; // stores callback functions that decorate a table with the given decorator
+
     public:
     /*===== Stores ===================================================================================================*/
     /** Registers a new `Store` with the given `name`. */
@@ -546,6 +550,48 @@ struct M_EXPORT Catalog
     auto schedulers_end()    const { return schedulers_.end(); }
     auto schedulers_cbegin() const { return schedulers_begin(); }
     auto schedulers_cend()   const { return schedulers_end(); }
+
+    /*===== Table Factories ==========================================================================================*/
+    private:
+    std::unique_ptr<TableFactory> table_factory_; ///< The `TableFactory` used to construct `Table`s
+
+    public:
+    /** Replaces the stored `TableFactory` with `table_factory` and returns the old `TableFactory`. */
+    std::unique_ptr<TableFactory> table_factory(std::unique_ptr<TableFactory> table_factory) {
+        return std::exchange(table_factory_, std::move(table_factory));
+    }
+    /** Returns a reference to the stored `TableFactory`. */
+    TableFactory & table_factory() const { return *table_factory_; }
+
+    /** Registers a new `TableFactoryDecorator` with the given `name`.
+     * The `name` will be used as the property name of the decorator in `--table-properties`. */
+    template<class T>
+    requires std::derived_from<T, TableFactoryDecorator>
+    void register_table_property(const char *name, const char *description = nullptr)
+    {
+        table_properties_.add(
+                pool(name),
+                Component<TableFactoryDecoratorCallback>(
+                        description,
+                        std::make_unique<TableFactoryDecoratorCallback>([](std::unique_ptr<TableFactory> table_factory)
+                        {
+                            return std::make_unique<T>(std::move(table_factory));
+                        })
+                ));
+    }
+    /** Applies the `TableFactoryDecorator` corresponding to `name` to `table_factory`.
+     * Returns the decorated `TableFactory`. */
+    std::unique_ptr<TableFactory> apply_table_property(const char *name, std::unique_ptr<TableFactory> table_factory) const
+    {
+        return table_properties_.get(pool(name)).operator()(std::move(table_factory));
+    }
+
+    auto table_properties_begin()        { return table_properties_.begin(); }
+    auto table_properties_end()          { return table_properties_.end(); }
+    auto table_properties_begin()  const { return table_properties_.begin(); }
+    auto table_properties_end()    const { return table_properties_.end(); }
+    auto table_properties_cbegin() const { return table_properties_begin(); }
+    auto table_properties_cend()   const { return table_properties_end(); }
 };
 
 }

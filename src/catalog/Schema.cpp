@@ -174,7 +174,7 @@ Database::~Database()
 Table & Database::add_table(const char *name) {
     auto it = tables_.find(name);
     if (it != tables_.end()) throw std::invalid_argument("table with that name already exists");
-    it = tables_.emplace_hint(it, name, Catalog::Get().table().make(name));
+    it = tables_.emplace_hint(it, name, Catalog::Get().table_factory().make(name));
     return *it->second;
 }
 

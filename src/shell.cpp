@@ -373,6 +373,14 @@ int main(int argc, const char **argv)
             show_any_help = true;
         }
     );
+    ADD(bool, Options::Get().list_table_properties, false,  /* Type, Var, Init  */
+        nullptr, "--list-table-properties",                 /* Short, Long      */
+        "list all available table properties",              /* Description      */
+        [&](bool) {                                         /* Callback         */
+            Options::Get().list_table_properties = true;
+            show_any_help = true;
+        }
+    );
     ADD(bool, Options::Get().list_cost_functions, false,          /* Type, Var, Init  */
         nullptr, "--list-cost-functions",                         /* Short, Long      */
         "list all available cost functions",                      /* Description      */
@@ -502,6 +510,19 @@ Immanuel Haffner\
             std::cout << "\n    " << std::setw(max_len) << std::left << scheduler.first;
             if (scheduler.second.description())
                 std::cout << "    -    " << scheduler.second.description();
+        }
+        std::cout << std::endl;
+    }
+
+    if (Options::Get().list_table_properties) {
+        std::cout << "List of available table properties:";
+        std::size_t max_len = 0;
+        range table_factories(C.table_properties_cbegin(), C.table_properties_cend());
+        for (auto &table_factory : table_factories) max_len = std::max(max_len, strlen(table_factory.first));
+        for (auto &table_factory : table_factories) {
+            std::cout << "\n    " << std::setw(max_len) << std::left << table_factory.first;
+            if (table_factory.second.description())
+                std::cout << "    -    " << table_factory.second.description();
         }
         std::cout << std::endl;
     }

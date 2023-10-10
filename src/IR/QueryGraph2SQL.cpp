@@ -29,7 +29,7 @@ void QueryGraph2SQL::translate(const QueryGraph &graph)
                 out_ << ", ";
             auto &ds = *it;
             if (auto base = cast<BaseTable>(ds.get())) {
-                auto name = base->table().name;
+                auto name = base->table().name();
                 out_ << name;
                 if (name != ds->alias()) {
                     M_insist(ds->alias());

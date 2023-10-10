@@ -416,7 +416,7 @@ m::StoreWriter::StoreWriter(Store &store)
     : store_(store)
 {
     for (auto &attr : store.table())
-        S.add({attr.table.name, attr.name}, attr.type);
+        S.add({attr.table.name(), attr.name}, attr.type);
 }
 
 m::StoreWriter::~StoreWriter() { }

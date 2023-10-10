@@ -66,7 +66,7 @@ void RowStore::compute_offsets()
 M_LCOV_EXCL_START
 void RowStore::dump(std::ostream &out) const
 {
-    out << "RowStore at " << data_.addr() << " for table \"" << table().name << "\": " << num_rows_ << '/' << capacity_
+    out << "RowStore at " << data_.addr() << " for table \"" << table().name() << "\": " << num_rows_ << '/' << capacity_
         << " rows, " << row_size_ << " bits per row, offsets [";
     for (uint32_t i = 0, end = table().num_attrs(); i != end; ++i) {
         if (i != 0) out << ", ";

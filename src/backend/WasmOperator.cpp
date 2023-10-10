@@ -514,7 +514,7 @@ void Scan<SIMDfied>::execute(const Match<Scan> &M, setup_t setup, pipeline_t pip
 
     /*----- Import the number of rows of `table`. -----*/
     std::ostringstream oss;
-    oss << table.name << "_num_rows";
+    oss << table.name() << "_num_rows";
     U32x1 num_rows = Module::Get().get_global<uint32_t>(oss.str().c_str());
 
     /*----- If no attributes must be loaded, generate a loop just executing the pipeline `num_rows`-times. -----*/
@@ -530,7 +530,7 @@ void Scan<SIMDfied>::execute(const Match<Scan> &M, setup_t setup, pipeline_t pip
 
     /*----- Import the base address of the mapped memory. -----*/
     oss.str("");
-    oss << table.name << "_mem";
+    oss << table.name() << "_mem";
     Ptr<void> base_address = Module::Get().get_global<void*>(oss.str().c_str());
 
     /*----- Emit setup code *before* compiling data layout to not overwrite its temporary boolean variables. -----*/

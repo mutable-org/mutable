@@ -58,7 +58,7 @@ bool Attribute::is_unique() const {
 M_LCOV_EXCL_START
 void Attribute::dump(std::ostream &out) const
 {
-    out << "Attribute `" << table.name << "`.`" << name << "`, "
+    out << "Attribute `" << table.name() << "`.`" << name << "`, "
         << "id " << id << ", "
         << "type " << *type
         << std::endl;
@@ -69,10 +69,10 @@ M_LCOV_EXCL_STOP
 
 
 /*======================================================================================================================
- * Table
+ * ConcreteTable
  *====================================================================================================================*/
 
-Schema Table::schema(const char *alias) const
+Schema ConcreteTable::schema(const char *alias) const
 {
     Schema S;
     for (auto &attr : *this) {
@@ -83,26 +83,26 @@ Schema Table::schema(const char *alias) const
             constraints |= Schema::entry_type::UNIQUE;
         if (attr.reference and attr.reference->is_unique())
             constraints |= Schema::entry_type::REFERENCES_UNIQUE;
-        S.add({alias ? alias : this->name, attr.name}, attr.type, constraints);
+        S.add({alias ? alias : this->name(), attr.name}, attr.type, constraints);
     }
     return S;
 }
 
-void Table::layout(const storage::DataLayoutFactory &factory) {
+void ConcreteTable::layout(const storage::DataLayoutFactory &factory) {
     view v(cbegin(), cend(), [](auto it) -> auto & { return it->type; });
     layout_ = factory.make(v.begin(), v.end());
 }
 
 M_LCOV_EXCL_START
-void Table::dump(std::ostream &out) const
+void ConcreteTable::dump(std::ostream &out) const
 {
-    out << "Table `" << name << '`';
+    out << "Table `" << name_ << '`';
     for (const auto &attr : attrs_)
         out << "\n` " << attr.id << ": `" << attr.name << "` " << *attr.type;
     out << std::endl;
 }
 
-void Table::dump() const { dump(std::cerr); }
+void ConcreteTable::dump() const { dump(std::cerr); }
 M_LCOV_EXCL_STOP
 
 
@@ -134,10 +134,15 @@ Database::Database(const char *name)
 
 Database::~Database()
 {
-    for (auto &r : tables_)
-        delete r.second;
     for (auto &f : functions_)
         delete f.second;
+}
+
+Table & Database::add_table(const char *name) {
+    auto it = tables_.find(name);
+    if (it != tables_.end()) throw std::invalid_argument("table with that name already exists");
+    it = tables_.emplace_hint(it, name, Catalog::Get().table().make(name));
+    return *it->second;
 }
 
 const Function * Database::get_function(const char *name) const

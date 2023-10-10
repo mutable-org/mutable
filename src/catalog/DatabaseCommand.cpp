@@ -218,10 +218,10 @@ void CreateTable::execute(Diagnostic &diag)
 {
     auto &C = Catalog::Get();
     auto &DB = C.get_database_in_use();
-    const char *table_name = table_->name;
+    const char *table_name = table_->name();
     Table *table = nullptr;
     try {
-        table = &DB.add(table_.release()); // TODO transfer of ownership with std::unique_ptr
+        table = &DB.add(std::move(table_));
     } catch (std::invalid_argument) {
         diag.err() << "Table " << table_name << " already exists in database " << DB.name << ".\n";
     }
@@ -230,7 +230,7 @@ void CreateTable::execute(Diagnostic &diag)
     table->store(C.create_store(*table));
 
     if (not Options::Get().quiet)
-        diag.out() << "Created table " << table->name << ".\n";
+        diag.out() << "Created table " << table->name() << ".\n";
 }
 
 void DropTable::execute(Diagnostic &diag)

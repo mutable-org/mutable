@@ -274,12 +274,13 @@ inline Schema operator|(const Schema &left, const Schema &right)
  * Attribute, Table, Function, Database
  *====================================================================================================================*/
 
-struct Table;
+struct ConcreteTable;
+struct TableDecorator;
 
 /** An attribute of a table.  Every attribute belongs to exactly one table.  */
 struct M_EXPORT Attribute
 {
-    friend struct Table;
+    friend struct ConcreteTable;
 
     std::size_t id; ///< the internal identifier of the attribute, unique within its table
     const Table &table; ///< the table the attribute belongs to
@@ -377,9 +378,78 @@ bool type_check(const Attribute &attr)
 /** A table is a sorted set of attributes. */
 struct M_EXPORT Table
 {
-    const char *name; ///< the name of the table
-    private:
+    protected:
     using table_type = std::vector<Attribute>;
+
+    public:
+    virtual ~Table() = default;
+
+    /** Returns the number of attributes in this table. */
+    virtual std::size_t num_attrs() const = 0;
+
+    virtual table_type::const_iterator begin()  const = 0;
+    virtual table_type::const_iterator end()    const = 0;
+    virtual table_type::const_iterator cbegin() const = 0;
+    virtual table_type::const_iterator cend()   const = 0;
+
+    /** Returns the attribute with the given `id`.  Throws `std::out_of_range` if no attribute with the given `id`
+     * exists. */
+    virtual Attribute & at(std::size_t id) = 0;
+    virtual const Attribute & at(std::size_t id) const = 0;
+    /** Returns the attribute with the given `id`. */
+    virtual Attribute & operator[](std::size_t id) = 0;
+    virtual const Attribute & operator[](std::size_t id) const = 0;
+
+    /** Returns the attribute with the given `name`.  Throws `std::out_of_range` if no attribute with the given `name`
+     * exists. */
+    virtual Attribute & at(const char *name) = 0;
+    virtual const Attribute & at(const char *name) const = 0;
+    /** Returns the attribute with the given `name`. */
+    virtual Attribute & operator[](const char *name) = 0;
+    virtual const Attribute & operator[](const char *name) const = 0;
+
+    /** Returns `true` iff the `Table` \p other is the same as `this`, `false` otherwise. */
+    virtual bool operator== (const Table &other) = 0;
+    virtual bool operator== (const Table &other) const = 0;
+
+    /** Returns the name of the Table. */
+    virtual const char * name() const = 0;
+
+    /** Returns a reference to the backing store. */
+    virtual Store & store() const = 0;
+    /** Sets the backing store for this table.  `new_store` must not be `nullptr`. */
+    virtual void store(std::unique_ptr<Store> new_store) = 0;
+
+    /** Returns a reference to the physical data layout. */
+    virtual const storage::DataLayout & layout() const = 0;
+    /** Sets the physical data layout for this table. */
+    virtual void layout(storage::DataLayout &&new_layout) = 0;
+    /** Sets the physical data layout for this table by calling `factory.make()`. */
+    virtual void layout(const storage::DataLayoutFactory &factory) = 0;
+
+    /** Returns all attributes forming the primary key. */
+    virtual std::vector<std::reference_wrapper<const Attribute>> primary_key() const = 0;
+
+    /** Adds an attribute with the given `name` to the primary key of this table. Throws `std::out_of_range` if no
+     * attribute with the given `name` exists. */
+    virtual void add_primary_key(const char *name) = 0;
+
+    /** Adds a new attribute with the given `name` and `type` to the table.  Throws `std::invalid_argument` if the
+     * `name` is already in use. */
+    virtual void push_back(const char *name, const PrimitiveType *type) = 0;
+
+    /** Returns a `Schema` for this `Table` given the alias `alias`. */
+    virtual Schema schema(const char *alias = nullptr) const = 0;
+
+    virtual void dump(std::ostream &out) const = 0;
+    virtual void dump() const = 0;
+};
+
+/** Basic implementation of `Table`. */
+struct M_EXPORT ConcreteTable : Table
+{
+    private:
+    const char *name_; ///< the name of the table
     table_type attrs_; ///< the attributes of this table, maintained as a sorted set
     std::unordered_map<const char*, table_type::size_type> name_to_attr_; ///< maps attribute names to attributes
     std::unique_ptr<Store> store_; ///< the store backing this table; may be `nullptr`
@@ -387,26 +457,27 @@ struct M_EXPORT Table
     SmallBitset primary_key_; ///< the primary key of this table, maintained as a `SmallBitset` over attribute id's
 
     public:
-    Table(const char *name) : name(name) { }
+    ConcreteTable(const char *name) : name_(name) { }
+    virtual ~ConcreteTable() = default;
 
     /** Returns the number of attributes in this table. */
-    std::size_t num_attrs() const { return attrs_.size(); }
+    std::size_t num_attrs() const override { return attrs_.size(); }
 
-    table_type::const_iterator begin()  const { return attrs_.cbegin(); }
-    table_type::const_iterator end()    const { return attrs_.cend(); }
-    table_type::const_iterator cbegin() const { return attrs_.cbegin(); }
-    table_type::const_iterator cend()   const { return attrs_.cend(); }
+    table_type::const_iterator begin()  const override { return attrs_.cbegin(); }
+    table_type::const_iterator end()    const override { return attrs_.cend(); }
+    table_type::const_iterator cbegin() const override { return attrs_.cbegin(); }
+    table_type::const_iterator cend()   const override { return attrs_.cend(); }
 
     /** Returns the attribute with the given `id`.  Throws `std::out_of_range` if no attribute with the given `id`
      * exists. */
-    Attribute & at(std::size_t id) {
+    Attribute & at(std::size_t id) override {
         if (id >= attrs_.size())
             throw std::out_of_range("id out of bounds");
         auto &attr = attrs_[id];
         M_insist(attr.id == id, "attribute ID mismatch");
         return attr;
     }
-    const Attribute & at(std::size_t id) const { return const_cast<Table*>(this)->at(id); }
+    const Attribute & at(std::size_t id) const override { return const_cast<ConcreteTable*>(this)->at(id); }
     /** Returns the attribute with the given `id`. */
     Attribute & operator[](std::size_t id) {
         M_insist(id < attrs_.size());
@@ -414,36 +485,49 @@ struct M_EXPORT Table
         M_insist(attr.id == id, "attribute ID mismatch");
         return attr;
     }
-    const Attribute & operator[](std::size_t id) const { return const_cast<Table*>(this)->operator[](id); }
+    const Attribute & operator[](std::size_t id) const override { return const_cast<ConcreteTable*>(this)->operator[](id); }
 
     /** Returns the attribute with the given `name`.  Throws `std::out_of_range` if no attribute with the given `name`
      * exists. */
-    Attribute & at(const char *name) {
+    Attribute & at(const char *name) override {
         if (auto it = name_to_attr_.find(name); it != name_to_attr_.end()) {
             M_insist(it->second < attrs_.size());
             return operator[](it->second);
         }
         throw std::out_of_range("name does not exists");
     }
-    const Attribute & at(const char *name) const { return const_cast<Table*>(this)->at(name); }
+    const Attribute & at(const char *name) const override { return const_cast<ConcreteTable*>(this)->at(name); }
     /** Returns the attribute with the given `name`. */
-    Attribute & operator[](const char *name) { return operator[](name_to_attr_.find(name)->second); }
-    const Attribute & operator[](const char *name) const { return const_cast<Table*>(this)->operator[](name); }
+    Attribute & operator[](const char *name) override { return operator[](name_to_attr_.find(name)->second); }
+    const Attribute & operator[](const char *name) const override { return const_cast<ConcreteTable*>(this)->operator[](name); }
+
+    /** Returns `true` iff the `Table` \p other is the same as `this`, `false` otherwise. */
+    bool operator== (const Table &other) override {
+        if (is<const ConcreteTable>(other))
+            return this == &other; // check for referential equality.
+        if (is<const TableDecorator>(other))
+            return other.operator==(*this);
+        M_unreachable("unknown table type");
+    }
+    bool operator== (const Table &other) const override { return const_cast<ConcreteTable*>(this)->operator==(other); }
+
+    /** Returns the name of the Table. */
+    const char * name() const override { return name_; }
 
     /** Returns a reference to the backing store. */
-    Store & store() const { return *store_; }
+    Store & store() const override { return *store_; }
     /** Sets the backing store for this table.  `new_store` must not be `nullptr`. */
-    void store(std::unique_ptr<Store> new_store) { using std::swap; swap(store_, new_store); }
+    void store(std::unique_ptr<Store> new_store) override { using std::swap; swap(store_, new_store); }
 
     /** Returns a reference to the physical data layout. */
-    const storage::DataLayout & layout() const { M_insist(bool(layout_)); return layout_; }
+    const storage::DataLayout & layout() const override { M_insist(bool(layout_)); return layout_; }
     /** Sets the physical data layout for this table. */
-    void layout(storage::DataLayout &&new_layout) { layout_ = std::move(new_layout); }
+    void layout(storage::DataLayout &&new_layout) override { layout_ = std::move(new_layout); }
     /** Sets the physical data layout for this table by calling `factory.make()`. */
-    void layout(const storage::DataLayoutFactory &factory);
+    virtual void layout(const storage::DataLayoutFactory &factory) override;
 
     /** Returns all attributes forming the primary key. */
-    std::vector<std::reference_wrapper<const Attribute>> primary_key() const {
+    std::vector<std::reference_wrapper<const Attribute>> primary_key() const override {
         std::vector<std::reference_wrapper<const Attribute>> res;
         for (auto id : primary_key_)
             res.emplace_back(operator[](id));
@@ -451,14 +535,14 @@ struct M_EXPORT Table
     }
     /** Adds an attribute with the given `name` to the primary key of this table. Throws `std::out_of_range` if no
      * attribute with the given `name` exists. */
-    void add_primary_key(const char *name) {
+    void add_primary_key(const char *name) override {
         auto &attr = at(name);
         primary_key_(attr.id) = true;
     }
 
     /** Adds a new attribute with the given `name` and `type` to the table.  Throws `std::invalid_argument` if the
      * `name` is already in use. */
-    void push_back(const char *name, const PrimitiveType *type) {
+    void push_back(const char *name, const PrimitiveType *type) override {
         auto res = name_to_attr_.emplace(name, attrs_.size());
         if (not res.second)
             throw std::invalid_argument("attribute name already in use");
@@ -466,10 +550,62 @@ struct M_EXPORT Table
     }
 
     /** Returns a `Schema` for this `Table` given the alias `alias`. */
-    Schema schema(const char *alias = nullptr) const;
+    Schema schema(const char *alias = nullptr) const override;
 
-    void dump(std::ostream &out) const;
-    void dump() const;
+    virtual void dump(std::ostream &out) const override;
+    virtual void dump() const override;
+};
+
+/** Abstract Decorator class that concrete TableDecorator inherit from. */
+struct TableDecorator : Table
+{
+    protected:
+    std::unique_ptr<Table> table_;
+
+    public:
+    TableDecorator(std::unique_ptr<Table> table) : table_(std::move(table)) { }
+    virtual ~TableDecorator() = default;
+
+    virtual size_t num_attrs() const override { return table_->num_attrs(); }
+
+    virtual table_type::const_iterator begin()  const override { return table_->begin(); }
+    virtual table_type::const_iterator end()    const override { return table_->end(); }
+    virtual table_type::const_iterator cbegin() const override { return table_->cbegin(); }
+    virtual table_type::const_iterator cend()   const override { return table_->cend(); }
+
+    virtual Attribute & at(std::size_t id) override { return table_->at(id); }
+    virtual const Attribute & at(std::size_t id) const override { return table_->at(id); }
+
+    virtual Attribute & operator[](std::size_t id) override { return table_->operator[](id); }
+    virtual const Attribute & operator[](std::size_t id) const override { return table_->operator[](id); }
+
+    virtual Attribute & at(const char *name) override { return table_->at(name); }
+    virtual const Attribute & at(const char *name) const override { return table_->at(name); }
+
+    virtual Attribute & operator[](const char *name) override { return table_->at(name); }
+    virtual const Attribute & operator[](const char *name) const override { return table_->at(name); }
+
+    virtual bool operator== (const Table &other) override { return other == *table_; }
+    virtual bool operator== (const Table &other) const override { return const_cast<TableDecorator*>(this)->operator==(other); }
+
+    virtual const char * name() const override { return table_->name(); }
+
+    virtual Store & store() const override { return table_->store(); }
+    virtual void store(std::unique_ptr<Store> new_store) override { table_->store(std::move(new_store)); }
+
+    virtual const storage::DataLayout & layout() const override { return table_->layout(); }
+    virtual void layout(storage::DataLayout &&new_layout) override { table_->layout(std::move(new_layout)); }
+    virtual void layout(const storage::DataLayoutFactory &factory) override { table_->layout(factory); }
+
+    virtual std::vector<std::reference_wrapper<const Attribute>> primary_key() const override { return table_->primary_key(); }
+    virtual void add_primary_key(const char * name) override { table_->add_primary_key(name); }
+
+    virtual void push_back(const char * name, const PrimitiveType * type) override { table_->push_back(name, type); }
+
+    virtual Schema schema(const char * alias) const override { return table_->schema(); }
+
+    virtual void dump(std::ostream & out) const override { table_->dump(out); }
+    virtual void dump() const override { table_->dump(); }
 };
 
 /** Defines a function.  There are functions pre-defined in the SQL standard and user-defined functions. */
@@ -522,7 +658,7 @@ struct M_EXPORT Database
     public:
     const char *name; ///< the name of the database
     private:
-    std::unordered_map<const char*, Table*> tables_; ///< the tables of this database
+    std::unordered_map<const char*, std::unique_ptr<Table>> tables_; ///< the tables of this database
     std::unordered_map<const char*, Function*> functions_; ///< functions defined in this database
     std::unique_ptr<CardinalityEstimator> cardinality_estimator_; ///< the `CardinalityEstimator` of this `Database`
 
@@ -543,17 +679,12 @@ struct M_EXPORT Database
     Table & get_table(const char *name) const { return *tables_.at(name); }
     /** Adds a new `Table` to this `Database`.  Throws `std::invalid_argument` if a `Table` with the given `name`
      * already exists. */
-    Table & add_table(const char *name) {
-        auto it = tables_.find(name);
+    Table & add_table(const char *name);
+    /** Adds a new `Table` to this `Database`. */
+    Table & add(std::unique_ptr<Table> table) {
+        auto it = tables_.find(table->name());
         if (it != tables_.end()) throw std::invalid_argument("table with that name already exists");
-        it = tables_.emplace_hint(it, name, new Table(name));
-        return *it->second;
-    }
-    /** Adds a new `Table` to this `Database`.  TODO implement transfer of ownership with unique_ptr */
-    Table & add(Table *r) {
-        auto it = tables_.find(r->name);
-        if (it != tables_.end()) throw std::invalid_argument("table with that name already exists");
-        it = tables_.emplace_hint(it, r->name, r);
+        it = tables_.emplace_hint(it, table->name(), std::move(table));
         return *it->second;
     }
     /** Returns `true` iff a `Table` with the given \p name exists. */
@@ -563,11 +694,10 @@ struct M_EXPORT Database
         auto it = tables_.find(name);
         if (it == tables_.end())
             throw std::invalid_argument("Table of that name does not exist.");
-        delete it->second;
         tables_.erase(it);
     };
     /** Drops the `Table` \p table. */
-    void drop_table(const Table &t) { return drop_table(t.name); }
+    void drop_table(const Table &t) { return drop_table(t.name()); }
 
     /*===== Functions ================================================================================================*/
     /** Returns a reference to the `Function` with the given `name`.  First searches this `Database` instance.  If no
@@ -609,7 +739,7 @@ struct hash<m::Attribute>
 {
     uint64_t operator()(const m::Attribute &attr) const {
         m::StrHash h;
-        return h(attr.table.name) * (attr.id + 1);
+        return h(attr.table.name()) * (attr.id + 1);
     }
 };
 

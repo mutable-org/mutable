@@ -10,7 +10,7 @@ using namespace m;
 TEST_CASE("ColumnStore", "[core][storage][columnstore]")
 {
     /* Construct a table definition. */
-    Table table("mytable");
+    ConcreteTable table("mytable");
     table.push_back("i1",      Type::Get_Integer(Type::TY_Vector, 1)); // 1 byte
     table.push_back("i2",      Type::Get_Integer(Type::TY_Vector, 2)); // 2 byte
     table.push_back("i4",      Type::Get_Integer(Type::TY_Vector, 4)); // 4 byte
@@ -74,7 +74,7 @@ TEST_CASE("ColumnStore", "[core][storage][columnstore]")
 TEST_CASE("ColumnStore sanity checks", "[core][storage][columnstore]")
 {
     /* Construct a table definition. */
-    Table table("mytable");
+    ConcreteTable table("mytable");
     table.push_back("char2048", Type::Get_Char(Type::TY_Vector, 2048)); // 2048 byte
 
     ColumnStore store(table);

@@ -122,7 +122,7 @@ bool find_OrderBy(const std::vector<std::pair<std::reference_wrapper<const ast::
 TEST_CASE("DataSource", "[core][IR][unit]")
 {
     auto graph = new QueryGraph();
-    auto &ds = graph->add_source("one", Table("tbl"));
+    auto &ds = graph->add_source("one", ConcreteTable("tbl"));
 
     Position pos("test");
     Designator DA(Token(pos, "A", TK_IDENTIFIER));

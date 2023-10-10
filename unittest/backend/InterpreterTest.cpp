@@ -82,7 +82,7 @@ TEST_CASE("RowStore/access", "[core][backend]")
         REQUIRE(diag.num_errors() == 0);
         REQUIRE(err.str().empty());
 
-#define IDX(ATTR) S[Schema::Identifier(table.name, C.pool(ATTR))].first
+#define IDX(ATTR) S[Schema::Identifier(table.name(), C.pool(ATTR))].first
 
         std::size_t num_tuples = 0;
         auto callback = std::make_unique<CallbackOperator>([&](const Schema &S, const Tuple &T) {
@@ -140,7 +140,7 @@ TEST_CASE("RowStore/access", "[core][backend]")
         REQUIRE(diag.num_errors() == 0);
         REQUIRE(err.str().empty());
 
-#define IDX(ATTR) S[Schema::Identifier(table.name, C.pool(ATTR))].first
+#define IDX(ATTR) S[Schema::Identifier(table.name(), C.pool(ATTR))].first
 #define CHECK_VALUE(ATTR, TYPE, VALUE) \
     CHECK_FALSE(T.is_null(IDX(ATTR))); \
     if (not T.is_null(IDX(ATTR))) \
@@ -219,7 +219,7 @@ TEST_CASE("RowStore/access", "[core][backend]")
         REQUIRE(diag.num_errors() == 0);
         REQUIRE(err.str().empty());
 
-#define IDX(ATTR) S[Schema::Identifier(table.name, C.pool(ATTR))].first
+#define IDX(ATTR) S[Schema::Identifier(table.name(), C.pool(ATTR))].first
 #define CHECK_VALUE(ATTR, TYPE, VALUE) \
     CHECK_FALSE(T.is_null(IDX(ATTR))); \
     if (not T.is_null(IDX(ATTR))) \
@@ -310,7 +310,7 @@ TEST_CASE("RowStore/access", "[core][backend]")
         REQUIRE(diag.num_errors() == 0);
         REQUIRE(err.str().empty());
 
-#define IDX(ATTR) S[Schema::Identifier(table.name, C.pool(ATTR))].first
+#define IDX(ATTR) S[Schema::Identifier(table.name(), C.pool(ATTR))].first
 #define CHECK_VALUE(ATTR, TYPE, VALUE) \
     CHECK_FALSE(T.is_null(IDX(ATTR))); \
     if (not T.is_null(IDX(ATTR))) \
@@ -417,7 +417,7 @@ TEST_CASE("RowStore/access", "[core][backend]")
         REQUIRE(diag.num_errors() == 0);
         REQUIRE(err.str().empty());
 
-#define IDX(ATTR) S[Schema::Identifier(table.name, C.pool(ATTR))].first
+#define IDX(ATTR) S[Schema::Identifier(table.name(), C.pool(ATTR))].first
 #define CHECK_VALUE(ATTR, TYPE, VALUE) \
     CHECK_FALSE(T.is_null(IDX(ATTR))); \
     if (not T.is_null(IDX(ATTR))) \
@@ -544,7 +544,7 @@ TEST_CASE("PaxStore/access", "[core][backend]")
         REQUIRE(diag.num_errors() == 0);
         REQUIRE(err.str().empty());
 
-#define IDX(ATTR) S[Schema::Identifier(table.name, C.pool(ATTR))].first
+#define IDX(ATTR) S[Schema::Identifier(table.name(), C.pool(ATTR))].first
 
         std::size_t num_tuples = 0;
         auto callback = std::make_unique<CallbackOperator>([&](const Schema &S, const Tuple &T) {
@@ -601,7 +601,7 @@ TEST_CASE("PaxStore/access", "[core][backend]")
         REQUIRE(diag.num_errors() == 0);
         REQUIRE(err.str().empty());
 
-#define IDX(ATTR) S[Schema::Identifier(table.name, C.pool(ATTR))].first
+#define IDX(ATTR) S[Schema::Identifier(table.name(), C.pool(ATTR))].first
 #define CHECK_VALUE(ATTR, TYPE, VALUE) \
     CHECK_FALSE(T.is_null(IDX(ATTR))); \
     if (not T.is_null(IDX(ATTR))) \
@@ -680,7 +680,7 @@ TEST_CASE("PaxStore/access", "[core][backend]")
         REQUIRE(diag.num_errors() == 0);
         REQUIRE(err.str().empty());
 
-#define IDX(ATTR) S[Schema::Identifier(table.name, C.pool(ATTR))].first
+#define IDX(ATTR) S[Schema::Identifier(table.name(), C.pool(ATTR))].first
 #define CHECK_VALUE(ATTR, TYPE, VALUE) \
     CHECK_FALSE(T.is_null(IDX(ATTR))); \
     if (not T.is_null(IDX(ATTR))) \
@@ -771,7 +771,7 @@ TEST_CASE("PaxStore/access", "[core][backend]")
         REQUIRE(diag.num_errors() == 0);
         REQUIRE(err.str().empty());
 
-#define IDX(ATTR) S[Schema::Identifier(table.name, C.pool(ATTR))].first
+#define IDX(ATTR) S[Schema::Identifier(table.name(), C.pool(ATTR))].first
 #define CHECK_VALUE(ATTR, TYPE, VALUE) \
     CHECK_FALSE(T.is_null(IDX(ATTR))); \
     if (not T.is_null(IDX(ATTR))) \
@@ -878,7 +878,7 @@ TEST_CASE("PaxStore/access", "[core][backend]")
         REQUIRE(diag.num_errors() == 0);
         REQUIRE(err.str().empty());
 
-#define IDX(ATTR) S[Schema::Identifier(table.name, C.pool(ATTR))].first
+#define IDX(ATTR) S[Schema::Identifier(table.name(), C.pool(ATTR))].first
 #define CHECK_VALUE(ATTR, TYPE, VALUE) \
     CHECK_FALSE(T.is_null(IDX(ATTR))); \
     if (not T.is_null(IDX(ATTR))) \
@@ -984,7 +984,7 @@ TEST_CASE("PaxStore/access", "[core][backend]")
         REQUIRE(diag.num_errors() == 0);
         REQUIRE(err.str().empty());
 
-#define IDX(ATTR) S[Schema::Identifier(table.name, C.pool(ATTR))].first
+#define IDX(ATTR) S[Schema::Identifier(table.name(), C.pool(ATTR))].first
 #define CHECK_VALUE(ATTR, TYPE, VALUE) \
     CHECK_FALSE(T.is_null(IDX(ATTR))); \
     if (not T.is_null(IDX(ATTR))) \
@@ -1059,7 +1059,7 @@ TEST_CASE("PaxStore/access", "[core][backend]")
         REQUIRE(diag.num_errors() == 0);
         REQUIRE(err.str().empty());
 
-#define IDX(ATTR) S[Schema::Identifier(table.name, C.pool(ATTR))].first
+#define IDX(ATTR) S[Schema::Identifier(table.name(), C.pool(ATTR))].first
 #define CHECK_VALUE(ATTR, TYPE, VALUE) \
     CHECK_FALSE(T.is_null(IDX(ATTR))); \
     if (not T.is_null(IDX(ATTR))) \

@@ -75,7 +75,7 @@ void ASTDot::operator()(Const<Designator> &e)
     const auto &t = e.target();
     if (auto val = std::get_if<const Attribute*>(&t)) {
         const Attribute &A = **val;
-        indent() << id(e) << EDGE << A.table.name << ':' << A.name
+        indent() << id(e) << EDGE << A.table.name() << ':' << A.name
             << " [style=\"dashed\",dir=\"forward\",color=\"#404040\"];";
     } else if (auto val = std::get_if<const Expr*>(&t)) {
         const Expr *expr = *val;
@@ -223,7 +223,7 @@ void ASTDot::operator()(Const<FromClause> &c)
             M_insist(std::holds_alternative<Token>(t.source));
             auto &name = std::get<Token>(t.source);
             auto &R = t.table();
-            indent() << id(name) << EDGE << R.name << ":n [dir=\"forward\",color=\"#404040\"];";
+            indent() << id(name) << EDGE << R.name() << ":n [dir=\"forward\",color=\"#404040\"];";
         }
     }
 }
@@ -382,11 +382,11 @@ void ASTDot::operator()(Const<SelectStmt> &s)
                 if (t.has_table()) {
                     auto &R = t.table();
 
-                    indent() << R.name << "[shape=none,style=filled,fillcolor=white,label=<";
+                    indent() << R.name() << "[shape=none,style=filled,fillcolor=white,label=<";
                     ++indent_;
                     indent() << "<TABLE>";
                     ++indent_;
-                    indent() << "<TR><TD BORDER=\"0\"><B>" << R.name << "</B></TD></TR>";
+                    indent() << "<TR><TD BORDER=\"0\"><B>" << R.name() << "</B></TD></TR>";
 
                     for (auto &A : R) {
                         oss.str("");

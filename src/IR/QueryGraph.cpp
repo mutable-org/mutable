@@ -2062,7 +2062,7 @@ void QueryGraph::dump(std::ostream &out) const
             out << "(...)";
         } else {
             auto bt = as<BaseTable>(*src);
-            out << bt.table().name;
+            out << bt.table().name();
         }
         if (src->alias())
             out << " AS " << src->alias();

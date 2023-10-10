@@ -37,7 +37,7 @@ SpnWrapper SpnWrapper::learn_spn_table(const char *name_of_database, const char 
 
     std::size_t primary_key_count = 0;
 
-    const std::string table_name = table.name;
+    const std::string table_name = table.name();
     auto stmt = statement_from_string(diag, "SELECT * FROM " + table_name + ";");
     std::unique_ptr<ast::SelectStmt> select_stmt(dynamic_cast<ast::SelectStmt*>(stmt.release()));
 

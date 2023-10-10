@@ -159,7 +159,7 @@ TEST_CASE("AdjacencyMatrix/QueryGraph Matrix", "[core][util][unit]")
     for (auto &ds : query_graph->sources()) {
         auto tbl = cast<const BaseTable>(ds.get());
         REQUIRE(tbl != nullptr);
-        const char *str_name = tbl->table().name;
+        const char *str_name = tbl->table().name();
         map[str_name] = SmallBitset(1 << ds->id());
     }
 

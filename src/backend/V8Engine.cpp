@@ -946,13 +946,13 @@ v8::Local<v8::Object> m::wasm::detail::create_env(v8::Isolate &isolate, const Op
 
         /* Add memory address to env. */
         std::ostringstream oss;
-        oss << it->second->name << "_mem";
+        oss << it->second->name() << "_mem";
         M_DISCARD env->Set(Ctx, to_v8_string(&isolate, oss.str()), v8::Int32::New(&isolate, off));
         Module::Get().emit_import<void*>(oss.str().c_str());
 
         /* Add table size (num_rows) to env. */
         oss.str("");
-        oss << it->second->name << "_num_rows";
+        oss << it->second->name() << "_num_rows";
         M_DISCARD env->Set(Ctx, to_v8_string(&isolate, oss.str()), v8::Int32::New(&isolate, it->second->store().num_rows()));
         Module::Get().emit_import<uint32_t>(oss.str().c_str());
     }

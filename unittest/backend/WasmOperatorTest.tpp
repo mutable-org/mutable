@@ -57,7 +57,7 @@ TEST_CASE("Wasm/" BACKEND_NAME "/Scan", "[core][wasm]")
     auto &wasm_context = m::WasmEngine::Create_Wasm_Context_For_ID(Module::ID()); // create fresh wasm context
 
     /* Create table. */
-    m::Table table("dummy_table");
+    m::ConcreteTable table("dummy_table");
     table.push_back("f", m::Type::Get_Float(m::Type::TY_Vector));
     table.push_back("i64", m::Type::Get_Integer(m::Type::TY_Vector, 8));
     table.push_back("b1", m::Type::Get_Boolean(m::Type::TY_Vector));
@@ -81,16 +81,16 @@ TEST_CASE("Wasm/" BACKEND_NAME "/Scan", "[core][wasm]")
     /* Lambda to invoke test *inside* section to get entire test case name. */
     auto invoke = [&](){
         /* Create match for the scan operator for the table. */
-        m::ScanOperator scan(table.store(), table.name);
+        m::ScanOperator scan(table.store(), table.name());
         m::Match<Scan<false>> M(&scan, {});
 
         /* Map table into wasm memory and add the mapped address and the number of rows as global variables. */
         auto off = wasm_context.map_table(table); // without faulting guard pages
         std::ostringstream oss;
-        oss << table.name << "_mem";
+        oss << table.name() << "_mem";
         Module::Get().emit_global<void*>(oss.str(), false, off);
         oss.str("");
-        oss << table.name << "_num_rows";
+        oss << table.name() << "_num_rows";
         Module::Get().emit_global<uint32_t>(oss.str(), false, table.store().num_rows());
 
         CodeGenContext::Init(); // create fresh codegen context

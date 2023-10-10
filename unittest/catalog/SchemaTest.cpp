@@ -22,17 +22,17 @@ std::string get_unique_id()
 
 }
 
-TEST_CASE("Table c'tor", "[core][catalog][schema]")
+TEST_CASE("ConcreteTable c'tor", "[core][catalog][schema]")
 {
-    Table r("mytable");
+    ConcreteTable r("mytable");
 
-    CHECK(streq(r.name, "mytable"));
+    CHECK(streq(r.name(), "mytable"));
     CHECK(r.num_attrs() == 0);
 }
 
-TEST_CASE("Table empty access", "[core][catalog][schema]")
+TEST_CASE("ConcreteTable empty access", "[core][catalog][schema]")
 {
-    Table r("mytable");
+    ConcreteTable r("mytable");
 
     REQUIRE_THROWS_AS(r.at("attribute"), std::out_of_range);
 
@@ -40,9 +40,9 @@ TEST_CASE("Table empty access", "[core][catalog][schema]")
         REQUIRE(((void) "this code must be dead or the table is not empty", false));
 }
 
-TEST_CASE("Table::push_back()", "[core][catalog][schema]")
+TEST_CASE("ConcreteTable::push_back()", "[core][catalog][schema]")
 {
-    Table r("mytable");
+    ConcreteTable r("mytable");
 
     const PrimitiveType *i4 = Type::Get_Integer(Type::TY_Vector, 4);
     const PrimitiveType *vc = Type::Get_Varchar(Type::TY_Vector, 42);
@@ -61,9 +61,9 @@ TEST_CASE("Table::push_back()", "[core][catalog][schema]")
     REQUIRE(streq(attr.name, "comment"));
 }
 
-TEST_CASE("Table iterators", "[core][catalog][schema]")
+TEST_CASE("ConcreteTable iterators", "[core][catalog][schema]")
 {
-    Table r("mytable");
+    ConcreteTable r("mytable");
     const PrimitiveType *i4 = Type::Get_Integer(Type::TY_Vector, 4);
 
     r.push_back("a", i4);
@@ -81,9 +81,9 @@ TEST_CASE("Table iterators", "[core][catalog][schema]")
     REQUIRE(it == r.cend());
 }
 
-TEST_CASE("Table get attribute by name", "[core][catalog][schema]")
+TEST_CASE("ConcreteTable get attribute by name", "[core][catalog][schema]")
 {
-    Table r("mytable");
+    ConcreteTable r("mytable");
     const PrimitiveType *i4 = Type::Get_Integer(Type::TY_Vector, 4);
 
     r.push_back("a", i4);
@@ -94,6 +94,7 @@ TEST_CASE("Table get attribute by name", "[core][catalog][schema]")
     {
         auto &attr = r["a"];
         REQUIRE(streq(attr.name, "a"));
+    }
     {
         auto &attr = r["b"];
         REQUIRE(streq(attr.name, "b"));
@@ -102,12 +103,11 @@ TEST_CASE("Table get attribute by name", "[core][catalog][schema]")
         auto &attr = r["c"];
         REQUIRE(streq(attr.name, "c"));
     }
-    }
 }
 
-TEST_CASE("Table::push_back() duplicate name", "[core][catalog][schema]")
+TEST_CASE("ConcreteTable::push_back() duplicate name", "[core][catalog][schema]")
 {
-    Table r("mytable");
+    ConcreteTable r("mytable");
     const PrimitiveType *i4 = Type::Get_Integer(Type::TY_Vector, 4);
 
     const char *attr_name = "a";
@@ -199,8 +199,7 @@ TEST_CASE("Database/add table error if name already taken", "[core][catalog][dat
 
     const char *tbl_name = "mytable";
     D.add_table(tbl_name);
-    Table *R = new Table(tbl_name);
-    REQUIRE_THROWS_AS(D.add(R), std::invalid_argument);
-    delete R;
+    std::unique_ptr<Table> R = std::make_unique<ConcreteTable>(tbl_name);
+    REQUIRE_THROWS_AS(D.add(std::move(R)), std::invalid_argument);
     Catalog::Clear();
 }

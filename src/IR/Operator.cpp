@@ -44,7 +44,7 @@ std::ostream & m::operator<<(std::ostream &out, const Operator &op) {
         [&out, &depth](const NoOpOperator &op) { indent(out, op, depth).out << "NoOpOperator"; },
         [&out, &depth](const ScanOperator &op) {
             indent(out, op, depth).out
-                << "ScanOperator (" << op.store().table().name << " AS " << op.alias() << ')';
+                << "ScanOperator (" << op.store().table().name() << " AS " << op.alias() << ')';
         },
         [&out, &depth](const FilterOperator &op) { indent(out, op, depth).out << "FilterOperator " << op.filter(); },
         [&out, &depth](const DisjunctiveFilterOperator &op) {

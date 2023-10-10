@@ -101,7 +101,7 @@ struct M_EXPORT BaseTable : DataSource
     /** Returns a reference to the `Table` providing the tuples. */
     const Table & table() const { return table_; }
 
-    const char * name() const override { return alias() ? alias() : table_.name; }
+    const char * name() const override { return alias() ? alias() : table_.name(); }
 
     /** `BaseTable` is never correlated.  Always returns `false`. */
     bool is_correlated() const override { return false; };

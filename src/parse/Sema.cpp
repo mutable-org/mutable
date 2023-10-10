@@ -1476,7 +1476,7 @@ void Sema::operator()(CreateTableStmt &s)
     }
     auto &DB = C.get_database_in_use();
     const char *table_name = s.table_name.text;
-    std::unique_ptr<Table> T = std::make_unique<Table>(table_name);
+    std::unique_ptr<Table> T = std::make_unique<ConcreteTable>(table_name);
 
     /* Add the newly declared table to the list of sources of the sema context.  We need to add the table to the sema
      * context so that semantic analysis of `CHECK` expressions can resolve references to attributes of the same table.

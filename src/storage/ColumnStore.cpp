@@ -35,7 +35,7 @@ ColumnStore::~ColumnStore() { }
 M_LCOV_EXCL_START
 void ColumnStore::dump(std::ostream &out) const
 {
-    out << "ColumnStore for table \"" << table().name << "\": " << num_rows_ << '/' << capacity_
+    out << "ColumnStore for table \"" << table().name() << "\": " << num_rows_ << '/' << capacity_
         << " rows, " << row_size_ << " bits per row" << std::endl;
 }
 M_LCOV_EXCL_STOP

@@ -10,7 +10,7 @@ using namespace m;
 TEST_CASE("PaxStore", "[core][storage][paxstore]")
 {
     /* Construct a table definition. */
-    Table table("mytable");
+    ConcreteTable table("mytable");
     table.push_back("i1",      Type::Get_Integer(Type::TY_Vector, 1)); // 1 byte
     table.push_back("i2",      Type::Get_Integer(Type::TY_Vector, 2)); // 2 byte
     table.push_back("i4",      Type::Get_Integer(Type::TY_Vector, 4)); // 4 byte
@@ -90,7 +90,7 @@ TEST_CASE("PaxStore", "[core][storage][paxstore]")
 TEST_CASE("PaxStore sanity checks", "[core][storage][columnstore]")
 {
     /* Construct a table definition. */
-    Table table("mytable");
+    ConcreteTable table("mytable");
     table.push_back("char2048", Type::Get_Char(Type::TY_Vector, 2048)); // 2048 byte
 
     constexpr uint32_t BLOCK_SIZE = 1UL << 13; // 8 KiB

@@ -359,9 +359,12 @@ get_aggregates(const ast::SelectStmt &stmt)
             if (e.get_function().is_aggregate()) { // test that this is an aggregation
                 using std::find_if, std::to_string;
                 const std::string str = to_string(e);
-                auto exists = [&str](std::reference_wrapper<const ast::Expr> agg) { return to_string(agg.get()) == str; };
+                auto exists = [&str](std::reference_wrapper<const ast::Expr> agg) {
+                    return to_string(agg.get()) == str;
+                };
                 if (find_if(aggregates.begin(), aggregates.end(), exists) == aggregates.end()) // if not already present
                     aggregates.push_back(e);
+                throw visit_skip_subtree{}; // skip recursing into subexpressions
             }
         },
     };

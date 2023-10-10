@@ -540,8 +540,8 @@ publish:github-repository:
         - git remote remove github || true
         - git remote add github git@github.com:mutable-org/mutable.git
         - git fetch gitlab
-        - git push --tags github gitlab/$CI_DEFAULT_BRANCH:$CI_DEFAULT_BRANCH
-        - git push github $CI_DEFAULT_BRANCH:pr-target
+        - git push --tags github gitlab/$CI_DEFAULT_BRANCH:$CI_DEFAULT_BRANCH  # update main branch on GitHub
+        - git push github gitlab/$CI_DEFAULT_BRANCH:pr-target  # update branch pr-target on GitHub
 
 
 publish:github-release:

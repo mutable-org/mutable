@@ -43,6 +43,7 @@ set(
     catalog/CardinalityEstimatorTest.cpp
     catalog/DatabaseCommandTest.cpp
     catalog/SchemaTest.cpp
+    catalog/TableFactoryTest.cpp
     catalog/TypeTest.cpp
 
     # storage

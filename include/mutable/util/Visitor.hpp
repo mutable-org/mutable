@@ -10,9 +10,9 @@
 
 namespace m {
 
-/** Exception class which may be throw to stop entire recursion in visitors. */
+/** Exception class which can be thrown to stop entire recursion in visitors. */
 struct visit_stop_recursion { };
-/** Exception class which may be throw to skip recursion of the subtree in pre-order visitors. */
+/** Exception class which can be thrown to skip recursion of the subtree in pre-order visitors. */
 struct visit_skip_subtree { };
 
 /** Visitor base class. */

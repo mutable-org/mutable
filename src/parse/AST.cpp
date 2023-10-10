@@ -162,7 +162,7 @@ Schema Expr::get_required() const
                 Schema::Identifier id(C.pool(oss.str()));
                 if (not schema.has(id)) // avoid duplicates
                     schema.add(id, fn.type());
-                throw visit_stop_recursion{}; // TODO: throw visit_skip_subtree after Luca's MR
+                throw visit_skip_subtree{};
             }
         }
     };

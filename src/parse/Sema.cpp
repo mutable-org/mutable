@@ -1689,9 +1689,9 @@ void Sema::operator()(InsertStmt &s)
             diag.e(s.table_name.pos) << "Tuple " << (i + 1) << " has not enough values.\n";
             continue;
         }
-        for (std::size_t j = 0; j != t.size(); ++j) {
+        for (auto [it, j] = std::tuple{tbl->begin(), 0}; it != tbl->end(); ++it, ++j) {
             auto &v = t[j];
-            auto &attr = tbl->at(j);
+            auto &attr = *it;
             switch (v.first) {
                 case InsertStmt::I_Expr: {
                     (*this)(*v.second);

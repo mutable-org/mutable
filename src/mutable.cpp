@@ -412,12 +412,7 @@ void m::execute_file(Diagnostic &diag, const std::filesystem::path &path)
     }
 }
 
-m::StoreWriter::StoreWriter(Store &store)
-    : store_(store)
-{
-    for (auto &attr : store.table())
-        S.add({attr.table.name(), attr.name}, attr.type);
-}
+m::StoreWriter::StoreWriter(Store &store) : store_(store), S(store.table().schema()) { }
 
 m::StoreWriter::~StoreWriter() { }
 

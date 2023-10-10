@@ -119,6 +119,7 @@ void InsertRecords::execute(Diagnostic&)
     for (auto &t : I.tuples) {
         StackMachine get_tuple(Schema{});
         for (std::size_t i = 0; i != t.size(); ++i) {
+            auto attr_id = T.convert_id(i); // hidden attributes change the actual id of the attribute
             auto &v = t[i];
             switch (v.first) {
                 case ast::InsertStmt::I_Null:
@@ -131,8 +132,8 @@ void InsertRecords::execute(Diagnostic&)
 
                 case ast::InsertStmt::I_Expr:
                     get_tuple.emit(*v.second);
-                    get_tuple.emit_Cast(S[i].type, v.second->type());
-                    get_tuple.emit_St_Tup(0, i, S[i].type);
+                    get_tuple.emit_Cast(S[attr_id].type, v.second->type());
+                    get_tuple.emit_St_Tup(0, attr_id, S[attr_id].type);
                     break;
             }
         }

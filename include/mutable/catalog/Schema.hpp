@@ -4,6 +4,7 @@
 #include <cstring>
 #include <functional>
 #include <iosfwd>
+#include <iterator>
 #include <memory>
 #include <mutable/catalog/CardinalityEstimator.hpp>
 #include <mutable/catalog/Type.hpp>
@@ -78,6 +79,7 @@ M_LCOV_EXCL_STOP
             NOT_NULLABLE = 0b1U,           ///< entry must not be NULL
             UNIQUE = 0b10U,                ///< entry has unique values
             REFERENCES_UNIQUE = 0b100U,    ///< entry references unique values
+            IS_HIDDEN = 0b1000U,           ///< entry is hidden to the user
         };
 
         Identifier id;
@@ -289,6 +291,7 @@ struct M_EXPORT Attribute
     bool not_nullable = false; ///< the flag indicating whether the attribute must not be NULL
     ///> the flag indicating whether the attribute is unique; note that a singleton primary key is also unique
     bool unique = false;
+    bool is_hidden = false; ///< the flag indicates whether the attribute is hidden from the user
     const Attribute *reference = nullptr; ///< the referenced attribute
 
     private:
@@ -381,16 +384,161 @@ struct M_EXPORT Table
     protected:
     using table_type = std::vector<Attribute>;
 
+    template<bool V, bool H>
+    struct the_iterator
+    {
+        static constexpr bool Show_Visible = V;
+        static constexpr bool Show_Hidden = H;
+
+
+        using value_type = Attribute;
+        using it_type = table_type::const_iterator;
+        using difference_type = std::ptrdiff_t;
+        using pointer = const value_type*;
+        using reference = const value_type&;
+
+        private:
+        it_type it_, start_, end_;
+
+        public:
+        the_iterator() = default;
+        the_iterator(it_type start, it_type end) : it_(start), start_(start), end_(end) {
+            if constexpr (Show_Visible and not Show_Hidden)
+                while (it_ != end_ and it_->is_hidden) {
+                    ++it_;
+                }
+            else if constexpr (not Show_Visible and Show_Hidden)
+                while (it_ != end_ and not it_->is_hidden) {
+                    ++it_;
+                }
+            else if constexpr (not Show_Visible and not Show_Hidden)
+                it_ = end_;
+        }
+        the_iterator(it_type it, it_type start, it_type end) : it_(it), start_(start), end_(end) { }
+
+        the_iterator & operator++() {
+            ++it_;
+            if constexpr (Show_Visible and not Show_Hidden)
+                while (it_ != end_ and it_->is_hidden) {
+                    ++it_;
+                }
+            else if constexpr (not Show_Visible and Show_Hidden)
+                while (it_ != end_ and not it_->is_hidden) {
+                    ++it_;
+                }
+            return *this;
+        }
+
+        the_iterator operator++(int) { the_iterator clone = *this; operator++(); return clone; }
+
+        the_iterator & operator--() {
+            --it_;
+            if constexpr (Show_Visible and not Show_Hidden)
+                while (it_ != start_ and it_->is_hidden) {
+                    --it_;
+                }
+            else if constexpr (not Show_Visible and Show_Hidden)
+                while (it_ != start_ and not it_->is_hidden) {
+                    --it_;
+                }
+            return *this;
+        }
+
+        the_iterator operator--(int) { the_iterator clone = *this; operator--(); return clone; }
+
+        reference operator*() const { return *it_; }
+        pointer operator->() const { return it_.operator->(); }
+
+        bool operator==(const the_iterator &other) const {
+            return it_ == other.it_ and start_ == other.start_ and end_ == other.end_;
+        }
+        bool operator!=(const the_iterator &other) const { return not operator==(other); }
+
+        the_iterator & operator+=(int offset) {
+            if constexpr (Show_Visible and Show_Hidden) {
+                it_ += offset;
+                return *this;
+            }
+
+            for (size_t i = 0 ; i < offset; ++i) {
+                ++it_;
+                if constexpr (Show_Visible and not Show_Hidden)
+                    while (it_ != end_ and it_->is_hidden) {
+                        ++it_;
+                    }
+                else if constexpr (not Show_Visible and Show_Hidden)
+                    while (it_ != end_ and not it_->is_hidden) {
+                        ++it_;
+                    }
+            }
+            return *this;
+        }
+        the_iterator & operator-=(int offset) {
+            if constexpr (Show_Visible and Show_Hidden) {
+                it_ -= offset;
+                return *this;
+            }
+
+            for (size_t i = 0 ; i < offset; ++i) {
+                --it_;
+                if constexpr (Show_Visible and not Show_Hidden)
+                    while (it_ != start_ and it_->is_hidden) {
+                        --it_;
+                    }
+                else if constexpr (not Show_Visible and Show_Hidden)
+                    while (it_ != start_ and not it_->is_hidden) {
+                        --it_;
+                    }
+            }
+            return *this;
+        }
+
+        difference_type operator-(the_iterator other) const {
+            if constexpr (Show_Visible and Show_Hidden) return this->it_ - other.it_;
+            if (this->it_ - other.it_ == 0) return 0;
+
+            auto smaller_it = (this->it_ < other.it_) ? this->it_ : other.it_;
+            auto larger_it = (this->it_ < other.it_) ? other.it_ : this->it_;
+            difference_type ignored = 0;
+            for (auto i = smaller_it; i != larger_it; ++i) {
+                if constexpr (Show_Visible and not Show_Hidden) {
+                    if (i != end_ and i->is_hidden) ignored++;
+                } else if constexpr (not Show_Visible and Show_Hidden) {
+                    if (i != end_ and not i->is_hidden) ignored++;
+                }
+            }
+            difference_type distance = this->it_ - other.it_;
+            distance += (distance > 0) ? -ignored : ignored;
+            return distance;
+        }
+    };
+
     public:
+    using iterator = the_iterator<true, false>;
+    using hidden_iterator = the_iterator<false, true>;
+    using all_iterator = the_iterator<true, true>;
+
     virtual ~Table() = default;
 
     /** Returns the number of attributes in this table. */
     virtual std::size_t num_attrs() const = 0;
+    virtual std::size_t num_hidden_attrs() const = 0;
+    virtual std::size_t num_all_attrs() const = 0;
 
-    virtual table_type::const_iterator begin()  const = 0;
-    virtual table_type::const_iterator end()    const = 0;
-    virtual table_type::const_iterator cbegin() const = 0;
-    virtual table_type::const_iterator cend()   const = 0;
+    virtual iterator begin()  const = 0;
+    virtual iterator end()    const = 0;
+    virtual iterator cbegin() const = 0;
+    virtual iterator cend()   const = 0;
+
+    virtual hidden_iterator begin_hidden()  const = 0;
+    virtual hidden_iterator end_hidden()    const = 0;
+    virtual hidden_iterator cbegin_hidden() const = 0;
+    virtual hidden_iterator cend_hidden()   const = 0;
+
+    virtual all_iterator begin_all()  const = 0;
+    virtual all_iterator end_all()    const = 0;
+    virtual all_iterator cbegin_all() const = 0;
+    virtual all_iterator cend_all()   const = 0;
 
     /** Returns the attribute with the given `id`.  Throws `std::out_of_range` if no attribute with the given `id`
      * exists. */
@@ -441,6 +589,10 @@ struct M_EXPORT Table
     /** Returns a `Schema` for this `Table` given the alias `alias`. */
     virtual Schema schema(const char *alias = nullptr) const = 0;
 
+    /** Converts the `id` an non-hidden attribute would have in a table without any hidden attributes
+     * and returns the actual id of that attribute. */
+    virtual size_t convert_id(size_t id) = 0;
+
     virtual void dump(std::ostream &out) const = 0;
     virtual void dump() const = 0;
 };
@@ -460,13 +612,29 @@ struct M_EXPORT ConcreteTable : Table
     ConcreteTable(const char *name) : name_(name) { }
     virtual ~ConcreteTable() = default;
 
-    /** Returns the number of attributes in this table. */
-    std::size_t num_attrs() const override { return attrs_.size(); }
+    /** Returns the number of non-hidden attributes in this table. */
+    std::size_t num_attrs() const override { return end() - begin(); }
 
-    table_type::const_iterator begin()  const override { return attrs_.cbegin(); }
-    table_type::const_iterator end()    const override { return attrs_.cend(); }
-    table_type::const_iterator cbegin() const override { return attrs_.cbegin(); }
-    table_type::const_iterator cend()   const override { return attrs_.cend(); }
+    /** Returns the number of hidden attributes in this table. */
+    std::size_t num_hidden_attrs() const override { return end_hidden() - begin_hidden(); }
+
+    /** Returns the number of attributes in this table. */
+    std::size_t num_all_attrs() const override { return attrs_.size(); }
+
+    virtual iterator begin()  const override { return iterator(attrs_.begin(), attrs_.end()); }
+    virtual iterator end()    const override { return iterator(attrs_.end(), attrs_.begin(), attrs_.end()); }
+    virtual iterator cbegin() const override { return iterator(attrs_.begin(), attrs_.end()); }
+    virtual iterator cend()   const override { return iterator(attrs_.end(), attrs_.begin(), attrs_.end()); }
+
+    virtual hidden_iterator begin_hidden()  const override { return hidden_iterator(attrs_.begin(), attrs_.end()); }
+    virtual hidden_iterator end_hidden()    const override { return hidden_iterator(attrs_.end(), attrs_.begin(), attrs_.end()); }
+    virtual hidden_iterator cbegin_hidden() const override { return hidden_iterator(attrs_.begin(), attrs_.end()); }
+    virtual hidden_iterator cend_hidden()   const override { return hidden_iterator(attrs_.end(), attrs_.begin(), attrs_.end()); }
+
+    virtual all_iterator begin_all()  const override { return all_iterator(attrs_.begin(), attrs_.end()); }
+    virtual all_iterator end_all()    const override { return all_iterator(attrs_.end(), attrs_.begin(), attrs_.end()); }
+    virtual all_iterator cbegin_all() const override { return all_iterator(attrs_.begin(), attrs_.end()); }
+    virtual all_iterator cend_all()   const override { return all_iterator(attrs_.end(), attrs_.begin(), attrs_.end()); }
 
     /** Returns the attribute with the given `id`.  Throws `std::out_of_range` if no attribute with the given `id`
      * exists. */
@@ -552,6 +720,14 @@ struct M_EXPORT ConcreteTable : Table
     /** Returns a `Schema` for this `Table` given the alias `alias`. */
     Schema schema(const char *alias = nullptr) const override;
 
+    /** Converts the `id` an non-hidden attribute would have in a table without any hidden attributes
+     * and returns the actual id of that attribute. */
+    size_t convert_id(size_t id) override {
+        for (size_t i = 0; i <= id; ++i)
+            if (attrs_[i].is_hidden) ++id;
+        return id;
+    }
+
     virtual void dump(std::ostream &out) const override;
     virtual void dump() const override;
 };
@@ -567,11 +743,23 @@ struct TableDecorator : Table
     virtual ~TableDecorator() = default;
 
     virtual size_t num_attrs() const override { return table_->num_attrs(); }
+    virtual size_t num_hidden_attrs() const override { return table_->num_hidden_attrs(); }
+    virtual size_t num_all_attrs() const override { return table_->num_all_attrs(); }
 
-    virtual table_type::const_iterator begin()  const override { return table_->begin(); }
-    virtual table_type::const_iterator end()    const override { return table_->end(); }
-    virtual table_type::const_iterator cbegin() const override { return table_->cbegin(); }
-    virtual table_type::const_iterator cend()   const override { return table_->cend(); }
+    virtual iterator begin()  const override { return table_->begin(); }
+    virtual iterator end()    const override { return table_->end(); }
+    virtual iterator cbegin() const override { return table_->cbegin(); }
+    virtual iterator cend()   const override { return table_->cend(); }
+
+    virtual hidden_iterator begin_hidden()  const override { return table_->begin_hidden(); }
+    virtual hidden_iterator end_hidden()    const override { return table_->end_hidden(); }
+    virtual hidden_iterator cbegin_hidden() const override { return table_->cbegin_hidden(); }
+    virtual hidden_iterator cend_hidden()   const override { return table_->cend_hidden(); }
+
+    virtual all_iterator begin_all()  const override { return table_->begin_all(); }
+    virtual all_iterator end_all()    const override { return table_->end_all(); }
+    virtual all_iterator cbegin_all() const override { return table_->cbegin_all(); }
+    virtual all_iterator cend_all()   const override { return table_->cend_all(); }
 
     virtual Attribute & at(std::size_t id) override { return table_->at(id); }
     virtual const Attribute & at(std::size_t id) const override { return table_->at(id); }
@@ -604,8 +792,22 @@ struct TableDecorator : Table
 
     virtual Schema schema(const char * alias) const override { return table_->schema(); }
 
+    virtual size_t convert_id(size_t id) override { return table_->convert_id(id); }
+
     virtual void dump(std::ostream & out) const override { table_->dump(out); }
     virtual void dump() const override { table_->dump(); }
+};
+
+/** A multi-versioning table is a `Table` with additional invisible timestamp attributes. */
+struct M_EXPORT MultiVersioningTable : TableDecorator
+{
+    public:
+    MultiVersioningTable(std::unique_ptr<Table> table);
+
+    ~MultiVersioningTable() { }
+
+    void dump(std::ostream &out) const override;
+    void dump() const override;
 };
 
 /** Defines a function.  There are functions pre-defined in the SQL standard and user-defined functions. */

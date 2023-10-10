@@ -35,7 +35,7 @@ void DSVReader::operator()(std::istream &in, const char *name)
 
     /* Compute table schema. */
     Schema S;
-    for (auto &attr : table) S.add({table.name(), attr.name}, attr.type);
+    for (auto it = table.begin_all(); it != table.end_all(); ++it) S.add({table.name(), it->name}, it->type);
 
     /* Declare reference to the `StackMachine` for the current `Linearization`. */
     std::unique_ptr<StackMachine> W;

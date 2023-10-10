@@ -28,6 +28,8 @@ TEST_CASE("ConcreteTable c'tor", "[core][catalog][schema]")
 
     CHECK(streq(r.name(), "mytable"));
     CHECK(r.num_attrs() == 0);
+    CHECK(r.num_hidden_attrs() == 0);
+    CHECK(r.num_all_attrs() == 0);
 }
 
 TEST_CASE("ConcreteTable empty access", "[core][catalog][schema]")
@@ -53,6 +55,8 @@ TEST_CASE("ConcreteTable::push_back()", "[core][catalog][schema]")
     r.push_back("condition", b);
 
     REQUIRE(r.num_attrs() == 3);
+    REQUIRE(r.num_hidden_attrs() == 0);
+    REQUIRE(r.num_all_attrs() == 3);
 
     auto &attr = r[1];
     REQUIRE(&attr == &r[attr.id]);
@@ -69,16 +73,36 @@ TEST_CASE("ConcreteTable iterators", "[core][catalog][schema]")
     r.push_back("a", i4);
     r.push_back("b", i4);
     r.push_back("c", i4);
-    REQUIRE(r.num_attrs() == 3);
+    CHECK(r.num_attrs() == 3);
+    CHECK(r.num_hidden_attrs() == 0);
+    CHECK(r.num_all_attrs() == 3);
 
-    auto it = r.cbegin();
-    REQUIRE(streq(it->name, "a"));
-    ++it;
-    REQUIRE(streq(it->name, "b"));
-    ++it;
-    REQUIRE(streq(it->name, "c"));
-    ++it;
-    REQUIRE(it == r.cend());
+    SECTION("iterator") {
+        auto it = r.cbegin();
+        REQUIRE(streq(it->name, "a"));
+        ++it;
+        REQUIRE(streq(it->name, "b"));
+        ++it;
+        REQUIRE(streq(it->name, "c"));
+        ++it;
+        REQUIRE(it == r.cend());
+    }
+
+    SECTION("hidden iterator") {
+        auto it = r.cbegin_hidden();
+        REQUIRE(it == r.cend_hidden());
+    }
+
+    SECTION("all iterator") {
+        auto it = r.cbegin_all();
+        REQUIRE(streq(it->name, "a"));
+        ++it;
+        REQUIRE(streq(it->name, "b"));
+        ++it;
+        REQUIRE(streq(it->name, "c"));
+        ++it;
+        REQUIRE(it == r.cend_all());
+    }
 }
 
 TEST_CASE("ConcreteTable get attribute by name", "[core][catalog][schema]")
@@ -90,6 +114,8 @@ TEST_CASE("ConcreteTable get attribute by name", "[core][catalog][schema]")
     r.push_back("b", i4);
     r.push_back("c", i4);
     REQUIRE(r.num_attrs() == 3);
+    REQUIRE(r.num_hidden_attrs() == 0);
+    REQUIRE(r.num_all_attrs() == 3);
 
     {
         auto &attr = r["a"];
@@ -114,6 +140,196 @@ TEST_CASE("ConcreteTable::push_back() duplicate name", "[core][catalog][schema]"
 
     r.push_back(attr_name, i4);
     REQUIRE_THROWS_AS(r.push_back(attr_name, i4), std::invalid_argument); // duplicate
+}
+
+TEST_CASE("MultiVersioningTable c'tor", "[core][catalog][schema]")
+{
+    auto &C = Catalog::Get();
+    MultiVersioningTable r(std::make_unique<ConcreteTable>("mytable"));
+
+    CHECK(streq(r.name(), "mytable"));
+    CHECK(r.num_attrs() == 0);
+    CHECK(r.num_hidden_attrs() == 2);
+    CHECK(r.num_all_attrs() == 2);
+
+    const PrimitiveType *i8 = Type::Get_Integer(Type::TY_Vector, 8);
+    auto &attr0 = r[(int)0];
+    REQUIRE(&attr0 == &r[attr0.id]);
+    REQUIRE(attr0.table == r);
+    REQUIRE(&attr0.table != &r);
+    REQUIRE(*attr0.type == *i8);
+    REQUIRE(streq(attr0.name, C.pool("$ts_begin")));
+    auto &attr1 = r[1];
+    REQUIRE(&attr1 == &r[attr1.id]);
+    REQUIRE(attr1.table == r);
+    REQUIRE(&attr1.table != &r);
+    REQUIRE(*attr1.type == *i8);
+    REQUIRE(streq(attr1.name, C.pool("$ts_end")));
+}
+
+TEST_CASE("MultiVersioningTable out of range access", "[core][catalog][schema]")
+{
+    MultiVersioningTable r(std::make_unique<ConcreteTable>("mytable"));
+
+    REQUIRE_THROWS_AS(r.at("attribute"), std::out_of_range);
+    REQUIRE_THROWS_AS(r.at(2), std::out_of_range);
+}
+
+TEST_CASE("MultiVersioningTable::push_back()", "[core][catalog][schema]")
+{
+    MultiVersioningTable r(std::make_unique<ConcreteTable>("mytable"));
+
+    const PrimitiveType *i4 = Type::Get_Integer(Type::TY_Vector, 4);
+    const PrimitiveType *vc = Type::Get_Varchar(Type::TY_Vector, 42);
+    const PrimitiveType *b = Type::Get_Boolean(Type::TY_Vector);
+
+    r.push_back("n", i4);
+    r.push_back("comment", vc);
+    r.push_back("condition", b);
+
+    CHECK(r.num_attrs() == 3);
+    CHECK(r.num_hidden_attrs() == 2);
+    CHECK(r.num_all_attrs() == 5);
+
+    auto &attr = r[3];
+    REQUIRE(&attr == &r[attr.id]);
+    REQUIRE(&attr.table != &r);
+    REQUIRE(attr.table == r);
+    REQUIRE(attr.type == vc);
+    REQUIRE(streq(attr.name, "comment"));
+}
+
+TEST_CASE("MultiVersioningTable iterators", "[core][catalog][schema]")
+{
+    MultiVersioningTable r(std::make_unique<ConcreteTable>("mytable"));
+    const PrimitiveType *i4 = Type::Get_Integer(Type::TY_Vector, 4);
+
+    r.push_back("a", i4);
+    r.push_back("b", i4);
+    r.push_back("c", i4);
+
+    CHECK(r.num_attrs() == 3);
+    CHECK(r.num_hidden_attrs() == 2);
+    CHECK(r.num_all_attrs() == 5);
+
+    SECTION("iterator") {
+        auto it = r.cbegin();
+        REQUIRE(streq(it->name, "a"));
+        ++it;
+        REQUIRE(streq(it->name, "b"));
+        ++it;
+        REQUIRE(streq(it->name, "c"));
+        ++it;
+        REQUIRE(it == r.cend());
+    }
+
+    SECTION("hidden iterator") {
+        auto it = r.cbegin_hidden();
+        REQUIRE(streq(it->name, "$ts_begin"));
+        ++it;
+        REQUIRE(streq(it->name, "$ts_end"));
+        ++it;
+        REQUIRE(it == r.cend_hidden());
+    }
+
+    SECTION("all iterator") {
+        auto it = r.cbegin_all();
+        REQUIRE(streq(it->name, "$ts_begin"));
+        ++it;
+        REQUIRE(streq(it->name, "$ts_end"));
+        ++it;
+        REQUIRE(streq(it->name, "a"));
+        ++it;
+        REQUIRE(streq(it->name, "b"));
+        ++it;
+        REQUIRE(streq(it->name, "c"));
+        ++it;
+        REQUIRE(it == r.cend_all());
+    }
+}
+
+TEST_CASE("MultiVersioningTable get attribute by name", "[core][catalog][schema]")
+{
+    auto &C = Catalog::Get();
+    MultiVersioningTable r(std::make_unique<ConcreteTable>("mytable"));
+    const PrimitiveType *i4 = Type::Get_Integer(Type::TY_Vector, 4);
+
+    r.push_back("a", i4);
+    r.push_back("b", i4);
+    r.push_back("c", i4);
+
+    CHECK(r.num_attrs() == 3);
+    CHECK(r.num_hidden_attrs() == 2);
+    CHECK(r.num_all_attrs() == 5);
+
+    {
+        auto & attr = r[C.pool("$ts_begin")];
+        REQUIRE(streq(attr.name, "$ts_begin"));
+    }
+    {
+        auto & attr = r[C.pool("$ts_end")];
+        REQUIRE(streq(attr.name, "$ts_end"));
+    }
+    {
+        auto & attr = r["a"];
+        REQUIRE(streq(attr.name, "a"));
+    }
+    {
+        auto &attr = r["b"];
+        REQUIRE(streq(attr.name, "b"));
+    }
+    {
+        auto &attr = r["c"];
+        REQUIRE(streq(attr.name, "c"));
+    }
+}
+
+TEST_CASE("MultiVersioningTable::push_back() duplicate name", "[core][catalog][schema]")
+{
+    auto &C = Catalog::Get();
+    MultiVersioningTable r(std::make_unique<ConcreteTable>("mytable"));
+    const PrimitiveType *i8 = Type::Get_Integer(Type::TY_Vector, 8);
+
+    REQUIRE_THROWS_AS(r.push_back(C.pool("$ts_begin"), i8), std::invalid_argument); // duplicate
+    REQUIRE_THROWS_AS(r.push_back(C.pool("$ts_end"), i8), std::invalid_argument); // duplicate
+}
+
+TEST_CASE("MultiVersioningTable Datalayout", "[core][catalog][schema]")
+{
+    Catalog &C = Catalog::Get();
+    MultiVersioningTable r(std::make_unique<ConcreteTable>("mytable"));
+    const PrimitiveType *i4 = Type::Get_Integer(Type::TY_Vector, 4);
+
+    r.push_back("a", i4);
+    r.push_back("b", i4);
+    r.push_back("c", i4);
+
+    r.layout(C.data_layout());
+    auto &layout = r.layout();
+    layout.for_sibling_leaves([&](const std::vector<m::storage::DataLayout::leaf_info_t> &leaves,
+                                  const m::storage::DataLayout::level_info_stack_t &levels,
+                                  uint64_t inode_offset_in_bits)
+    {
+        REQUIRE(leaves.size() == r.num_all_attrs() + 1 /* NULL bitmap */);
+    });
+}
+
+TEST_CASE("Table Convert Non-Hidden Attribute ID", "[core][catalog][schema]")
+{
+    ConcreteTable r("mytable");
+    const PrimitiveType *i4 = Type::Get_Integer(Type::TY_Vector, 4);
+
+    r.push_back("a", i4);
+    r.push_back("b", i4);
+    r.push_back("c", i4);
+    r.push_back("d", i4);
+    r.push_back("e", i4);
+    r["b"].is_hidden = true;
+    r["d"].is_hidden = true;
+
+    REQUIRE(r.convert_id(0) == 0);
+    REQUIRE(r.convert_id(1) == 2);
+    REQUIRE(r.convert_id(2) == 4);
 }
 
 // XXX: This might not be the right place for the following tests.

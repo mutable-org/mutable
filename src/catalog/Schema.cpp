@@ -75,21 +75,23 @@ M_LCOV_EXCL_STOP
 Schema ConcreteTable::schema(const char *alias) const
 {
     Schema S;
-    for (auto &attr : *this) {
+    for (auto attr = this->begin_all(); attr != this->end_all(); ++attr) {
         Schema::entry_type::constraints_t constraints{0};
-        if (attr.not_nullable)
+        if (attr->not_nullable)
             constraints |= Schema::entry_type::NOT_NULLABLE;
-        if (attr.is_unique())
+        if (attr->is_unique())
             constraints |= Schema::entry_type::UNIQUE;
-        if (attr.reference and attr.reference->is_unique())
+        if (attr->reference and attr->reference->is_unique())
             constraints |= Schema::entry_type::REFERENCES_UNIQUE;
-        S.add({alias ? alias : this->name(), attr.name}, attr.type, constraints);
+        if (attr->is_hidden)
+            constraints |= Schema::entry_type::IS_HIDDEN;
+        S.add({alias ? alias : this->name(), attr->name}, attr->type, constraints);
     }
     return S;
 }
 
 void ConcreteTable::layout(const storage::DataLayoutFactory &factory) {
-    view v(cbegin(), cend(), [](auto it) -> auto & { return it->type; });
+    view v(cbegin_all(), cend_all(), [](auto it) -> auto & { return it->type; });
     layout_ = factory.make(v.begin(), v.end());
 }
 
@@ -103,6 +105,37 @@ void ConcreteTable::dump(std::ostream &out) const
 }
 
 void ConcreteTable::dump() const { dump(std::cerr); }
+M_LCOV_EXCL_STOP
+
+
+/*======================================================================================================================
+ * MultiVersioningTable
+ *====================================================================================================================*/
+
+MultiVersioningTable::MultiVersioningTable(std::unique_ptr<Table> table)
+    : TableDecorator(std::move(table))
+{
+    auto &C = Catalog::Get();
+
+    /*----- Add hidden timestamp attributes. -----*/
+    auto i8 = Type::Get_Integer(Type::TY_Vector, 8);
+    auto ts_begin = C.pool("$ts_begin");
+    auto ts_end = C.pool("$ts_end");
+    table_->push_back(ts_begin, i8);
+    table_->push_back(ts_end, i8);
+    (*table_)[ts_begin].is_hidden = true;
+    (*table_)[ts_begin].not_nullable = true;
+    (*table_)[ts_end].is_hidden = true;
+}
+
+M_LCOV_EXCL_START
+void MultiVersioningTable::dump(std::ostream &out) const
+{
+    out << "MultiVersioningTable Decorator" << std::endl;
+    table_->dump(out);
+}
+
+void MultiVersioningTable::dump() const { dump(std::cerr); }
 M_LCOV_EXCL_STOP
 
 

@@ -17,8 +17,8 @@ ColumnStore::ColumnStore(const Table &table)
     data_ = allocator_.allocate(ALLOCATION_SIZE * (table.num_attrs() + 1));
 
     /* Compute the capacity depending on the column with the largest attribute size. */
-    for (auto &attr : table) {
-        auto size = attr.type->size();
+    for (auto attr = table.begin_all(); attr != table.end_all(); ++attr) {
+        auto size = attr->type->size();
         row_size_ += size;
         max_attr_size = std::max(max_attr_size, size);
     }

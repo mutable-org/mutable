@@ -48,6 +48,9 @@ class DuckDB(Connector):
 
         # For query execution
         command: str = f"./{self.duckdb_cli} {TMP_DB}"
+        if not self.multithreaded:
+            command = 'taskset -c 2 ' + command
+
         popen_args: dict[str, Any] = {'shell': True, 'text': True}
         benchmark_info: str = f"{suite}/{benchmark}/{experiment} [{configname}]"
 

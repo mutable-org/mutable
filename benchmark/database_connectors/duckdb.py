@@ -6,7 +6,8 @@ from typing import Any
 import os
 
 
-TMP_DB = 'tmp.duckdb'
+TMP_DB: str = 'tmp.duckdb'
+COMPLETE_TABLE_SUFFIX: str = '_complete'
 
 
 @typechecked
@@ -56,7 +57,9 @@ class DuckDB(Connector):
 
         try:
             # Set up database
-            create_tbl_stmts: list[str] = self.generate_create_table_stmts(params['data'], self.check_with_scale_factors(params))
+            complete_tables: list[str]
+            actual_tables: list[str]
+            complete_tables, actual_tables = self.generate_create_table_stmts(params['data'])
 
             if self.check_execute_single_cases(params):
                 # Execute cases singly
@@ -69,8 +72,9 @@ class DuckDB(Connector):
 
                         statements: list[str] = list()
                         if i == 0:
-                            # Also use the create_tbl_stmts in this case
-                            statements.extend(create_tbl_stmts)
+                            # Also use the CREATE TABLE stmts in this case
+                            statements.extend(complete_tables)
+                            statements.extend(actual_tables)
 
                         # Create tables from tmp tables with scale factor
                         for table_name, table in params['data'].items():
@@ -82,7 +86,7 @@ class DuckDB(Connector):
                                 sf = 1
                             header: int = int(table.get('header', 0))
                             num_rows: int = round((table['lines_in_file'] - header) * sf)
-                            statements.append(f'INSERT INTO "{table_name}" SELECT * FROM "{table_name}_tmp" LIMIT {num_rows};')
+                            statements.append(f'INSERT INTO "{table_name}" SELECT * FROM "{table_name}{COMPLETE_TABLE_SUFFIX}" LIMIT {num_rows};')
 
                         statements.append(".timer on")
                         statements.append(query_stmt)   # Actual query from this case
@@ -114,13 +118,23 @@ class DuckDB(Connector):
                 timeout: int = DEFAULT_TIMEOUT + TIMEOUT_PER_CASE * len(cases) * n_runs
 
                 statements: list[str] = list()
-                statements.extend(create_tbl_stmts)
+                statements.extend(complete_tables)
+                statements.extend(actual_tables)
 
-                statements.append(".timer on")
+                # Dropping and recreating tables in between runs removes any cache influences
+                refill_stmts: list[str] = list()
+                for name, table in params['data'].items():
+                    refill_stmts.append(f'DROP TABLE "{name}";')
+                refill_stmts.extend(actual_tables)
+                for name, table in params['data'].items():
+                    refill_stmts.append(f'INSERT INTO "{name}" (SELECT * FROM "{name}{COMPLETE_TABLE_SUFFIX}");')
+
                 for _ in range(n_runs):
+                    statements.extend(refill_stmts)
+                    statements.append(".timer on")
                     for case_query in cases.values():
                         statements.append(case_query)
-                statements.append(".timer off")
+                    statements.append(".timer off")
 
                 combined_query: str = "\n".join(statements)
 
@@ -157,20 +171,17 @@ class DuckDB(Connector):
             os.remove(TMP_DB)
 
 
-    # Creates tables in the database and copies contents of given files into them
-    # Call with 'with_scale_factors'=False if data should be loaded as a whole
-    # Call with 'with_scale_factors'=True if data should be placed in tmp tables
-    # and copied for each case with different scale factor
-    def generate_create_table_stmts(self, data: dict[str, dict[str, Any]], with_scale_factors: bool) -> list[str]:
-        statements: list[str] = list()
+    # Creates tables in the database and copies contents of given files into them.
+    # The complete data is in the 'T_complete' tables. For the individual cases the actual table T
+    # can be filled using 'INSERT INTO T (SELECT * FROM T_complete LIMIT x)'
+    def generate_create_table_stmts(self, data: dict[str, dict[str, Any]]) -> tuple[list[str],list[str]]:
+        complete_tables: list[str] = list()
+        actual_tables: list[str] = list()
         for table_name, table in data.items():
             columns: str = Connector.parse_attributes(self.DUCKDB_TYPE_PARSER, table['attributes'])
 
-            if with_scale_factors:
-                table_name += "_tmp"
-
-            create: str = f'CREATE TABLE "{table_name}" {columns};'
-            copy: str = f'COPY "{table_name}" FROM \'{table["file"]}\' ( '
+            create: str = f'CREATE TABLE "{table_name}{COMPLETE_TABLE_SUFFIX}" {columns};'
+            copy: str = f'COPY "{table_name}{COMPLETE_TABLE_SUFFIX}" FROM \'{table["file"]}\' ( '
             if 'delimiter' in table:
                 delim = table['delimiter'].replace("'", "")
                 copy += f" DELIMITER \'{delim}\',"
@@ -181,14 +192,13 @@ class DuckDB(Connector):
 
             copy = copy[:-1] + " );"
 
-            statements.append(create)
-            statements.append(copy)
+            complete_tables.append(create)
+            complete_tables.append(copy)
 
-            if with_scale_factors:
-                # Create actual table that will be used for experiment
-                statements.append(f'CREATE TABLE "{table_name[:-4]}" {columns};')
+            # Create actual table that will be used for experiment
+            actual_tables.append(f'CREATE TABLE "{table_name}" {columns};')
 
-        return statements
+        return complete_tables, actual_tables
 
 
     # Parse `results` for timings

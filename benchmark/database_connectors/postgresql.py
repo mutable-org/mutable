@@ -118,17 +118,26 @@ class PostgreSQL(Connector):
 
         else:
             # Prepare db
-            self.prepare_db(params)
+            actual_tables: list[str] = self.prepare_db(params)
 
-            # Otherwise, tables have to be created just once before the measurements (done above)
+            # Dropping and recreating tables in between runs removes any cache influences
+            refill_stmts: list[str] = list()
+            for name, table in params['data'].items():
+                refill_stmts.append(f'DROP TABLE "{name}";')
+            refill_stmts.extend(actual_tables)
+            for name, table in params['data'].items():
+                refill_stmts.append(f'INSERT INTO "{name}" (SELECT * FROM "{name}{COMPLETE_TABLE_SUFFIX}");')
+
             # Write cases/queries to a file that will be passed to the command to execute
             with open(TMP_SQL_FILE, "w") as tmp:
                 tmp.write(f'set statement_timeout = {TIMEOUT_PER_CASE * 1000:.0f};\n')
-                tmp.write("\\timing on\n")
                 for _ in range(n_runs):
+                    for stmt in refill_stmts:
+                        tmp.write(stmt + '\n')
+                    tmp.write("\\timing on\n")
                     for case_query in cases.values():
                         tmp.write(case_query + '\n')
-                tmp.write("\\timing off\n")
+                    tmp.write("\\timing off\n")
                 tmp.write(f'set statement_timeout = 0;\n')
 
             # Execute query file and collect measurement data
@@ -184,7 +193,7 @@ class PostgreSQL(Connector):
                 os.remove(TMP_SQL_FILE)
 
 
-    def prepare_db(self, params: dict[str, Any]) -> None:
+    def prepare_db(self, params: dict[str, Any]) -> list[str]:
         # Set up database
         self.setup()
 
@@ -194,23 +203,24 @@ class PostgreSQL(Connector):
             connection.autocommit = True
             cursor = connection.cursor()
             cursor.execute("set jit=off;")
-            self.create_tables(cursor, params['data'], self.check_execute_single_cases(params))
+            actual_tables: list[str] = self.create_tables(cursor, params['data'])
         finally:
             connection.close()
             del connection
+        return actual_tables
 
-
-    # Creates tables in the database and copies contents of given files into them
-    # Call with 'with_scale_factors'=False if data should be loaded as a whole
-    # Call with 'with_scale_factors'=True if data should be placed in tmp tables
-    # and copied for each case with different scale factor
-    def create_tables(self, cursor: psycopg2.extensions.cursor, data: dict[str, dict[str, Any]], with_scale_factors: bool) -> None:
+    # Creates tables in the database and copies contents of given files into them.
+    # The complete data is in the 'T_complete' tables. For the individual cases the actual table T
+    # can be filled using 'INSERT INTO T (SELECT * FROM T_complete LIMIT x)'
+    # Returns the list of actual table statements
+    def create_tables(self, cursor: psycopg2.extensions.cursor, data: dict[str, dict[str, Any]]) -> list[str]:
+        actual_tables: list[str] = list()
         for table_name, table in data.items():
             columns: str = Connector.parse_attributes(self.POSTGRESQL_TYPE_PARSER, table['attributes'])
 
             # Use an additional table with the *complete* data set to quickly recreate the table with the benchmark
             # data, in case of varying scale factor.
-            complete_table_name: str = table_name + COMPLETE_TABLE_SUFFIX if with_scale_factors else table_name
+            complete_table_name: str = table_name + COMPLETE_TABLE_SUFFIX
             quoted_table_name: str = f'"{complete_table_name}"'
 
             create: str = f"CREATE UNLOGGED TABLE {quoted_table_name} {columns};"
@@ -232,8 +242,12 @@ class PostgreSQL(Connector):
                 except psycopg2.errors.BadCopyFileFormat as ex:
                     raise ConnectorException(str(ex))
 
-            if with_scale_factors:
-                cursor.execute(f'CREATE UNLOGGED TABLE "{table_name}" {columns};')     # Create actual table that will be used for experiment
+            # Create actual table that will be used for experiment
+            actual: str = f'CREATE UNLOGGED TABLE "{table_name}" {columns};'
+            cursor.execute(actual)
+            actual_tables.append(actual)
+
+        return actual_tables
 
 
     # Parse `results` for timings

@@ -80,40 +80,10 @@ struct __virtual_crtp_helper
                     }
                 };
 
-                /*----- Enforce template instantiation ---------------------------------------------------------------*/
-                template<bool C, typename Actual, typename T, typename... Ts>
-                struct template_instantiation_helper : template_instantiation_helper<C, Actual, T>
-                                                     , template_instantiation_helper<C, Actual, Ts...>
-                { };
-                template<typename Actual, typename T>
-                struct template_instantiation_helper<false, Actual, T>
-                {
-                    // ReturnType (Actual::template *operator()<T>)(Args...) instance;
-                    // virtual ~template_instantiation_helper() { }
-                    // template_instantiation_helper() {
-                    //     std::declval<Actual>().template operator()<T>(
-                    //         Tag{}, std::declval<T>(), std::declval<Args>()...
-                    //     );
-                    // }
-                };
-                template<typename Actual, typename T>
-                struct template_instantiation_helper<true, Actual, T>
-                {
-                    // ReturnType (const Actual::template *operator()<T>)(Args...) instance;
-                    // virtual ~template_instantiation_helper() { }
-                    // template_instantiation_helper() {
-                    //     std::declval<const Actual>().template operator()<T>(
-                    //         Tag{}, std::declval<T>(), std::declval<Args>()...
-                    //     );
-                    // }
-                };
-
                 /*----- The types to inherit from --------------------------------------------------------------------*/
                 using base_type = base_type_helper<Const, CRTPArgs...>;
                 template<typename Actual>
                 using derived_type = derived_type_helper<Const, Actual, CRTPArgs...>;
-                template<typename Actual>
-                struct enforce_template_instances : template_instantiation_helper<Const, Actual, CRTPArgs...> { };
             };
         };
     };

@@ -799,13 +799,31 @@ std::size_t SpnEstimator::predict_cardinality(const DataModel &_data) const
 
 void SpnEstimator::print(std::ostream&) const { }
 
+
+#define LIST_CE(X) \
+    X(CartesianProductEstimator, "CartesianProduct", "estimates cardinalities as Cartesian product") \
+    X(InjectionCardinalityEstimator, "Injected", "estimates cardinalities based on a JSON file") \
+    X(SpnEstimator, "Spn", "estimates cardinalities based on Sum-Product Networks")
+
+#define INSTANTIATE(TYPE, _1, _2) \
+    template std::unique_ptr<DataModel> TYPE::operator()(estimate_join_all_tag, PlanTableSmallOrDense &&PT, \
+                                                         const QueryGraph &G, Subproblem to_join, \
+                                                         const cnf::CNF &condition) const; \
+    template std::unique_ptr<DataModel> TYPE::operator()(estimate_join_all_tag, PlanTableLargeAndSparse &&PT, \
+                                                         const QueryGraph &G, Subproblem to_join, \
+                                                         const cnf::CNF &condition) const;
+LIST_CE(INSTANTIATE)
+#undef INSTANTIATE
+
 __attribute__((constructor(202)))
 static void register_cardinality_estimators()
 {
     Catalog &C = Catalog::Get();
-    C.register_cardinality_estimator<CartesianProductEstimator>("CartesianProduct", "estimates cardinalities as Cartesian product");
-    C.register_cardinality_estimator<InjectionCardinalityEstimator>("Injected", "estimates cardinalities based on a JSON file");
-    C.register_cardinality_estimator<SpnEstimator>("Spn", "estimates cardinalities based on Sum-Product Networks");
+
+#define REGISTER(TYPE, NAME, DESCRIPTION) \
+    C.register_cardinality_estimator<TYPE>(NAME, DESCRIPTION);
+LIST_CE(REGISTER)
+#undef REGISTER
 
     C.arg_parser().add<bool>(
         /* group=       */ "Cardinality estimation",

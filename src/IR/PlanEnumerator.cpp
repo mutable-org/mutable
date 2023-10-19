@@ -724,24 +724,33 @@ void m::TDGOO::operator()(enumerate_tag, PlanTable &PT, const QueryGraph &G, con
 }
 
 
+#define LIST_PE(X) \
+    X(DPccp,        "enumerates connected subgraph complement pairs") \
+    X(DPsize,       "size-based subproblem enumeration") \
+    X(DPsizeOpt,    "optimized DPsize: does not enumerate symmetric subproblems") \
+    X(DPsizeSub,    "DPsize with enumeration of subset complement pairs") \
+    X(DPsub,        "subset-based subproblem enumeration") \
+    X(DPsubOpt,     "optimized DPsub: does not enumerate symmetric subproblems") \
+    X(GOO,          "Greedy Operator Ordering") \
+    X(TDGOO,        "Top-down variant of Greedy Operator Ordering") \
+    X(IKKBZ,        "greedy algorithm by IK/KBZ, ordering joins by rank") \
+    X(LinearizedDP, "DP with search space linearization based on IK/KBZ") \
+    X(TDbasic,      "basic top-down join enumeration using generate-and-test partitioning") \
+    X(TDMinCutAGaT, "top-down join enumeration using minimal graph cuts and advanced generate-and-test partitioning") \
+    X(PEall,        "enumerates ALL join orders, inclding Cartesian products")
+
+#define INSTANTIATE(NAME, _) \
+    template void NAME::operator()(enumerate_tag, PlanTableSmallOrDense &PT, const QueryGraph &G, const CostFunction &CF) const; \
+    template void NAME::operator()(enumerate_tag, PlanTableLargeAndSparse &PT, const QueryGraph &G, const CostFunction &CF) const;
+LIST_PE(INSTANTIATE)
+#undef INSTANTIATE
+
 __attribute__((constructor(202)))
 static void register_plan_enumerators()
 {
     Catalog &C = Catalog::Get();
 #define REGISTER(NAME, DESCRIPTION) \
-    C.register_plan_enumerator(#NAME, std::make_unique<NAME>(), DESCRIPTION)
-    REGISTER(DPccp,        "enumerates connected subgraph complement pairs"); // register DPccp first to be default
-    REGISTER(DPsize,       "size-based subproblem enumeration");
-    REGISTER(DPsizeOpt,    "optimized DPsize: does not enumerate symmetric subproblems");
-    REGISTER(DPsizeSub,    "DPsize with enumeration of subset complement pairs");
-    REGISTER(DPsub,        "subset-based subproblem enumeration");
-    REGISTER(DPsubOpt,     "optimized DPsub: does not enumerate symmetric subproblems");
-    REGISTER(GOO,          "Greedy Operator Ordering");
-    REGISTER(TDGOO,        "Top-down variant of Greedy Operator Ordering");
-    REGISTER(IKKBZ,        "greedy algorithm by IK/KBZ, ordering joins by rank");
-    REGISTER(LinearizedDP, "DP with search space linearization based on IK/KBZ");
-    REGISTER(TDbasic,      "basic top-down join enumeration using generate-and-test partitioning");
-    REGISTER(TDMinCutAGaT, "top-down join enumeration using minimal graph cuts and advanced generate-and-test partitioning");
-    REGISTER(PEall,        "enumerates ALL join orders, inclding Cartesian products");
+    C.register_plan_enumerator(#NAME, std::make_unique<NAME>(), DESCRIPTION);
+LIST_PE(REGISTER)
 #undef REGISTER
 }

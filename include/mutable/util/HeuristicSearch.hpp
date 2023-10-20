@@ -485,8 +485,8 @@ concept SearchConfig = std::is_class_v<Config> and
                        requires { { Config::IsMonotone } -> std::convertible_to<bool>; };
 
 
-template<typename state_type>
-concept has_mark = requires (state_type state, Subproblem sub) { { state.mark(sub) } -> std::same_as<Subproblem>; };
+template<typename state_type, typename... Context>
+concept has_mark = requires (state_type state, Context... context) { state.reset_marked(state, context...); };
 
 /** Implements a generic A* search algorithm.  Allows for specifying a weighting factor for the heuristic value.  Allows
  * for lazy evaluation of the heuristic. */
@@ -655,7 +655,7 @@ struct genericAStar
         auto it = candidates.begin();
         /*----- Add states in the beam to the beam queue. -----*/
         for (auto end = it + num_beamed; it != end; ++it) {
-            if constexpr (has_mark<state_type>)
+            if constexpr (has_mark<state_type, Context...>)
                 expand.reset_marked(it->state, context...);
             state_manager_.push_beam_queue(std::move(it->state), it->h, context...);
         }
@@ -724,7 +724,7 @@ struct genericAStar
             }, state, heuristic, expand, context...);
             /*----- The states remaining in `candidates` are within the beam. -----*/
             for (auto &s : candidates) {
-                if constexpr (has_mark<state_type>)
+                if constexpr (has_mark<state_type, Context...>)
                     expand.reset_marked(s.state, context...);
                 state_manager_.push_beam_queue(std::move(s.state), s.h, context...);
             }

@@ -2001,46 +2001,18 @@ struct GOO<PlanTable, State, TopDown>
     GOO(PlanTable&, const QueryGraph&, const AdjacencyMatrix&, const CostFunction&, const CardinalityEstimator&) { }
 
     double operator()(const state_type &state, PlanTable &PT, const QueryGraph &G, const AdjacencyMatrix &M,
-                      const CostFunction&, const CardinalityEstimator &CE) const
+                      const CostFunction &CF, const CardinalityEstimator &CE) const
     {
-        using std::swap;
-        static cnf::CNF condition; // TODO use join condition
-
+        /*----- Initialize worklist from subproblems. -----*/
         std::vector<Subproblem> worklist;
         worklist.reserve(G.num_sources());
-        for (Subproblem S : state)
-            worklist.emplace_back(S);
+        worklist.insert(worklist.end(), state.cbegin(), state.cend());
 
-        double C_min;
-        Subproblem min_left, min_right;
-        auto enumerate_ccp = [&](Subproblem left, Subproblem right) -> void {
-            if (not PT[left].model)
-                PT[left].model = CE.estimate_join_all(G, PT, left, condition);
-            if (not PT[right].model)
-                PT[right].model = CE.estimate_join_all(G, PT, right, condition);
-            const double C = CE.predict_cardinality(*PT[left].model) + CE.predict_cardinality(*PT[right].model);
-            if (C < C_min) {
-                C_min = C;
-                min_left = left;
-                min_right = right;
-            }
-        };
-
+        /*----- Greedily enumerate all joins. -----*/
         double cost = 0;
-        while (not worklist.empty()) {
-            const Subproblem S = worklist.back();
-            worklist.pop_back();
-
-            if (S.is_singleton())
-                continue;
-
-            C_min = std::numeric_limits<decltype(C_min)>::infinity();
-            MinCutAGaT{}.partition(M, enumerate_ccp, S);
-
-            cost += C_min;
-            worklist.emplace_back(min_left);
-            worklist.emplace_back(min_right);
-        }
+        m::pe::TDGOO{}.for_each_join([&](Subproblem left, Subproblem right) {
+            cost += CE.predict_cardinality(*PT[left].model) + CE.predict_cardinality(*PT[right].model);
+        }, PT, G, M, CF, CE, std::move(worklist));
 
         return cost;
     }

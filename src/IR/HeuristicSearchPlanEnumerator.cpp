@@ -10,6 +10,7 @@
 
 
 using namespace m;
+using namespace m::pe;
 using namespace m::pe::hs;
 
 

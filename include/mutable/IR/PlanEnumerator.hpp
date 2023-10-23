@@ -11,7 +11,11 @@
 #include <unordered_map>
 
 
+///> mutable namespace
 namespace m {
+
+///> plan enumerator namespace
+namespace pe {
 
 struct enumerate_tag : const_virtual_crtp_helper<enumerate_tag>::
     returns<void>::
@@ -193,5 +197,7 @@ struct M_EXPORT TDGOO : PlanEnumeratorCRTP<TDGOO>
     template<typename PlanTable>
     void operator()(enumerate_tag, PlanTable &PT, const QueryGraph &G, const CostFunction &CF) const;
 };
+
+}
 
 }

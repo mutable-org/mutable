@@ -22,6 +22,7 @@
 
 
 using namespace m;
+using namespace m::pe;
 
 
 /*======================================================================================================================
@@ -680,7 +681,7 @@ struct TDMinCutAGaT final : PlanEnumeratorCRTP<TDMinCutAGaT>
  *====================================================================================================================*/
 
 template<typename PlanTable>
-void m::GOO::operator()(enumerate_tag, PlanTable &PT, const QueryGraph &G, const CostFunction &CF) const
+void GOO::operator()(enumerate_tag, PlanTable &PT, const QueryGraph &G, const CostFunction &CF) const
 {
     const AdjacencyMatrix &M = G.adjacency_matrix();
     auto &CE = Catalog::Get().get_database_in_use().cardinality_estimator();
@@ -706,7 +707,7 @@ void m::GOO::operator()(enumerate_tag, PlanTable &PT, const QueryGraph &G, const
  *====================================================================================================================*/
 
 template<typename PlanTable>
-void m::TDGOO::operator()(enumerate_tag, PlanTable &PT, const QueryGraph &G, const CostFunction &CF) const
+void TDGOO::operator()(enumerate_tag, PlanTable &PT, const QueryGraph &G, const CostFunction &CF) const
 {
     const AdjacencyMatrix &M = G.adjacency_matrix();
     auto &CE = Catalog::Get().get_database_in_use().cardinality_estimator();

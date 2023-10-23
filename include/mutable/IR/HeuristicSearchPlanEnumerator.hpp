@@ -2031,16 +2031,16 @@ struct GOO<PlanTable, State, BottomUp>
         // std::cerr << "GOO: vertex = " << state << '\n';
 
         /*----- Initialize nodes. -----*/
-        m::GOO::node nodes[G.num_sources()];
+        m::pe::GOO::node nodes[G.num_sources()];
         std::size_t num_nodes = 0;
         state.for_each_subproblem([&](Subproblem S) {
-            nodes[num_nodes++] = m::GOO::node(S, M.neighbors(S));
+            nodes[num_nodes++] = m::pe::GOO::node(S, M.neighbors(S));
         }, G);
 
         /*----- Greedily enumerate all joins. -----*/
         const Subproblem All = Subproblem::All(G.num_sources());
         double cost = 0;
-        m::GOO{}.for_each_join([&](Subproblem left, Subproblem right) {
+        m::pe::GOO{}.for_each_join([&](Subproblem left, Subproblem right) {
             static cnf::CNF condition; // TODO use join condition
             if (All != (left|right)) {
                 // std::cerr << "    join ";

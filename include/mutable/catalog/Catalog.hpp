@@ -317,7 +317,7 @@ struct M_EXPORT Catalog
     ComponentSet<StoreFactory> stores_;
     ComponentSet<storage::DataLayoutFactory> data_layouts_;
     ComponentSet<CardinalityEstimatorFactory> cardinality_estimators_;
-    ComponentSet<PlanEnumerator> plan_enumerators_;
+    ComponentSet<pe::PlanEnumerator> plan_enumerators_;
     ComponentSet<BackendFactory> backends_;
     ComponentSet<CostFunction> cost_functions_;
     ComponentSet<DatabaseInstructionFactory> instructions_;
@@ -413,19 +413,19 @@ struct M_EXPORT Catalog
 
     /*===== Plan Enumerators =========================================================================================*/
     /** Registers a new `PlanEnumerator` with the given `name`. */
-    void register_plan_enumerator(const char *name, std::unique_ptr<PlanEnumerator> PE,
+    void register_plan_enumerator(const char *name, std::unique_ptr<pe::PlanEnumerator> PE,
                                   const char *description = nullptr)
     {
-        plan_enumerators_.add(pool(name), Component<PlanEnumerator>(description, std::move(PE)));
+        plan_enumerators_.add(pool(name), Component<pe::PlanEnumerator>(description, std::move(PE)));
     }
     /** Sets the default `PlanEnumerator` to use. */
     void default_plan_enumerator(const char *name) { plan_enumerators_.set_default(pool(name)); }
     /** Returns `true` iff the `Catalog` has a default `PlanEnumerator`. */
     bool has_default_plan_enumerator() const { return plan_enumerators_.has_default(); }
     /** Returns a reference to the default `PlanEnumerator`. */
-    PlanEnumerator & plan_enumerator() const { return plan_enumerators_.get_default(); }
+    pe::PlanEnumerator & plan_enumerator() const { return plan_enumerators_.get_default(); }
     /** Returns a reference to the `PlanEnumerator` with the given `name`. */
-    PlanEnumerator & plan_enumerator(const char *name) const { return plan_enumerators_.get(pool(name)); }
+    pe::PlanEnumerator & plan_enumerator(const char *name) const { return plan_enumerators_.get(pool(name)); }
     /** Returns the name of the default `PlanEnumerator`. */
     const char * default_plan_enumerator_name() const { return plan_enumerators_.get_default_name(); }
 

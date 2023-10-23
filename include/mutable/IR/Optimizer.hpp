@@ -22,13 +22,13 @@ struct M_EXPORT Optimizer
     using order_type = QueryGraph::order_type;
 
     private:
-    const PlanEnumerator &pe_;
+    const pe::PlanEnumerator &pe_;
     const CostFunction &cf_;
     mutable std::vector<std::unique_ptr<const ast::Expr>> created_exprs_; ///< additionally created expressions
     mutable bool needs_projection_ = false; ///< flag to determine whether current query needs a projection as root
 
     public:
-    Optimizer(const PlanEnumerator &pe, const CostFunction &cf) : pe_(pe), cf_(cf) { }
+    Optimizer(const pe::PlanEnumerator &pe, const CostFunction &cf) : pe_(pe), cf_(cf) { }
 
     auto & plan_enumerator() const { return pe_; }
     auto & cost_function() const { return cf_; }

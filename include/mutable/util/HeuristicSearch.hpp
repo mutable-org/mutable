@@ -4,6 +4,7 @@
 #include <cmath>
 #include <concepts>
 #include <exception>
+#include <functional>
 #include <iosfwd>
 #include <map>
 #include <mutable/Options.hpp>

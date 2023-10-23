@@ -2028,8 +2028,6 @@ struct GOO<PlanTable, State, BottomUp>
     {
         using std::swap;
 
-        // std::cerr << "GOO: vertex = " << state << '\n';
-
         /*----- Initialize nodes. -----*/
         m::pe::GOO::node nodes[G.num_sources()];
         std::size_t num_nodes = 0;
@@ -2043,11 +2041,6 @@ struct GOO<PlanTable, State, BottomUp>
         m::pe::GOO{}.for_each_join([&](Subproblem left, Subproblem right) {
             static cnf::CNF condition; // TODO use join condition
             if (All != (left|right)) {
-                // std::cerr << "    join ";
-                // left.print_fixed_length(std::cerr, G.num_sources());
-                // std::cerr << " ⋈  ";
-                // right.print_fixed_length(std::cerr, G.num_sources());
-                // std::cerr << '\n';
                 double old_cost_left = 0, old_cost_right = 0;
                 swap(PT[left].cost, old_cost_left);
                 swap(PT[right].cost, old_cost_right);
@@ -2056,8 +2049,6 @@ struct GOO<PlanTable, State, BottomUp>
                 swap(PT[right].cost, old_cost_right);
             }
         }, PT, G, M, CF, CE, nodes, nodes + num_nodes);
-
-        // std::cerr << "     h = " << cost << '\n';
 
         return cost;
     }

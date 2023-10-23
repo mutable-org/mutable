@@ -1971,21 +1971,20 @@ struct GOO<PlanTable, State, BottomUp>
         m::pe::GOO::node nodes[G.num_sources()];
         std::size_t num_nodes = 0;
         state.for_each_subproblem([&](Subproblem S) {
-            nodes[num_nodes++] = m::pe::GOO::node(S, M.neighbors(S));
+            new (&nodes[num_nodes++]) m::pe::GOO::node(S, M.neighbors(S));
         }, G);
 
         /*----- Greedily enumerate all joins. -----*/
         const Subproblem All = Subproblem::All(G.num_sources());
         double cost = 0;
         m::pe::GOO{}.for_each_join([&](Subproblem left, Subproblem right) {
-            static cnf::CNF condition; // TODO use join condition
+            static cnf::CNF condition; // TODO: use join condition
             if (All != (left|right)) {
-                double old_cost_left = 0, old_cost_right = 0;
-                swap(PT[left].cost, old_cost_left);
-                swap(PT[right].cost, old_cost_right);
+                const double old_cost_left = std::exchange(PT[left].cost, 0);
+                const double old_cost_right = std::exchange(PT[right].cost, 0);
                 cost += CF.calculate_join_cost(G, PT, CE, left, right, condition);
-                swap(PT[left].cost, old_cost_left);
-                swap(PT[right].cost, old_cost_right);
+                PT[left].cost = old_cost_left;
+                PT[right].cost = old_cost_right;
             }
         }, PT, G, M, CF, CE, nodes, nodes + num_nodes);
 

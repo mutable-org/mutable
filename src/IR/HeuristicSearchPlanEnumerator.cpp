@@ -122,7 +122,7 @@ template<
     template<typename, typename, typename, typename...> typename Search
 >
 bool heuristic_search(PlanTable &PT, const QueryGraph &G, const AdjacencyMatrix &M, const CostFunction &CF,
-                         const CardinalityEstimator &CE)
+                      const CardinalityEstimator &CE)
 {
     using H = Heuristic<PlanTable, State, Expand>;
     State::RESET_STATE_COUNTERS();
@@ -154,7 +154,16 @@ bool heuristic_search(PlanTable &PT, const QueryGraph &G, const AdjacencyMatrix 
     try {
         State initial_state = Expand::template Start<State>(PT, G, M, CF, CE);
         H h(PT, G, M, CF, CE);
-        const State &goal = S.search(std::move(initial_state), upper_bound, Expand{}, h, PT, G, M, CF, CE);
+        const State &goal = S.search(
+            /* initial_state= */ std::move(initial_state),
+            /* expand=        */ Expand{},
+            /* heuristic=     */ h,
+            /* config=        */ {
+                .upper_bound = upper_bound,
+            },
+            /*----- Context -----*/
+            PT, G, M, CF, CE
+        );
         if (Options::Get().statistics)
             S.dump(std::cout);
 

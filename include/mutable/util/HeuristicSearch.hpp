@@ -485,6 +485,16 @@ concept SearchConfig = std::is_class_v<Config> and
                        requires { { Config::Lazy } -> std::convertible_to<bool>; } and
                        requires { { Config::IsMonotone } -> std::convertible_to<bool>; };
 
+/** Relies on the rules of [*aggregate
+ * initialization*](https://en.cppreference.com/w/cpp/language/aggregate_initialization) */
+struct SearchConfiguration
+{
+    /** Upper bound on the cost of plans to consider.  More costly plans will be pruned.  Defaults to NaN, expressing
+     * that no bound is given.  (Usually, the search algorithm will then initialize its internal upper bound with
+     * infinity.) */
+    double upper_bound = std::numeric_limits<double>::quiet_NaN();
+};
+static_assert(std::is_standard_layout_v<SearchConfiguration>);
 
 template<typename state_type, typename... Context>
 concept has_mark = requires (state_type state, Context... context) { state.reset_marked(state, context...); };
@@ -590,16 +600,8 @@ struct genericAStar
      *
      * @return the cost of the computed path from `initial_state` to a goal state
      */
-    const State & search(state_type initial_state, double upper_bound, expand_type expand, heuristic_type &heuristic,
-                         Context&... context);
-
-    /** Search for a path from the given `initial_state` to a goal state.  Uses the given heuristic to guide the search.
-     *
-     * @return the cost of the computed path from `initial_state` to a goal state
-     */
-    const State & search(state_type initial_state, expand_type expand, heuristic_type &heuristic, Context&... context) {
-        return search(std::move(initial_state), std::numeric_limits<double>::infinity(), expand, heuristic, context...);
-    }
+    const State & search(state_type initial_state, expand_type expand, heuristic_type &heuristic,
+                         SearchConfiguration config, Context&... context);
 
     /** Resets the state of the search. */
     void clear() {
@@ -757,16 +759,18 @@ template<
 requires heuristic_search_heuristic<Heuristic, Context...>
 const State & genericAStar<State, Expand, Heuristic, Config, Context...>::search(
     state_type initial_state,
-    double upper_bound,
     expand_type expand,
     heuristic_type &heuristic,
+    SearchConfiguration config,
     Context&... context
 ) {
-    if (not std::isnan(upper_bound)) {
+    if (not std::isnan(config.upper_bound)) {
         /* Initialize the least path cost.  Note, that the given upper bound could be *exactly* the weight of the
          * shortest path.  To not prune the goal reached on that shortest path, we increase the upper bound *slightly*.
          * More precisely, we increase the upper bound to the next representable value in `double`. */
-        state_manager_.update_least_path_cost(std::nextafter(upper_bound, std::numeric_limits<double>::infinity()));
+        state_manager_.update_least_path_cost(
+            std::nextafter(config.upper_bound, std::numeric_limits<double>::infinity())
+        );
     }
 
     /* Initialize queue with initial state. */

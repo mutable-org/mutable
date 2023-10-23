@@ -56,9 +56,7 @@ inline bool subproblem_lt(Subproblem left, Subproblem right) { return uint64_t(l
 }
 
 
-namespace m {
-namespace pe {
-namespace hs {
+namespace m::pe::hs {
 
 /*======================================================================================================================
  * Heuristic Search States
@@ -1140,8 +1138,6 @@ M_LCOV_EXCL_STOP
 }
 
 }
-}
-}
 
 
 namespace std {
@@ -1216,9 +1212,7 @@ struct hash<m::pe::hs::search_states::EdgePtrBottomUp>
 }
 
 
-namespace m {
-namespace pe {
-namespace hs {
+namespace m::pe::hs {
 
 /*======================================================================================================================
  * Heuristic Search State Expansions
@@ -1694,13 +1688,9 @@ struct TopDownComplete : TopDown
 }
 
 }
-}
-}
 
 
-namespace m {
-namespace pe {
-namespace hs {
+namespace m::pe::hs {
 
 /*======================================================================================================================
  * Heuristic Search Heuristics
@@ -2126,13 +2116,9 @@ struct avg_sel : avg_sel<PlanTable, State, typename Expand::direction>
 }
 
 }
-}
-}
 
 
-namespace m {
-namespace pe {
-namespace hs {
+namespace m::pe::hs {
 
 namespace config {
 
@@ -2206,13 +2192,9 @@ DEFINE_SEARCH(beam_search_with_cbp, monotone<true>, Fibonacci_heap, weight<1>, l
 }
 
 }
-}
-}
 
 
-namespace m {
-namespace pe {
-namespace hs {
+namespace m::pe::hs {
 
 template<
     typename PlanTable,
@@ -2234,6 +2216,4 @@ struct HeuristicSearch final : PlanEnumeratorCRTP<HeuristicSearch>
     void operator()(enumerate_tag, PlanTable &PT, const QueryGraph &G, const CostFunction &CF) const;
 };
 
-}
-}
 }

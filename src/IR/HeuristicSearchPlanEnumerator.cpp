@@ -19,6 +19,8 @@ using namespace m::pe::hs;
  *====================================================================================================================*/
 
 namespace {
+
+///> command-line options for the HeuristicSearchPlanEnumerator
 namespace options {
 
 /** The heuristic search vertex to use. */
@@ -31,15 +33,75 @@ const char *heuristic = "zero";
 const char *search = "AStar";
 
 }
+
 }
+
+
+/*======================================================================================================================
+ * Helper functions
+ *====================================================================================================================*/
+
+namespace {
+
+template<typename State>
+std::array<Subproblem, 2> delta(const State &before_join, const State &after_join)
+{
+    std::array<Subproblem, 2> delta;
+    M_insist(before_join.size() == after_join.size() + 1);
+    auto after_it = after_join.cbegin();
+    auto before_it = before_join.cbegin();
+    auto out_it = delta.begin();
+
+    while (out_it != delta.end()) {
+        M_insist(before_it != before_join.cend());
+        if (after_it == after_join.cend()) {
+            *out_it++ = *before_it++;
+        } else if (*before_it == *after_it) {
+            ++before_it;
+            ++after_it;
+        } else {
+            *out_it++ = *before_it++;
+        }
+    }
+    return delta;
+}
+
+template<typename PlanTable, typename State>
+void reconstruct_plan_bottom_up(const State &state, PlanTable &PT, const QueryGraph &G,const CardinalityEstimator &CE,
+                                const CostFunction &CF)
+{
+    static cnf::CNF condition; // TODO: use join condition
+
+    const State *parent = state.parent();
+    if (not parent) return;
+    reconstruct_plan_bottom_up(*parent, PT, G, CE, CF); // solve recursively
+    const auto D = delta(*parent, state); // find joined subproblems
+    PT.update(G, CE, CF, D[0], D[1], condition); // update plan table
+}
+
+template<typename PlanTable, typename State>
+void reconstruct_plan_top_down(const State &goal, PlanTable &PT, const QueryGraph &G, const CardinalityEstimator &CE,
+                               const CostFunction &CF)
+{
+    const State *current = &goal;
+    static cnf::CNF condition; // TODO: use join condition
+
+    while (current->parent()) {
+        const State *parent = current->parent();
+        const auto D = delta(*current, *parent); // find joined subproblems
+        PT.update(G, CE, CF, D[0], D[1], condition); // update plan table
+        current = parent; // advance
+    }
+}
+
+}
+
 
 /*======================================================================================================================
  * Heuristic Search States: class/static fields
  *====================================================================================================================*/
 
-namespace m {
-namespace pe {
-namespace hs {
+namespace m::pe::hs {
 namespace search_states {
 
 SubproblemsArray::allocator_type SubproblemsArray::allocator_;
@@ -49,7 +111,79 @@ EdgePtrBottomUp::Scratchpad EdgePtrBottomUp::scratchpad_;
 
 }
 }
+
+namespace m::pe::hs {
+
+template<
+    typename PlanTable,
+    typename State,
+    typename Expand,
+    template<typename, typename, typename> typename Heuristic,
+    template<typename, typename, typename, typename...> typename Search
+>
+bool heuristic_search(PlanTable &PT, const QueryGraph &G, const AdjacencyMatrix &M, const CostFunction &CF,
+                         const CardinalityEstimator &CE)
+{
+    using H = Heuristic<PlanTable, State, Expand>;
+    State::RESET_STATE_COUNTERS();
+
+    using search_algorithm = Search<
+        State, Expand, H,
+        /*----- context -----*/
+        PlanTable&,
+        const QueryGraph&,
+        const AdjacencyMatrix&,
+        const CostFunction&,
+        const CardinalityEstimator&
+    >;
+
+    search_algorithm S(PT, G, M, CF, CE);
+
+    const double upper_bound = [&]() {
+        /*----- Run GOO to compute upper bound of plan cost. -----*/
+        /* Beam search becomes incomplete if an upper bound derived from an actual plan is provided.  Beam search
+         * may never find that plan or any better plan, and hence return without finding a path. In this case, the
+         * initial plan found by GOO is used. */
+        GOO Goo;
+        Goo(G, CF, PT);
+        return PT.get_final().cost;
+    }();
+    if (Options::Get().statistics)
+        std::cout << "initial upper bound is " << upper_bound << std::endl;
+
+    try {
+        State initial_state = Expand::template Start<State>(PT, G, M, CF, CE);
+        H h(PT, G, M, CF, CE);
+        const State &goal = S.search(std::move(initial_state), upper_bound, Expand{}, h, PT, G, M, CF, CE);
+        if (Options::Get().statistics)
+            S.dump(std::cout);
+
+        /*----- Reconstruct the plan from the found path to goal. -----*/
+        if constexpr (std::is_base_of_v<expansions::TopDown, Expand>) {
+            reconstruct_plan_top_down(goal, PT, G, CE, CF);
+        } else {
+            static_assert(std::is_base_of_v<expansions::BottomUp, Expand>, "unexpected expansion");
+            reconstruct_plan_bottom_up(goal, PT, G, CE, CF);
+        }
+    } catch (std::logic_error err) {
+        if constexpr (not search_algorithm::use_beam_search) {
+            if (not Options::Get().quiet)
+                std::cout << "search did not reach a goal state, fall back to DPccp" << std::endl;
+            DPccp{}(G, CF, PT);
+        }
+    }
+#ifdef COUNTERS
+    if (Options::Get().statistics) {
+        std::cout <<   "Vertices generated: " << State::NUM_STATES_GENERATED()
+                  << "\nVertices expanded: " << State::NUM_STATES_EXPANDED()
+                  << "\nVertices constructed: " << State::NUM_STATES_CONSTRUCTED()
+                  << "\nVertices disposed: " << State::NUM_STATES_DISPOSED()
+                  << std::endl;
+    }
+#endif
+    return true;
 }
+
 }
 
 namespace {
@@ -70,64 +204,13 @@ bool heuristic_search_helper(const char *vertex_str, const char *expand_str, con
         streq(options::heuristic, heuristic_str) and
         streq(options::search,    search_str   ))
     {
-        using H = Heuristic<PlanTable, State, Expand>;
-        State::RESET_STATE_COUNTERS();
-
-        using search_algorithm = Search<
-            State, Expand, H,
-            /*----- context -----*/
-            PlanTable&,
-            const QueryGraph&,
-            const AdjacencyMatrix&,
-            const CostFunction&,
-            const CardinalityEstimator&
-        >;
-
-        search_algorithm S(PT, G, M, CF, CE);
-
-        const double upper_bound = [&]() {
-            /*----- Run GOO to compute upper bound of plan cost. -----*/
-            /* Beam search becomes incomplete if an upper bound derived from an actual plan is provided.  Beam search
-             * may never find that plan or any better plan, and hence return without finding a path. In this case, the
-             * initial plan found by GOO is used. */
-            GOO Goo;
-            Goo(G, CF, PT);
-            return PT.get_final().cost;
-        }();
-        if (Options::Get().statistics)
-            std::cout << "initial upper bound is " << upper_bound << std::endl;
-
-        try {
-            State initial_state = Expand::template Start<State>(PT, G, M, CF, CE);
-            H h(PT, G, M, CF, CE);
-            const State &goal = S.search(std::move(initial_state), upper_bound, Expand{}, h, PT, G, M, CF, CE);
-            if (Options::Get().statistics)
-                S.dump(std::cout);
-
-            /*----- Reconstruct the plan from the found path to goal. -----*/
-            if constexpr (std::is_base_of_v<expansions::TopDown, Expand>) {
-                reconstruct_plan_top_down(goal, PT, G, CE, CF);
-            } else {
-                static_assert(std::is_base_of_v<expansions::BottomUp, Expand>, "unexpected expansion");
-                reconstruct_plan_bottom_up(goal, PT, G, CE, CF);
-            }
-        } catch (std::logic_error err) {
-            if constexpr (not search_algorithm::use_beam_search) {
-                std::cout << "search " << search_str << '+' << vertex_str << '+' << expand_str << '+' << heuristic_str
-                          << " did not reach a goal state, fall back to DPccp" << std::endl;
-                DPccp{}(G, CF, PT);
-            }
-        }
-#ifdef COUNTERS
-        if (Options::Get().statistics) {
-            std::cout <<   "Vertices generated: " << State::NUM_STATES_GENERATED()
-                      << "\nVertices expanded: " << State::NUM_STATES_EXPANDED()
-                      << "\nVertices constructed: " << State::NUM_STATES_CONSTRUCTED()
-                      << "\nVertices disposed: " << State::NUM_STATES_DISPOSED()
-                      << std::endl;
-        }
-#endif
-        return true;
+        return m::pe::hs::heuristic_search<
+            PlanTable,
+            State,
+            Expand,
+            Heuristic,
+            Search
+        >(PT, G, M, CF, CE);
     }
     return false;
 

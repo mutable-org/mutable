@@ -49,57 +49,6 @@ namespace {
 ///> order two subproblems lexicographically
 inline bool subproblem_lt(Subproblem left, Subproblem right) { return uint64_t(left) < uint64_t(right); };
 
-template<typename State>
-std::array<Subproblem, 2> delta(const State &before_join, const State &after_join)
-{
-    std::array<Subproblem, 2> delta;
-    M_insist(before_join.size() == after_join.size() + 1);
-    auto after_it = after_join.cbegin();
-    auto before_it = before_join.cbegin();
-    auto out_it = delta.begin();
-
-    while (out_it != delta.end()) {
-        M_insist(before_it != before_join.cend());
-        if (after_it == after_join.cend()) {
-            *out_it++ = *before_it++;
-        } else if (*before_it == *after_it) {
-            ++before_it;
-            ++after_it;
-        } else {
-            *out_it++ = *before_it++;
-        }
-    }
-    return delta;
-}
-
-template<typename PlanTable, typename State>
-void reconstruct_plan_bottom_up(const State &state, PlanTable &PT, const QueryGraph &G,const CardinalityEstimator &CE,
-                                const CostFunction &CF)
-{
-    static cnf::CNF condition; // TODO use join condition
-
-    const State *parent = state.parent();
-    if (not parent) return;
-    reconstruct_plan_bottom_up(*parent, PT, G, CE, CF); // solve recursively
-    const auto D = delta(*parent, state); // find joined subproblems
-    PT.update(G, CE, CF, D[0], D[1], condition); // update plan table
-}
-
-template<typename PlanTable, typename State>
-void reconstruct_plan_top_down(const State &goal, PlanTable &PT, const QueryGraph &G, const CardinalityEstimator &CE,
-                               const CostFunction &CF)
-{
-    const State *current = &goal;
-    static cnf::CNF condition; // TODO use join condition
-
-    while (current->parent()) {
-        const State *parent = current->parent();
-        const auto D = delta(*current, *parent); // find joined subproblems
-        PT.update(G, CE, CF, D[0], D[1], condition); // update plan table
-        current = parent; // advance
-    }
-}
-
 }
 
 }
@@ -2264,6 +2213,16 @@ DEFINE_SEARCH(beam_search_with_cbp, monotone<true>, Fibonacci_heap, weight<1>, l
 namespace m {
 namespace pe {
 namespace hs {
+
+template<
+    typename PlanTable,
+    typename State,
+    typename Expand,
+    template<typename, typename, typename> typename Heuristic,
+    template<typename, typename, typename, typename...> typename Search
+>
+bool heuristic_search(PlanTable &PT, const QueryGraph &G, const AdjacencyMatrix &M, const CostFunction &CF,
+                      const CardinalityEstimator &CE);
 
 /** Computes the join order using heuristic search */
 struct HeuristicSearch final : PlanEnumeratorCRTP<HeuristicSearch>

@@ -275,8 +275,18 @@ struct StateManager
             /* Early pruning: if the current state is already more costly than the cheapest complete path found so far,
              * we can safely ignore that state.  Additionally, if the heuristic is admissible, we know that the
              * remaining cost from the current state to the goal is *at least* `h`.  Therefore, any complete path from
-             * start to goal that contains this state has cost at least `g + h`.  */
-            const auto min_path_cost = M_CONSTEXPR_COND(is_admissible<Heurisitc>, state.g() + h, state.g());
+             * start to goal that contains this state has cost at least `g + h`.
+             *
+             * For cost-based pruning, the weighting factor must not be considered since it renders the *f*-values
+             * *inadmissible*.  Therefore, for weighted search we have to divide `h` by the weighting factor before
+             * pruning.  Note, that the weighting factor was initially applied when computing `h` of a state for adding
+             * it to the priority queue.  */
+            const auto min_path_cost = [&]() {
+                if constexpr (use_weighted_search)
+                    return is_admissible<Heurisitc> ? state.g() + h : weighting_factor(), state.g();
+                else
+                    return is_admissible<Heurisitc> ? state.g() + h : state.g();
+            }();
             if (min_path_cost >= least_path_cost) [[unlikely]] {
                 inc_pruned_by_cost();
                 return;
@@ -356,8 +366,18 @@ struct StateManager
                     /* Early pruning: if the current state is already more costly than the cheapest complete path found
                      * so far, we can safely ignore that state.  Additionally, if the heuristic is admissible, we know
                      * that the remaining cost from the current state to the goal is *at least* `h`.  Therefore, any
-                     * complete path from start to goal that contains this state has cost at least `g + h`.  */
-                    const auto min_path_cost = M_CONSTEXPR_COND(is_admissible<Heurisitc>, state.g() + h, state.g());
+                     * complete path from start to goal that contains this state has cost at least `g + h`.
+                     *
+                     * For cost-based pruning, the weighting factor must not be considered since it renders the
+                     * *f*-values *inadmissible*.  Therefore, for weighted search we have to divide `h` by the weighting
+                     * factor before pruning.  Note, that the weighting factor was initially applied when computing `h`
+                     * of a state for adding it to the priority queue.  */
+                    const auto min_path_cost = [&]() {
+                        if constexpr (use_weighted_search)
+                            return is_admissible<Heurisitc> ? state.g() + h / weighting_factor() : state.g();
+                        else
+                            return is_admissible<Heurisitc> ? state.g() + h : state.g();
+                    }();
                     if (min_path_cost >= least_path_cost) [[unlikely]] {
                         inc_pruned_by_cost();
                         return;

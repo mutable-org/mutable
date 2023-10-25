@@ -35,6 +35,8 @@ const char *search = "AStar";
 float weighting_factor = 1.f;
 /** Whether to compute an initial upper bound for cost-based pruning. */
 bool initialize_upper_bound = false;
+/** The expansion budget for Anytime A*. */
+uint64_t expansion_budget = std::numeric_limits<uint64_t>::max();
 
 }
 
@@ -167,12 +169,15 @@ bool heuristic_search(PlanTable &PT, const QueryGraph &G, const AdjacencyMatrix 
             static_assert(std::is_base_of_v<expansions::BottomUp, Expand>, "unexpected expansion");
             reconstruct_plan_bottom_up(goal, PT, G, CE, CF);
         }
-    } catch (std::logic_error err) {
+    } catch (std::logic_error) {
         if constexpr (not search_algorithm::use_beam_search) {
             if (not Options::Get().quiet)
                 std::cout << "search did not reach a goal state, fall back to DPccp" << std::endl;
             DPccp{}(G, CF, PT);
         }
+    } catch (ai::budget_exhausted_exception) {
+        M_insist(search_algorithm::use_anytime_search, "exception can only be thrown during anytime search");
+        // TODO: greedily complete the partial solution found so far
     }
 #ifdef COUNTERS
     if (Options::Get().statistics) {
@@ -221,6 +226,7 @@ bool heuristic_search_helper(const char *vertex_str, const char *expand_str, con
         }
 
         config.weighting_factor = options::weighting_factor;
+        config.expansion_budget = options::expansion_budget;
 
         return m::pe::hs::heuristic_search<
             PlanTable,
@@ -396,6 +402,13 @@ void register_heuristic_search_plan_enumerator()
         /* long=        */ "--hs-init-upper-bound",
         /* description= */ "greedily compute an initial upper bound for cost-based pruning",
         [] (bool) { options::initialize_upper_bound = true; }
+    );
+    C.arg_parser().add<uint64_t>(
+        /* group=       */ "HeuristicSearch",
+        /* short=       */ nullptr,
+        /* long=        */ "--hs-budget",
+        /* description= */ "the expansion budget to use for Anytime A*",
+        [] (uint64_t n) { options::expansion_budget = n; }
     );
 }
 

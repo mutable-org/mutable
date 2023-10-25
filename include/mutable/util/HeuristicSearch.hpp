@@ -8,6 +8,7 @@
 #include <iosfwd>
 #include <map>
 #include <mutable/Options.hpp>
+#include <mutable/util/exception.hpp>
 #include <mutable/util/macro.hpp>
 #include <queue>
 #include <ratio>
@@ -23,6 +24,11 @@ namespace m {
 struct AdjacencyMatrix;
 
 namespace ai {
+
+struct budget_exhausted_exception : m::exception
+{
+    budget_exhausted_exception(std::string message) : m::exception(std::move(message)) { }
+};
 
 
 /*======================================================================================================================
@@ -517,7 +523,8 @@ concept SearchConfig = std::is_class_v<Config> and
                        std::integral<decltype(Config::BeamWidth::num)> and
                        std::integral<decltype(Config::BeamWidth::den)> and
                        requires { { Config::Lazy } -> std::convertible_to<bool>; } and
-                       requires { { Config::IsMonotone } -> std::convertible_to<bool>; };
+                       requires { { Config::IsMonotone } -> std::convertible_to<bool>; } and
+                       requires { { Config::PerformAnytimeSearch} -> std::convertible_to<bool>; };
 
 /** Relies on the rules of [*aggregate
  * initialization*](https://en.cppreference.com/w/cpp/language/aggregate_initialization) */
@@ -530,6 +537,8 @@ struct SearchConfiguration
     /** The weighting factor for the heuristic.  Should be in (0; ∞).  If a weight of 0 is anticipated, use heuristic
      * `zero` instead. */
     float weighting_factor = 1.f;
+    /** Budget for the maximum number of expansions.  When the budget is exhausted, search stops. */
+    uint64_t expansion_budget = std::numeric_limits<uint64_t>::max();
 };
 static_assert(std::is_standard_layout_v<SearchConfiguration>);
 
@@ -566,6 +575,8 @@ struct genericAStar
     static constexpr bool is_monotone = Config::IsMonotone;
     ///> The fraction of a state's successors to add to the beam (if performing beam search)
     static constexpr float BEAM_FACTOR = .2f;
+    ///> Whether to search with a fixed, finite budget and return early when the budget is exhausted
+    static constexpr bool use_anytime_search = Config::PerformAnytimeSearch;
 
     using callback_t = std::function<void(state_type, double)>;
 
@@ -830,11 +841,26 @@ const State & genericAStar<State, Expand, Heuristic, Config, Context...>::search
         );
     }
 
+    /* Lambda function to assure that the budgeted number of expansions is met when using Anytime A*. */
+    auto have_budget = [&config]() mutable -> bool {
+        if constexpr (use_anytime_search) {
+            if (config.expansion_budget) {
+                --config.expansion_budget;
+                return true;
+            } else {
+                return false;
+            }
+        } else {
+            (void) config; // silence unused warning
+            return true;
+        }
+    };
+
     /* Initialize queue with initial state. */
     state_manager_.template push<use_beam_search and is_monotone>(std::move(initial_state), 0, context...);
 
     /* Run work list algorithm. */
-    while (not state_manager_.queues_empty()) {
+    while (not state_manager_.queues_empty() and have_budget()) {
         M_insist(not (is_monotone and use_beam_search) or not state_manager_.is_beam_queue_empty(),
                  "the beam queue must not run empty with beam search on a monotone search space");
         auto top = state_manager_.pop();
@@ -846,6 +872,10 @@ const State & genericAStar<State, Expand, Heuristic, Config, Context...>::search
         explore_state(state, heuristic, expand, context...);
     }
 
+    if constexpr (use_anytime_search) {
+        if (config.expansion_budget == 0) // expansion budget exhausted?
+            throw budget_exhausted_exception("no goal state found with given expansion budget");
+    }
     throw std::logic_error("goal state unreachable from provided initial state");
 }
 

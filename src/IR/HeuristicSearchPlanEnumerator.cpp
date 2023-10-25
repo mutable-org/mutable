@@ -31,6 +31,8 @@ const char *expand = "BottomUpComplete";
 const char *heuristic = "zero";
 /** The search method to use. */
 const char *search = "AStar";
+/** The weighting factor to use. */
+float weighting_factor = 1.f;
 
 }
 
@@ -373,6 +375,13 @@ void register_heuristic_search_plan_enumerator()
         /* long=        */ "--hs-search",
         /* description= */ "the search method to use",
         [] (const char *str) { options::search = str; }
+    );
+    C.arg_parser().add<float>(
+        /* group=       */ "HeuristicSearch",
+        /* short=       */ nullptr,
+        /* long=        */ "--hs-wf",
+        /* description= */ "the weighting factor for the heuristic value (defaults to 1)",
+        [] (float wf) { options::weighting_factor = wf; }
     );
 }
 

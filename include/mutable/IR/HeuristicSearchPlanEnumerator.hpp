@@ -2105,10 +2105,10 @@ struct Fibonacci_heap
     using allocator_type = boost::container::node_allocator<T>;
 };
 
-template<long Num, long Denom = 1>
-struct weight
+template<bool B>
+struct weighted_search
 {
-    static constexpr float Weight = float(Num) / Denom;
+    static constexpr bool PerformWeightedSearch= B;
 };
 
 template<long Num, long Denom = 1>
@@ -2151,12 +2151,14 @@ struct combine<T> : T { };
     template<typename State, typename Expand, typename Heuristic, typename... Context> \
     using NAME = ai::genericAStar<State, Expand, Heuristic, combine<__VA_ARGS__>, Context...>
 
-DEFINE_SEARCH(AStar,                monotone<true>, Fibonacci_heap, weight<1>, lazy<false>, cost_based_pruning<false>, beam<0>);
-DEFINE_SEARCH(lazyAStar,            monotone<true>, Fibonacci_heap, weight<1>, lazy<true>,  cost_based_pruning<false>, beam<0>);
-DEFINE_SEARCH(beam_search,          monotone<true>, Fibonacci_heap, weight<1>, lazy<false>, cost_based_pruning<false>, beam<2>);
-DEFINE_SEARCH(dynamic_beam_search,  monotone<true>, Fibonacci_heap, weight<1>, lazy<false>, cost_based_pruning<false>, beam<1, 5>);
-DEFINE_SEARCH(AStar_with_cbp,       monotone<true>, Fibonacci_heap, weight<1>, lazy<false>, cost_based_pruning<true>,  beam<0>);
-DEFINE_SEARCH(beam_search_with_cbp, monotone<true>, Fibonacci_heap, weight<1>, lazy<false>, cost_based_pruning<true>,  beam<2>);
+DEFINE_SEARCH(AStar,                    monotone<true>, Fibonacci_heap, weighted_search<false>, lazy<false>, cost_based_pruning<false>, beam<0>);
+DEFINE_SEARCH(lazyAStar,                monotone<true>, Fibonacci_heap, weighted_search<false>, lazy<true>,  cost_based_pruning<false>, beam<0>);
+DEFINE_SEARCH(beam_search,              monotone<true>, Fibonacci_heap, weighted_search<false>, lazy<false>, cost_based_pruning<false>, beam<2>);
+DEFINE_SEARCH(dynamic_beam_search,      monotone<true>, Fibonacci_heap, weighted_search<false>, lazy<false>, cost_based_pruning<false>, beam<1, 5>);
+DEFINE_SEARCH(AStar_with_cbp,           monotone<true>, Fibonacci_heap, weighted_search<false>, lazy<false>, cost_based_pruning<true>,  beam<0>);
+DEFINE_SEARCH(beam_search_with_cbp,     monotone<true>, Fibonacci_heap, weighted_search<false>, lazy<false>, cost_based_pruning<true>,  beam<2>);
+DEFINE_SEARCH(weighted_AStar,           monotone<true>, Fibonacci_heap, weighted_search<true>,  lazy<false>, cost_based_pruning<false>, beam<0>);
+DEFINE_SEARCH(weighted_AStar_with_cbp,  monotone<true>, Fibonacci_heap, weighted_search<true>,  lazy<false>, cost_based_pruning<true>,  beam<0>);
 
 #undef DEFINE_SEARCH
 

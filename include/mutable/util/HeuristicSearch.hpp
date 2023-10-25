@@ -107,6 +107,7 @@ struct StateManager
 
     static constexpr bool detect_duplicates = true;
     static constexpr bool enable_cost_based_pruning = Config::PerformCostBasedPruning;
+    static constexpr bool use_weighted_search = Config::PerformWeightedSearch;
 
     private:
     ///> type for a pointer to an entry in the map of states
@@ -238,11 +239,24 @@ struct StateManager
     ///> the cost of the cheapest, complete path found yet; can be used for additional pruning
     double least_path_cost = std::numeric_limits<double>::infinity();
 
+    ///> the weighting factor for the heuistic value of a state
+    float weighting_factor_ = 1.f;
+
     public:
     StateManager(Context&... context) : partitions_(context...) { }
     StateManager(const StateManager&) = delete;
     StateManager(StateManager&&) = default;
     StateManager & operator=(StateManager&&) = default;
+
+    /** Returns the weighting factor for the heuristic value. */
+    float weighting_factor() const { return weighting_factor_; }
+
+    /** Set the weighting factor for the heuristic value and returns the old value. */
+    float weighting_factor(float new_factor) {
+        M_insist(new_factor >= 0.f, "factor must not be negative");
+        M_insist(new_factor != 0.f, "factor must not be 0, use heuristic zero for Dijkstra`s search algorithm");
+        return std::exchange(weighting_factor_, new_factor);
+    }
 
     /** Update the `least_path_cost` to `cost`.  Requires that `cost < least_path_cost`. */
     void update_least_path_cost(double cost) {
@@ -479,7 +493,7 @@ operator()(StateManager::pointer_type p_left, StateManager::pointer_type p_right
 
 template<typename Config>
 concept SearchConfig = std::is_class_v<Config> and
-                       requires { { Config::Weight } -> std::convertible_to<float>; } and
+                       requires { { Config::PerformWeightedSearch } -> std::convertible_to<bool>; } and
                        std::integral<decltype(Config::BeamWidth::num)> and
                        std::integral<decltype(Config::BeamWidth::den)> and
                        requires { { Config::Lazy } -> std::convertible_to<bool>; } and
@@ -493,6 +507,9 @@ struct SearchConfiguration
      * that no bound is given.  (Usually, the search algorithm will then initialize its internal upper bound with
      * infinity.) */
     double upper_bound = std::numeric_limits<double>::quiet_NaN();
+    /** The weighting factor for the heuristic.  Should be in (0; ∞).  If a weight of 0 is anticipated, use heuristic
+     * `zero` instead. */
+    float weighting_factor = 1.f;
 };
 static_assert(std::is_standard_layout_v<SearchConfiguration>);
 
@@ -515,7 +532,8 @@ struct genericAStar
     using expand_type = Expand;
     using heuristic_type = Heuristic;
 
-    static constexpr float weight = Config::Weight;
+    ///> Whether to perform weighted search with a given weighting factor for the heuristic value
+    static constexpr bool use_weighted_search = Config::PerformWeightedSearch;
     ///> The width of a beam used for *beam search*.  Set to 0 to disable beam search.
     static constexpr float beam_width = Config::BeamWidth::num / Config::BeamWidth::den;
     ///> Whether to perform beam search or regular A*
@@ -532,6 +550,9 @@ struct genericAStar
     using callback_t = std::function<void(state_type, double)>;
 
     private:
+    ///> the weighting factor for the heuistic value of a state
+    float weighting_factor_ = 1.;
+
 #if 1
 #define DEF_COUNTER(NAME) \
     std::size_t num_##NAME##_ = 0; \
@@ -594,6 +615,16 @@ struct genericAStar
     genericAStar(genericAStar&&) = default;
 
     genericAStar & operator=(genericAStar&&) = default;
+
+    /** Returns the weighting factor for the heuristic value. */
+    float weighting_factor() const { return weighting_factor_; }
+
+    /** Set the weighting factor for the heuristic value and returns the old value. */
+    float weighting_factor(float new_factor) {
+        M_insist(new_factor >= 0.f, "factor must not be negative");
+        M_insist(new_factor != 0.f, "weight must not be 0, use heuristic zero for Dijkstra`s search algorithm");
+        return std::exchange(weighting_factor_, new_factor);
+    }
 
     /** Search for a path from the given `initial_state` to a goal state.  Uses the given heuristic to guide the search.
      * Provides an upper bound for the cost of the shortest path.
@@ -674,7 +705,7 @@ struct genericAStar
         /*----- Evaluate heuristic lazily by using heurisitc value of current state. -----*/
         double h_current_state;
         if (auto it = state_manager_.find(state, context...); it == state_manager_.end(state, context...)) {
-            h_current_state = weight * heuristic(state, context...);
+            h_current_state = weighting_factor() * heuristic(state, context...);
         } else {
             inc_cached_heuristic_value();
             h_current_state = it->second.h; // use cached `h`
@@ -691,7 +722,7 @@ struct genericAStar
         /*----- Evaluate heuristic eagerly. -----*/
         expand(state, [this, callback=std::move(callback), &state, &heuristic, &context...](state_type successor) {
             if (auto it = state_manager_.find(successor, context...); it == state_manager_.end(state, context...)) {
-                const double h = weight * heuristic(successor, context...);
+                const double h = weighting_factor() * heuristic(successor, context...);
                 callback(std::move(successor), h);
             } else {
                 inc_cached_heuristic_value();
@@ -764,6 +795,12 @@ const State & genericAStar<State, Expand, Heuristic, Config, Context...>::search
     SearchConfiguration config,
     Context&... context
 ) {
+    if constexpr (use_weighted_search) {
+        /* For weighted search, set the weight to the desired weighting factor. */
+        weighting_factor(config.weighting_factor);
+        state_manager_.weighting_factor(config.weighting_factor);
+    }
+
     if (not std::isnan(config.upper_bound)) {
         /* Initialize the least path cost.  Note, that the given upper bound could be *exactly* the weight of the
          * shortest path.  To not prune the goal reached on that shortest path, we increase the upper bound *slightly*.

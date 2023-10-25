@@ -33,6 +33,8 @@ const char *heuristic = "zero";
 const char *search = "AStar";
 /** The weighting factor to use. */
 float weighting_factor = 1.f;
+/** Whether to compute an initial upper bound for cost-based pruning. */
+bool initialize_upper_bound = false;
 
 }
 
@@ -124,7 +126,7 @@ template<
     template<typename, typename, typename, typename...> typename Search
 >
 bool heuristic_search(PlanTable &PT, const QueryGraph &G, const AdjacencyMatrix &M, const CostFunction &CF,
-                      const CardinalityEstimator &CE)
+                      const CardinalityEstimator &CE, ai::SearchConfiguration config)
 {
     using H = Heuristic<PlanTable, State, Expand>;
     State::RESET_STATE_COUNTERS();
@@ -141,17 +143,8 @@ bool heuristic_search(PlanTable &PT, const QueryGraph &G, const AdjacencyMatrix 
 
     search_algorithm S(PT, G, M, CF, CE);
 
-    const double upper_bound = [&]() {
-        /*----- Run GOO to compute upper bound of plan cost. -----*/
-        /* Beam search becomes incomplete if an upper bound derived from an actual plan is provided.  Beam search
-         * may never find that plan or any better plan, and hence return without finding a path. In this case, the
-         * initial plan found by GOO is used. */
-        GOO Goo;
-        Goo(G, CF, PT);
-        return PT.get_final().cost;
-    }();
     if (Options::Get().statistics)
-        std::cout << "initial upper bound is " << upper_bound << std::endl;
+        std::cout << "initial upper bound is " << config.upper_bound << std::endl;
 
     try {
         State initial_state = Expand::template Start<State>(PT, G, M, CF, CE);
@@ -160,9 +153,7 @@ bool heuristic_search(PlanTable &PT, const QueryGraph &G, const AdjacencyMatrix 
             /* initial_state= */ std::move(initial_state),
             /* expand=        */ Expand{},
             /* heuristic=     */ h,
-            /* config=        */ {
-                .upper_bound = upper_bound,
-            },
+            /* config=        */ config,
             /*----- Context -----*/
             PT, G, M, CF, CE
         );
@@ -215,13 +206,29 @@ bool heuristic_search_helper(const char *vertex_str, const char *expand_str, con
         streq(options::heuristic, heuristic_str) and
         streq(options::search,    search_str   ))
     {
+        ai::SearchConfiguration config;
+
+        if (options::initialize_upper_bound) {
+            config.upper_bound = [&]() {
+                /*----- Run GOO to compute upper bound of plan cost. -----*/
+                /* Beam search becomes incomplete if an upper bound derived from an actual plan is provided.  Beam
+                 * search may never find that plan or any better plan, and hence return without finding a path. In this
+                 * case, the initial plan found by GOO is used. */
+                GOO Goo;
+                Goo(G, CF, PT);
+                return PT.get_final().cost;
+            }();
+        }
+
+        config.weighting_factor = options::weighting_factor;
+
         return m::pe::hs::heuristic_search<
             PlanTable,
             State,
             Expand,
             Heuristic,
             Search
-        >(PT, G, M, CF, CE);
+        >(PT, G, M, CF, CE, config);
     }
     return false;
 
@@ -382,6 +389,13 @@ void register_heuristic_search_plan_enumerator()
         /* long=        */ "--hs-wf",
         /* description= */ "the weighting factor for the heuristic value (defaults to 1)",
         [] (float wf) { options::weighting_factor = wf; }
+    );
+    C.arg_parser().add<bool>(
+        /* group=       */ "HeuristicSearch",
+        /* short=       */ nullptr,
+        /* long=        */ "--hs-init-upper-bound",
+        /* description= */ "greedily compute an initial upper bound for cost-based pruning",
+        [] (bool) { options::initialize_upper_bound = true; }
     );
 }
 

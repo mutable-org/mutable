@@ -2177,7 +2177,7 @@ template<
     template<typename, typename, typename, typename...> typename Search
 >
 bool heuristic_search(PlanTable &PT, const QueryGraph &G, const AdjacencyMatrix &M, const CostFunction &CF,
-                      const CardinalityEstimator &CE);
+                      const CardinalityEstimator &CE, ai::SearchConfiguration config);
 
 /** Computes the join order using heuristic search */
 struct HeuristicSearch final : PlanEnumeratorCRTP<HeuristicSearch>

@@ -2,8 +2,11 @@
 
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <iomanip>
 #include <limits>
+#include <mutable/util/concepts.hpp>
+#include <mutable/util/macro.hpp>
 #include <string>
 #include <string_view>
 #include <type_traits>
@@ -16,8 +19,8 @@ namespace {
 
 /** Helper function to parse integral values. */
 template<typename T>
-std::enable_if_t<std::is_integral_v<T>, void>
-parse_integral(const char **&argv, const std::function<void(T)> &callback)
+requires integral<T>
+void help_parse(const char **&argv, const std::function<void(T)> &callback)
 {
     if (not *++argv) {
         std::cerr << "missing argument" << std::endl;;
@@ -26,22 +29,22 @@ parse_integral(const char **&argv, const std::function<void(T)> &callback)
 
     try {
         /*----- Signed integer types. -----*/
-        if constexpr (std::is_same_v<T, int>)
+        if constexpr (std::same_as<T, int>)
             callback(std::stoi(*argv));
-        if constexpr (std::is_same_v<T, long>)
+        if constexpr (std::same_as<T, long>)
             callback(std::stol(*argv));
-        if constexpr (std::is_same_v<T, long long>)
+        if constexpr (std::same_as<T, long long>)
             callback(std::stoll(*argv));
         /*----- Unsigned integer types. -----*/
-        if constexpr (std::is_same_v<T, unsigned>) {
+        if constexpr (std::same_as<T, unsigned>) {
             const unsigned long v = std::stoul(*argv);
             if (v > std::numeric_limits<unsigned>::max())
                 throw std::out_of_range("input exceeds range of type unsigned int");
             callback(unsigned(v));
         }
-        if constexpr (std::is_same_v<T, unsigned long>)
+        if constexpr (std::same_as<T, unsigned long>)
             callback(std::stoul(*argv));
-        if constexpr (std::is_same_v<T, unsigned long long>)
+        if constexpr (std::same_as<T, unsigned long long>)
             callback(std::stoull(*argv));
     } catch(std::invalid_argument ex) {
         std::cerr << "not a valid integer" << std::endl;
@@ -52,21 +55,52 @@ parse_integral(const char **&argv, const std::function<void(T)> &callback)
     }
 }
 
+/** Helper function to parse floating-point values. */
+template<typename T>
+requires std::floating_point<T>
+void help_parse(const char **&argv, const std::function<void(T)> &callback)
+{
+    if (not *++argv) {
+        std::cerr << "missing argument" << std::endl;
+        std::exit(EXIT_FAILURE);
+    }
+
+    T fp;
+    try {
+        if constexpr (std::same_as<T, float>)
+            fp = std::stof(*argv);
+        else
+            fp = std::stod(*argv);
+    } catch (std::invalid_argument) {
+        std::cerr << "not a valid floating-point number" << std::endl;
+        std::exit(EXIT_FAILURE);
+    } catch (std::out_of_range) {
+        std::cerr << "value out of range" << std::endl;
+        std::exit(EXIT_FAILURE);
+    }
+
+    callback(fp);
 }
+
+}
+
+#define PARSE(TYPE) \
+template<> void ArgParser::OptionImpl<TYPE>::parse(const char **&argv) const { help_parse<TYPE>(argv, callback); }
 
 /*----- Boolean ------------------------------------------------------------------------------------------------------*/
 template<> void ArgParser::OptionImpl<bool>::parse(const char **&) const { callback(true); }
 
 /*----- Integral -----------------------------------------------------------------------------------------------------*/
-#define PARSE(TYPE) \
-template<> void ArgParser::OptionImpl<TYPE>::parse(const char **&argv) const { parse_integral<TYPE>(argv, callback); }
 PARSE(int);
 PARSE(long);
 PARSE(long long);
 PARSE(unsigned);
 PARSE(unsigned long);
 PARSE(unsigned long long);
-#undef PARSE
+
+/*----- Float & Double -----------------------------------------------------------------------------------------------*/
+PARSE(float);
+PARSE(double);
 
 /*----- String -------------------------------------------------------------------------------------------------------*/
 template<>
@@ -107,6 +141,8 @@ void ArgParser::OptionImpl<std::vector<std::string_view>>::parse(const char **&a
 
     callback(std::move(args));
 }
+
+#undef PARSE
 
 //----------------------------------------------------------------------------------------------------------------------
 

@@ -5,6 +5,7 @@
 #include <iomanip>
 #include <limits>
 #include <string>
+#include <string_view>
 #include <type_traits>
 
 
@@ -76,6 +77,35 @@ void ArgParser::OptionImpl<const char*>::parse(const char **&argv) const
         std::exit(EXIT_FAILURE);
     }
     callback(*argv);
+}
+
+/*----- List of String -----------------------------------------------------------------------------------------------*/
+template<>
+void ArgParser::OptionImpl<std::vector<std::string_view>>::parse(const char **&argv) const
+{
+    if (not *++argv) {
+        std::cerr << "missing argument" << std::endl;
+        std::exit(EXIT_FAILURE);
+    }
+
+    std::vector<std::string_view> args;
+    std::string_view sv(*argv);
+
+    if (sv.empty()) {
+        callback(std::move(args));
+        return;
+    }
+
+    std::string_view::size_type begin = 0;
+    for (;;) {
+        auto end = sv.find(',', begin);
+        args.emplace_back(sv.substr(begin, end - begin));
+        if (end == std::string_view::npos)
+            break;
+        begin = end + 1; // skip comma ','
+    }
+
+    callback(std::move(args));
 }
 
 //----------------------------------------------------------------------------------------------------------------------

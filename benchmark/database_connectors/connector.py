@@ -166,5 +166,6 @@ class Connector(ABC):
 
 
     # Connector should override this method
+    @abstractmethod
     def print_command(self, command: str | bytes | Sequence[str | bytes], query: str, indent: str = '') -> None:
         pass

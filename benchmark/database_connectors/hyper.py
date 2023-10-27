@@ -5,10 +5,8 @@ from benchmark_utils import *
 from tableauhyperapi import HyperProcess, Telemetry, Connection, CreateMode, NOT_NULLABLE, NULLABLE, SqlType, \
         TableDefinition, Inserter, escape_name, escape_string_literal, HyperException, TableName
 from typeguard import typechecked
-from typing import Any
+from typing import Any, Sequence
 import os
-import subprocess
-
 
 
 @typechecked
@@ -25,10 +23,9 @@ class HyPer(Connector):
         suffix: str = f' ({get_num_cores()} cores)' if self.multithreaded else ' (single core)'
         tqdm_print(f'` Perform experiment {suite}/{benchmark}/{experiment} with configuration HyPer{suffix}.')
 
-        path: str = os.getcwd()
         script = f'''
 import sys
-sys.path.insert(0, '{path}/benchmark')
+sys.path.insert(0, '{os.getcwd()}/benchmark')
 import database_connectors.hyper
 print(repr(database_connectors.hyper.HyPer._execute({n_runs}, {repr(params)})))
 sys.stdout.flush()
@@ -44,36 +41,18 @@ sys.stdout.flush()
             tqdm_print(f"    $ {' '.join(args)}")
 
         timeout: int = n_runs * (DEFAULT_TIMEOUT + TIMEOUT_PER_CASE * len(params['cases']))
-        process = subprocess.Popen(
-            args=args,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            cwd=path
-        )
 
         try:
-            process.wait(timeout=timeout)
-        except subprocess.TimeoutExpired:
-            tqdm_print(f'Benchmark timed out after {timeout} seconds')
-            # Set execution time of every case of every run to timeout
-            times: list[float] = [float(TIMEOUT_PER_CASE*1000) for _ in range(n_runs)]
+            out: str = self.benchmark_query(command=args, query='', timeout=timeout,
+                benchmark_info=f'{suite}/{benchmark}/{experiment} [HyPer{suffix}]',
+                verbose=self.verbose)
+        except ExperimentTimeoutExpired:
+            times: list[float] = [float(TIMEOUT_PER_CASE * 1000) for _ in range(n_runs)]
             config_result: ConfigResult = {case: times for case in params['cases'].keys()}
             result: ConnectorResult = {f'HyPer{suffix}': config_result}
             return result
-        finally:
-            if process.poll() is None:          # if process is still alive
-                process.terminate()             # try to shut down gracefully
-                try:
-                    process.wait(timeout=15)    # give process 15 seconds to terminate
-                except subprocess.TimeoutExpired:
-                    process.kill()              # kill if process did not terminate in time
 
-        # Check returncode
-        if process.returncode == 0:
-            result: ConnectorResult = eval(process.stdout.read().decode('latin-1'))
-        else:
-            raise ConnectorException(f"Process failed with return code {process.returncode}. Details:\n{process.stderr.read().decode('latin-1')}")
-
+        result: ConnectorResult = eval(out)
         patched_result: ConnectorResult = dict()
         for key, val in result.items():
             patched_result[f'{key}{suffix}'] = val
@@ -255,3 +234,9 @@ sys.stdout.flush()
             }
             result.append((table_defs[table_name], file, par))
         return result
+
+    def print_command(self, command: str | bytes | Sequence[str | bytes], query: str, indent: str = '') -> None:
+        # hyper connector only uses list[str] as command
+        if command is not list[str]:
+            pass
+        tqdm_print(f"    $ {' '.join(command)}")

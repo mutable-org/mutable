@@ -7,7 +7,6 @@
 #include "lex/Lexer.hpp"
 #include "parse/Parser.hpp"
 #include "parse/Sema.hpp"
-#include "parse/Sema.hpp"
 #include <cerrno>
 #include <fstream>
 #include <mutable/catalog/DatabaseCommand.hpp>
@@ -72,22 +71,13 @@ void m::process_stream(std::istream &in, const char *filename, Diagnostic diag)
     /*----- Process the input stream. --------------------------------------------------------------------------------*/
     ast::Lexer lexer(diag, C.get_pool(), filename, in);
     ast::Parser parser(lexer);
-    ast::Sema sema(diag);
 
     while (parser.token()) {
         bool err = false;
         diag.clear();
         Timer &timer = C.timer();
         auto ast = parser.parse();
-        err |= diag.num_errors() > 0;
-
-        diag.clear();
-        auto cmd = sema.analyze(std::move(ast));
-        err |= diag.num_errors() > 0;
-
-        M_insist(not err == bool(cmd), "when there are no errors, Sema must have returned a command");
-        if (not err and cmd)
-            C.scheduler().schedule_command(std::move(cmd), diag);
+        C.scheduler().schedule_command(std::move(ast), diag);
 
         if (Options::Get().times) {
             using namespace std::chrono;

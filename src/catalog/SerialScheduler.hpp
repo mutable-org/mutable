@@ -28,9 +28,9 @@ struct SerialScheduler : Scheduler
         CommandQueue() = default;
         ~CommandQueue() = default;
 
-        std::optional<queued_command> pop();   ///< returns the next queued `DatabaseCommand`. If the queue is in pop-only mode this returns `std::nullopt`.
-        void push(std::unique_ptr<DatabaseCommand> command, Diagnostic &diag, std::promise<bool> promise);
-        void close();    ///< empties and closes the queue without executing the remaining `DatabaseCommand`s.
+        std::optional<queued_command> pop();   ///< returns the next queued `ast::Command`. If the queue is in pop-only mode this returns `std::nullopt`.
+        void push(std::unique_ptr<ast::Command> command, Diagnostic &diag, std::promise<bool> promise);
+        void close();    ///< empties and closes the queue without executing the remaining `ast::Command`s.
         bool is_closed();  ///< signals waiting threads that no more elements will be pushed
     };
 
@@ -41,7 +41,7 @@ struct SerialScheduler : Scheduler
     SerialScheduler() = default;
     ~SerialScheduler();
 
-    bool schedule_command(std::unique_ptr<DatabaseCommand> command, Diagnostic &diag) override;
+    bool schedule_command(std::unique_ptr<ast::Command> command, Diagnostic &diag) override;
 
     private:
     /** The method run by the worker thread `schedule_thread_`.

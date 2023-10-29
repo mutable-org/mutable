@@ -1,4 +1,5 @@
 #include "catalog/SerialScheduler.hpp"
+#include "parse/Sema.hpp"
 #include <mutable/mutable.hpp>
 
 
@@ -20,7 +21,7 @@ std::optional<m::Scheduler::queued_command> SerialScheduler::CommandQueue::pop()
     return {std::move(res)};
 }
 
-void SerialScheduler::CommandQueue::push(std::unique_ptr<DatabaseCommand> command, Diagnostic &diag, std::promise<bool> promise)
+void SerialScheduler::CommandQueue::push(std::unique_ptr<ast::Command> command, Diagnostic &diag, std::promise<bool> promise)
 {
     std::unique_lock<std::mutex> lock(mutex_);
     if (closed_) {
@@ -60,7 +61,7 @@ SerialScheduler::~SerialScheduler()
     }
 }
 
-bool SerialScheduler::schedule_command(std::unique_ptr<DatabaseCommand> command, Diagnostic &diag)
+bool SerialScheduler::schedule_command(std::unique_ptr<ast::Command> command, Diagnostic &diag)
 {
     std::promise<bool> execution_completed;
     auto execution_completed_future = execution_completed.get_future();
@@ -83,9 +84,21 @@ void SerialScheduler::schedule_thread()
         // pop() should only return no value if the queue is closed
         if (not ret.has_value()) continue;
 
-        auto [cmd, diag, promise] = std::move(ret.value());
-        cmd->execute(diag);
-        promise.set_value(true);
+        auto [ast, diag, promise] = std::move(ret.value());
+        ast::Sema sema(diag);
+        bool err = diag.num_errors() > 0; // parser errors
+
+        diag.clear();
+        auto cmd = sema.analyze(std::move(ast));
+        err |= diag.num_errors() > 0; // sema errors
+
+        M_insist(not err == bool(cmd), "when there are no errors, Sema must have returned a command");
+        if (not err and cmd) {
+            cmd->execute(diag);
+            promise.set_value(true);
+            continue;
+        }
+        promise.set_value(false);
     }
 }
 

@@ -1,7 +1,7 @@
 #pragma once
 
 #include <mutable/mutable-config.hpp>
-#include <mutable/catalog/DatabaseCommand.hpp>
+#include <mutable/parse/AST.hpp>
 #include <mutable/util/Diagnostic.hpp>
 #include <future>
 
@@ -13,16 +13,16 @@ namespace m {
 struct M_EXPORT Scheduler
 {
     protected:
-    using queued_command = std::tuple<std::unique_ptr<DatabaseCommand>, Diagnostic &, std::promise<bool>>;
+    using queued_command = std::tuple<std::unique_ptr<ast::Command>, Diagnostic &, std::promise<bool>>;
 
     public:
     Scheduler() = default;
     virtual ~Scheduler() {}
 
-    /** Schedule a `DatabaseCommand` for execution.
-     * Blocks execution until the `DatabaseCommand` finished its execution or until the Scheduler aborts the execution.
-     * Returns true if the `DatabaseCommand` was successfully executed, false otherwise. */
-    virtual bool schedule_command(std::unique_ptr<DatabaseCommand> command, Diagnostic &diag) = 0;
+    /** Schedule a `ast::Command` for execution.
+     * Blocks execution until the `ast::Command` finished its execution or until the Scheduler aborts the execution.
+     * Returns true if the `ast::Command` was successfully executed, false otherwise. */
+    virtual bool schedule_command(std::unique_ptr<ast::Command> command, Diagnostic &diag) = 0;
 };
 
 }

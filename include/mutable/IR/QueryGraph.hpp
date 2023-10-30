@@ -5,6 +5,7 @@
 #include <deque>
 #include <functional>
 #include <memory>
+#include <mutable/catalog/Scheduler.hpp>
 #include <mutable/IR/CNF.hpp>
 #include <mutable/mutable-config.hpp>
 #include <mutable/util/AdjacencyMatrix.hpp>
@@ -188,6 +189,8 @@ struct M_EXPORT QueryGraph
 
     mutable std::unique_ptr<AdjacencyMatrix> adjacency_matrix_;
 
+    Scheduler::Transaction *t_ = nullptr; ///< the transaction this query graph belongs to
+
     public:
     friend void swap(QueryGraph &first, QueryGraph &second) {
         using std::swap;
@@ -280,6 +283,18 @@ struct M_EXPORT QueryGraph
 
     /** Translates the query graph to SQL. */
     void sql(std::ostream &out) const;
+
+    /** Set the transaction ID. */
+    void transaction(Scheduler::Transaction *t) {
+        M_insist(not t_ or *t_ == *t, "QueryGraph is already linked to another transaction");
+        t_ = t;
+
+        for (auto &ds : sources_)
+            if (auto bt = cast<const Query>(ds.get()))
+                bt->query_graph_->transaction(t_);
+    }
+    /** Returns the transaction ID. */
+    Scheduler::Transaction * transaction() const { return t_; }
 
     void dump(std::ostream &out) const;
     void dump() const;

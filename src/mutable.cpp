@@ -77,7 +77,7 @@ void m::process_stream(std::istream &in, const char *filename, Diagnostic diag)
         diag.clear();
         Timer &timer = C.timer();
         auto ast = parser.parse();
-        C.scheduler().schedule_command(std::move(ast), diag);
+        C.scheduler().autocommit(std::move(ast), diag);
 
         if (Options::Get().times) {
             using namespace std::chrono;

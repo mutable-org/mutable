@@ -1,6 +1,7 @@
 #pragma once
 
 #include <iostream>
+#include <mutable/catalog/Scheduler.hpp>
 #include <mutable/catalog/Schema.hpp>
 #include <mutable/IR/Tuple.hpp>
 #include <mutable/storage/Store.hpp>
@@ -15,9 +16,10 @@ struct M_EXPORT Reader
 {
     const Table &table; ///< the table to insert the data into
     Diagnostic &diag;
+    Scheduler::Transaction * transaction;
 
     public:
-    Reader(const Table &table, Diagnostic &diag) : table(table), diag(diag) { }
+    Reader(const Table &table, Diagnostic &diag, Scheduler::Transaction *transaction = nullptr) : table(table), diag(diag), transaction(transaction) { }
     virtual ~Reader() { }
 
     virtual void operator()(std::istream &in, const char *name = "-") = 0;
@@ -76,7 +78,7 @@ struct M_EXPORT DSVReader : Reader, ConstTypeVisitor
     std::size_t col_idx;
 
     public:
-    DSVReader(const Table &table, Config cfg, Diagnostic &diag);
+    DSVReader(const Table &table, Config cfg, Diagnostic &diag, Scheduler::Transaction *transaction = nullptr);
 
     void operator()(std::istream &in, const char *name) override;
 

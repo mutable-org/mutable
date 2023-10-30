@@ -6,6 +6,7 @@ add_library(
     CostFunctionCout.cpp
     CostModel.cpp
     DatabaseCommand.cpp
+    Scheduler.cpp
     Schema.cpp
     SerialScheduler.cpp
     SpnWrapper.cpp

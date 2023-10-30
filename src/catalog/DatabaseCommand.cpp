@@ -65,6 +65,7 @@ void QueryDatabase::execute(Diagnostic &diag)
     }
 
     graph_ = M_TIME_EXPR(QueryGraph::Build(ast<ast::SelectStmt>()), "Construct the query graph", C.timer());
+    graph_->transaction(this->transaction());
 
     if (Options::Get().graph)
         graph_->dump(std::cout);
@@ -159,7 +160,7 @@ void ImportDSV::execute(Diagnostic &diag)
 {
     Catalog &C = Catalog::Get();
     try {
-        DSVReader R(table_, cfg_, diag);
+        DSVReader R(table_, cfg_, diag, transaction());
 
         errno = 0;
         std::ifstream file(path_);

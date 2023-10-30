@@ -19,8 +19,8 @@ using namespace m;
 using namespace m::storage;
 
 
-DSVReader::DSVReader(const Table &table, Config cfg, Diagnostic &diag)
-    : Reader(table, diag)
+DSVReader::DSVReader(const Table &table, Config cfg, Diagnostic &diag, Scheduler::Transaction *transaction)
+    : Reader(table, diag, transaction)
     , cfg_(cfg)
     , pos(nullptr)
 {

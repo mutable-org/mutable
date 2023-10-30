@@ -21,6 +21,8 @@ struct DatabaseCommand
     private:
     ///> the AST of the command; optional
     std::unique_ptr<ast::Command> ast_;
+    ///> the transaction this command belongs to
+    Scheduler::Transaction *t_;
 
     public:
     virtual ~DatabaseCommand() = default;
@@ -40,6 +42,11 @@ struct DatabaseCommand
 
     std::unique_ptr<ast::Command> ast(std::unique_ptr<ast::Command> new_ast) {
         return std::exchange(ast_, std::move(new_ast));
+    }
+
+    Scheduler::Transaction * transaction() { return t_; }
+    void transaction(Scheduler::Transaction *t) {
+        return std::swap(t_, t);
     }
 };
 

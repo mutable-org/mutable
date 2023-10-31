@@ -176,8 +176,117 @@ bool heuristic_search(PlanTable &PT, const QueryGraph &G, const AdjacencyMatrix 
             DPccp{}(G, CF, PT);
         }
     } catch (ai::budget_exhausted_exception) {
+        /*--- No plan was found within the given budget for A* ⇒ use GOO to complete the *nearest* partial solution --*/
+        /* Find the set of states that is closest to the goal state, concerning path length.  Among these states chose
+         * the state X with the lowest f-value (f(X)=g(X)+h(X)).  In the case that this state is a goal state, the found
+         * path to this state is returned.  Otherwise, use GOO from this state to find a plan. */
+
         M_insist(search_algorithm::use_anytime_search, "exception can only be thrown during anytime search");
-        // TODO: greedily complete the partial solution found so far
+        if (Options::Get().statistics)
+            S.dump(std::cout);
+
+        using partition_type = typename decltype(S)::state_manager_type::map_type; ///< map from State to StateInfo
+        const auto &SM = S.state_manager();
+        const auto &partitions = SM.partitions();
+
+        /*----- Find the `last_state_found' as the starting state for path completion -----*/
+        /* Find the partition closest to the goal, i.e. the partition that minimizes the difference between the number
+         * of subproblems included in the states of the partition and the number of subproblems of the goal.  Thus, the
+         * direction of traversal to finding this partition depends on the chosen search direction.  For bottom-up
+         * search, traverse the partitions starting at the partition with each state only consisting of one subproblem,
+         * i.e. the goal of bottom-up Search.  For top-down search, traverse the partitions in the reverse direction,
+         * starting at the partition with each state only consisting of base relations, i.e. the goal of top-down
+         * search.  In the partition closest to the goal, choose the state X with ths smallest unweighted f(X). */
+        auto find_partition_closest_to_goal = [](auto partitions) -> const partition_type & {
+            auto it = std::find_if_not(
+                partitions.begin(),
+                partitions.end(),
+                [](const partition_type &partition) -> bool { return partition.empty(); }
+            );
+            M_insist(it != partitions.end(), "all partitions empty");
+            return *it;
+        };
+
+        auto &last_partition = [&find_partition_closest_to_goal](auto partitions) -> const partition_type & {
+            if constexpr (std::is_base_of_v<expansions::TopDown, Expand>)
+                return find_partition_closest_to_goal(partitions.reverse());
+            else
+                return find_partition_closest_to_goal(partitions);
+        }(partitions);
+
+        using entry_type = decltype(S)::state_manager_type::map_type::value_type;
+        auto min_state = [&S, &config](const entry_type *best, const entry_type &next) -> const entry_type* {
+            /** Compute the *f*-value of an entry in the state manager. */
+            auto f = [&S, &config](const entry_type &e) {
+                if constexpr (S.use_weighted_search)
+                    return e.first.g() + e.second.h / config.weighting_factor;
+                else
+                    return e.first.g() + e.second.h;
+            };
+            const double f_best = f(*best);
+            const double f_next = f(next);
+            return f_best <= f_next ? best : &next;
+        };
+
+        auto &last_state_found = std::accumulate(
+            /* first= */ last_partition.begin(),
+            /* last=  */ last_partition.end(),
+            /* init=  */ &*last_partition.begin(),
+            /* op=    */ min_state
+        )->first;
+
+        /*----- Check whether the 'last_state_found' is a goal state already -----*/
+        /* This may happen when a goal state is added to the state manager during vertex expansion but it is never
+         * popped from the queue and expanded itself.  If the `last_state_found` is a goal state, we can directly
+         * reconstruct the path. */
+        if (Expand::is_goal(last_state_found, PT, G, M, CF, CE)) {
+            if (std::is_base_of_v<expansions::BottomUp, Expand>)
+                reconstruct_plan_bottom_up(last_state_found, PT, G, CE, CF);
+            else
+                reconstruct_plan_top_down(last_state_found, PT, G, CE, CF);
+        } else if constexpr (std::is_base_of_v<expansions::BottomUp, Expand>) {
+            /*----- BottomUp -----*/
+            /* The `last_state_found` is *not* a goal state.  We need to *finish* the partial solution using a greedy
+             * approach. */
+
+            /* Reconstruct partial plan found so far. */
+            reconstruct_plan_bottom_up(last_state_found, PT, G, CE, CF);
+
+            /* Initialize nodes with the subproblems of the starting state */
+            pe::GOO::node nodes[G.num_sources()];
+            std::size_t num_nodes = 0;
+            last_state_found.for_each_subproblem([&](Subproblem S) {
+                nodes[num_nodes++] = pe::GOO::node(S, M.neighbors(S));
+            }, G);
+
+            /* Run GOO from the starting state and update the PlanTable accordingly */
+            pe::GOO{}.compute_plan(PT, G, M, CF, CE, nodes, nodes + num_nodes);
+
+            const Subproblem All = Subproblem::All(G.num_sources());
+            M_insist((PT[All].model != NULL), "No full plan found");
+
+        } else {
+            /*----- TopDown -----*/
+            static_assert(std::is_base_of_v<expansions::TopDown, Expand>);
+            static cnf::CNF condition;
+
+            /* Initialize worklist with the subproblems of the starting state. */
+            std::vector<Subproblem> worklist;
+            worklist.reserve(G.num_sources());
+            worklist.insert(worklist.end(), last_state_found.cbegin(), last_state_found.cend());
+
+            /* Compute the remaining plan with TDGOO. */
+            auto update_PT = [&](Subproblem left, Subproblem right) {
+                PT.update(G, CE, CF, left, right, condition); // TODO: use actual condition
+            };
+            pe::TDGOO{}.for_each_join(update_PT, PT, G, M, CF, CE, std::move(worklist));
+
+            /* To complete the plan found by TDGOO, fill the PlanTable with the joins initially found by the search */
+            reconstruct_plan_top_down(last_state_found, PT, G, CE, CF);
+
+            const Subproblem All = Subproblem::All(G.num_sources());
+            M_insist(PT.has_plan(All), "No full plan found");
+        }
     }
 #ifdef COUNTERS
     if (Options::Get().statistics) {

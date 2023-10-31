@@ -146,6 +146,7 @@ struct StateManager
 
 #undef DEF_COUNTER
 
+    public:
     ///> information attached to each state
     struct StateInfo
     {
@@ -172,6 +173,12 @@ struct StateManager
         /* Allocator= */ typename Config::template allocator_type<map_value_type>
     >;
 
+    using partition_iterator = typename std::vector<map_type>::iterator;
+    using partition_const_iterator = typename std::vector<map_type>::const_iterator;
+    using partition_reverse_iterator = typename std::vector<map_type>::reverse_iterator;
+    using partition_const_reverse_iterator = typename std::vector<map_type>::const_reverse_iterator;
+
+    private:
     /*----- Helper type to manage potentially partitioned states. ----------------------------------------------------*/
     template<bool Partition>
     struct Partitions;
@@ -214,6 +221,19 @@ struct StateManager
             for (auto &P : partitions_)
                 P.clear();
         }
+
+        partition_iterator begin() { return partitions_.begin(); }
+        partition_iterator end() { return partitions_.end(); }
+        partition_const_iterator begin() const { return partitions_.begin(); }
+        partition_const_iterator end() const { return partitions_.end(); }
+        partition_const_iterator cbegin() const { return partitions_.begin(); }
+        partition_const_iterator cend() const { return partitions_.end(); }
+        partition_reverse_iterator rbegin() { return partitions_.rbegin(); }
+        partition_reverse_iterator rend() { return partitions_.rend(); }
+        partition_const_reverse_iterator rbegin() const { return partitions_.rbegin(); }
+        partition_const_reverse_iterator rend() const { return partitions_.rend(); }
+        partition_const_reverse_iterator crbegin() const { return partitions_.rbegin(); }
+        partition_const_reverse_iterator crend() const { return partitions_.rend(); }
     };
 
     template<>
@@ -253,6 +273,22 @@ struct StateManager
     StateManager(const StateManager&) = delete;
     StateManager(StateManager&&) = default;
     StateManager & operator=(StateManager&&) = default;
+
+    partition_iterator partitions_begin() { return partitions_.begin(); }
+    partition_iterator partitions_end() { return partitions_.end(); }
+    partition_const_iterator partitions_begin() const { return partitions_.begin(); }
+    partition_const_iterator partitions_end() const { return partitions_.end(); }
+    partition_const_iterator partitions_cbegin() const { return partitions_.begin(); }
+    partition_const_iterator partitions_cend() const { return partitions_.end(); }
+    partition_reverse_iterator partitions_rbegin() { return partitions_.rbegin(); }
+    partition_reverse_iterator partitions_rend() { return partitions_.rend(); }
+    partition_const_reverse_iterator partitions_rbegin() const { return partitions_.rbegin(); }
+    partition_const_reverse_iterator partitions_rend() const { return partitions_.rend(); }
+    partition_const_reverse_iterator partitions_crbegin() const { return partitions_.rbegin(); }
+    partition_const_reverse_iterator partitions_crend() const { return partitions_.rend(); }
+
+    range<partition_iterator> partitions() { return range(partitions_begin(), partitions_end()); }
+    range<partition_const_iterator> partitions() const { return range(partitions_begin(), partitions_end()); }
 
     /** Returns the weighting factor for the heuristic value. */
     float weighting_factor() const { return weighting_factor_; }
@@ -580,6 +616,16 @@ struct genericAStar
 
     using callback_t = std::function<void(state_type, double)>;
 
+    using state_manager_type = StateManager<
+        /* State=           */ State,
+        /* Expand=          */ Expand,
+        /* Heurisitc=       */ Heuristic,
+        /* HasRegularQueue= */ not (use_beam_search and is_monotone),
+        /* HasBeamQueue=    */ use_beam_search,
+        /* Config=          */ Config,
+        /* Context...=      */ Context...
+    >;
+
     private:
     ///> the weighting factor for the heuistic value of a state
     float weighting_factor_ = 1.;
@@ -620,14 +666,8 @@ struct genericAStar
 
     };
 
-    StateManager</* State=           */ State,
-                 /* Expand=          */ Expand,
-                 /* Heurisitc=       */ Heuristic,
-                 /* HasRegularQueue= */ not (use_beam_search and is_monotone),
-                 /* HasBeamQueue=    */ use_beam_search,
-                 /* Config=          */ Config,
-                 /* Context...=      */ Context...
-    > state_manager_;
+    ///> the search's state manager, tracking heuristic value, checking for duplicates, and ordering by *f*-value
+    state_manager_type state_manager_;
 
     ///> candidates for the beam
     std::vector<weighted_state> candidates;
@@ -646,6 +686,8 @@ struct genericAStar
     genericAStar(genericAStar&&) = default;
 
     genericAStar & operator=(genericAStar&&) = default;
+
+    const state_manager_type & state_manager () const { return state_manager_; }
 
     /** Returns the weighting factor for the heuristic value. */
     float weighting_factor() const { return weighting_factor_; }

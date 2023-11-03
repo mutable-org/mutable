@@ -652,7 +652,7 @@ struct M_EXPORT ConcreteTable : Table
     }
     const Attribute & at(std::size_t id) const override { return const_cast<ConcreteTable*>(this)->at(id); }
     /** Returns the attribute with the given `id`. */
-    Attribute & operator[](std::size_t id) {
+    Attribute & operator[](std::size_t id) override {
         M_insist(id < attrs_.size());
         auto &attr = attrs_[id];
         M_insist(attr.id == id, "attribute ID mismatch");

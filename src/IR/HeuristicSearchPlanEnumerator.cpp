@@ -330,7 +330,9 @@ bool heuristic_search_helper(const char *vertex_str, const char *expand_str, con
                  * case, the initial plan found by GOO is used. */
                 GOO Goo;
                 Goo(G, CF, PT);
-                return PT.get_final().cost;
+                auto &plan = PT.get_final();
+                M_insist(not plan.left.empty() and not plan.right.empty());
+                return plan.cost;
             }();
         }
 

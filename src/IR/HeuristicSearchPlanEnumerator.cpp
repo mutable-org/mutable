@@ -340,6 +340,9 @@ bool heuristic_search_helper(const char *vertex_str, const char *expand_str, con
                     return plan.cost;
                 }();
             }
+        } else if (options::initialize_upper_bound) {
+            std::cerr << "WARNING: option --hs-init-upper-bound has no effect for the chosen search configuration"
+                      << std::endl;
         }
 
         config.weighting_factor = options::weighting_factor;

@@ -554,13 +554,15 @@ operator()(StateManager::pointer_type p_left, StateManager::pointer_type p_right
 }
 
 template<typename Config>
-concept SearchConfig = std::is_class_v<Config> and
-                       requires { { Config::PerformWeightedSearch } -> std::convertible_to<bool>; } and
-                       std::integral<decltype(Config::BeamWidth::num)> and
-                       std::integral<decltype(Config::BeamWidth::den)> and
-                       requires { { Config::Lazy } -> std::convertible_to<bool>; } and
-                       requires { { Config::IsMonotone } -> std::convertible_to<bool>; } and
-                       requires { { Config::PerformAnytimeSearch} -> std::convertible_to<bool>; };
+concept SearchConfig =
+    std::is_class_v<Config> and
+    requires { { Config::PerformCostBasedPruning } -> std::convertible_to<bool>; } and
+    requires { { Config::PerformWeightedSearch } -> std::convertible_to<bool>; } and
+    std::integral<decltype(Config::BeamWidth::num)> and
+    std::integral<decltype(Config::BeamWidth::den)> and
+    requires { { Config::Lazy } -> std::convertible_to<bool>; } and
+    requires { { Config::IsMonotone } -> std::convertible_to<bool>; } and
+    requires { { Config::PerformAnytimeSearch} -> std::convertible_to<bool>; };
 
 /** Relies on the rules of [*aggregate
  * initialization*](https://en.cppreference.com/w/cpp/language/aggregate_initialization) */

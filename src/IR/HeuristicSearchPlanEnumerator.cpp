@@ -146,8 +146,10 @@ bool heuristic_search(PlanTable &PT, const QueryGraph &G, const AdjacencyMatrix 
 
     search_algorithm S(PT, G, M, CF, CE);
 
-    if (Options::Get().statistics)
-        std::cout << "initial upper bound is " << config.upper_bound << std::endl;
+    if constexpr (StaticConfig::PerformCostBasedPruning) {
+        if (Options::Get().statistics)
+            std::cout << "initial upper bound is " << config.upper_bound << std::endl;
+    }
 
     try {
         State initial_state = Expand::template Start<State>(PT, G, M, CF, CE);
@@ -324,18 +326,20 @@ bool heuristic_search_helper(const char *vertex_str, const char *expand_str, con
     {
         ai::SearchConfiguration config;
 
-        if (options::initialize_upper_bound) {
-            config.upper_bound = [&]() {
-                /*----- Run GOO to compute upper bound of plan cost. -----*/
-                /* Beam search becomes incomplete if an upper bound derived from an actual plan is provided.  Beam
-                 * search may never find that plan or any better plan, and hence return without finding a path. In this
-                 * case, the initial plan found by GOO is used. */
-                GOO Goo;
-                Goo(G, CF, PT);
-                auto &plan = PT.get_final();
-                M_insist(not plan.left.empty() and not plan.right.empty());
-                return plan.cost;
-            }();
+        if constexpr (StaticConfig::PerformCostBasedPruning) {
+            if (options::initialize_upper_bound) {
+                config.upper_bound = [&]() {
+                    /*----- Run GOO to compute upper bound of plan cost. -----*/
+                    /* Beam search becomes incomplete if an upper bound derived from an actual plan is provided.  Beam
+                     * search may never find that plan or any better plan, and hence return without finding a path. In this
+                     * case, the initial plan found by GOO is used. */
+                    GOO Goo;
+                    Goo(G, CF, PT);
+                    auto &plan = PT.get_final();
+                    M_insist(not plan.left.empty() and not plan.right.empty());
+                    return plan.cost;
+                }();
+            }
         }
 
         config.weighting_factor = options::weighting_factor;

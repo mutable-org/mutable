@@ -877,13 +877,15 @@ const State & genericAStar<State, Expand, Heuristic, StaticConfig, Context...>::
         state_manager_.weighting_factor(config.weighting_factor);
     }
 
-    if (not std::isnan(config.upper_bound)) {
-        /* Initialize the least path cost.  Note, that the given upper bound could be *exactly* the weight of the
-         * shortest path.  To not prune the goal reached on that shortest path, we increase the upper bound *slightly*.
-         * More precisely, we increase the upper bound to the next representable value in `double`. */
-        state_manager_.update_least_path_cost(
-            std::nextafter(config.upper_bound, std::numeric_limits<double>::infinity())
-        );
+    if constexpr (StaticConfig::PerformCostBasedPruning) {
+        if (not std::isnan(config.upper_bound)) {
+            /* Initialize the least path cost.  Note, that the given upper bound could be *exactly* the weight of the
+             * shortest path.  To not prune the goal reached on that shortest path, we increase the upper bound *slightly*.
+             * More precisely, we increase the upper bound to the next representable value in `double`. */
+            state_manager_.update_least_path_cost(
+                std::nextafter(config.upper_bound, std::numeric_limits<double>::infinity())
+            );
+        }
     }
 
     /* Lambda function to assure that the budgeted number of expansions is met when using Anytime A*. */

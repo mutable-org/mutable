@@ -125,7 +125,8 @@ template<
     typename State,
     typename Expand,
     template<typename, typename, typename> typename Heuristic,
-    template<typename, typename, typename, typename...> typename Search
+    template<typename, typename, typename, typename, typename...> typename Search,
+    ai::SearchConfigConcept StaticConfig
 >
 bool heuristic_search(PlanTable &PT, const QueryGraph &G, const AdjacencyMatrix &M, const CostFunction &CF,
                       const CardinalityEstimator &CE, ai::SearchConfiguration config)
@@ -134,7 +135,7 @@ bool heuristic_search(PlanTable &PT, const QueryGraph &G, const AdjacencyMatrix 
     State::RESET_STATE_COUNTERS();
 
     using search_algorithm = Search<
-        State, Expand, H,
+        State, Expand, H, StaticConfig,
         /*----- context -----*/
         PlanTable&,
         const QueryGraph&,
@@ -309,7 +310,8 @@ template<
     typename State,
     typename Expand,
     template<typename, typename, typename> typename Heuristic,
-    template<typename, typename, typename, typename...> typename Search
+    template<typename, typename, typename, typename, typename...> typename Search,
+    ai::SearchConfigConcept StaticConfig
 >
 bool heuristic_search_helper(const char *vertex_str, const char *expand_str, const char *heuristic_str,
                              const char *search_str, PlanTable &PT, const QueryGraph &G, const AdjacencyMatrix &M,
@@ -344,7 +346,8 @@ bool heuristic_search_helper(const char *vertex_str, const char *expand_str, con
             State,
             Expand,
             Heuristic,
-            Search
+            Search,
+            StaticConfig
         >(PT, G, M, CF, CE, config);
     }
     return false;
@@ -368,6 +371,7 @@ void HeuristicSearch::operator()(enumerate_tag, PlanTable &PT, const QueryGraph 
                                 search_states::STATE, \
                                 expansions::EXPAND, \
                                 heuristics::HEURISTIC, \
+                                ai::genericAStar, \
                                 config::CONFIG \
                                >(#STATE, #EXPAND, #HEURISTIC, #CONFIG, PT, G, M, CF, CE)) \
     { \

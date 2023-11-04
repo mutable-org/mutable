@@ -2154,8 +2154,7 @@ struct combine<T> : T { };
 /*===== Pre-configured Search Strategies =============================================================================*/
 
 #define DEFINE_SEARCH(NAME, ...) \
-    template<typename State, typename Expand, typename Heuristic, typename... Context> \
-    using NAME = ai::genericAStar<State, Expand, Heuristic, combine<monotone<true>, Fibonacci_heap, __VA_ARGS__>, Context...>
+    using NAME = combine<monotone<true>, Fibonacci_heap, __VA_ARGS__>
 
 DEFINE_SEARCH(AStar,                    weighted_search<false>, lazy<false>, cost_based_pruning<false>, beam<0>,    anytime_search<false>);
 DEFINE_SEARCH(lazyAStar,                weighted_search<false>, lazy<true>,  cost_based_pruning<false>, beam<0>,    anytime_search<false>);
@@ -2183,7 +2182,8 @@ template<
     typename State,
     typename Expand,
     template<typename, typename, typename> typename Heuristic,
-    template<typename, typename, typename, typename...> typename Search
+    template<typename, typename, typename, typename, typename...> typename Search,
+    ai::SearchConfigConcept StaticConfig
 >
 bool heuristic_search(PlanTable &PT, const QueryGraph &G, const AdjacencyMatrix &M, const CostFunction &CF,
                       const CardinalityEstimator &CE, ai::SearchConfiguration config);

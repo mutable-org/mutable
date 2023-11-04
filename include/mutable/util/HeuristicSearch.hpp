@@ -10,6 +10,7 @@
 #include <mutable/Options.hpp>
 #include <mutable/util/exception.hpp>
 #include <mutable/util/macro.hpp>
+#include <mutable/util/OptField.hpp>
 #include <queue>
 #include <ratio>
 #include <tuple>
@@ -566,19 +567,21 @@ concept SearchConfigConcept =
 
 /** Relies on the rules of [*aggregate
  * initialization*](https://en.cppreference.com/w/cpp/language/aggregate_initialization) */
+template<SearchConfigConcept StaticConfig>
 struct SearchConfiguration
 {
     /** Upper bound on the cost of plans to consider.  More costly plans will be pruned.  Defaults to NaN, expressing
      * that no bound is given.  (Usually, the search algorithm will then initialize its internal upper bound with
      * infinity.) */
-    double upper_bound = std::numeric_limits<double>::quiet_NaN();
+    OptField<StaticConfig::PerformCostBasedPruning, double> upper_bound = std::numeric_limits<double>::quiet_NaN();
+
     /** The weighting factor for the heuristic.  Should be in (0; ∞).  If a weight of 0 is anticipated, use heuristic
      * `zero` instead. */
-    float weighting_factor = 1.f;
+    OptField<StaticConfig::PerformWeightedSearch, float> weighting_factor = 1.f;
+
     /** Budget for the maximum number of expansions.  When the budget is exhausted, search stops. */
-    uint64_t expansion_budget = std::numeric_limits<uint64_t>::max();
+    OptField<StaticConfig::PerformAnytimeSearch, uint64_t> expansion_budget = std::numeric_limits<uint64_t>::max();
 };
-static_assert(std::is_standard_layout_v<SearchConfiguration>);
 
 template<typename state_type, typename... Context>
 concept has_mark = requires (state_type state, Context... context) { state.reset_marked(state, context...); };
@@ -708,7 +711,7 @@ struct genericAStar
      * @return the cost of the computed path from `initial_state` to a goal state
      */
     const State & search(state_type initial_state, expand_type expand, heuristic_type &heuristic,
-                         SearchConfiguration config, Context&... context);
+                         SearchConfiguration<StaticConfig> config, Context&... context);
 
     /** Resets the state of the search. */
     void clear() {
@@ -868,7 +871,7 @@ const State & genericAStar<State, Expand, Heuristic, StaticConfig, Context...>::
     state_type initial_state,
     expand_type expand,
     heuristic_type &heuristic,
-    SearchConfiguration config,
+    SearchConfiguration<StaticConfig> config,
     Context&... context
 ) {
     if constexpr (use_weighted_search) {

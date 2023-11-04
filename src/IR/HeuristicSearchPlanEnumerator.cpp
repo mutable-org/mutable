@@ -129,7 +129,7 @@ template<
     ai::SearchConfigConcept StaticConfig
 >
 bool heuristic_search(PlanTable &PT, const QueryGraph &G, const AdjacencyMatrix &M, const CostFunction &CF,
-                      const CardinalityEstimator &CE, ai::SearchConfiguration config)
+                      const CardinalityEstimator &CE, ai::SearchConfiguration<StaticConfig> config)
 {
     using H = Heuristic<PlanTable, State, Expand>;
     State::RESET_STATE_COUNTERS();
@@ -324,7 +324,7 @@ bool heuristic_search_helper(const char *vertex_str, const char *expand_str, con
         streq(options::heuristic, heuristic_str) and
         streq(options::search,    search_str   ))
     {
-        ai::SearchConfiguration config;
+        ai::SearchConfiguration<StaticConfig> config;
 
         if constexpr (StaticConfig::PerformCostBasedPruning) {
             if (options::initialize_upper_bound) {

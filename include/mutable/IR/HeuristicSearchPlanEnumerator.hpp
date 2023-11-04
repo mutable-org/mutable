@@ -2186,7 +2186,7 @@ template<
     ai::SearchConfigConcept StaticConfig
 >
 bool heuristic_search(PlanTable &PT, const QueryGraph &G, const AdjacencyMatrix &M, const CostFunction &CF,
-                      const CardinalityEstimator &CE, ai::SearchConfiguration config);
+                      const CardinalityEstimator &CE, ai::SearchConfiguration<StaticConfig> config);
 
 /** Computes the join order using heuristic search */
 struct HeuristicSearch final : PlanEnumeratorCRTP<HeuristicSearch>

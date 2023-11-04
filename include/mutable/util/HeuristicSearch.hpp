@@ -554,7 +554,7 @@ operator()(StateManager::pointer_type p_left, StateManager::pointer_type p_right
 }
 
 template<typename Config>
-concept SearchConfig =
+concept SearchConfigConcept =
     std::is_class_v<Config> and
     requires { { Config::PerformCostBasedPruning } -> std::convertible_to<bool>; } and
     requires { { Config::PerformWeightedSearch } -> std::convertible_to<bool>; } and
@@ -589,7 +589,7 @@ template<
     heuristic_search_state State,
     typename Expand,
     typename Heuristic,
-    SearchConfig Config,
+    SearchConfigConcept StaticConfig,
     typename... Context
 >
 requires heuristic_search_heuristic<Heuristic, Context...>
@@ -598,23 +598,24 @@ struct genericAStar
     using state_type = State;
     using expand_type = Expand;
     using heuristic_type = Heuristic;
+    using static_search_config = StaticConfig;
 
     ///> Whether to perform weighted search with a given weighting factor for the heuristic value
-    static constexpr bool use_weighted_search = Config::PerformWeightedSearch;
+    static constexpr bool use_weighted_search = StaticConfig::PerformWeightedSearch;
     ///> The width of a beam used for *beam search*.  Set to 0 to disable beam search.
-    static constexpr float beam_width = Config::BeamWidth::num / Config::BeamWidth::den;
+    static constexpr float beam_width = StaticConfig::BeamWidth::num / StaticConfig::BeamWidth::den;
     ///> Whether to perform beam search or regular A*
-    static constexpr bool use_beam_search = Config::BeamWidth::num != 0;
+    static constexpr bool use_beam_search = StaticConfig::BeamWidth::num != 0;
     ///> Whether to use a dynamic beam width for beam search
     static constexpr bool use_dynamic_beam_sarch = use_beam_search and beam_width < 1.f;
     ///> Whether to evaluate the heuristic lazily
-    static constexpr bool is_lazy = Config::Lazy;
+    static constexpr bool is_lazy = StaticConfig::Lazy;
     ///> Whether the state space is acyclic and without dead ends (useful in combination with beam search)
-    static constexpr bool is_monotone = Config::IsMonotone;
+    static constexpr bool is_monotone = StaticConfig::IsMonotone;
     ///> The fraction of a state's successors to add to the beam (if performing beam search)
     static constexpr float BEAM_FACTOR = .2f;
     ///> Whether to search with a fixed, finite budget and return early when the budget is exhausted
-    static constexpr bool use_anytime_search = Config::PerformAnytimeSearch;
+    static constexpr bool use_anytime_search = StaticConfig::PerformAnytimeSearch;
 
     using callback_t = std::function<void(state_type, double)>;
 
@@ -624,7 +625,7 @@ struct genericAStar
         /* Heurisitc=       */ Heuristic,
         /* HasRegularQueue= */ not (use_beam_search and is_monotone),
         /* HasBeamQueue=    */ use_beam_search,
-        /* Config=          */ Config,
+        /* Config=          */ StaticConfig,
         /* Context...=      */ Context...
     >;
 
@@ -859,11 +860,11 @@ template<
     heuristic_search_state State,
     typename Expand,
     typename Heuristic,
-    SearchConfig Config,
+    SearchConfigConcept StaticConfig,
     typename... Context
 >
 requires heuristic_search_heuristic<Heuristic, Context...>
-const State & genericAStar<State, Expand, Heuristic, Config, Context...>::search(
+const State & genericAStar<State, Expand, Heuristic, StaticConfig, Context...>::search(
     state_type initial_state,
     expand_type expand,
     heuristic_type &heuristic,

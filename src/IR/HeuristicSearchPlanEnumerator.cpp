@@ -373,14 +373,14 @@ void HeuristicSearch::operator()(enumerate_tag, PlanTable &PT, const QueryGraph 
     const AdjacencyMatrix &M = G.adjacency_matrix();
 
 
-#define HEURISTIC_SEARCH(STATE, EXPAND, HEURISTIC, CONFIG) \
+#define HEURISTIC_SEARCH(STATE, EXPAND, HEURISTIC, STATIC_CONFIG) \
     if (heuristic_search_helper<PlanTable, \
                                 search_states::STATE, \
                                 expansions::EXPAND, \
                                 heuristics::HEURISTIC, \
                                 ai::genericAStar, \
-                                config::CONFIG \
-                               >(#STATE, #EXPAND, #HEURISTIC, #CONFIG, PT, G, M, CF, CE)) \
+                                config::STATIC_CONFIG \
+                               >(#STATE, #EXPAND, #HEURISTIC, #STATIC_CONFIG, PT, G, M, CF, CE)) \
     { \
         goto matched_heuristic_search; \
     }

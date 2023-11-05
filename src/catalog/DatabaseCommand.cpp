@@ -142,6 +142,16 @@ void InsertRecords::execute(Diagnostic&)
         }
         Tuple *args[] = { &tup };
         get_tuple(args);
+
+        /*----- set timestamps if available. -----*/
+        auto it = std::find_if(T.cbegin_hidden(), T.end_hidden(),
+                               [&](const Attribute & attr) {
+                                   return attr.name == C.pool("$ts_begin");
+                               });
+        if (it != T.end_hidden()) {
+            tup.set(it->id, Value(transaction()->start_time()));
+        }
+
         W.append(tup);
     }
 }

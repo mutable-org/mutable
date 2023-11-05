@@ -121,6 +121,16 @@ void DSVReader::operator()(std::istream &in, const char *name)
                 W = std::make_unique<StackMachine>(Interpreter::compile_store(S, store.memory().addr(), *layout,
                                                                               S, store.num_rows() - 1));
             }
+            /*----- set timestamps if available. -----*/
+            auto it = std::find_if(table.cbegin_hidden(), table.end_hidden(),
+                                   [&](const Attribute & attr) {
+                                       return attr.name == C.pool("$ts_begin");
+            });
+            if (this->transaction and it != table.end_hidden()) {
+                col_idx = it->id;
+                tup.set(col_idx, Value(transaction->start_time()));
+            }
+
             Tuple *args[] = { &tup };
             (*W)(args); // write tuple to store
         }

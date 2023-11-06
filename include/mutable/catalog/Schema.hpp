@@ -898,8 +898,6 @@ struct M_EXPORT Database
             throw std::invalid_argument("Table of that name does not exist.");
         tables_.erase(it);
     };
-    /** Drops the `Table` \p table. */
-    void drop_table(const Table &t) { return drop_table(t.name()); }
 
     /*===== Functions ================================================================================================*/
     /** Returns a reference to the `Function` with the given `name`.  First searches this `Database` instance.  If no

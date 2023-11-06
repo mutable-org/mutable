@@ -5,11 +5,13 @@
 #include <functional>
 #include <iosfwd>
 #include <iterator>
+#include <list>
 #include <memory>
 #include <mutable/catalog/CardinalityEstimator.hpp>
 #include <mutable/catalog/Type.hpp>
 #include <mutable/mutable-config.hpp>
 #include <mutable/storage/DataLayout.hpp>
+#include <mutable/storage/Index.hpp>
 #include <mutable/storage/Store.hpp>
 #include <mutable/util/ADT.hpp>
 #include <mutable/util/enum_ops.hpp>
@@ -865,12 +867,29 @@ struct M_EXPORT Database
 {
     friend struct Catalog;
 
+    struct index_entry_type
+    {
+        const char *name; ///< the name of the index
+        const Table &table; ///< the table of the index
+        const Attribute &attribute; ///< the indexed attribute
+        std::unique_ptr<idx::IndexBase> index; ///< the actual index
+
+        index_entry_type(const char *name, const Table &table, const Attribute &attribute,
+                         std::unique_ptr<idx::IndexBase> index)
+            : name(name)
+            , table(table)
+            , attribute(attribute)
+            , index(std::move(index))
+        { }
+    };
+
     public:
     const char *name; ///< the name of the database
     private:
     std::unordered_map<const char*, std::unique_ptr<Table>> tables_; ///< the tables of this database
     std::unordered_map<const char*, Function*> functions_; ///< functions defined in this database
     std::unique_ptr<CardinalityEstimator> cardinality_estimator_; ///< the `CardinalityEstimator` of this `Database`
+    std::list<index_entry_type> indexes_; ///< the indexes of this database
 
     private:
     Database(const char *name);
@@ -904,6 +923,7 @@ struct M_EXPORT Database
         auto it = tables_.find(name);
         if (it == tables_.end())
             throw std::invalid_argument("Table of that name does not exist.");
+        drop_indexes(name);
         tables_.erase(it);
     };
 
@@ -922,6 +942,50 @@ struct M_EXPORT Database
         auto old = std::move(cardinality_estimator_); cardinality_estimator_ = std::move(CE); return old;
     }
     const CardinalityEstimator & cardinality_estimator() const { return *cardinality_estimator_; }
+
+    /*===== Indexes ==================================================================================================*/
+    /** Adds an index with \p index_name on \p attribute_name from \p table_name.  Throws `std::out_of_range` if a
+     * `Table` with the given \p `table_name` does not exist.  Throws `std::out_of_range` if an `Attribute` with the
+     * given \p attribute_name does not exist.  Throws `m::invalid_argument` if an index with the given \p index_name
+     * already exists. */
+    void add_index(std::unique_ptr<idx::IndexBase> index, const char *table_name, const char *attribute_name,
+                   const char *index_name)
+    {
+        if (has_index(index_name))
+            throw invalid_argument("Index with that name already exists.");
+        auto &table = get_table(table_name);
+        auto &attribute = table.at(attribute_name);
+        indexes_.emplace_back(index_name, table, attribute, std::move(index));
+    }
+    /** Drops the index with the given \p index_name.  Throws `m::invalid_argument` if an index with the given \p
+     * index_name does not exist. */
+    void drop_index(const char *index_name) {
+        for (auto it = indexes_.cbegin(); it != indexes_.cend(); ++it) {
+            if (it->name == index_name) {
+                indexes_.erase(it);
+                return;
+            }
+        }
+        throw invalid_argument("Index of that name does not exist.");
+    }
+    /** Drops all indexes from the table with the given \p table_name.  Throws `m::invalid_argument` if a table with the
+     * given \p table_name does not exist. */
+    void drop_indexes(const char *table_name) {
+        if (not has_table(table_name))
+            throw invalid_argument("Table with that name does not exist.");
+        for (auto it = indexes_.cbegin(); it != indexes_.end();) {
+            if (it->table.name() == table_name)
+                it = indexes_.erase(it);
+            else
+                ++it;
+        }
+    }
+    /** Returns `true` iff there is an index with the given \p index_name. */
+    bool has_index(const char *index_name) {
+        for (auto it = indexes_.cbegin(); it != indexes_.cend(); ++it)
+            if (it->name == index_name) return true;
+        return false;
+    }
 };
 
 }

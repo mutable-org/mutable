@@ -784,7 +784,10 @@ struct genericAStar
         /*----- Evaluate heuristic lazily by using heurisitc value of current state. -----*/
         double h_current_state;
         if (auto it = state_manager_.find(state, context...); it == state_manager_.end(state, context...)) {
-            h_current_state = weighting_factor() * heuristic(state, context...);
+            if constexpr (use_weighted_search)
+                h_current_state = weighting_factor() * heuristic(state, context...);
+            else
+                h_current_state = heuristic(state, context...);
         } else {
             inc_cached_heuristic_value();
             h_current_state = it->second.h; // use cached `h`
@@ -801,8 +804,13 @@ struct genericAStar
         /*----- Evaluate heuristic eagerly. -----*/
         expand(state, [this, callback=std::move(callback), &state, &heuristic, &context...](state_type successor) {
             if (auto it = state_manager_.find(successor, context...); it == state_manager_.end(state, context...)) {
-                const double h = weighting_factor() * heuristic(successor, context...);
-                callback(std::move(successor), h);
+                if constexpr (use_weighted_search) {
+                    const double h = weighting_factor() * heuristic(successor, context...);
+                    callback(std::move(successor), h);
+                } else {
+                    const double h = heuristic(successor, context...);
+                    callback(std::move(successor), h);
+                }
             } else {
                 inc_cached_heuristic_value();
                 callback(std::move(successor), it->second.h); // use cached `h`

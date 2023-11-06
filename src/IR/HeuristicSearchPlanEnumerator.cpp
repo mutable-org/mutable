@@ -345,7 +345,13 @@ bool heuristic_search_helper(const char *vertex_str, const char *expand_str, con
                       << std::endl;
         }
 
-        config.weighting_factor = options::weighting_factor;
+        if constexpr (StaticConfig::PerformWeightedSearch) {
+            config.weighting_factor = options::weighting_factor;
+        } else if (options::weighting_factor != 1.f) {
+            std::cerr << "WARNING: option --hs-wf has no effect for the chosen search configuration"
+                      << std::endl;
+        }
+
         config.expansion_budget = options::expansion_budget;
 
         return m::pe::hs::heuristic_search<

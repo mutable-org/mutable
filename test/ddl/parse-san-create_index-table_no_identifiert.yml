@@ -1,0 +1,26 @@
+description: CREATE INDEX table no identifier sanity test
+db: ddl
+query: |
+    CREATE INDEX ON 42(a);
+required: YES
+
+stages:
+    lexer:
+        out: |
+            -:1:1: CREATE TK_Create
+            -:1:8: INDEX TK_Index
+            -:1:14: ON TK_On
+            -:1:17: 42 TK_DEC_INT
+            -:1:19: ( TK_LPAR
+            -:1:20: a TK_IDENTIFIER
+            -:1:21: ) TK_RPAR
+            -:1:22: ; TK_SEMICOL
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    parser:
+        out: NULL
+        err: NULL
+        num_err: NULL
+        returncode: 1

@@ -1,0 +1,29 @@
+description: CREATE INDEX expression without pars sanity test
+db: ddl
+query: |
+    CREATE INDEX idx ON tab0(a+b);
+required: YES
+
+stages:
+    lexer:
+        out: |
+            -:1:1: CREATE TK_Create
+            -:1:8: INDEX TK_Index
+            -:1:14: idx TK_IDENTIFIER
+            -:1:18: ON TK_On
+            -:1:21: tab0 TK_IDENTIFIER
+            -:1:25: ( TK_LPAR
+            -:1:26: a TK_IDENTIFIER
+            -:1:27: + TK_PLUS
+            -:1:28: b TK_IDENTIFIER
+            -:1:29: ) TK_RPAR
+            -:1:30: ; TK_SEMICOL
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    parser:
+        out: NULL
+        err: NULL
+        num_err: NULL
+        returncode: 1

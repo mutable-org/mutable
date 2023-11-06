@@ -1,0 +1,29 @@
+description: CREATE INDEX IF NOT EXISTS missing identifier sanity test
+db: ddl
+query: |
+    CREATE INDEX IF NOT EXISTS ON tab0(b);
+required: YES
+
+stages:
+    lexer:
+        out: |
+            -:1:1: CREATE TK_Create
+            -:1:8: INDEX TK_Index
+            -:1:14: IF TK_If
+            -:1:17: NOT TK_Not
+            -:1:21: EXISTS TK_Exists
+            -:1:28: ON TK_On
+            -:1:31: tab0 TK_IDENTIFIER
+            -:1:35: ( TK_LPAR
+            -:1:36: b TK_IDENTIFIER
+            -:1:37: ) TK_RPAR
+            -:1:38: ; TK_SEMICOL
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    parser:
+        out: NULL
+        err: NULL
+        num_err: NULL
+        returncode: 1

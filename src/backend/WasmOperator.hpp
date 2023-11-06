@@ -38,7 +38,7 @@ namespace m {
     X(HashBasedGrouping) \
     X(OrderedGrouping) \
     X(Aggregation) \
-    X(Sorting) \
+    X(Quicksort) \
     X(NoOpSorting) \
     X(Limit) \
     X(HashBasedGroupJoin) \
@@ -53,7 +53,7 @@ namespace m {
     X(HashBasedGrouping) \
     X(OrderedGrouping) \
     X(Aggregation) \
-    X(Sorting) \
+    X(Quicksort) \
     X(NoOpSorting) \
     X(Limit) \
     X(HashBasedGroupJoin)
@@ -218,13 +218,13 @@ struct Aggregation : PhysicalOperator<Aggregation, AggregationOperator>
     static ConditionSet post_condition(const Match<Aggregation> &M);
 };
 
-struct Sorting : PhysicalOperator<Sorting, SortingOperator>
+struct Quicksort : PhysicalOperator<Quicksort, SortingOperator>
 {
-    static void execute(const Match<Sorting> &M, setup_t setup, pipeline_t pipeline, teardown_t teardown);
-    static double cost(const Match<Sorting>&) { return 1.0; }
+    static void execute(const Match<Quicksort> &M, setup_t setup, pipeline_t pipeline, teardown_t teardown);
+    static double cost(const Match<Quicksort>&) { return 1.0; }
     static ConditionSet pre_condition(std::size_t child_idx,
                                       const std::tuple<const SortingOperator*> &partial_inner_nodes);
-    static ConditionSet post_condition(const Match<Sorting> &M);
+    static ConditionSet post_condition(const Match<Quicksort> &M);
 };
 
 struct NoOpSorting : PhysicalOperator<NoOpSorting, SortingOperator>
@@ -583,7 +583,7 @@ struct Match<wasm::Aggregation> : MatchBase
 };
 
 template<>
-struct Match<wasm::Sorting> : MatchBase
+struct Match<wasm::Quicksort> : MatchBase
 {
     const SortingOperator &sorting;
     const MatchBase &child;
@@ -598,7 +598,7 @@ struct Match<wasm::Sorting> : MatchBase
     }
 
     void execute(setup_t setup, pipeline_t pipeline, teardown_t teardown) const override {
-        wasm::Sorting::execute(*this, std::move(setup), std::move(pipeline), std::move(teardown));
+        wasm::Quicksort::execute(*this, std::move(setup), std::move(pipeline), std::move(teardown));
     }
 
     protected:

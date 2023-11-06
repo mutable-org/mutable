@@ -3050,7 +3050,7 @@ void Aggregation::execute(const Match<Aggregation> &M, setup_t setup, pipeline_t
  * Sorting
  *====================================================================================================================*/
 
-ConditionSet Sorting::pre_condition(std::size_t child_idx, const std::tuple<const SortingOperator*>&)
+ConditionSet Quicksort::pre_condition(std::size_t child_idx, const std::tuple<const SortingOperator*>&)
 {
      M_insist(child_idx == 0);
 
@@ -3062,14 +3062,14 @@ ConditionSet Sorting::pre_condition(std::size_t child_idx, const std::tuple<cons
     return pre_cond;
 }
 
-ConditionSet Sorting::post_condition(const Match<Sorting> &M)
+ConditionSet Quicksort::post_condition(const Match<Quicksort> &M)
 {
     ConditionSet post_cond;
 
-    /*----- Sorting does not introduce predication. -----*/
+    /*----- Quicksort does not introduce predication. -----*/
     post_cond.add_condition(Predicated(false));
 
-    /*----- Sorting does sort the data. -----*/
+    /*----- Quicksort does sort the data. -----*/
     Sortedness::order_t orders;
     for (auto &o : M.sorting.order_by()) {
         Schema::Identifier id(o.first);
@@ -3084,10 +3084,10 @@ ConditionSet Sorting::post_condition(const Match<Sorting> &M)
     return post_cond;
 }
 
-void Sorting::execute(const Match<Sorting> &M, setup_t setup, pipeline_t pipeline, teardown_t teardown)
+void Quicksort::execute(const Match<Quicksort> &M, setup_t setup, pipeline_t pipeline, teardown_t teardown)
 {
     /*----- Create infinite buffer to materialize the current results but resume the pipeline later. -----*/
-    M_insist(bool(M.materializing_factory), "`wasm::Sorting` must have a factory for the materialized child");
+    M_insist(bool(M.materializing_factory), "`wasm::Quicksort` must have a factory for the materialized child");
     const auto buffer_schema = M.sorting.child(0)->schema().drop_constants().deduplicate();
     const auto sorting_schema = M.sorting.schema().drop_constants().deduplicate();
     GlobalBuffer buffer(
@@ -3107,7 +3107,7 @@ void Sorting::execute(const Match<Sorting> &M, setup_t setup, pipeline_t pipelin
     }
     sorting_child_pipeline(); // call child function
 
-    /*----- Invoke sorting algorithm with buffer to sort. -----*/
+    /*----- Invoke quicksort algorithm with buffer to sort. -----*/
     quicksort(buffer, M.sorting.order_by());
 
     /*----- Process sorted buffer. -----*/
@@ -4655,9 +4655,9 @@ void Match<m::wasm::Aggregation>::print(std::ostream &out, unsigned level) const
     this->child.print(out, level + 1);
 }
 
-void Match<m::wasm::Sorting>::print(std::ostream &out, unsigned level) const
+void Match<m::wasm::Quicksort>::print(std::ostream &out, unsigned level) const
 {
-    indent(out, level) << "wasm::Sorting " << this->sorting.schema() << " (cumulative cost " << cost() << ')';
+    indent(out, level) << "wasm::Quicksort " << this->sorting.schema() << " (cumulative cost " << cost() << ')';
     this->child.print(out, level + 1);
 }
 

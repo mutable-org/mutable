@@ -258,12 +258,58 @@ struct DropTable : DDLCommand
     void execute(Diagnostic &diag) override;
 };
 
+struct CreateIndex : DDLCommand
+{
+    private:
+    std::unique_ptr<idx::IndexBase> index_;
+    const char *table_name_;
+    const char *attribute_name_;
+    const char *index_name_;
+
+    public:
+    CreateIndex(std::unique_ptr<idx::IndexBase> index, const char *table_name, const char *attribute_name,
+                const char *index_name)
+        : index_(M_notnull(std::move(index)))
+        , table_name_(table_name)
+        , attribute_name_(attribute_name)
+        , index_name_(index_name)
+    { }
+
+    void accept(DatabaseCommandVisitor &v) override;
+    void accept(ConstDatabaseCommandVisitor &v) const override;
+
+    void execute(Diagnostic &diag) override;
+};
+
+struct DropIndex : DDLCommand
+{
+    private:
+    std::vector<const char*> index_names_;
+
+    public:
+    DropIndex(std::vector<const char*> index_names) : index_names_(std::move(index_names))
+    {
+#ifndef NDEBUG
+        for (auto i : index_names_)
+            M_notnull(i);
+#endif
+    }
+
+    void accept(DatabaseCommandVisitor &v) override;
+    void accept(ConstDatabaseCommandVisitor &v) const override;
+
+    void execute(Diagnostic &diag) override;
+};
+
 #define M_DATABASE_DDL_LIST(X)\
     X(CreateDatabase) \
     X(DropDatabase) \
     X(UseDatabase) \
     X(CreateTable) \
-    X(DropTable)
+    X(DropTable) \
+    X(CreateIndex) \
+    X(DropIndex)
+
 
 #define M_DATABASE_SQL_LIST(X) \
     M_DATABASE_DML_LIST(X) \

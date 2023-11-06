@@ -244,13 +244,44 @@ void DropTable::execute(Diagnostic &diag)
             DB.drop_table(table_name);
             if (not Options::Get().quiet)
                 diag.out() << "Dropped table " << table_name << ".\n";
-            // XXX: This should automatically drop all indexes on `table_name`, too.
         } catch (std::invalid_argument) {
             diag.err() << "Table " << table_name << " does not exist in Database " << DB.name << ".\n";
         }
     }
 }
 
+void CreateIndex::execute(Diagnostic &diag)
+{
+    auto &C = Catalog::Get();
+    auto &DB = C.get_database_in_use();
+
+    try {
+        DB.add_index(std::move(index_), table_name_, attribute_name_, index_name_);
+            if (not Options::Get().quiet)
+                diag.out() << "Created index " << index_name_ << ".\n";
+    } catch (std::out_of_range) {
+        diag.err() << "Table " << table_name_ << " or Attribute " << attribute_name_ << " does not exist in Database "
+                   << DB.name << ".\n";
+    } catch (invalid_argument) {
+        diag.err() << "Index " << index_name_ << " already exists in Database " << DB.name << ".\n";
+    }
+}
+
+void DropIndex::execute(Diagnostic &diag)
+{
+    auto &C = Catalog::Get();
+    auto &DB = C.get_database_in_use();
+
+    for (auto &index_name : index_names_) {
+        try {
+            DB.drop_index(index_name);
+            if (not Options::Get().quiet)
+                diag.out() << "Dropped index " << index_name << ".\n";
+        } catch (invalid_argument) {
+            diag.err() << "Index " << index_name << " does not exist in Database " << DB.name << ".\n";
+        }
+    }
+}
 
 #define ACCEPT(CLASS) \
     void CLASS::accept(DatabaseCommandVisitor &v) { v(*this); } \

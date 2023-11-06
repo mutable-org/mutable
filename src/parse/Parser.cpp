@@ -400,9 +400,9 @@ std::unique_ptr<Stmt> Parser::parse_CreateIndexStmt()
     if (not expect(TK_Create))
         return recover<ErrorStmt>(start, follow_set_STATEMENT);
 
-    bool has_unique = false;
-    if (accept(TK_Unique))
-        has_unique = true;
+    Token has_unique = Token();
+    if (token() == TK_Unique)
+        has_unique = consume();
 
     if (not expect(TK_Index))
         return recover<ErrorStmt>(start, follow_set_STATEMENT);

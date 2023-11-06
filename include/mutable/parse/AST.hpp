@@ -885,14 +885,14 @@ struct M_EXPORT DropTableStmt : Stmt
 
 struct M_EXPORT CreateIndexStmt : Stmt
 {
-    bool has_unique;
+    Token has_unique;
     bool has_if_not_exists;
     Token index_name;
     Token table_name;
     Token method;
     std::vector<std::unique_ptr<Expr>> key_fields;
 
-    CreateIndexStmt(bool has_unique, bool has_if_not_exists, Token index_name, Token table_name, Token method,
+    CreateIndexStmt(Token has_unique, bool has_if_not_exists, Token index_name, Token table_name, Token method,
                     std::vector<std::unique_ptr<Expr>> key_fields)
         : has_unique(has_unique)
         , has_if_not_exists(has_if_not_exists)

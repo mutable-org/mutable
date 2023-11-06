@@ -1618,9 +1618,87 @@ void Sema::operator()(CreateIndexStmt &s)
         diag.err() << "No database selected.\n";
         return;
     }
+    auto &DB = C.get_database_in_use();
 
-    // TODO create an actual `CreateIndex` command
-    command_ = std::make_unique<EmptyCommand>();
+    /* Check if `UNIQUE` was present in statement. */
+    if (s.has_unique) {
+        diag.e(s.has_unique.pos) << "Keyword UNIQUE not supported.\n";
+        return;
+    }
+
+    /* Check that the index name does not already exist. */
+    if (not s.index_name) {
+        diag.err() << "Indexes without name not supported.\n";
+        return;
+    }
+    auto index_name = s.index_name.text;
+    if (DB.has_index(index_name)) {
+        if (s.has_if_not_exists) {
+            diag.w(s.index_name.pos) << "Index " << index_name << " already exists in database " << DB.name
+                                     << ". Skipping.\n";
+            command_ = std::make_unique<EmptyCommand>();
+            return;
+        } else {
+            diag.e(s.index_name.pos) << "Index " << index_name << " already exists in database " << DB.name << ".\n";
+            return;
+        }
+    }
+
+    /* Check that the table exists. */
+    auto table_name = s.table_name.text;
+    if (not DB.has_table(table_name)) {
+        diag.e(s.table_name.pos) << "Table " << table_name << " does not exist in database " << DB.name << "\n.";
+        return;
+    }
+    auto &table = DB.get_table(table_name);
+
+    /** Check that the index method exists. */
+    auto index = std::make_unique<idx::IndexBase>();
+    if (s.method) {
+        switch(s.method.type) {
+            case TK_Default: {
+                index = std::make_unique<idx::IndexBase>();
+                break;
+            }
+            case TK_IDENTIFIER: {
+                if (s.method.text == C.pool("array")) {
+                    index = std::make_unique<idx::IndexBase>();
+                    break;
+                } else {
+                    diag.e(s.method.pos) << "Index method " << s.method.text << " not supported.\n";
+                    return;
+                }
+            }
+            default: {
+                diag.e(s.method.pos) << "Index method " << s.method.text << " not supported.\n";
+                return;
+            }
+        }
+    }
+
+    /* Check validity of key fields. */
+    if (s.key_fields.size() > 1) {
+        diag.err() << "More than one key field for indexes not supported.\n";
+        return;
+    }
+    for (auto it = s.key_fields.cbegin(), end = s.key_fields.cend(); it != end; ++it) {
+        auto field = it->get();
+        if (auto d = cast<Designator>(field)) {
+            if (not table.has_attribute(d->attr_name.text)) {
+                diag.e(d->tok.pos) << "Attribute " << d->attr_name.text << " does not exists in table "
+                                   << table_name << ".\n";
+                return;
+            }
+        } else {
+            diag.e(field->tok.pos) << "Non-attribute key fields for indexes not supported.\n";
+            return;
+        }
+    }
+    auto attribute_name = cast<Designator>(s.key_fields.front())->attr_name.text;
+
+    /* TODO: Check compatibility of key fields and index method. */
+
+    command_ = std::make_unique<CreateIndex>(std::move(index), table_name, attribute_name, index_name);
 }
 
 void Sema::operator()(DropIndexStmt &s)
@@ -1632,9 +1710,26 @@ void Sema::operator()(DropIndexStmt &s)
         diag.err() << "No database selected.\n";
         return;
     }
+    auto &DB = C.get_database_in_use();
 
-    // TODO create an actual `DropIndex` command
-    command_ = std::make_unique<EmptyCommand>();
+    bool ok = true;
+    std::vector<const char*> index_names;
+    for (auto &tok : s.index_names) {
+        const char *index_name = tok->text;
+        if (DB.has_index(index_name))
+            index_names.emplace_back(index_name);
+        else {
+            if (not s.has_if_exists) {
+                diag.e(tok->pos) << "Index " << index_name << " does not exist in database " << DB.name << ".\n";
+                ok = false;
+            } else {
+                diag.w(tok->pos) << "Index " << index_name << " does not exist in database " << DB.name << ". "
+                                 << "Skipping.\n";
+            }
+        }
+    }
+    if (ok)
+        command_ = std::make_unique<DropIndex>(std::move(index_names));
 }
 
 void Sema::operator()(SelectStmt &s)

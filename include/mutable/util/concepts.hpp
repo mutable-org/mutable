@@ -196,3 +196,8 @@ template<typename P>
 concept size_param_pack = typed_param_pack<P, std::size_t>;
 
 }
+
+template<typename Callback, typename T>
+concept is_invocable = requires (Callback &&callback, T value) {
+    std::invoke(std::forward<Callback>(callback), value);
+};

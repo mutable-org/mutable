@@ -39,7 +39,7 @@ class M_EXPORT ArgParser
     template<typename T>
     struct OptionImpl : public Option
     {
-        template<typename Callback>
+        template<is_invocable<T> Callback>
         OptionImpl(const char *short_name, const char *long_name, const char* description, Callback &&callback)
             : Option(short_name, long_name, description)
             , callback(std::forward<Callback>(callback))
@@ -80,7 +80,7 @@ class M_EXPORT ArgParser
      * @param description a textual description of the option
      * @param callback a callback function that is invoked if the option is given
      */
-    template<typename T, typename Callback>
+    template<typename T, is_invocable<T> Callback>
     void add(const char *group_name, const char *short_name, const char *long_name, const char *description,
              Callback &&callback)
     {
@@ -114,7 +114,7 @@ class M_EXPORT ArgParser
      * @param description a textual description of the option
      * @param callback a callback function that is invoked if the option is given
      */
-    template<typename T, typename Callback>
+    template<typename T, is_invocable<T> Callback>
     void add(const char *short_name, const char *long_name, const char *description, Callback &&callback) {
         add<T>(nullptr, short_name, long_name, description, std::forward<Callback>(callback));
     }

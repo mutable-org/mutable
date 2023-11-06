@@ -347,7 +347,7 @@ struct Match<wasm::Callback<SIMDfied>> : MatchBase
     const CallbackOperator &callback;
     const MatchBase &child;
     std::unique_ptr<const storage::DataLayoutFactory> result_set_factory;
-    std::optional<std::size_t> result_set_num_tuples_;
+    std::size_t result_set_window_size;
 
     Match(const CallbackOperator *Callback, std::vector<std::reference_wrapper<const MatchBase>> &&children)
         : callback(*Callback)
@@ -371,13 +371,13 @@ struct Match<wasm::Callback<SIMDfied>> : MatchBase
 template<bool SIMDfied>
 struct Match<wasm::Print<SIMDfied>> : MatchBase
 {
-    const PrintOperator &print_;
+    const PrintOperator &print_op;
     const MatchBase &child;
     std::unique_ptr<const storage::DataLayoutFactory> result_set_factory;
-    std::optional<std::size_t> result_set_num_tuples_;
+    std::size_t result_set_window_size;
 
     Match(const PrintOperator *print, std::vector<std::reference_wrapper<const MatchBase>> &&children)
-        : print_(*print)
+        : print_op(*print)
         , child(children[0])
         , result_set_factory(M_CONSTEXPR_COND_UNCAPTURED(SIMDfied,
              std::make_unique<storage::PAXLayoutFactory>(storage::PAXLayoutFactory::NTuples, 128),

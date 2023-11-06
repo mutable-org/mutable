@@ -16,8 +16,12 @@ using namespace m::wasm;
  * Helper structs and functions
  *====================================================================================================================*/
 
-void write_result_set(const Schema &schema, const DataLayoutFactory &factory,
-                      const std::optional<uint32_t> &window_size, const MatchBase &child)
+/** Emits code to write the result set of the `Schema` \p schema using the `DataLayout` created by \p factory.  The
+ * result set is either materialized entirely (if \p window_size equals 0 indicating infinity) or only partially (if
+ * \p window_size does not equal 0 indicating the used batch size).  To emit the code at the correct position, code
+ * generation is delegated to the child physical operator \p child. */
+void write_result_set(const Schema &schema, const DataLayoutFactory &factory, uint32_t window_size,
+                      const MatchBase &child)
 {
     M_insist(schema == schema.drop_constants().deduplicate(), "schema must not contain constants or duplicates");
     M_insist(CodeGenContext::Get().env().empty(), "all environment entries must be used");
@@ -27,9 +31,9 @@ void write_result_set(const Schema &schema, const DataLayoutFactory &factory,
     context.result_set_factory = factory.clone();
 
     if (schema.num_entries() == 0) { // result set contains only NULL constants
-        if (window_size) {
-            M_insist(*window_size >= CodeGenContext::Get().num_simd_lanes());
-            M_insist(*window_size % CodeGenContext::Get().num_simd_lanes() == 0);
+        if (window_size != 0) { // i.e. result set is materialized only partially
+            M_insist(window_size >= CodeGenContext::Get().num_simd_lanes());
+            M_insist(window_size % CodeGenContext::Get().num_simd_lanes() == 0);
 
             std::optional<Var<U32x1>> counter; ///< variable to *locally* count
             ///> *global* counter backup since the following code may be called multiple times
@@ -55,9 +59,9 @@ void write_result_set(const Schema &schema, const DataLayoutFactory &factory,
                         }
 
                         /*----- If window size is reached, update result size, extract current results, and reset tuple ID. */
-                        IF (*counter == *window_size) {
-                            CodeGenContext::Get().inc_num_tuples(U32x1(*window_size));
-                            Module::Get().emit_call<void>("read_result_set", Ptr<void>::Nullptr(), U32x1(*window_size));
+                        IF (*counter == window_size) {
+                            CodeGenContext::Get().inc_num_tuples(U32x1(window_size));
+                            Module::Get().emit_call<void>("read_result_set", Ptr<void>::Nullptr(), U32x1(window_size));
                             *counter = 0U;
                         };
                     },
@@ -75,7 +79,7 @@ void write_result_set(const Schema &schema, const DataLayoutFactory &factory,
 
             /*----- Extract remaining results. -----*/
             Module::Get().emit_call<void>("read_result_set", Ptr<void>::Nullptr(), counter_backup.val());
-        } else {
+        } else { // i.e. result set is materialized entirely
             /*----- Create child function s.t. result set is extracted in case of returns (e.g. due to `Limit`). -----*/
             FUNCTION(child_pipeline, void(void))
             {
@@ -110,12 +114,12 @@ void write_result_set(const Schema &schema, const DataLayoutFactory &factory,
             Module::Get().emit_call<void>("read_result_set", Ptr<void>::Nullptr(), CodeGenContext::Get().num_tuples());
         }
     } else { // result set contains contains actual values
-        if (window_size) {
-            M_insist(*window_size > CodeGenContext::Get().num_simd_lanes());
-            M_insist(*window_size % CodeGenContext::Get().num_simd_lanes() == 0);
+        if (window_size != 0) { // i.e. result set is materialized only partially
+            M_insist(window_size > CodeGenContext::Get().num_simd_lanes());
+            M_insist(window_size % CodeGenContext::Get().num_simd_lanes() == 0);
 
             /*----- Create finite global buffer (without `pipeline`-callback) used as reusable result set. -----*/
-            GlobalBuffer result_set(schema, factory, false, *window_size); // no callback to extract windows manually
+            GlobalBuffer result_set(schema, factory, false, window_size); // no callback to extract windows manually
 
             /*----- Create child function s.t. result set is extracted in case of returns (e.g. due to `Limit`). -----*/
             FUNCTION(child_pipeline, void(void))
@@ -127,7 +131,7 @@ void write_result_set(const Schema &schema, const DataLayoutFactory &factory,
                     /* pipeline= */ [&](){
                         /*----- Store whether only a single slot is free to not extract result for empty buffer. -----*/
                         const Var<Boolx1> single_slot_free(
-                            result_set.size() == *window_size - uint32_t(CodeGenContext::Get().num_simd_lanes())
+                            result_set.size() == window_size - uint32_t(CodeGenContext::Get().num_simd_lanes())
                         );
 
                         /*----- Write the result. -----*/
@@ -135,9 +139,9 @@ void write_result_set(const Schema &schema, const DataLayoutFactory &factory,
 
                         /*----- If the last buffer slot was filled, update result size and extract current results. */
                         IF (single_slot_free and result_set.size() == 0U) {
-                            CodeGenContext::Get().inc_num_tuples(U32x1(*window_size));
+                            CodeGenContext::Get().inc_num_tuples(U32x1(window_size));
                             Module::Get().emit_call<void>("read_result_set", result_set.base_address(),
-                                                          U32x1(*window_size));
+                                                          U32x1(window_size));
                         };
                     },
                     /* teardown= */ teardown_t::Make_Without_Parent([&](){ result_set.teardown(); })
@@ -150,7 +154,7 @@ void write_result_set(const Schema &schema, const DataLayoutFactory &factory,
 
             /*----- Extract remaining results. -----*/
             Module::Get().emit_call<void>("read_result_set", result_set.base_address(), result_set.size());
-        } else {
+        } else { // i.e. result set is materialized entirely
             /*----- Create infinite global buffer (without `pipeline`-callback) used as single result set. -----*/
             GlobalBuffer result_set(schema, factory); // no callback to extract results all at once
 
@@ -404,7 +408,7 @@ void Callback<SIMDfied>::execute(const Match<Callback> &M, setup_t, pipeline_t, 
     M_insist(bool(M.result_set_factory), "`wasm::Callback` must have a factory for the result set");
 
     auto result_set_schema = M.callback.schema().drop_constants().deduplicate();
-    write_result_set(result_set_schema, *M.result_set_factory, M.result_set_num_tuples_, M.child);
+    write_result_set(result_set_schema, *M.result_set_factory, M.result_set_window_size, M.child);
 }
 
 
@@ -435,8 +439,8 @@ void Print<SIMDfied>::execute(const Match<Print> &M, setup_t, pipeline_t, teardo
 {
     M_insist(bool(M.result_set_factory), "`wasm::Print` must have a factory for the result set");
 
-    auto result_set_schema = M.print_.schema().drop_constants().deduplicate();
-    write_result_set(result_set_schema, *M.result_set_factory, M.result_set_num_tuples_, M.child);
+    auto result_set_schema = M.print_op.schema().drop_constants().deduplicate();
+    write_result_set(result_set_schema, *M.result_set_factory, M.result_set_window_size, M.child);
 }
 
 
@@ -4576,7 +4580,7 @@ void Match<m::wasm::NoOp>::print(std::ostream &out, unsigned level) const
 template<bool SIMDfied>
 void Match<m::wasm::Callback<SIMDfied>>::print(std::ostream &out, unsigned level) const
 {
-    indent(out, level) << "wasm::Callback with " << *this->result_set_num_tuples << " tuples result set "
+    indent(out, level) << "wasm::Callback with " << this->result_set_window_size << " tuples result set "
                        << this->callback.schema() << "(cumulative cost " << cost() << ')';
     this->child.print(out, level + 1);
 }
@@ -4584,8 +4588,8 @@ void Match<m::wasm::Callback<SIMDfied>>::print(std::ostream &out, unsigned level
 template<bool SIMDfied>
 void Match<m::wasm::Print<SIMDfied>>::print(std::ostream &out, unsigned level) const
 {
-    indent(out, level) << "wasm::Print with " << *this->result_set_num_tuples << " tuples result set "
-                       << this->print_.schema() << "(cumulative cost " << cost() << ')';
+    indent(out, level) << "wasm::Print with " << this->result_set_window_size << " tuples result set "
+                       << this->print_op.schema() << "(cumulative cost " << cost() << ')';
     this->child.print(out, level + 1);
 }
 

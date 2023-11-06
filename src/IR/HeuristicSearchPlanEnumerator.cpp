@@ -352,7 +352,13 @@ bool heuristic_search_helper(const char *vertex_str, const char *expand_str, con
                       << std::endl;
         }
 
-        config.expansion_budget = options::expansion_budget;
+        if constexpr (StaticConfig::PerformAnytimeSearch) {
+            config.expansion_budget = options::expansion_budget;
+        } else if (options::expansion_budget != std::numeric_limits<uint64_t>::max()) {
+            std::cerr << "WARNING: option --hs-budget has no effect for the chosen search configuration"
+                      << std::endl;
+        }
+
 
         return m::pe::hs::heuristic_search<
             PlanTable,

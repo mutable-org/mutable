@@ -8,6 +8,10 @@
 using namespace m;
 using namespace m::wasm;
 
+M_LCOV_EXCL_START
+void MatchBase::dump(std::ostream &out) const { out << *this << std::endl; }
+void MatchBase::dump() const { dump(std::cerr); }
+M_LCOV_EXCL_STOP
 
 void PhysicalOptimizer::execute(const Operator &plan) const
 {
@@ -26,9 +30,10 @@ void PhysicalOptimizer::execute(const Operator &plan) const
 #endif
 }
 
+M_LCOV_EXCL_START
 void PhysicalOptimizer::dump_plan(const Operator &plan, std::ostream &out) const
 {
     out << *get_plan(plan).match << std::endl;
 }
-
 void PhysicalOptimizer::dump_plan(const Operator &plan) const { dump_plan(plan, std::cerr); }
+M_LCOV_EXCL_STOP

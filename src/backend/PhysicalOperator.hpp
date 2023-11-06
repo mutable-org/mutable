@@ -170,14 +170,17 @@ struct MatchBase
     public:
     virtual ~MatchBase() { }
     virtual void execute(setup_t setup, pipeline_t pipeline, teardown_t teardown) const = 0;
-    virtual std::string name() const = 0;
 
     double cost() const { return cost_; }
+
+    void dump(std::ostream &out) const;
+    void dump() const;
 
     friend std::ostream & operator<<(std::ostream &out, const MatchBase &M) {
         M.print(out);
         return out;
     }
+    friend std::string to_string(const MatchBase &M) { std::ostringstream oss; oss << M; return oss.str(); }
 
     protected:
     static std::ostream & indent(std::ostream &out, unsigned level) {
@@ -348,7 +351,7 @@ struct PhysicalOptimizer : ConstPostOrderOperatorVisitor
     void dot_plan_helper(const table_entry &e, std::ostream &out) const {
 #define q(X) '"' << X << '"' // quote
 #define id(X) q(std::hex << &X << std::dec) // convert virtual address to identifier
-        out << "    " << id(e) << " [label=<<B>" << html_escape(e.match->name())
+        out << "    " << id(e) << " [label=<<B>" << html_escape(to_string(*e.match))
             << "</B> (cumulative cost=" << e.cost << ")>];\n";
         for (const auto &child : e.children) {
             dot_plan_helper(child.get().second, out);
@@ -374,7 +377,6 @@ struct PhysicalOptimizer : ConstPostOrderOperatorVisitor
         out << "}\n";
     };
 
-    public:
     /** Prints a representation of the found physical operator covering for the logical plan rooted in `plan` to
      * `out`. */
     void dump_plan(const Operator &plan, std::ostream &out) const;

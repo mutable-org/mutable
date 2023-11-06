@@ -4576,76 +4576,84 @@ void Match<m::wasm::NoOp>::print(std::ostream &out, unsigned level) const
 template<bool SIMDfied>
 void Match<m::wasm::Callback<SIMDfied>>::print(std::ostream &out, unsigned level) const
 {
-    indent(out, level) << "wasm::Callback (cumulative cost " << cost() << ')';
+    indent(out, level) << "wasm::Callback with " << *this->result_set_num_tuples << " tuples result set "
+                       << this->callback.schema() << "(cumulative cost " << cost() << ')';
     this->child.print(out, level + 1);
 }
 
 template<bool SIMDfied>
 void Match<m::wasm::Print<SIMDfied>>::print(std::ostream &out, unsigned level) const
 {
-    indent(out, level) << "wasm::Print " << print_.schema() << " (cumulative cost " << cost() << ')';
+    indent(out, level) << "wasm::Print with " << *this->result_set_num_tuples << " tuples result set "
+                       << this->print_.schema() << "(cumulative cost " << cost() << ')';
     this->child.print(out, level + 1);
 }
 
 template<bool SIMDfied>
 void Match<m::wasm::Scan<SIMDfied>>::print(std::ostream &out, unsigned level) const
 {
-    indent(out, level) << M_CONSTEXPR_COND(SIMDfied, "wasm::SIMDScan(", "wasm::Scan(") << M_notnull(scan.alias())
-                       << ") " << scan.schema() << " (cumulative cost " << cost() << ')';
+    indent(out, level) << (SIMDfied ? "wasm::SIMDScan(" : "wasm::Scan(") << M_notnull(this->scan.alias()) << ") ";
+    if (this->buffer_factory_ and this->scan.schema().drop_constants().deduplicate().num_entries())
+        out << "with " << this->buffer_num_tuples_ << " tuples output buffer ";
+    out << this->scan.schema() << " (cumulative cost " << cost() << ')';
 }
 
 template<bool Predicated>
 void Match<m::wasm::Filter<Predicated>>::print(std::ostream &out, unsigned level) const
 {
     indent(out, level) << "wasm::" << (Predicated ? "Predicated" : "Branching") << "Filter ";
-    if (this->buffer_factory_)
+    if (this->buffer_factory_ and this->filter.schema().drop_constants().deduplicate().num_entries())
         out << "with " << this->buffer_num_tuples_ << " tuples output buffer ";
-    out << filter.schema() << " (cumulative cost " << cost() << ')';
+    out << this->filter.schema() << " (cumulative cost " << cost() << ')';
     this->child.print(out, level + 1);
 }
 
 void Match<m::wasm::LazyDisjunctiveFilter>::print(std::ostream &out, unsigned level) const
 {
     indent(out, level) << "wasm::LazyDisjunctiveFilter ";
-    if (this->buffer_factory_)
+    if (this->buffer_factory_ and this->filter.schema().drop_constants().deduplicate().num_entries())
         out << "with " << this->buffer_num_tuples_ << " tuples output buffer ";
-    const cnf::Clause &clause = filter.filter()[0];
+    const cnf::Clause &clause = this->filter.filter()[0];
     for (auto it = clause.cbegin(); it != clause.cend(); ++it) {
         if (it != clause.cbegin()) out << " → ";
         out << *it;
     }
-    out << ' ' << filter.schema() << " (cumulative cost " << cost() << ')';
+    out << ' ' << this->filter.schema() << " (cumulative cost " << cost() << ')';
     this->child.print(out, level + 1);
 }
 
 void Match<m::wasm::Projection>::print(std::ostream &out, unsigned level) const
 {
-    indent(out, level) << "wasm::Projection " << projection.schema() << " (cumulative cost " << cost() << ')';
+    indent(out, level) << "wasm::Projection ";
+    if (this->buffer_factory_ and this->projection.schema().drop_constants().deduplicate().num_entries())
+        out << "with " << this->buffer_num_tuples_ << " tuples output buffer ";
+    out << this->projection.schema() << " (cumulative cost " << cost() << ')';
     if (this->child)
         this->child->get().print(out, level + 1);
 }
 
 void Match<m::wasm::HashBasedGrouping>::print(std::ostream &out, unsigned level) const
 {
-    indent(out, level) << "wasm::HashBasedGrouping " << grouping.schema() << " (cumulative cost " << cost() << ')';
+    indent(out, level) << "wasm::HashBasedGrouping " << this->grouping.schema() << " (cumulative cost " << cost()
+                       << ')';
     this->child.print(out, level + 1);
 }
 
 void Match<m::wasm::OrderedGrouping>::print(std::ostream &out, unsigned level) const
 {
-    indent(out, level) << "wasm::OrderedGrouping " << grouping.schema() << " (cumulative cost " << cost() << ')';
+    indent(out, level) << "wasm::OrderedGrouping " << this->grouping.schema() << " (cumulative cost " << cost() << ')';
     this->child.print(out, level + 1);
 }
 
 void Match<m::wasm::Aggregation>::print(std::ostream &out, unsigned level) const
 {
-    indent(out, level) << "wasm::Aggregation " << aggregation.schema() << " (cumulative cost " << cost() << ')';
+    indent(out, level) << "wasm::Aggregation " << this->aggregation.schema() << " (cumulative cost " << cost() << ')';
     this->child.print(out, level + 1);
 }
 
 void Match<m::wasm::Sorting>::print(std::ostream &out, unsigned level) const
 {
-    indent(out, level) << "wasm::Sorting " << sorting.schema() << " (cumulative cost " << cost() << ')';
+    indent(out, level) << "wasm::Sorting " << this->sorting.schema() << " (cumulative cost " << cost() << ')';
     this->child.print(out, level + 1);
 }
 
@@ -4659,14 +4667,14 @@ template<bool Predicated>
 void Match<m::wasm::NestedLoopsJoin<Predicated>>::print(std::ostream &out, unsigned level) const
 {
     indent(out, level) << "wasm::" << (Predicated ? "Predicated" : "") << "NestedLoopsJoin ";
-    if (this->buffer_factory_)
+    if (this->buffer_factory_ and this->join.schema().drop_constants().deduplicate().num_entries())
         out << "with " << this->buffer_num_tuples_ << " tuples output buffer ";
-    out << join.schema() << " (cumulative cost " << cost() << ')';
+    out << this->join.schema() << " (cumulative cost " << cost() << ')';
 
     ++level;
-    std::size_t i = children.size();
+    std::size_t i = this->children.size();
     while (i--) {
-        const MatchBase &child = children[i].get();
+        const MatchBase &child = this->children[i].get();
         indent(out, level) << i << ". input";
         child.print(out, level + 1);
     }
@@ -4677,13 +4685,13 @@ void Match<m::wasm::SimpleHashJoin<Unique, Predicated>>::print(std::ostream &out
 {
     indent(out, level) << "wasm::" << (Predicated ? "Predicated" : "") << "SimpleHashJoin";
     if (Unique) out << " on UNIQUE key ";
-    if (this->buffer_factory_)
+    if (this->buffer_factory_ and this->join.schema().drop_constants().deduplicate().num_entries())
         out << "with " << this->buffer_num_tuples_ << " tuples output buffer ";
-    out << join.schema() << " (cumulative cost " << cost() << ')';
+    out << this->join.schema() << " (cumulative cost " << cost() << ')';
 
     ++level;
-    const MatchBase &build = children[0].get();
-    const MatchBase &probe = children[1].get();
+    const MatchBase &build = this->children[0].get();
+    const MatchBase &probe = this->children[1].get();
     indent(out, level) << "probe input";
     probe.print(out, level + 1);
     indent(out, level) << "build input";
@@ -4707,11 +4715,11 @@ void Match<m::wasm::SortMergeJoin<SortLeft, SortRight, Predicated>>::print(std::
         out << "and materializing left input ";
     else if (this->right_materializing_factory)
         out << "and materializing right input ";
-    out << join.schema() << " (cumulative cost " << cost() << ')';
+    out << this->join.schema() << " (cumulative cost " << cost() << ')';
 
     ++level;
-    const MatchBase &left = children[0].get();
-    const MatchBase &right = children[1].get();
+    const MatchBase &left = this->children[0].get();
+    const MatchBase &right = this->children[1].get();
     indent(out, level) << "right input";
     right.print(out, level + 1);
     indent(out, level) << "left input";
@@ -4720,20 +4728,20 @@ void Match<m::wasm::SortMergeJoin<SortLeft, SortRight, Predicated>>::print(std::
 
 void Match<m::wasm::Limit>::print(std::ostream &out, unsigned level) const
 {
-    indent(out, level) << "wasm::Limit " << limit.schema() << " (cumulative cost " << cost() << ')';
+    indent(out, level) << "wasm::Limit " << this->limit.schema() << " (cumulative cost " << cost() << ')';
     this->child.print(out, level + 1);
 }
 
 void Match<m::wasm::HashBasedGroupJoin>::print(std::ostream &out, unsigned level) const
 {
     indent(out, level) << "wasm::HashBasedGroupJoin ";
-    if (this->buffer_factory_)
+    if (this->buffer_factory_ and this->grouping.schema().drop_constants().deduplicate().num_entries())
         out << "with " << this->buffer_num_tuples_ << " tuples output buffer ";
-    out << grouping.schema() << " (cumulative cost " << cost() << ')';
+    out << this->grouping.schema() << " (cumulative cost " << cost() << ')';
 
     ++level;
-    const MatchBase &build = children[0].get();
-    const MatchBase &probe = children[1].get();
+    const MatchBase &build = this->children[0].get();
+    const MatchBase &probe = this->children[1].get();
     indent(out, level) << "probe input";
     probe.print(out, level + 1);
     indent(out, level) << "build input";

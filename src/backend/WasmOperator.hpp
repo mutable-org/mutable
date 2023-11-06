@@ -336,7 +336,6 @@ struct Match<wasm::NoOp> : MatchBase
     void execute(setup_t setup, pipeline_t pipeline, teardown_t teardown) const override {
         wasm::NoOp::execute(*this, std::move(setup), std::move(pipeline), std::move(teardown));
     }
-    std::string name() const override { return "wasm::NoOp"; }
 
     protected:
     void print(std::ostream &out, unsigned level) const override;
@@ -364,7 +363,6 @@ struct Match<wasm::Callback<SIMDfied>> : MatchBase
     void execute(setup_t setup, pipeline_t pipeline, teardown_t teardown) const override {
         wasm::Callback<SIMDfied>::execute(*this, std::move(setup), std::move(pipeline), std::move(teardown));
     }
-    std::string name() const override { return "wasm::Callback"; }
 
     protected:
     void print(std::ostream &out, unsigned level) const override;
@@ -392,7 +390,6 @@ struct Match<wasm::Print<SIMDfied>> : MatchBase
     void execute(setup_t setup, pipeline_t pipeline, teardown_t teardown) const override {
         wasm::Print<SIMDfied>::execute(*this, std::move(setup), std::move(pipeline), std::move(teardown));
     }
-    std::string name() const override { return "wasm::Print"; }
 
     protected:
     void print(std::ostream &out, unsigned level) const override;
@@ -437,12 +434,6 @@ struct Match<wasm::Scan<SIMDfied>> : MatchBase
         }
     }
 
-    std::string name() const override {
-        std::ostringstream oss;
-        oss << M_CONSTEXPR_COND(SIMDfied, "wasm::SIMDScan(", "wasm::Scan(") << scan.alias() << ')';
-        return oss.str();
-    }
-
     protected:
     void print(std::ostream &out, unsigned level) const override;
 };
@@ -469,10 +460,6 @@ struct Match<wasm::Filter<Predicated>> : MatchBase
                          std::move(setup), std::move(pipeline), std::move(teardown));
     }
 
-    std::string name() const override {
-        return M_CONSTEXPR_COND(Predicated, "wasm::PredicatedFilter", "wasm::BranchingFilter");
-    }
-
     protected:
     void print(std::ostream &out, unsigned level) const override;
 };
@@ -480,13 +467,13 @@ struct Match<wasm::Filter<Predicated>> : MatchBase
 template<>
 struct Match<wasm::LazyDisjunctiveFilter> : MatchBase
 {
+    const DisjunctiveFilterOperator &filter;
+    const MatchBase &child;
     private:
     std::unique_ptr<const storage::DataLayoutFactory> buffer_factory_;
     std::size_t buffer_num_tuples_;
-    public:
-    const DisjunctiveFilterOperator &filter;
-    const MatchBase &child;
 
+    public:
     Match(const DisjunctiveFilterOperator *filter, std::vector<std::reference_wrapper<const MatchBase>> &&children)
         : filter(*filter)
         , child(children[0])
@@ -499,10 +486,6 @@ struct Match<wasm::LazyDisjunctiveFilter> : MatchBase
                          std::move(setup), std::move(pipeline), std::move(teardown));
     }
 
-    std::string name() const override {
-        return "wasm::LazyDisjunctiveFilter";
-    }
-
     protected:
     void print(std::ostream &out, unsigned level) const override;
 };
@@ -513,6 +496,11 @@ struct Match<wasm::Projection> : MatchBase
     const ProjectionOperator &projection;
     std::optional<std::reference_wrapper<const MatchBase>> child;
 
+    private:
+    std::unique_ptr<const storage::DataLayoutFactory> buffer_factory_;
+    std::size_t buffer_num_tuples_;
+
+    public:
     Match(const ProjectionOperator *projection, std::vector<std::reference_wrapper<const MatchBase>> &&children)
         : projection(*projection)
     {
@@ -523,9 +511,9 @@ struct Match<wasm::Projection> : MatchBase
     }
 
     void execute(setup_t setup, pipeline_t pipeline, teardown_t teardown) const override {
-        wasm::Projection::execute(*this, std::move(setup), std::move(pipeline), std::move(teardown));
+        execute_buffered(*this, projection.schema(), buffer_factory_, buffer_num_tuples_,
+                         std::move(setup), std::move(pipeline), std::move(teardown));
     }
-    std::string name() const override { return "wasm::Projection"; }
 
     protected:
     void print(std::ostream &out, unsigned level) const override;
@@ -547,7 +535,6 @@ struct Match<wasm::HashBasedGrouping> : MatchBase
     void execute(setup_t setup, pipeline_t pipeline, teardown_t teardown) const override {
         wasm::HashBasedGrouping::execute(*this, std::move(setup), std::move(pipeline), std::move(teardown));
     }
-    std::string name() const override { return "wasm::HashBasedGrouping"; }
 
     protected:
     void print(std::ostream &out, unsigned level) const override;
@@ -569,7 +556,6 @@ struct Match<wasm::OrderedGrouping> : MatchBase
     void execute(setup_t setup, pipeline_t pipeline, teardown_t teardown) const override {
         wasm::OrderedGrouping::execute(*this, std::move(setup), std::move(pipeline), std::move(teardown));
     }
-    std::string name() const override { return "wasm::OrderedGrouping"; }
 
     protected:
     void print(std::ostream &out, unsigned level) const override;
@@ -591,7 +577,6 @@ struct Match<wasm::Aggregation> : MatchBase
     void execute(setup_t setup, pipeline_t pipeline, teardown_t teardown) const override {
         wasm::Aggregation::execute(*this, std::move(setup), std::move(pipeline), std::move(teardown));
     }
-    std::string name() const override { return "wasm::Aggregation"; }
 
     protected:
     void print(std::ostream &out, unsigned level) const override;
@@ -615,7 +600,6 @@ struct Match<wasm::Sorting> : MatchBase
     void execute(setup_t setup, pipeline_t pipeline, teardown_t teardown) const override {
         wasm::Sorting::execute(*this, std::move(setup), std::move(pipeline), std::move(teardown));
     }
-    std::string name() const override { return "wasm::Sorting"; }
 
     protected:
     void print(std::ostream &out, unsigned level) const override;
@@ -635,7 +619,6 @@ struct Match<wasm::NoOpSorting> : MatchBase
     void execute(setup_t setup, pipeline_t pipeline, teardown_t teardown) const override {
         wasm::NoOpSorting::execute(*this, std::move(setup), std::move(pipeline), std::move(teardown));
     }
-    std::string name() const override { return "wasm::NoOpSorting"; }
 
     protected:
     void print(std::ostream &out, unsigned level) const override;
@@ -667,10 +650,6 @@ struct Match<wasm::NestedLoopsJoin<Predicated>> : MatchBase
                          std::move(setup), std::move(pipeline), std::move(teardown));
     }
 
-    std::string name() const override {
-        return M_CONSTEXPR_COND(Predicated, "wasm::PredicatedNestedLoopsJoin", "wasm::BranchingNestedLoopsJoin");
-    }
-
     protected:
     void print(std::ostream &out, unsigned level) const override;
 };
@@ -700,13 +679,6 @@ struct Match<wasm::SimpleHashJoin<UniqueBuild, Predicated>> : MatchBase
     void execute(setup_t setup, pipeline_t pipeline, teardown_t teardown) const override {
         execute_buffered(*this, join.schema(), buffer_factory_, buffer_num_tuples_,
                          std::move(setup), std::move(pipeline), std::move(teardown));
-    }
-
-    std::string name() const override {
-        std::ostringstream oss;
-        if constexpr (UniqueBuild) oss << "wasm::Unique";
-        oss << M_CONSTEXPR_COND(Predicated, "PredicatedSimpleHashJoin", "BranchingSimpleHashJoin");
-        return oss.str();
     }
 
     protected:
@@ -741,21 +713,6 @@ struct Match<wasm::SortMergeJoin<SortLeft, SortRight, Predicated>> : MatchBase
         );
     }
 
-    std::string name() const override {
-        if constexpr (SortLeft) {
-            if constexpr (SortRight)
-                return M_CONSTEXPR_COND(Predicated, "PredicatedLeftRightSortMergeJoin",
-                                                    "BranchingLeftRightSortMergeJoin");
-            else
-                return M_CONSTEXPR_COND(Predicated, "PredicatedLeftSortMergeJoin", "BranchingLeftSortMergeJoin");
-        } else {
-            if constexpr (SortRight)
-                return M_CONSTEXPR_COND(Predicated, "PredicatedRightSortMergeJoin", "BranchingRightSortMergeJoin");
-            else
-                return M_CONSTEXPR_COND(Predicated, "PredicatedMergeJoin", "BranchingMergeJoin");
-        }
-    }
-
     protected:
     void print(std::ostream &out, unsigned level) const override;
 };
@@ -776,7 +733,6 @@ struct Match<wasm::Limit> : MatchBase
     void execute(setup_t setup, pipeline_t pipeline, teardown_t teardown) const override {
         wasm::Limit::execute(*this, std::move(setup), std::move(pipeline), std::move(teardown));
     }
-    std::string name() const override { return "wasm::Limit"; }
 
     protected:
     void print(std::ostream &out, unsigned level) const override;
@@ -785,16 +741,16 @@ struct Match<wasm::Limit> : MatchBase
 template<>
 struct Match<wasm::HashBasedGroupJoin> : MatchBase
 {
-    private:
-    std::unique_ptr<const storage::DataLayoutFactory> buffer_factory_;
-    std::size_t buffer_num_tuples_;
-    public:
     const GroupingOperator &grouping;
     const JoinOperator &join;
     const Wildcard &build;
     const Wildcard &probe;
     std::vector<std::reference_wrapper<const MatchBase>> children;
+    private:
+    std::unique_ptr<const storage::DataLayoutFactory> buffer_factory_;
+    std::size_t buffer_num_tuples_;
 
+    public:
     Match(const GroupingOperator* grouping, const JoinOperator *join, const Wildcard *build, const Wildcard *probe,
           std::vector<std::reference_wrapper<const MatchBase>> &&children)
         : grouping(*grouping)
@@ -810,8 +766,6 @@ struct Match<wasm::HashBasedGroupJoin> : MatchBase
         execute_buffered(*this, grouping.schema(), buffer_factory_, buffer_num_tuples_,
                          std::move(setup), std::move(pipeline), std::move(teardown));
     }
-
-    std::string name() const override { return "wasm::HashBasedGroupJoin"; }
 
     protected:
     void print(std::ostream &out, unsigned level) const override;

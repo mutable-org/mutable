@@ -556,6 +556,9 @@ struct M_EXPORT Table
     virtual Attribute & operator[](const char *name) = 0;
     virtual const Attribute & operator[](const char *name) const = 0;
 
+    /** Returns `true` iff the table has an attribute \p name. */
+    virtual bool has_attribute(const char *name) const = 0;
+
     /** Returns `true` iff the `Table` \p other is the same as `this`, `false` otherwise. */
     virtual bool operator== (const Table &other) = 0;
     virtual bool operator== (const Table &other) const = 0;
@@ -669,6 +672,9 @@ struct M_EXPORT ConcreteTable : Table
     Attribute & operator[](const char *name) override { return operator[](name_to_attr_.find(name)->second); }
     const Attribute & operator[](const char *name) const override { return const_cast<ConcreteTable*>(this)->operator[](name); }
 
+     /** Returns `true` iff the table has an attribute \p name. */
+    bool has_attribute(const char *name) const override { return name_to_attr_.contains(name); }
+
     /** Returns `true` iff the `Table` \p other is the same as `this`, `false` otherwise. */
     bool operator== (const Table &other) override {
         if (is<const ConcreteTable>(other))
@@ -772,6 +778,8 @@ struct TableDecorator : Table
 
     virtual Attribute & operator[](const char *name) override { return table_->at(name); }
     virtual const Attribute & operator[](const char *name) const override { return table_->at(name); }
+
+    virtual bool has_attribute(const char *name) const override { return table_->has_attribute(name); }
 
     virtual bool operator== (const Table &other) override { return other == *table_; }
     virtual bool operator== (const Table &other) const override { return const_cast<TableDecorator*>(this)->operator==(other); }

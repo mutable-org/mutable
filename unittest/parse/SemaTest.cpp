@@ -2387,6 +2387,207 @@ TEST_CASE("Sema/Statements/Select", "[core][parse][sema]")
     }
 }
 
+TEST_CASE("Sema/Statements/CreateIndex", "[core][parse][sema]")
+{
+    Catalog::Clear();
+
+    /* Create a dummy DB and a dummy table. */
+    Catalog &C = Catalog::Get();
+    const char *db_name = "mydb";
+    auto &DB = C.add_database(db_name);
+    C.set_database_in_use(DB);
+    auto table_name = C.pool("mytable");
+    auto &table = DB.add_table(table_name);
+    table.push_back(C.pool("a"), Type::Get_Boolean(Type::TY_Vector));
+    table.push_back(C.pool("b"), Type::Get_Double(Type::TY_Vector));
+
+    SECTION("Create Index Statement is ok.")
+    {
+        LEXER("CREATE INDEX idx ON mytable(a);");
+        Parser parser(lexer);
+        auto stmt = as<CreateIndexStmt>(parser.parse());
+        REQUIRE(diag.num_errors() == 0);
+        REQUIRE(err.str().empty());
+        Sema sema(diag);
+        sema(*stmt);
+
+        REQUIRE(diag.num_errors() == 0);
+        REQUIRE(err.str().empty());
+    }
+
+    SECTION("Create Index Statement on already indexed attribute is ok.")
+    {
+        /* Create index idx on mytable(a). */
+        auto attribute_name = C.pool("a");
+        auto index_name = C.pool("idx");
+        DB.add_index(std::make_unique<idx::IndexBase>(), table_name, attribute_name, index_name);
+
+        /* Try to create another index idx. */
+        LEXER("CREATE INDEX new_idx ON mytable(a);");
+        Parser parser(lexer);
+        auto stmt = as<CreateIndexStmt>(parser.parse());
+        REQUIRE(diag.num_errors() == 0);
+        REQUIRE(err.str().empty());
+        Sema sema(diag);
+        sema(*stmt);
+
+        REQUIRE(diag.num_errors() == 0);
+        REQUIRE(err.str().empty());
+    }
+
+    SECTION("Create Index Statement without index name.")
+    {
+        LEXER("CREATE INDEX ON mytable(a);");
+        Parser parser(lexer);
+        auto stmt = as<CreateIndexStmt>(parser.parse());
+        REQUIRE(diag.num_errors() == 0);
+        REQUIRE(err.str().empty());
+        Sema sema(diag);
+        sema(*stmt);
+
+        REQUIRE(diag.num_errors() == 1);
+        REQUIRE(not err.str().empty());
+    }
+
+    SECTION("Create Index Statement on table which does not exist.")
+    {
+        LEXER("CREATE INDEX ON mynewtable(a);");
+        Parser parser(lexer);
+        auto stmt = as<CreateIndexStmt>(parser.parse());
+        REQUIRE(diag.num_errors() == 0);
+        REQUIRE(err.str().empty());
+        Sema sema(diag);
+        sema(*stmt);
+
+        REQUIRE(diag.num_errors() == 1);
+        REQUIRE(not err.str().empty());
+    }
+
+    SECTION("Create Index Statement on attribute which does not exist.")
+    {
+        LEXER("CREATE INDEX ON mytable(myattr);");
+        Parser parser(lexer);
+        auto stmt = as<CreateIndexStmt>(parser.parse());
+        REQUIRE(diag.num_errors() == 0);
+        REQUIRE(err.str().empty());
+        Sema sema(diag);
+        sema(*stmt);
+
+        REQUIRE(diag.num_errors() == 1);
+        REQUIRE(not err.str().empty());
+    }
+
+    SECTION("Create Index Statement with unsupported index method.")
+    {
+        LEXER("CREATE INDEX ON mytable USING mymethod (a);");
+        Parser parser(lexer);
+        auto stmt = as<CreateIndexStmt>(parser.parse());
+        REQUIRE(diag.num_errors() == 0);
+        REQUIRE(err.str().empty());
+        Sema sema(diag);
+        sema(*stmt);
+
+        REQUIRE(diag.num_errors() == 1);
+        REQUIRE(not err.str().empty());
+    }
+
+    SECTION("Create Index Statement with already existing index name.")
+    {
+        /* Create index idx on mytable(a). */
+        auto attribute_name = C.pool("a");
+        auto index_name = C.pool("idx");
+        DB.add_index(std::make_unique<idx::IndexBase>(), table_name, attribute_name, index_name);
+
+        /* Try to create another index idx. */
+        LEXER("CREATE INDEX idx ON mytable(b);");
+        Parser parser(lexer);
+        auto stmt = as<CreateIndexStmt>(parser.parse());
+        REQUIRE(diag.num_errors() == 0);
+        REQUIRE(err.str().empty());
+        Sema sema(diag);
+        sema(*stmt);
+
+        REQUIRE(diag.num_errors() == 1);
+        REQUIRE(not err.str().empty());
+    }
+}
+
+TEST_CASE("Sema/Statements/DropIndex", "[core][parse][sema]")
+{
+    Catalog::Clear();
+
+    /* Create a dummy DB and a dummy table. */
+    Catalog &C = Catalog::Get();
+    const char *db_name = "mydb";
+    auto &DB = C.add_database(db_name);
+    C.set_database_in_use(DB);
+    auto table_name = C.pool("mytable");
+    auto &table = DB.add_table(table_name);
+    auto attribute_name = C.pool("a");
+    table.push_back(attribute_name, Type::Get_Boolean(Type::TY_Vector));
+
+    /* Create default index on mytable(a). */
+    auto index_name = C.pool("idx");
+    DB.add_index(std::make_unique<idx::IndexBase>(), table_name, attribute_name, index_name);
+
+    SECTION("Drop Index Statement is ok.")
+    {
+        LEXER("DROP INDEX idx;");
+        Parser parser(lexer);
+        auto stmt = as<DropIndexStmt>(parser.parse());
+        REQUIRE(diag.num_errors() == 0);
+        REQUIRE(err.str().empty());
+        Sema sema(diag);
+        sema(*stmt);
+
+        REQUIRE(diag.num_errors() == 0);
+        REQUIRE(err.str().empty());
+    }
+
+    SECTION("Drop Index Statement for index which does not exist.")
+    {
+        LEXER("DROP INDEX foo;");
+        Parser parser(lexer);
+        auto stmt = as<DropIndexStmt>(parser.parse());
+        REQUIRE(diag.num_errors() == 0);
+        REQUIRE(err.str().empty());
+        Sema sema(diag);
+        sema(*stmt);
+
+        REQUIRE(diag.num_errors() == 1);
+        REQUIRE(not err.str().empty());
+    }
+
+    SECTION("Drop Index Statement with IF EXISTS for index which does not exist.")
+    {
+        LEXER("DROP INDEX IF EXISTS foo;");
+        Parser parser(lexer);
+        auto stmt = as<DropIndexStmt>(parser.parse());
+        REQUIRE(diag.num_errors() == 0);
+        REQUIRE(err.str().empty());
+        Sema sema(diag);
+        sema(*stmt);
+
+        REQUIRE(diag.num_errors() == 0);
+        REQUIRE(not err.str().empty()); // warning
+    }
+
+    // Only warning, no error expected
+    SECTION("Drop Index Statement with IF EXISTS for two indexes one of which does not exist.")
+    {
+        LEXER("DROP INDEX IF EXISTS foo, idx;");
+        Parser parser(lexer);
+        auto stmt = as<DropIndexStmt>(parser.parse());
+        REQUIRE(diag.num_errors() == 0);
+        REQUIRE(err.str().empty());
+        Sema sema(diag);
+        sema(*stmt);
+
+        REQUIRE(diag.num_errors() == 0);
+        REQUIRE(not err.str().empty()); // warning
+    }
+}
+
 TEST_CASE("Sema/Statements/Insert", "[core][parse][sema]")
 {
     Catalog::Clear();

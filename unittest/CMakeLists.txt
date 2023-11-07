@@ -34,6 +34,7 @@ set(
 
     # IR
     IR/CNFTest.cpp
+    IR/HeuristicSearchPlanEnumeratorTest.cpp
     IR/PartialPlanGeneratorTest.cpp
     IR/PlanEnumeratorTest.cpp
     IR/QueryGraphTest.cpp

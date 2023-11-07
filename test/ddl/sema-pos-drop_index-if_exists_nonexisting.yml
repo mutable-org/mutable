@@ -1,0 +1,31 @@
+description: DROP INDEX IF EXISTS non-existing positive test
+db: ddl
+query: |
+    DROP INDEX IF EXISTS anyidx;
+required: YES
+
+stages:
+    lexer:
+        out: |
+            -:1:1: DROP TK_Drop
+            -:1:6: INDEX TK_Index
+            -:1:12: IF TK_If
+            -:1:15: EXISTS TK_Exists
+            -:1:22: anyidx TK_IDENTIFIER
+            -:1:28: ; TK_SEMICOL
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    parser:
+        out: |
+          DROP INDEX IF EXISTS anyidx;
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    sema:
+        out: NULL
+        err: NULL
+        num_err: 0
+        returncode: 0

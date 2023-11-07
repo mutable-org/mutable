@@ -1,0 +1,40 @@
+description: CREATE INDEX IF NOT EXISTS identifiert test
+db: ddl
+query: |
+    CREATE INDEX IF NOT EXISTS idx0_b ON tab0(b);
+required: YES
+
+stages:
+    lexer:
+        out: |
+            -:1:1: CREATE TK_Create
+            -:1:8: INDEX TK_Index
+            -:1:14: IF TK_If
+            -:1:17: NOT TK_Not
+            -:1:21: EXISTS TK_Exists
+            -:1:28: idx0_b TK_IDENTIFIER
+            -:1:35: ON TK_On
+            -:1:38: tab0 TK_IDENTIFIER
+            -:1:42: ( TK_LPAR
+            -:1:43: b TK_IDENTIFIER
+            -:1:44: ) TK_RPAR
+            -:1:45: ; TK_SEMICOL
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    parser:
+        out: |
+            CREATE INDEX IF NOT EXISTS idx0_b ON tab0
+            (
+                b
+            );
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    sema:
+        out: NULL
+        err: NULL
+        num_err: 0
+        returncode: 0

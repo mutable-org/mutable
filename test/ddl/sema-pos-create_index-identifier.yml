@@ -1,0 +1,37 @@
+description: CREATE INDEX identifiert test
+db: ddl
+query: |
+    CREATE INDEX idx0_b ON tab0(b);
+required: YES
+
+stages:
+    lexer:
+        out: |
+            -:1:1: CREATE TK_Create
+            -:1:8: INDEX TK_Index
+            -:1:14: idx0_b TK_IDENTIFIER
+            -:1:21: ON TK_On
+            -:1:24: tab0 TK_IDENTIFIER
+            -:1:28: ( TK_LPAR
+            -:1:29: b TK_IDENTIFIER
+            -:1:30: ) TK_RPAR
+            -:1:31: ; TK_SEMICOL
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    parser:
+        out: |
+            CREATE INDEX idx0_b ON tab0
+            (
+                b
+            );
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    sema:
+        out: NULL
+        err: NULL
+        num_err: 0
+        returncode: 0

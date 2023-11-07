@@ -1,0 +1,29 @@
+description: DROP INDEX single positive test
+db: ddl
+query: |
+    DROP INDEX idx0_a;
+required: YES
+
+stages:
+    lexer:
+        out: |
+            -:1:1: DROP TK_Drop
+            -:1:6: INDEX TK_Index
+            -:1:12: idx0_a TK_IDENTIFIER
+            -:1:18: ; TK_SEMICOL
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    parser:
+        out: |
+            DROP INDEX idx0_a;
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    sema:
+        out: NULL
+        err: NULL
+        num_err: 0
+        returncode: 0

@@ -1,0 +1,31 @@
+description: DROP INDEX multiple positive test
+db: ddl
+query: |
+    DROP INDEX idx0_a, idx1_b;
+required: YES
+
+stages:
+    lexer:
+        out: |
+            -:1:1: DROP TK_Drop
+            -:1:6: INDEX TK_Index
+            -:1:12: idx0_a TK_IDENTIFIER
+            -:1:18: , TK_COMMA
+            -:1:20: idx1_b TK_IDENTIFIER
+            -:1:26: ; TK_SEMICOL
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    parser:
+        out: |
+            DROP INDEX idx0_a, idx1_b;
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    sema:
+        out: NULL
+        err: NULL
+        num_err: 0
+        returncode: 0

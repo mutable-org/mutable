@@ -1,0 +1,39 @@
+description: CREATE INDEX USING method test
+db: ddl
+query: |
+    CREATE INDEX idx0_b_default ON tab0 USING DEFAULT (b);
+required: YES
+
+stages:
+    lexer:
+        out: |
+            -:1:1: CREATE TK_Create
+            -:1:8: INDEX TK_Index
+            -:1:14: idx0_b_default TK_IDENTIFIER
+            -:1:29: ON TK_On
+            -:1:32: tab0 TK_IDENTIFIER
+            -:1:37: USING TK_Using
+            -:1:43: DEFAULT TK_Default
+            -:1:51: ( TK_LPAR
+            -:1:52: b TK_IDENTIFIER
+            -:1:53: ) TK_RPAR
+            -:1:54: ; TK_SEMICOL
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    parser:
+        out: |
+            CREATE INDEX idx0_b_default ON tab0 USING DEFAULT
+            (
+                b
+            );
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    sema:
+        out: NULL
+        err: NULL
+        num_err: 0
+        returncode: 0

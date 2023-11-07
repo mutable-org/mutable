@@ -1,0 +1,33 @@
+description: DROP INDEX IF EXISTS multiple positive test
+db: ddl
+query: |
+    DROP INDEX IF EXISTS idx0_a, anyidx;
+required: YES
+
+stages:
+    lexer:
+        out: |
+            -:1:1: DROP TK_Drop
+            -:1:6: INDEX TK_Index
+            -:1:12: IF TK_If
+            -:1:15: EXISTS TK_Exists
+            -:1:22: idx0_a TK_IDENTIFIER
+            -:1:28: , TK_COMMA
+            -:1:30: anyidx TK_IDENTIFIER
+            -:1:36: ; TK_SEMICOL
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    parser:
+        out: |
+            DROP INDEX IF EXISTS idx0_a, anyidx;
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    sema:
+        out: NULL
+        err: NULL
+        num_err: 0
+        returncode: 0

@@ -79,11 +79,12 @@ This way, our hooks are properly installed and contained in version control.
   then the problem is that the required header file is not installed in one of the compiler's searched include directories.
   To resolve the problem, we must manually provide the include directory to the build of `pygraphviz`.
 
-  1. Get the current install directory of Graphviz with `brew info graphviz`.
-  1. Run the following command to build `pygraphviz` with the additional include directory.  Replace `<VERSION>` with your actual version of Graphviz.
-     ```plain
-     $ export GRAPHVIZ_DIR="/usr/local/Cellar/graphviz/<VERSION>"
-     $ pipenv run pip install pygraphviz --global-option=build_ext --global-option="-I$GRAPHVIZ_DIR/include" --global-option="-L$GRAPHVIZ_DIR/lib"
-     ```
-  1. Run `pipenv sync` as usual.
-
+1. Run the following command to build `pygraphviz` with the additional include directory.
+   ```plain
+   $ pipenv run pip install --use-pep517 \
+                            --config-setting="--global-option=build_ext" \
+                            --config-setting="--build-option=-I$(brew --prefix graphviz)/include/" \
+                            --config-setting="--build-option=-L$(brew --prefix graphviz)/lib/" \
+                            pygraphviz
+   ```
+1. Run `pipenv sync` as usual.

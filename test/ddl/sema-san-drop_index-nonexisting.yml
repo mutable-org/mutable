@@ -1,0 +1,29 @@
+description: DROP INDEX non-existing sanity test
+db: ddl
+query: |
+    DROP INDEX anyidx;
+required: YES
+
+stages:
+    lexer:
+        out: |
+            -:1:1: DROP TK_Drop
+            -:1:6: INDEX TK_Index
+            -:1:12: anyidx TK_IDENTIFIER
+            -:1:18: ; TK_SEMICOL
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    parser:
+        out: |
+            DROP INDEX anyidx;
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    sema:
+        out: NULL
+        err: NULL
+        num_err: 1
+        returncode: 1

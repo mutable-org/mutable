@@ -10,7 +10,9 @@
 #include <mutable/catalog/CostFunctionCout.hpp>
 #include <mutable/IR/Operator.hpp>
 #include <mutable/IR/PlanTable.hpp>
+#include <mutable/lex/Token.hpp>
 #include <mutable/Options.hpp>
+#include <mutable/parse/AST.hpp>
 #include <mutable/util/enum_ops.hpp>
 #include <mutable/util/fn.hpp>
 #include <stdexcept>
@@ -126,6 +128,7 @@ MultiVersioningTable::MultiVersioningTable(std::unique_ptr<Table> table)
     (*table_)[ts_begin].is_hidden = true;
     (*table_)[ts_begin].not_nullable = true;
     (*table_)[ts_end].is_hidden = true;
+    (*table_)[ts_end].not_nullable = true;
 }
 
 M_LCOV_EXCL_START
@@ -137,6 +140,137 @@ void MultiVersioningTable::dump(std::ostream &out) const
 
 void MultiVersioningTable::dump() const { dump(std::cerr); }
 M_LCOV_EXCL_STOP
+
+
+namespace {
+
+
+void apply_timestamp_filter(QueryGraph &G)
+{
+    Catalog &C = Catalog::Get();
+
+    auto pos = Position(nullptr);
+    ast::Token ts_begin(pos, C.pool("$ts_begin"), TK_IDENTIFIER);
+    ast::Token ts_end(pos, C.pool("$ts_end"), TK_IDENTIFIER);
+
+    for (auto &ds : G.sources()) {
+        if (auto bt = cast<const BaseTable>(ds.get())) {
+            /* Set timestamp filter */
+            auto it = std::find_if(bt->table().cbegin_hidden(),
+                                   bt->table().end_hidden(),
+                                   [&](const Attribute & attr) {
+                                       return attr.name == C.pool("$ts_begin");
+                                   });
+
+            if (it != bt->table().end_hidden()) {
+                ast::Token table_name(pos, bt->table().name(), TK_EOF);
+                /*----- Build AST -----*/
+                // $ts_begin
+                std::unique_ptr<ast::Expr> ts_begin_designator = std::make_unique<ast::Designator>(
+                        ts_begin,
+                        table_name,
+                        ts_begin,
+                        Type::Get_Integer(Type::TY_Vector, 8),
+                        &*it
+                );
+
+                // TST := transaction start time constant
+                std::unique_ptr<ast::Expr> ts_begin_transaction_constant = std::make_unique<ast::Constant>(ast::Token(
+                        pos,
+                        C.pool(std::to_string(G.transaction()->start_time()).c_str()),
+                        m::TK_DEC_INT
+                ));
+                ts_begin_transaction_constant->type(Type::Get_Integer(Type::TY_Vector, 8));
+
+                // $ts_begin <= TST
+                std::unique_ptr<ast::Expr> ts_begin_filter_clause = std::make_unique<ast::BinaryExpr>(
+                        ast::Token(pos, C.pool("<="), TK_LESS_EQUAL),
+                        std::move(ts_begin_designator),
+                        std::move(ts_begin_transaction_constant)
+                );
+                ts_begin_filter_clause->type(Type::Get_Boolean(Type::TY_Vector));
+
+                // $ts_end
+                std::unique_ptr<ast::Expr> ts_end_designator = std::make_unique<ast::Designator>(
+                        ts_end,
+                        table_name,
+                        ts_end,
+                        Type::Get_Integer(Type::TY_Vector, 8),
+                        &bt->table()[C.pool("$ts_end")]
+                );
+
+                // TST := transaction start time constant
+                std::unique_ptr<ast::Expr> ts_end_transaction_constant = std::make_unique<ast::Constant>(ast::Token(
+                        pos,
+                        C.pool(std::to_string(G.transaction()->start_time()).c_str()),
+                        m::TK_DEC_INT
+                ));
+                ts_end_transaction_constant->type(Type::Get_Integer(Type::TY_Vector, 8));
+
+                // $ts_end > TST
+                std::unique_ptr<ast::Expr> ts_end_greater_transaction_expr = std::make_unique<ast::BinaryExpr>(
+                        ast::Token(pos, C.pool(">"), TK_GREATER),
+                        std::move(ts_end_designator),
+                        std::move(ts_end_transaction_constant)
+                );
+                ts_end_greater_transaction_expr->type(Type::Get_Boolean(Type::TY_Vector));
+
+                // $ts_end
+                std::unique_ptr<ast::Expr> ts_end_designator_2 = std::make_unique<ast::Designator>(
+                        ts_end,
+                        table_name,
+                        ts_end,
+                        Type::Get_Integer(Type::TY_Vector, 8),
+                        &bt->table()[C.pool("$ts_end")]
+                );
+
+                // 1
+                std::unique_ptr<ast::Expr> zero_constant = std::make_unique<ast::Constant>(ast::Token(
+                        pos,
+                        C.pool("0"),
+                        m::TK_DEC_INT
+                ));
+                zero_constant->type(Type::Get_Integer(Type::TY_Vector, 8));
+
+                // $ts_end = 0
+                std::unique_ptr<ast::Expr> ts_end_eq_zero = std::make_unique<ast::BinaryExpr>(
+                        ast::Token(pos, C.pool("="), TK_EQUAL),
+                        std::move(ts_end_designator_2),
+                        std::move(zero_constant)
+                );
+                ts_end_eq_zero->type(Type::Get_Boolean(Type::TY_Vector));
+
+                // $ts_end > TST OR $ts_end = 0
+                std::unique_ptr<ast::Expr> ts_end_filter_clause = std::make_unique<ast::BinaryExpr>(
+                        ast::Token(pos, C.pool("OR"), TK_Or),
+                        std::move(ts_end_greater_transaction_expr),
+                        std::move(ts_end_eq_zero)
+                );
+                ts_end_filter_clause->type(Type::Get_Boolean(Type::TY_Vector));
+
+                // $ts_begin <= TST AND ($ts_end > TST OR $ts_end = 0)
+                std::unique_ptr<ast::Expr> filter_expr = std::make_unique<ast::BinaryExpr>(
+                        ast::Token(pos, C.pool("AND"), TK_And),
+                        std::move(ts_begin_filter_clause),
+                        std::move(ts_end_filter_clause)
+                );
+                filter_expr->type(Type::Get_Boolean(Type::TY_Vector));
+
+                G.add_custom_filter(std::move(filter_expr), *ds);
+            }
+        }
+    }
+}
+
+__attribute__((constructor(202)))
+void register_pre_optimization()
+{
+    Catalog &C = Catalog::Get();
+    C.register_pre_optimization("multi-versioning", apply_timestamp_filter, "adds timestamp filters to the QueryGraph");
+}
+
+
+}
 
 
 /*======================================================================================================================

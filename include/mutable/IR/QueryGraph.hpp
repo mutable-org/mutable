@@ -190,6 +190,8 @@ struct M_EXPORT QueryGraph
     mutable std::unique_ptr<AdjacencyMatrix> adjacency_matrix_;
 
     Scheduler::Transaction *t_ = nullptr; ///< the transaction this query graph belongs to
+    ///> Stores the expressions of custom filters that have been added to the `DataSource`s after semantic analysis.
+    std::vector<std::unique_ptr<ast::Expr>> custom_filter_exprs_;
 
     public:
     friend void swap(QueryGraph &first, QueryGraph &second) {
@@ -295,6 +297,18 @@ struct M_EXPORT QueryGraph
     }
     /** Returns the transaction ID. */
     Scheduler::Transaction * transaction() const { return t_; }
+
+    /** Creates a `cnf::CNF` from `filter_expr` and adds it to the current filter of the given `DataSource` `ds` by logical conjunction. */
+    void add_custom_filter(std::unique_ptr<ast::Expr> filter_expr, DataSource &ds) {
+        M_insist(std::find_if(sources_.begin(), sources_.end(), [&](std::unique_ptr<DataSource> &source){
+            return *source == ds;
+        }) != sources_.end());
+
+        auto filter = cnf::to_CNF(*filter_expr);
+        ds.update_filter(filter);
+        custom_filter_exprs_.push_back(std::move(filter_expr));
+    }
+
 
     void dump(std::ostream &out) const;
     void dump() const;

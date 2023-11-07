@@ -114,13 +114,13 @@ std::vector<cnf::CNF> optimize_filter(cnf::CNF filter)
  *====================================================================================================================*/
 
 std::pair<std::unique_ptr<Producer>, PlanTableEntry>
-Optimizer::optimize(const QueryGraph &G) const
+Optimizer::optimize(QueryGraph &G) const
 {
     return optimize_recursive(G);
 }
 
 std::pair<std::unique_ptr<Producer>, PlanTableEntry>
-Optimizer::optimize_recursive(const QueryGraph &G) const
+Optimizer::optimize_recursive(QueryGraph &G) const
 {
     switch (Options::Get().plan_table_type)
     {
@@ -151,7 +151,7 @@ Optimizer::optimize_recursive(const QueryGraph &G) const
 
 template<typename PlanTable>
 std::pair<std::unique_ptr<Producer>, PlanTable>
-Optimizer::optimize_with_plantable(const QueryGraph &G) const
+Optimizer::optimize_with_plantable(QueryGraph &G) const
 {
     PlanTable plan_table(G);
     const auto num_sources = G.sources().size();
@@ -498,7 +498,7 @@ Optimizer::compute_projections_required_for_order_by(const std::vector<projectio
 #define DEFINE(PLANTABLE) \
 template \
 std::pair<std::unique_ptr<Producer>, PLANTABLE> \
-Optimizer::optimize_with_plantable(const QueryGraph &G) const; \
+Optimizer::optimize_with_plantable(QueryGraph &G) const; \
 template \
 void \
 Optimizer::optimize_locally(const QueryGraph &G, PLANTABLE &plan_table) const; \

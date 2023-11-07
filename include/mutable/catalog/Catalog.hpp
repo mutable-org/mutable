@@ -327,7 +327,7 @@ struct M_EXPORT Catalog
     using TableFactoryDecoratorCallback = std::function<std::unique_ptr<TableFactory>(std::unique_ptr<TableFactory>)>;
     ComponentSet<TableFactoryDecoratorCallback> table_properties_; // stores callback functions that decorate a table with the given decorator
 
-    using PreOptimizationCallback = std::function<void(const QueryGraph &)>;
+    using PreOptimizationCallback = std::function<void(QueryGraph &)>;
     ComponentSet<PreOptimizationCallback> pre_optimizations_;
 
     using PostOptimizationCallback = std::function<std::unique_ptr<Producer>(std::unique_ptr<Producer>)>;

@@ -56,6 +56,9 @@ struct M_EXPORT Expr
 
     /** Returns the `Type` of this `Expr`.  Assumes that the `Expr` has been assigned a `Type` by the `Sema`. */
     const Type * type() const { return M_notnull(type_); }
+    /** Sets the `Type` of this `Expr`.  Should be used when constructing an `Expr` outside of the `Sema`.
+     * Should not be called to replace an already assigned type. */
+    void type(const Type *type) { M_insist(not type_); type_ = type; }
     /** Returns true iff this `Expr` has been assigned a `Type`, most likely by `Sema`. */
     bool has_type() const { return type_ != nullptr; }
 

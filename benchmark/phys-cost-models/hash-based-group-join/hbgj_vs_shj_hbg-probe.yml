@@ -1,0 +1,112 @@
+description: Fused hash-based group-join vs. singleton simple-hash join followed by singleton hash-based grouping.
+suite: phys-cost-models
+benchmark: hash-based-group-join
+name: fused vs. singleton, varying probe size
+readonly: true
+chart:
+    x:
+        scale: linear
+        type: Q
+        label: 'Scale factor of probe relation'
+    y:
+        scale: linear
+        type: Q
+        label: 'Machine code execution time [ms]'
+data:
+    'Relation_parent':
+        file: 'benchmark/phys-cost-models/data/Relation_parent.csv'
+        format: 'csv'
+        delimiter: ','
+        header: 1
+        attributes:
+            'id': 'INT NOT NULL PRIMARY KEY'
+            'n2m': 'INT NOT NULL'
+            'a0': 'INT NOT NULL'
+            'a1': 'INT NOT NULL'
+            'a2': 'INT NOT NULL'
+            'a3': 'INT NOT NULL'
+    'Relation_child':
+        file: 'benchmark/phys-cost-models/data/Relation_child.csv'
+        format: 'csv'
+        delimiter: ','
+        header: 1
+        scale_factors:
+            0.0: 0.0
+            0.1: 0.1
+            0.2: 0.2
+            0.3: 0.3
+            0.4: 0.4
+            0.5: 0.5
+            0.6: 0.6
+            0.7: 0.7
+            0.8: 0.8
+            0.9: 0.9
+            1.0: 1.0
+        attributes:
+            'id': 'INT NOT NULL'
+            'fid_1e_6': 'INT NOT NULL REFERENCES Relation_parent(id)'
+            'fid_9e_7': 'INT NOT NULL REFERENCES Relation_parent(id)'
+            'fid_8e_7': 'INT NOT NULL REFERENCES Relation_parent(id)'
+            'fid_7e_7': 'INT NOT NULL REFERENCES Relation_parent(id)'
+            'fid_6e_7': 'INT NOT NULL REFERENCES Relation_parent(id)'
+            'fid_5e_7': 'INT NOT NULL REFERENCES Relation_parent(id)'
+            'fid_4e_7': 'INT NOT NULL REFERENCES Relation_parent(id)'
+            'fid_3e_7': 'INT NOT NULL REFERENCES Relation_parent(id)'
+            'fid_2e_7': 'INT NOT NULL REFERENCES Relation_parent(id)'
+            'fid_1e_7': 'INT NOT NULL REFERENCES Relation_parent(id)'
+            'fid_1e_8': 'INT NOT NULL REFERENCES Relation_parent(id)'
+            'fid_1e_9': 'INT NOT NULL REFERENCES Relation_parent(id)'
+            'n2m': 'INT NOT NULL'
+            'a0': 'INT NOT NULL'
+            'a1': 'INT NOT NULL'
+            'a2': 'INT NOT NULL'
+            'a3': 'INT NOT NULL'
+systems:
+    mutable:
+        args: >-
+            --backend WasmV8
+            --cardinality-estimator Injected
+            --use-cardinality-file benchmark/phys-cost-models/hash-based-group-join/hbgj_vs_shj_hbg.json
+            --data-layout Row
+            --join-implementations SimpleHash
+            --grouping-implementations HashBased
+            --simple-hash-join-ordering-strategy BuildOnLeft
+            --hash-table-probing-strategy Quadratic
+            --hash-table-storing-strategy OutOfPlace
+            --no-simd
+        configurations:
+            'singleton (open-addressing)':
+                args: --hash-table-implementation OpenAddressing --hash-table-max-load-factor 0.7 --no-hash-based-group-join
+                pattern: '^Execute machine code:.*'
+            'fused (open-addressing)':
+                args: --hash-table-implementation OpenAddressing --hash-table-max-load-factor 0.7
+                pattern: '^Execute machine code:.*'
+            'singleton (chained)':
+                args: --hash-table-implementation Chained --hash-table-max-load-factor 1.5 --no-hash-based-group-join
+                pattern: '^Execute machine code:.*'
+            'fused (chained)':
+                args: --hash-table-implementation Chained --hash-table-max-load-factor 1.5
+                pattern: '^Execute machine code:.*'
+        cases:
+            0.0: SELECT COUNT(*), MIN(C.a0), MAX(C.a1), SUM(C.a2), AVG(C.a3)
+                 FROM Relation_parent P, Relation_child C WHERE P.id = C.fid_1e_6 GROUP BY P.id;
+            0.1: SELECT COUNT(*), MIN(C.a0), MAX(C.a1), SUM(C.a2), AVG(C.a3)
+                 FROM Relation_parent P, Relation_child C WHERE P.id = C.fid_1e_6 GROUP BY P.id;
+            0.2: SELECT COUNT(*), MIN(C.a0), MAX(C.a1), SUM(C.a2), AVG(C.a3)
+                 FROM Relation_parent P, Relation_child C WHERE P.id = C.fid_1e_6 GROUP BY P.id;
+            0.3: SELECT COUNT(*), MIN(C.a0), MAX(C.a1), SUM(C.a2), AVG(C.a3)
+                 FROM Relation_parent P, Relation_child C WHERE P.id = C.fid_1e_6 GROUP BY P.id;
+            0.4: SELECT COUNT(*), MIN(C.a0), MAX(C.a1), SUM(C.a2), AVG(C.a3)
+                 FROM Relation_parent P, Relation_child C WHERE P.id = C.fid_1e_6 GROUP BY P.id;
+            0.5: SELECT COUNT(*), MIN(C.a0), MAX(C.a1), SUM(C.a2), AVG(C.a3)
+                 FROM Relation_parent P, Relation_child C WHERE P.id = C.fid_1e_6 GROUP BY P.id;
+            0.6: SELECT COUNT(*), MIN(C.a0), MAX(C.a1), SUM(C.a2), AVG(C.a3)
+                 FROM Relation_parent P, Relation_child C WHERE P.id = C.fid_1e_6 GROUP BY P.id;
+            0.7: SELECT COUNT(*), MIN(C.a0), MAX(C.a1), SUM(C.a2), AVG(C.a3)
+                 FROM Relation_parent P, Relation_child C WHERE P.id = C.fid_1e_6 GROUP BY P.id;
+            0.8: SELECT COUNT(*), MIN(C.a0), MAX(C.a1), SUM(C.a2), AVG(C.a3)
+                 FROM Relation_parent P, Relation_child C WHERE P.id = C.fid_1e_6 GROUP BY P.id;
+            0.9: SELECT COUNT(*), MIN(C.a0), MAX(C.a1), SUM(C.a2), AVG(C.a3)
+                 FROM Relation_parent P, Relation_child C WHERE P.id = C.fid_1e_6 GROUP BY P.id;
+            1.0: SELECT COUNT(*), MIN(C.a0), MAX(C.a1), SUM(C.a2), AVG(C.a3)
+                 FROM Relation_parent P, Relation_child C WHERE P.id = C.fid_1e_6 GROUP BY P.id;

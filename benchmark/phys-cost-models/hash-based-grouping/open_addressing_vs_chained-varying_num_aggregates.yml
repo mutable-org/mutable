@@ -1,0 +1,75 @@
+description: Open-addressing vs. chained hash tables for hash-based grouping.
+suite: phys-cost-models
+benchmark: hash-based-grouping
+name: open-addressing vs. chained, varying aggregates
+readonly: true
+chart:
+    x:
+        scale: linear
+        type: O
+        label: 'Number of aggregates'
+    y:
+        scale: linear
+        type: Q
+        label: 'Machine code execution time [ms]'
+data:
+    'Distinct_multi_i32':
+        file: 'benchmark/phys-cost-models/data/Distinct_multi_i32.csv'
+        format: 'csv'
+        delimiter: ','
+        header: 1
+        attributes:
+            'id': 'INT NOT NULL'
+            'n10': 'INT NOT NULL'
+            'n100': 'INT NOT NULL'
+            'n1000': 'INT NOT NULL'
+            'n1000_sorted': 'INT NOT NULL'
+            'n10000': 'INT NOT NULL'
+            'n100000': 'INT NOT NULL'
+            'n1000000': 'INT NOT NULL'
+            '_n1000000': 'INT NOT NULL'
+            '__n1000000': 'INT NOT NULL'
+            '___n1000000': 'INT NOT NULL'
+systems:
+    mutable:
+        args: >-
+            --backend WasmV8
+            --cardinality-estimator Injected
+            --use-cardinality-file benchmark/phys-cost-models/data/cardinalities.json
+            --data-layout Row
+            --grouping-implementations HashBased
+            --hash-table-probing-strategy Quadratic
+            --no-simd
+        configurations:
+            'open-addressing (out-of-place)':
+                args: >-
+                    --hash-table-implementation OpenAddressing
+                    --hash-table-max-load-factor 0.7
+                    --hash-table-storing-strategy OutOfPlace
+                pattern: '^Execute machine code:.*'
+            'open-addressing (in-place)':
+                args: >-
+                    --hash-table-implementation OpenAddressing
+                    --hash-table-max-load-factor 0.7
+                    --hash-table-storing-strategy InPlace
+                pattern: '^Execute machine code:.*'
+            'chained':
+                args: >-
+                    --hash-table-implementation Chained
+                    --hash-table-max-load-factor 1.5
+                pattern: '^Execute machine code:.*'
+        cases:
+            0: SELECT n1000
+               FROM Distinct_multi_i32 GROUP BY Distinct_multi_i32.n1000;
+            1: SELECT n1000, SUM(n10)
+               FROM Distinct_multi_i32 GROUP BY Distinct_multi_i32.n1000;
+            2: SELECT n1000, SUM(n10), SUM(n100)
+               FROM Distinct_multi_i32 GROUP BY Distinct_multi_i32.n1000;
+            3: SELECT n1000, SUM(n10), SUM(n100), SUM(n1000_sorted)
+               FROM Distinct_multi_i32 GROUP BY Distinct_multi_i32.n1000;
+            4: SELECT n1000, SUM(n10), SUM(n100), SUM(n1000_sorted), SUM(n10000)
+               FROM Distinct_multi_i32 GROUP BY Distinct_multi_i32.n1000;
+            5: SELECT n1000, SUM(n10), SUM(n100), SUM(n1000_sorted), SUM(n10000), SUM(n100000)
+               FROM Distinct_multi_i32 GROUP BY Distinct_multi_i32.n1000;
+            6: SELECT n1000, SUM(n10), SUM(n100), SUM(n1000_sorted), SUM(n10000), SUM(n100000), SUM(n1000000)
+               FROM Distinct_multi_i32 GROUP BY Distinct_multi_i32.n1000;

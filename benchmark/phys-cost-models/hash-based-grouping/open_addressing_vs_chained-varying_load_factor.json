@@ -1,0 +1,20 @@
+{
+    "phys_cost_models": [
+        { "relations": ["g#lf05"], "size": 2046 },
+        { "relations": ["g#lf06"], "size": 2046 },
+        { "relations": ["g#lf07"], "size": 2046 },
+        { "relations": ["g#lf08"], "size": 2046 },
+        { "relations": ["g#lf09"], "size": 2046 },
+        { "relations": ["g#lf10"], "size": 2046 },
+        { "relations": ["g#lf12"], "size": 2046 },
+        { "relations": ["g#lf14"], "size": 2046 },
+        { "relations": ["g#lf16"], "size": 2046 },
+        { "relations": ["g#lf18"], "size": 2046 },
+        { "relations": ["g#lf20"], "size": 2046 },
+        { "relations": ["g#lf22"], "size": 2046 },
+        { "relations": ["g#lf24"], "size": 2046 },
+        { "relations": ["g#lf26"], "size": 2046 },
+        { "relations": ["g#lf28"], "size": 2046 },
+        { "relations": ["g#lf30"], "size": 2046 }
+    ]
+}

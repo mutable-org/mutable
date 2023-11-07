@@ -1,0 +1,69 @@
+description: Different data layouts for the buffer to sort using quicksort.
+suite: phys-cost-models
+benchmark: quicksort
+name: buffer layout
+readonly: true
+chart:
+    x:
+        scale: linear
+        type: O
+        label: 'Size of tuples [bytes]'
+    y:
+        scale: linear
+        type: Q
+        label: 'Machine code execution time [ms]'
+data:
+    'Distinct_multi_i32':
+        file: 'benchmark/phys-cost-models/data/Distinct_multi_i32.csv'
+        format: 'csv'
+        delimiter: ','
+        header: 1
+        attributes:
+            'id': 'INT NOT NULL'
+            'n10': 'INT NOT NULL'
+            'n100': 'INT NOT NULL'
+            'n1000': 'INT NOT NULL'
+            'n1000_sorted': 'INT NOT NULL'
+            'n10000': 'INT NOT NULL'
+            'n100000': 'INT NOT NULL'
+            'n1000000': 'INT NOT NULL'
+            '_n1000000': 'INT NOT NULL'
+            '__n1000000': 'INT NOT NULL'
+            '___n1000000': 'INT NOT NULL'
+systems:
+    mutable:
+        args: >-
+            --backend WasmV8
+            --cardinality-estimator Injected
+            --use-cardinality-file benchmark/phys-cost-models/data/cardinalities.json
+            --sorting-implementations Quicksort
+            --quicksort-cmp-selection-strategy Predicated
+            --no-simd
+        configurations:
+            'row-major':
+                args: --data-layout Row     --hard-pipeline-breaker-layout Row
+                pattern: '^Execute machine code:.*'
+            'PAX4K':
+                args: --data-layout PAX4K   --hard-pipeline-breaker-layout PAX4K
+                pattern: '^Execute machine code:.*'
+            'PAX64K':
+                args: --data-layout PAX64K  --hard-pipeline-breaker-layout PAX64K
+                pattern: '^Execute machine code:.*'
+            'PAX512K':
+                args: --data-layout PAX512K --hard-pipeline-breaker-layout PAX512K
+                pattern: '^Execute machine code:.*'
+            'PAX4M':
+                args: --data-layout PAX4M   --hard-pipeline-breaker-layout PAX4M
+                pattern: '^Execute machine code:.*'
+            'PAX64M':
+                args: --data-layout PAX64M  --hard-pipeline-breaker-layout PAX64M
+                pattern: '^Execute machine code:.*'
+        cases:
+            4:  SELECT n1000
+                FROM Distinct_multi_i32 ORDER BY n1000;
+            8:  SELECT n1000, n100
+                FROM Distinct_multi_i32 ORDER BY n1000;
+            12: SELECT n1000, n100, n10000
+                FROM Distinct_multi_i32 ORDER BY n1000;
+            16: SELECT n1000, n100, n10000, n100000
+                FROM Distinct_multi_i32 ORDER BY n1000;

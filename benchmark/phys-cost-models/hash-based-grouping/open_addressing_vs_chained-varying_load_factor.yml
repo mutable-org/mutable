@@ -1,0 +1,76 @@
+description: Open-addressing vs. chained hash tables for hash-based grouping with groups of size ~500 at lf 1.
+suite: phys-cost-models
+benchmark: hash-based-grouping
+name: open-addressing vs. chained, varying load factor
+readonly: true
+chart:
+    x:
+        scale: linear
+        type: Q
+        label: 'Load factor of hash table'
+    y:
+        scale: linear
+        type: Q
+        label: 'Machine code execution time [ms]'
+data:
+    'Load_factors_multi_i32':
+        file: 'benchmark/phys-cost-models/data/Load_factors_multi_i32.csv'
+        format: 'csv'
+        delimiter: ','
+        header: 1
+        attributes:
+            'id': 'INT NOT NULL'
+            'lf05': 'INT NOT NULL'
+            'lf06': 'INT NOT NULL'
+            'lf07': 'INT NOT NULL'
+            'lf08': 'INT NOT NULL'
+            'lf09': 'INT NOT NULL'
+            'lf10': 'INT NOT NULL'
+            'lf11': 'INT NOT NULL'
+            'lf12': 'INT NOT NULL'
+            'lf13': 'INT NOT NULL'
+            'lf14': 'INT NOT NULL'
+            'lf15': 'INT NOT NULL'
+            'lf16': 'INT NOT NULL'
+            'lf17': 'INT NOT NULL'
+            'lf18': 'INT NOT NULL'
+            'lf19': 'INT NOT NULL'
+            'lf20': 'INT NOT NULL'
+            'lf22': 'INT NOT NULL'
+            'lf24': 'INT NOT NULL'
+            'lf26': 'INT NOT NULL'
+            'lf28': 'INT NOT NULL'
+            'lf30': 'INT NOT NULL'
+systems:
+    mutable:
+        args: >-
+            --backend WasmV8
+            --cardinality-estimator Injected
+            --use-cardinality-file benchmark/phys-cost-models/hash-based-grouping/open_addressing_vs_chained-varying_load_factor.json
+            --data-layout Row
+            --grouping-implementations HashBased
+            --no-simd
+        configurations:
+            'open-addressing':
+                args: --hash-table-implementation OpenAddressing --hash-table-max-load-factor 0.99999
+                pattern: '^Execute machine code:.*'
+            'chained':
+                args: --hash-table-implementation Chained        --hash-table-max-load-factor 1.0
+                pattern: '^Execute machine code:.*'
+        cases:
+            0.5: SELECT 1 FROM Load_factors_multi_i32 GROUP BY lf05;
+            0.6: SELECT 1 FROM Load_factors_multi_i32 GROUP BY lf06;
+            0.7: SELECT 1 FROM Load_factors_multi_i32 GROUP BY lf07;
+            0.8: SELECT 1 FROM Load_factors_multi_i32 GROUP BY lf08;
+            0.9: SELECT 1 FROM Load_factors_multi_i32 GROUP BY lf09;
+            1.0: SELECT 1 FROM Load_factors_multi_i32 GROUP BY lf10;
+            1.2: SELECT 1 FROM Load_factors_multi_i32 GROUP BY lf12;
+            1.4: SELECT 1 FROM Load_factors_multi_i32 GROUP BY lf14;
+            1.6: SELECT 1 FROM Load_factors_multi_i32 GROUP BY lf16;
+            1.8: SELECT 1 FROM Load_factors_multi_i32 GROUP BY lf18;
+            2.0: SELECT 1 FROM Load_factors_multi_i32 GROUP BY lf20;
+            2.2: SELECT 1 FROM Load_factors_multi_i32 GROUP BY lf22;
+            2.4: SELECT 1 FROM Load_factors_multi_i32 GROUP BY lf24;
+            2.6: SELECT 1 FROM Load_factors_multi_i32 GROUP BY lf26;
+            2.8: SELECT 1 FROM Load_factors_multi_i32 GROUP BY lf28;
+            3.0: SELECT 1 FROM Load_factors_multi_i32 GROUP BY lf30;

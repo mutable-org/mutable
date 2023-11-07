@@ -1,0 +1,63 @@
+description: Different data layouts for read and write of a single attribute.
+suite: phys-cost-models
+benchmark: simd
+name: read write, varying type
+readonly: true
+chart:
+    x:
+        scale: linear
+        type: O
+        label: 'Size of attribute [bytes]'
+    y:
+        scale: linear
+        type: Q
+        label: 'Machine code execution time [ms]'
+data:
+    'Attributes_simd':
+        file: 'benchmark/phys-cost-models/data/Attributes_simd.csv'
+        format: 'csv'
+        delimiter: ','
+        header: 1
+        attributes:
+            'id': 'INT NOT NULL'
+            'i8': 'TINYINT NOT NULL'
+            'i8_2': 'TINYINT NOT NULL'
+            'i16': 'SMALLINT NOT NULL'
+            'i32': 'INT NOT NULL'
+            'i64': 'BIGINT NOT NULL'
+systems:
+    mutable:
+        args: --backend WasmV8 --soft-pipeline-breaker AfterScan
+        configurations:
+            'PAX16Tup, scalar':
+                args: --data-layout PAX16Tup   --soft-pipeline-breaker-layout PAX16Tup   --no-simd
+                pattern: '^Execute machine code:.*'
+            'PAX16Tup, SIMD':
+                args: --data-layout PAX16Tup   --soft-pipeline-breaker-layout PAX16Tup   --no-double-pumping
+                pattern: '^Execute machine code:.*'
+            'PAX16Tup, SIMD, double pumped':
+                args: --data-layout PAX16Tup   --soft-pipeline-breaker-layout PAX16Tup
+                pattern: '^Execute machine code:.*'
+            'PAX128Tup, scalar':
+                args: --data-layout PAX128Tup  --soft-pipeline-breaker-layout PAX128Tup  --no-simd
+                pattern: '^Execute machine code:.*'
+            'PAX128Tup, SIMD':
+                args: --data-layout PAX128Tup  --soft-pipeline-breaker-layout PAX128Tup  --no-double-pumping
+                pattern: '^Execute machine code:.*'
+            'PAX128Tup, SIMD, double pumped':
+                args: --data-layout PAX128Tup  --soft-pipeline-breaker-layout PAX128Tup
+                pattern: '^Execute machine code:.*'
+            'PAX1024Tup, scalar':
+                args: --data-layout PAX1024Tup --soft-pipeline-breaker-layout PAX1024Tup --no-simd
+                pattern: '^Execute machine code:.*'
+            'PAX1024Tup, SIMD':
+                args: --data-layout PAX1024Tup --soft-pipeline-breaker-layout PAX1024Tup --no-double-pumping
+                pattern: '^Execute machine code:.*'
+            'PAX1024Tup, SIMD, double pumped':
+                args: --data-layout PAX1024Tup --soft-pipeline-breaker-layout PAX1024Tup
+                pattern: '^Execute machine code:.*'
+        cases:
+            #1: SELECT i8  FROM Attributes_simd;
+            2: SELECT i16 FROM Attributes_simd;
+            4: SELECT i32 FROM Attributes_simd;
+            8: SELECT i64 FROM Attributes_simd;

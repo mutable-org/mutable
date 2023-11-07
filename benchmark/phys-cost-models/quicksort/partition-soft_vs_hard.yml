@@ -1,0 +1,55 @@
+description: Whether to use a hard boundary when partitioning data to sort using quicksort on 1M tuples.
+suite: phys-cost-models
+benchmark: quicksort
+name: partition soft vs. hard boundary
+readonly: true
+chart:
+    x:
+        scale: linear
+        type: O
+        label: 'Number of distinct values'
+    y:
+        scale: linear
+        type: Q
+        label: 'Machine code execution time [ms]'
+data:
+    'Distinct_multi_i32':
+        file: 'benchmark/phys-cost-models/data/Distinct_multi_i32.csv'
+        format: 'csv'
+        delimiter: ','
+        header: 1
+        attributes:
+            'id': 'INT NOT NULL'
+            'n10': 'INT NOT NULL'
+            'n100': 'INT NOT NULL'
+            'n1000': 'INT NOT NULL'
+            'n1000_sorted': 'INT NOT NULL'
+            'n10000': 'INT NOT NULL'
+            'n100000': 'INT NOT NULL'
+            'n1000000': 'INT NOT NULL'
+            '_n1000000': 'INT NOT NULL'
+            '__n1000000': 'INT NOT NULL'
+            '___n1000000': 'INT NOT NULL'
+systems:
+    mutable:
+        args: >-
+            --backend WasmV8
+            --cardinality-estimator Injected
+            --use-cardinality-file benchmark/phys-cost-models/data/cardinalities.json
+            --data-layout Row
+            --hard-pipeline-breaker-layout Row
+            --sorting-implementations Quicksort
+            --quicksort-cmp-selection-strategy Predicated
+            --no-simd
+        configurations:
+            'soft boundary':
+                args: ''
+                pattern: '^Execute machine code:.*'
+            'hard boundary':
+                args: --partition-hard-boundary
+                pattern: '^Execute machine code:.*'
+        cases:
+            1000:    SELECT 1 FROM Distinct_multi_i32 ORDER BY n1000;
+            10000:   SELECT 1 FROM Distinct_multi_i32 ORDER BY n10000;
+            100000:  SELECT 1 FROM Distinct_multi_i32 ORDER BY n100000;
+            1000000: SELECT 1 FROM Distinct_multi_i32 ORDER BY n1000000;

@@ -1,0 +1,77 @@
+description: Different data layouts for potential non-read access of 172B tuples where the first and second attribute
+  is located in the same cache line, the third and fourth one as well, and the fifth one in a separate cache line.
+  Moreover, the fifth attribute has the same stride as the first one.
+suite: phys-cost-models
+benchmark: data-layouts
+name: potential non-read access, huge
+readonly: true
+chart:
+    x:
+        scale: linear
+        type: O
+        label: 'Number of attributes'
+    y:
+        scale: linear
+        type: Q
+        label: 'Machine code execution time [ms]'
+data:
+    'Attributes_huge':
+        file: 'benchmark/phys-cost-models/data/Attributes_huge.csv'
+        format: 'csv'
+        delimiter: ','
+        header: 1
+        attributes:
+            'id': 'INT NOT NULL'
+            'a0': 'TINYINT NOT NULL'
+            'c0': 'CHAR 59 NOT NULL'
+            'a1': 'BIGINT NOT NULL'
+            'a2': 'SMALLINT NOT NULL'
+            'c1': 'CHAR 56 NOT NULL'
+            'a3': 'INT NOT NULL'
+            'c2': 'CHAR 60 NOT NULL'
+systems:
+    mutable:
+        args: --backend WasmV8 --no-simd
+        configurations:
+            'row-major':
+                args: --data-layout Row     --no-attribute-reordering
+                pattern: '^Execute machine code:.*'
+            'row-major (reordered)':
+                args: --data-layout Row
+                pattern: '^Execute machine code:.*'
+            'PAX4K':
+                args: --data-layout PAX4K   --no-attribute-reordering
+                pattern: '^Execute machine code:.*'
+            'PAX4K (SIMD)':
+                args: --data-layout PAX4K   --no-attribute-reordering --simd
+                pattern: '^Execute machine code:.*'
+            'PAX64K':
+                args: --data-layout PAX64K  --no-attribute-reordering
+                pattern: '^Execute machine code:.*'
+            'PAX64K (SIMD)':
+                args: --data-layout PAX64K  --no-attribute-reordering --simd
+                pattern: '^Execute machine code:.*'
+            'PAX512K':
+                args: --data-layout PAX512K --no-attribute-reordering
+                pattern: '^Execute machine code:.*'
+            'PAX512K (SIMD)':
+                args: --data-layout PAX512K --no-attribute-reordering --simd
+                pattern: '^Execute machine code:.*'
+            'PAX4M':
+                args: --data-layout PAX4M   --no-attribute-reordering
+                pattern: '^Execute machine code:.*'
+            'PAX4M (SIMD)':
+                args: --data-layout PAX4M   --no-attribute-reordering --simd
+                pattern: '^Execute machine code:.*'
+            'PAX64M':
+                args: --data-layout PAX64M  --no-attribute-reordering
+                pattern: '^Execute machine code:.*'
+            'PAX64M (SIMD)':
+                args: --data-layout PAX64M  --no-attribute-reordering --simd
+                pattern: '^Execute machine code:.*'
+        cases:
+            1: SELECT id FROM Attributes_huge;
+            2: SELECT id, a0 FROM Attributes_huge;
+            3: SELECT id, a0, a1 FROM Attributes_huge;
+            4: SELECT id, a0, a1, a2 FROM Attributes_huge;
+            5: SELECT id, a0, a1, a2, a3 FROM Attributes_huge;

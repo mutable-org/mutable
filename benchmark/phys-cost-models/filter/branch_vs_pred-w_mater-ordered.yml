@@ -1,0 +1,62 @@
+description: Branching vs. predicated filter on ordered data with materialization after the filter.
+suite: phys-cost-models
+benchmark: filter
+name: branching vs. predicated, w/ materialization, ordered
+readonly: true
+chart:
+    x:
+        scale: linear
+        type: Q
+        label: 'Selectivity of filter predicate'
+    y:
+        scale: linear
+        type: Q
+        label: 'Machine code execution time [ms]'
+data:
+    'Selectivity_d':
+        file: 'benchmark/phys-cost-models/data/Selectivity_d.csv'
+        format: 'csv'
+        delimiter: ','
+        header: 1
+        attributes:
+            'id': 'INT NOT NULL'
+            'd': 'DOUBLE NOT NULL'
+            'd_sorted': 'DOUBLE NOT NULL'
+            'i32': 'INT NOT NULL'
+systems:
+    mutable:
+        args: >-
+            --backend WasmV8
+            --cardinality-estimator Injected
+            --use-cardinality-file benchmark/phys-cost-models/data/cardinalities.json
+            --soft-pipeline-breaker AfterFilter
+            --no-simd
+        configurations:
+            'row-major, branching':
+                args: --data-layout Row   --soft-pipeline-breaker-layout Row   --filter-selection-strategy Branching
+                pattern: '^Execute machine code:.*'
+            'row-major, predicated':
+                args: --data-layout Row   --soft-pipeline-breaker-layout Row   --filter-selection-strategy Predicated
+                pattern: '^Execute machine code:.*'
+            'PAX4M, branching':
+                args: --data-layout PAX4M --soft-pipeline-breaker-layout PAX4M --filter-selection-strategy Branching
+                pattern: '^Execute machine code:.*'
+            'PAX4M, predicated':
+                args: --data-layout PAX4M --soft-pipeline-breaker-layout PAX4M --filter-selection-strategy Predicated
+                pattern: '^Execute machine code:.*'
+        cases:
+            0.00: SELECT d_sorted FROM Selectivity_d WHERE d_sorted <= 0.00;
+            0.01: SELECT d_sorted FROM Selectivity_d WHERE d_sorted <= 0.01;
+            0.05: SELECT d_sorted FROM Selectivity_d WHERE d_sorted <= 0.05;
+            0.10: SELECT d_sorted FROM Selectivity_d WHERE d_sorted <= 0.10;
+            0.20: SELECT d_sorted FROM Selectivity_d WHERE d_sorted <= 0.20;
+            0.30: SELECT d_sorted FROM Selectivity_d WHERE d_sorted <= 0.30;
+            0.40: SELECT d_sorted FROM Selectivity_d WHERE d_sorted <= 0.40;
+            0.50: SELECT d_sorted FROM Selectivity_d WHERE d_sorted <= 0.50;
+            0.60: SELECT d_sorted FROM Selectivity_d WHERE d_sorted <= 0.60;
+            0.70: SELECT d_sorted FROM Selectivity_d WHERE d_sorted <= 0.70;
+            0.80: SELECT d_sorted FROM Selectivity_d WHERE d_sorted <= 0.80;
+            0.90: SELECT d_sorted FROM Selectivity_d WHERE d_sorted <= 0.90;
+            0.95: SELECT d_sorted FROM Selectivity_d WHERE d_sorted <= 0.95;
+            0.99: SELECT d_sorted FROM Selectivity_d WHERE d_sorted <= 0.99;
+            1.00: SELECT d_sorted FROM Selectivity_d WHERE d_sorted <= 1.00;

@@ -1,0 +1,52 @@
+description: Scalar vs. SIMDfied projection.
+suite: phys-cost-models
+benchmark: simd
+name: projection
+readonly: true
+chart:
+    x:
+        scale: linear
+        type: N
+        label: 'Operation used on i8 attributes'
+    y:
+        scale: linear
+        type: Q
+        label: 'Machine code execution time [ms]'
+data:
+    'Attributes_simd':
+        file: 'benchmark/phys-cost-models/data/Attributes_simd.csv'
+        format: 'csv'
+        delimiter: ','
+        header: 1
+        attributes:
+            'id': 'INT NOT NULL'
+            'i8': 'TINYINT NOT NULL'
+            'i8_2': 'TINYINT NOT NULL'
+            'i16': 'SMALLINT NOT NULL'
+            'i32': 'INT NOT NULL'
+            'i64': 'BIGINT NOT NULL'
+systems:
+    mutable:
+        args: --backend WasmV8 --soft-pipeline-breaker-layout PAX128Tup --soft-pipeline-breaker-num-tuples 128
+        configurations:
+            'row-major, scalar':
+                args: --data-layout Row       --no-simd --soft-pipeline-breaker AfterProjection
+                pattern: '^Execute machine code:.*'
+            'row-major, SIMD':
+                args: --data-layout Row                 --soft-pipeline-breaker AfterProjection,AfterScan
+                pattern: '^Execute machine code:.*'
+            'PAX128Tup, scalar':
+                args: --data-layout PAX128Tup --no-simd --soft-pipeline-breaker AfterProjection
+                pattern: '^Execute machine code:.*'
+            'PAX128Tup, SIMD':
+                args: --data-layout PAX128Tup           --soft-pipeline-breaker AfterProjection
+                pattern: '^Execute machine code:.*'
+        cases:
+            neg: SELECT -i8,        i8_2 FROM Attributes_simd;
+            inv: SELECT ~i8,        i8_2 FROM Attributes_simd;
+            add: SELECT i8 + i8_2,  i8_2 FROM Attributes_simd;
+            sub: SELECT i8 - i8_2,  i8_2 FROM Attributes_simd;
+            mul: SELECT i8 * i8_2,  i8_2 FROM Attributes_simd;
+            eq:  SELECT i8 = i8_2,  i8_2 FROM Attributes_simd;
+            ne:  SELECT i8 != i8_2, i8_2 FROM Attributes_simd;
+            gt:  SELECT i8 > i8_2,  i8_2 FROM Attributes_simd;

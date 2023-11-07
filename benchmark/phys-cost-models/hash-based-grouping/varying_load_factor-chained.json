@@ -1,0 +1,15 @@
+{
+    "phys_cost_models": [
+        { "relations": ["g#lf10"], "size": 6138 },
+        { "relations": ["g#lf12"], "size": 6138 },
+        { "relations": ["g#lf14"], "size": 6138 },
+        { "relations": ["g#lf16"], "size": 6138 },
+        { "relations": ["g#lf18"], "size": 6138 },
+        { "relations": ["g#lf20"], "size": 6138 },
+        { "relations": ["g#lf22"], "size": 6138 },
+        { "relations": ["g#lf24"], "size": 6138 },
+        { "relations": ["g#lf26"], "size": 6138 },
+        { "relations": ["g#lf28"], "size": 6138 },
+        { "relations": ["g#lf30"], "size": 6138 }
+    ]
+}

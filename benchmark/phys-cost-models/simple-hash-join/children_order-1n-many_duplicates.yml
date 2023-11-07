@@ -1,0 +1,123 @@
+description: Children order in foreign key simple-hash join. Relation with primary key has fixed size.
+suite: phys-cost-models
+benchmark: simple-hash-join
+name: children order in 1n, many duplicates
+readonly: true
+chart:
+    x:
+        scale: linear
+        type: Q
+        label: 'Relative size of relation with foreign key'
+    y:
+        scale: linear
+        type: Q
+        label: 'Machine code execution time [ms]'
+data:
+    'Relation_parent':
+        file: 'benchmark/phys-cost-models/data/Relation_parent.csv'
+        format: 'csv'
+        delimiter: ','
+        header: 1
+        scale_factors: 0.5
+        attributes:
+            'id': 'INT NOT NULL PRIMARY KEY'
+            'n2m': 'INT NOT NULL'
+            'a0': 'INT NOT NULL'
+            'a1': 'INT NOT NULL'
+            'a2': 'INT NOT NULL'
+            'a3': 'INT NOT NULL'
+    'Relation_child':
+        file: 'benchmark/phys-cost-models/data/Relation_child.csv'
+        format: 'csv'
+        delimiter: ','
+        header: 1
+        scale_factors:
+            0.1:  0.05
+            0.5:  0.25
+            0.75: 0.375
+            0.9:  0.45
+            1.0:  0.5
+            1.1:  0.55
+            1.25: 0.625
+            1.5:  0.75
+            2.0:  1.0
+        attributes:
+            'id': 'INT NOT NULL'
+            'fid_1e_6': 'INT NOT NULL REFERENCES Relation_parent(id)'
+            'fid_9e_7': 'INT NOT NULL REFERENCES Relation_parent(id)'
+            'fid_8e_7': 'INT NOT NULL REFERENCES Relation_parent(id)'
+            'fid_7e_7': 'INT NOT NULL REFERENCES Relation_parent(id)'
+            'fid_6e_7': 'INT NOT NULL REFERENCES Relation_parent(id)'
+            'fid_5e_7': 'INT NOT NULL REFERENCES Relation_parent(id)'
+            'fid_4e_7': 'INT NOT NULL REFERENCES Relation_parent(id)'
+            'fid_3e_7': 'INT NOT NULL REFERENCES Relation_parent(id)'
+            'fid_2e_7': 'INT NOT NULL REFERENCES Relation_parent(id)'
+            'fid_1e_7': 'INT NOT NULL REFERENCES Relation_parent(id)'
+            'fid_1e_8': 'INT NOT NULL REFERENCES Relation_parent(id)'
+            'fid_1e_9': 'INT NOT NULL REFERENCES Relation_parent(id)'
+            'n2m': 'INT NOT NULL'
+            'a0': 'INT NOT NULL'
+            'a1': 'INT NOT NULL'
+            'a2': 'INT NOT NULL'
+            'a3': 'INT NOT NULL'
+systems:
+    mutable:
+        args: >-
+            --backend WasmV8
+            --data-layout Row
+            --join-implementations SimpleHash
+            --insist-no-rehashing
+            --hash-table-probing-strategy Quadratic
+            --hash-table-storing-strategy InPlace
+            --no-simd
+        configurations:
+            'build on primary key relation (open-addressing)':
+                args: >-
+                    --simple-hash-join-ordering-strategy BuildOnLeft
+                    --no-exploit-unique-build
+                    --hash-table-implementation OpenAddressing
+                    --hash-table-max-load-factor 0.7
+                pattern: '^Execute machine code:.*'
+            'build on primary key relation (open-addressing, exploit uniqueness)':
+                args: >-
+                    --simple-hash-join-ordering-strategy BuildOnLeft
+                    --hash-table-implementation OpenAddressing
+                    --hash-table-max-load-factor 0.7
+                pattern: '^Execute machine code:.*'
+            'build on primary key relation (chained)':
+                args: >-
+                    --simple-hash-join-ordering-strategy BuildOnLeft
+                    --no-exploit-unique-build
+                    --hash-table-implementation Chained
+                    --hash-table-max-load-factor 1.5
+                pattern: '^Execute machine code:.*'
+            'build on primary key relation (chained, exploit uniqueness)':
+                args: >-
+                    --simple-hash-join-ordering-strategy BuildOnLeft
+                    --hash-table-implementation Chained
+                    --hash-table-max-load-factor 1.5
+                pattern: '^Execute machine code:.*'
+            'build on foreign key relation (open-addressing)':
+                args: >-
+                    --simple-hash-join-ordering-strategy BuildOnRight
+                    --no-exploit-unique-build
+                    --hash-table-implementation OpenAddressing
+                    --hash-table-max-load-factor 0.7
+                pattern: '^Execute machine code:.*'
+            'build on foreign key relation (chained)':
+                args: >-
+                    --simple-hash-join-ordering-strategy BuildOnRight
+                    --no-exploit-unique-build
+                    --hash-table-implementation Chained
+                    --hash-table-max-load-factor 1.5
+                pattern: '^Execute machine code:.*'
+        cases:
+            0.1:  SELECT 1 FROM Relation_parent, Relation_child WHERE Relation_parent.id = Relation_child.fid_7e_7;
+            0.5:  SELECT 1 FROM Relation_parent, Relation_child WHERE Relation_parent.id = Relation_child.fid_7e_7;
+            0.75: SELECT 1 FROM Relation_parent, Relation_child WHERE Relation_parent.id = Relation_child.fid_7e_7;
+            0.9:  SELECT 1 FROM Relation_parent, Relation_child WHERE Relation_parent.id = Relation_child.fid_7e_7;
+            1.0:  SELECT 1 FROM Relation_parent, Relation_child WHERE Relation_parent.id = Relation_child.fid_7e_7;
+            1.1:  SELECT 1 FROM Relation_parent, Relation_child WHERE Relation_parent.id = Relation_child.fid_7e_7;
+            1.25: SELECT 1 FROM Relation_parent, Relation_child WHERE Relation_parent.id = Relation_child.fid_7e_7;
+            1.5:  SELECT 1 FROM Relation_parent, Relation_child WHERE Relation_parent.id = Relation_child.fid_7e_7;
+            2.0:  SELECT 1 FROM Relation_parent, Relation_child WHERE Relation_parent.id = Relation_child.fid_7e_7;

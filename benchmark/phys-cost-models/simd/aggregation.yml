@@ -1,0 +1,54 @@
+description: Scalar vs. SIMDfied aggregation.
+suite: phys-cost-models
+benchmark: simd
+name: aggregation
+readonly: true
+chart:
+    x:
+        scale: linear
+        type: N
+        label: 'Aggregate function used'
+    y:
+        scale: linear
+        type: Q
+        label: 'Machine code execution time [ms]'
+data:
+    'Attributes_simd':
+        file: 'benchmark/phys-cost-models/data/Attributes_simd.csv'
+        format: 'csv'
+        delimiter: ','
+        header: 1
+        attributes:
+            'id': 'INT NOT NULL'
+            'i8': 'TINYINT NOT NULL'
+            'i8_2': 'TINYINT NOT NULL'
+            'i16': 'SMALLINT NOT NULL'
+            'i32': 'INT NOT NULL'
+            'i64': 'BIGINT NOT NULL'
+systems:
+    mutable:
+        args: --backend WasmV8 --soft-pipeline-breaker-layout PAX128Tup --soft-pipeline-breaker-num-tuples 128
+        configurations:
+            'row-major, scalar':
+                args: --data-layout Row --no-simd
+                pattern: '^Execute machine code:.*'
+            'row-major, SIMD':
+                args: --data-layout Row --soft-pipeline-breaker AfterScan
+                pattern: '^Execute machine code:.*'
+            'PAX128Tup, scalar':
+                args: --data-layout PAX128Tup --no-simd
+                pattern: '^Execute machine code:.*'
+            'PAX128Tup, SIMD':
+                args: --data-layout PAX128Tup
+                pattern: '^Execute machine code:.*'
+        cases:
+            min,i8:    SELECT MIN(i8)    FROM Attributes_simd;
+            min,i32:   SELECT MIN(i32)   FROM Attributes_simd;
+            max,i8:    SELECT MAX(i8)    FROM Attributes_simd;
+            max,i32:   SELECT MAX(i32)   FROM Attributes_simd;
+            sum,i8:    SELECT SUM(i8)    FROM Attributes_simd;
+            sum,i32:   SELECT SUM(i32)   FROM Attributes_simd;
+            avg,i8:    SELECT AVG(i8)    FROM Attributes_simd;
+            avg,i32:   SELECT AVG(i32)   FROM Attributes_simd;
+            count,i8:  SELECT COUNT(i8)  FROM Attributes_simd;
+            count,i32: SELECT COUNT(i32) FROM Attributes_simd;

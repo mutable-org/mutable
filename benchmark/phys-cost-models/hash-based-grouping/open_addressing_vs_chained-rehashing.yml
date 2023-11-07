@@ -1,0 +1,54 @@
+description: Open-addressing vs. chained hash tables for hash-based grouping and initial cardinality of 1024.
+suite: phys-cost-models
+benchmark: hash-based-grouping
+name: open-addressing vs. chained, rehashing
+readonly: true
+chart:
+    x:
+        scale: log
+        type: Q
+        label: 'Number of distinct values'
+    y:
+        scale: linear
+        type: Q
+        label: 'Machine code execution time [ms]'
+data:
+    'Distinct_multi_i32':
+        file: 'benchmark/phys-cost-models/data/Distinct_multi_i32.csv'
+        format: 'csv'
+        delimiter: ','
+        header: 1
+        attributes:
+            'id': 'INT NOT NULL'
+            'n10': 'INT NOT NULL'
+            'n100': 'INT NOT NULL'
+            'n1000': 'INT NOT NULL'
+            'n1000_sorted': 'INT NOT NULL'
+            'n10000': 'INT NOT NULL'
+            'n100000': 'INT NOT NULL'
+            'n1000000': 'INT NOT NULL'
+            '_n1000000': 'INT NOT NULL'
+            '__n1000000': 'INT NOT NULL'
+            '___n1000000': 'INT NOT NULL'
+systems:
+    mutable:
+        args: >-
+            --backend WasmV8
+            --data-layout Row
+            --grouping-implementations HashBased
+            --hash-table-initial-capacity 1024
+            --no-simd
+        configurations:
+            'open-addressing':
+                args: --hash-table-implementation OpenAddressing --hash-table-max-load-factor 0.7
+                pattern: '^Execute machine code:.*'
+            'chained':
+                args: --hash-table-implementation Chained        --hash-table-max-load-factor 1.5
+                pattern: '^Execute machine code:.*'
+        cases:
+            10:      SELECT 1 FROM Distinct_multi_i32 GROUP BY n10;
+            100:     SELECT 1 FROM Distinct_multi_i32 GROUP BY n100;
+            1000:    SELECT 1 FROM Distinct_multi_i32 GROUP BY n1000;
+            10000:   SELECT 1 FROM Distinct_multi_i32 GROUP BY n10000;
+            100000:  SELECT 1 FROM Distinct_multi_i32 GROUP BY n100000;
+            1000000: SELECT 1 FROM Distinct_multi_i32 GROUP BY n1000000;

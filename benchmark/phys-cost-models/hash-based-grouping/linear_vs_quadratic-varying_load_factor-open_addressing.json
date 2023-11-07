@@ -1,0 +1,10 @@
+{
+    "phys_cost_models": [
+        { "relations": ["g#lf05"], "size": 2046 },
+        { "relations": ["g#lf06"], "size": 2046 },
+        { "relations": ["g#lf07"], "size": 2046 },
+        { "relations": ["g#lf08"], "size": 2046 },
+        { "relations": ["g#lf09"], "size": 2046 },
+        { "relations": ["g#lf10"], "size": 2046 }
+    ]
+}

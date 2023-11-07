@@ -1,0 +1,64 @@
+description: Branching vs. predicated filter on ordered data with hashing (for hash-based grouping) after the filter.
+suite: phys-cost-models
+benchmark: filter
+name: branching vs. predicated, w/ hashing, ordered
+readonly: true
+chart:
+    x:
+        scale: linear
+        type: Q
+        label: 'Selectivity of filter predicate'
+    y:
+        scale: linear
+        type: Q
+        label: 'Machine code execution time [ms]'
+data:
+    'Selectivity_d':
+        file: 'benchmark/phys-cost-models/data/Selectivity_d.csv'
+        format: 'csv'
+        delimiter: ','
+        header: 1
+        attributes:
+            'id': 'INT NOT NULL'
+            'd': 'DOUBLE NOT NULL'
+            'd_sorted': 'DOUBLE NOT NULL'
+            'i32': 'INT NOT NULL'
+systems:
+    mutable:
+        args: >-
+            --backend WasmV8
+            --cardinality-estimator Injected
+            --use-cardinality-file benchmark/phys-cost-models/data/cardinalities.json
+            --grouping-implementations HashBased
+            --hash-table-implementation Chained
+            --hash-table-max-load-factor 1.5
+            --no-simd
+        configurations:
+            'row-major, branching':
+                args: --data-layout Row   --filter-selection-strategy Branching
+                pattern: '^Execute machine code:.*'
+            'row-major, predicated':
+                args: --data-layout Row   --filter-selection-strategy Predicated
+                pattern: '^Execute machine code:.*'
+            'PAX4M, branching':
+                args: --data-layout PAX4M --filter-selection-strategy Branching
+                pattern: '^Execute machine code:.*'
+            'PAX4M, predicated':
+                args: --data-layout PAX4M --filter-selection-strategy Predicated
+                pattern: '^Execute machine code:.*'
+        cases:
+            0.00: SELECT 1 FROM Selectivity_d WHERE d_sorted <= 0.00 GROUP BY i32;
+            0.01: SELECT 1 FROM Selectivity_d WHERE d_sorted <= 0.01 GROUP BY i32;
+            0.05: SELECT 1 FROM Selectivity_d WHERE d_sorted <= 0.05 GROUP BY i32;
+            0.10: SELECT 1 FROM Selectivity_d WHERE d_sorted <= 0.10 GROUP BY i32;
+            0.20: SELECT 1 FROM Selectivity_d WHERE d_sorted <= 0.20 GROUP BY i32;
+            0.30: SELECT 1 FROM Selectivity_d WHERE d_sorted <= 0.30 GROUP BY i32;
+            0.40: SELECT 1 FROM Selectivity_d WHERE d_sorted <= 0.40 GROUP BY i32;
+            0.50: SELECT 1 FROM Selectivity_d WHERE d_sorted <= 0.50 GROUP BY i32;
+            0.60: SELECT 1 FROM Selectivity_d WHERE d_sorted <= 0.60 GROUP BY i32;
+            0.70: SELECT 1 FROM Selectivity_d WHERE d_sorted <= 0.70 GROUP BY i32;
+            0.80: SELECT 1 FROM Selectivity_d WHERE d_sorted <= 0.80 GROUP BY i32;
+            0.90: SELECT 1 FROM Selectivity_d WHERE d_sorted <= 0.90 GROUP BY i32;
+            0.95: SELECT 1 FROM Selectivity_d WHERE d_sorted <= 0.95 GROUP BY i32;
+            0.99: SELECT 1 FROM Selectivity_d WHERE d_sorted <= 0.99 GROUP BY i32;
+            1.00: SELECT 1 FROM Selectivity_d WHERE d_sorted <= 1.00 GROUP BY i32;

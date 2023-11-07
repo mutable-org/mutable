@@ -1,0 +1,50 @@
+description: Different data layouts for read access of 16B tuples where each attribute has the same
+  stride.
+suite: phys-cost-models
+benchmark: data-layouts
+name: optimizations, read
+readonly: true
+chart:
+    x:
+        scale: linear
+        type: O
+        label: 'Number of attributes'
+    y:
+        scale: linear
+        type: Q
+        label: 'Machine code execution time [ms]'
+data:
+    'Attributes_multi_i32':
+        file: 'benchmark/phys-cost-models/data/Attributes_multi_i32.csv'
+        format: 'csv'
+        delimiter: ','
+        header: 1
+        attributes:
+            'a0': 'INT NOT NULL'
+            'a1': 'INT NOT NULL'
+            'a2': 'INT NOT NULL'
+            'a3': 'INT NOT NULL'
+systems:
+    mutable:
+        args: --backend WasmV8 --remove-null-bitmap --no-simd
+        configurations:
+            'row-major':
+                args: --data-layout Row
+                pattern: '^Execute machine code:.*'
+            'PAX4M':
+                args: --data-layout PAX4M --pax-pack-one-tuple-less --no-pointer-sharing
+                pattern: '^Execute machine code:.*'
+            'PAX4M, pointer sharing':
+                args: --data-layout PAX4M --pax-pack-one-tuple-less
+                pattern: '^Execute machine code:.*'
+            'PAX4M, remainder removal':
+                args: --data-layout PAX4M --no-pointer-sharing
+                pattern: '^Execute machine code:.*'
+            'PAX4M, both':
+                args: --data-layout PAX4M
+                pattern: '^Execute machine code:.*'
+        cases:
+            1: SELECT SUM(a0) FROM Attributes_multi_i32;
+            2: SELECT SUM(a0), SUM(a1) FROM Attributes_multi_i32;
+            3: SELECT SUM(a0), SUM(a1), SUM(a2) FROM Attributes_multi_i32;
+            4: SELECT SUM(a0), SUM(a1), SUM(a2), SUM(a3) FROM Attributes_multi_i32;

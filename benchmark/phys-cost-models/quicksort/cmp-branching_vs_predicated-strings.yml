@@ -1,0 +1,183 @@
+description: Branching vs. predicated comparison used in quicksort on string values.
+suite: phys-cost-models
+benchmark: quicksort
+name: compare branching vs. predicated, strings
+readonly: true
+chart:
+    x:
+        scale: linear
+        type: O
+        label: 'Length and number of string values to compare'
+    y:
+        scale: linear
+        type: Q
+        label: 'Machine code execution time [ms]'
+data:
+    'Distinct_multi_c1':
+        file: 'benchmark/phys-cost-models/data/Distinct_multi_c1.csv'
+        format: 'csv'
+        delimiter: ','
+        header: 1
+        attributes:
+            'id': 'INT NOT NULL'
+            'a': 'CHAR 1 NOT NULL'
+            'b': 'CHAR 1 NOT NULL'
+            'c': 'CHAR 1 NOT NULL'
+            'd': 'CHAR 1 NOT NULL'
+            'e': 'CHAR 1 NOT NULL'
+            'f': 'CHAR 1 NOT NULL'
+            'g': 'CHAR 1 NOT NULL'
+            'h': 'CHAR 1 NOT NULL'
+            'i': 'CHAR 1 NOT NULL'
+    'Distinct_multi_c2':
+        file: 'benchmark/phys-cost-models/data/Distinct_multi_c2.csv'
+        format: 'csv'
+        delimiter: ','
+        header: 1
+        attributes:
+            'id': 'INT NOT NULL'
+            'a': 'CHAR 2 NOT NULL'
+            'b': 'CHAR 2 NOT NULL'
+            'c': 'CHAR 2 NOT NULL'
+            'd': 'CHAR 2 NOT NULL'
+            'e': 'CHAR 2 NOT NULL'
+            'f': 'CHAR 2 NOT NULL'
+            'g': 'CHAR 2 NOT NULL'
+            'h': 'CHAR 2 NOT NULL'
+            'i': 'CHAR 2 NOT NULL'
+    'Distinct_multi_c3':
+        file: 'benchmark/phys-cost-models/data/Distinct_multi_c3.csv'
+        format: 'csv'
+        delimiter: ','
+        header: 1
+        attributes:
+            'id': 'INT NOT NULL'
+            'a': 'CHAR 3 NOT NULL'
+            'b': 'CHAR 3 NOT NULL'
+            'c': 'CHAR 3 NOT NULL'
+            'd': 'CHAR 3 NOT NULL'
+            'e': 'CHAR 3 NOT NULL'
+            'f': 'CHAR 3 NOT NULL'
+            'g': 'CHAR 3 NOT NULL'
+            'h': 'CHAR 3 NOT NULL'
+            'i': 'CHAR 3 NOT NULL'
+    'Distinct_multi_c4':
+        file: 'benchmark/phys-cost-models/data/Distinct_multi_c4.csv'
+        format: 'csv'
+        delimiter: ','
+        header: 1
+        attributes:
+            'id': 'INT NOT NULL'
+            'a': 'CHAR 4 NOT NULL'
+            'b': 'CHAR 4 NOT NULL'
+            'c': 'CHAR 4 NOT NULL'
+            'd': 'CHAR 4 NOT NULL'
+            'e': 'CHAR 4 NOT NULL'
+            'f': 'CHAR 4 NOT NULL'
+            'g': 'CHAR 4 NOT NULL'
+            'h': 'CHAR 4 NOT NULL'
+            'i': 'CHAR 4 NOT NULL'
+    'Distinct_multi_c5':
+        file: 'benchmark/phys-cost-models/data/Distinct_multi_c5.csv'
+        format: 'csv'
+        delimiter: ','
+        header: 1
+        attributes:
+            'id': 'INT NOT NULL'
+            'a': 'CHAR 5 NOT NULL'
+            'b': 'CHAR 5 NOT NULL'
+            'c': 'CHAR 5 NOT NULL'
+            'd': 'CHAR 5 NOT NULL'
+            'e': 'CHAR 5 NOT NULL'
+            'f': 'CHAR 5 NOT NULL'
+            'g': 'CHAR 5 NOT NULL'
+            'h': 'CHAR 5 NOT NULL'
+            'i': 'CHAR 5 NOT NULL'
+    'Distinct_multi_c6':
+        file: 'benchmark/phys-cost-models/data/Distinct_multi_c6.csv'
+        format: 'csv'
+        delimiter: ','
+        header: 1
+        attributes:
+            'id': 'INT NOT NULL'
+            'a': 'CHAR 6 NOT NULL'
+            'b': 'CHAR 6 NOT NULL'
+            'c': 'CHAR 6 NOT NULL'
+            'd': 'CHAR 6 NOT NULL'
+            'e': 'CHAR 6 NOT NULL'
+            'f': 'CHAR 6 NOT NULL'
+            'g': 'CHAR 6 NOT NULL'
+            'h': 'CHAR 6 NOT NULL'
+            'i': 'CHAR 6 NOT NULL'
+systems:
+    mutable:
+        args: >-
+            --backend WasmV8
+            --cardinality-estimator Injected
+            --use-cardinality-file benchmark/phys-cost-models/data/cardinalities.json
+            --data-layout Row
+            --hard-pipeline-breaker-layout Row
+            --sorting-implementations Quicksort
+            --no-simd
+        configurations:
+            'branching':
+                args: --quicksort-cmp-selection-strategy Branching
+                pattern: '^Execute machine code:.*'
+            'predicated':
+                args: --quicksort-cmp-selection-strategy Predicated
+                pattern: '^Execute machine code:.*'
+        cases:
+            1,1: SELECT 1 FROM Distinct_multi_c1 ORDER BY a;
+            1,2: SELECT 1 FROM Distinct_multi_c1 ORDER BY a, b;
+            1,3: SELECT 1 FROM Distinct_multi_c1 ORDER BY a, b, c;
+            1,4: SELECT 1 FROM Distinct_multi_c1 ORDER BY a, b, c, d;
+            1,5: SELECT 1 FROM Distinct_multi_c1 ORDER BY a, b, c, d, e;
+            1,6: SELECT 1 FROM Distinct_multi_c1 ORDER BY a, b, c, d, e, f;
+            1,7: SELECT 1 FROM Distinct_multi_c1 ORDER BY a, b, c, d, e, f, g;
+            1,8: SELECT 1 FROM Distinct_multi_c1 ORDER BY a, b, c, d, e, f, g, h;
+            1,9: SELECT 1 FROM Distinct_multi_c1 ORDER BY a, b, c, d, e, f, g, h, i;
+            2,1: SELECT 1 FROM Distinct_multi_c2 ORDER BY a;
+            2,2: SELECT 1 FROM Distinct_multi_c2 ORDER BY a, b;
+            2,3: SELECT 1 FROM Distinct_multi_c2 ORDER BY a, b, c;
+            2,4: SELECT 1 FROM Distinct_multi_c2 ORDER BY a, b, c, d;
+            2,5: SELECT 1 FROM Distinct_multi_c2 ORDER BY a, b, c, d, e;
+            2,6: SELECT 1 FROM Distinct_multi_c2 ORDER BY a, b, c, d, e, f;
+            2,7: SELECT 1 FROM Distinct_multi_c2 ORDER BY a, b, c, d, e, f, g;
+            2,8: SELECT 1 FROM Distinct_multi_c2 ORDER BY a, b, c, d, e, f, g, h;
+            2,9: SELECT 1 FROM Distinct_multi_c2 ORDER BY a, b, c, d, e, f, g, h, i;
+            3,1: SELECT 1 FROM Distinct_multi_c3 ORDER BY a;
+            3,2: SELECT 1 FROM Distinct_multi_c3 ORDER BY a, b;
+            3,3: SELECT 1 FROM Distinct_multi_c3 ORDER BY a, b, c;
+            3,4: SELECT 1 FROM Distinct_multi_c3 ORDER BY a, b, c, d;
+            3,5: SELECT 1 FROM Distinct_multi_c3 ORDER BY a, b, c, d, e;
+            3,6: SELECT 1 FROM Distinct_multi_c3 ORDER BY a, b, c, d, e, f;
+            3,7: SELECT 1 FROM Distinct_multi_c3 ORDER BY a, b, c, d, e, f, g;
+            3,8: SELECT 1 FROM Distinct_multi_c3 ORDER BY a, b, c, d, e, f, g, h;
+            3,9: SELECT 1 FROM Distinct_multi_c3 ORDER BY a, b, c, d, e, f, g, h, i;
+            4,1: SELECT 1 FROM Distinct_multi_c4 ORDER BY a;
+            4,2: SELECT 1 FROM Distinct_multi_c4 ORDER BY a, b;
+            4,3: SELECT 1 FROM Distinct_multi_c4 ORDER BY a, b, c;
+            4,4: SELECT 1 FROM Distinct_multi_c4 ORDER BY a, b, c, d;
+            4,5: SELECT 1 FROM Distinct_multi_c4 ORDER BY a, b, c, d, e;
+            4,6: SELECT 1 FROM Distinct_multi_c4 ORDER BY a, b, c, d, e, f;
+            4,7: SELECT 1 FROM Distinct_multi_c4 ORDER BY a, b, c, d, e, f, g;
+            4,8: SELECT 1 FROM Distinct_multi_c4 ORDER BY a, b, c, d, e, f, g, h;
+            4,9: SELECT 1 FROM Distinct_multi_c4 ORDER BY a, b, c, d, e, f, g, h, i;
+            5,1: SELECT 1 FROM Distinct_multi_c5 ORDER BY a;
+            5,2: SELECT 1 FROM Distinct_multi_c5 ORDER BY a, b;
+            5,3: SELECT 1 FROM Distinct_multi_c5 ORDER BY a, b, c;
+            5,4: SELECT 1 FROM Distinct_multi_c5 ORDER BY a, b, c, d;
+            5,5: SELECT 1 FROM Distinct_multi_c5 ORDER BY a, b, c, d, e;
+            5,6: SELECT 1 FROM Distinct_multi_c5 ORDER BY a, b, c, d, e, f;
+            5,7: SELECT 1 FROM Distinct_multi_c5 ORDER BY a, b, c, d, e, f, g;
+            5,8: SELECT 1 FROM Distinct_multi_c5 ORDER BY a, b, c, d, e, f, g, h;
+            5,9: SELECT 1 FROM Distinct_multi_c5 ORDER BY a, b, c, d, e, f, g, h, i;
+            6,1: SELECT 1 FROM Distinct_multi_c6 ORDER BY a;
+            6,2: SELECT 1 FROM Distinct_multi_c6 ORDER BY a, b;
+            6,3: SELECT 1 FROM Distinct_multi_c6 ORDER BY a, b, c;
+            6,4: SELECT 1 FROM Distinct_multi_c6 ORDER BY a, b, c, d;
+            6,5: SELECT 1 FROM Distinct_multi_c6 ORDER BY a, b, c, d, e;
+            6,6: SELECT 1 FROM Distinct_multi_c6 ORDER BY a, b, c, d, e, f;
+            6,7: SELECT 1 FROM Distinct_multi_c6 ORDER BY a, b, c, d, e, f, g;
+            6,8: SELECT 1 FROM Distinct_multi_c6 ORDER BY a, b, c, d, e, f, g, h;
+            6,9: SELECT 1 FROM Distinct_multi_c6 ORDER BY a, b, c, d, e, f, g, h, i;

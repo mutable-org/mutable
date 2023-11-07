@@ -1,0 +1,88 @@
+description: Hash-based vs. ordered grouping.
+suite: phys-cost-models
+benchmark: grouping
+name: hash-based vs. ordered
+readonly: true
+chart:
+    x:
+        scale: linear
+        type: Q
+        label: 'Scale factor of input relation'
+    y:
+        scale: linear
+        type: Q
+        label: 'Machine code execution time [ms]'
+data:
+    'Distinct_multi_i32':
+        file: 'benchmark/phys-cost-models/data/Distinct_multi_i32.csv'
+        format: 'csv'
+        delimiter: ','
+        header: 1
+        scale_factors:
+            0.0: 0.0
+            0.1: 0.1
+            0.2: 0.2
+            0.3: 0.3
+            0.4: 0.4
+            0.5: 0.5
+            0.6: 0.6
+            0.7: 0.7
+            0.8: 0.8
+            0.9: 0.9
+            1.0: 1.0
+        attributes:
+            'id': 'INT NOT NULL'
+            'n10': 'INT NOT NULL'
+            'n100': 'INT NOT NULL'
+            'n1000': 'INT NOT NULL'
+            'n1000_sorted': 'INT NOT NULL'
+            'n10000': 'INT NOT NULL'
+            'n100000': 'INT NOT NULL'
+            'n1000000': 'INT NOT NULL'
+            '_n1000000': 'INT NOT NULL'
+            '__n1000000': 'INT NOT NULL'
+            '___n1000000': 'INT NOT NULL'
+systems:
+    mutable:
+        args: >-
+            --backend WasmV8
+            --cardinality-estimator Injected
+            --use-cardinality-file benchmark/phys-cost-models/data/cardinalities.json
+            --data-layout Row
+            --insist-no-rehashing
+            --no-simd
+        configurations:
+            'hash-based':
+                args: >-
+                    --grouping-implementations HashBased
+                    --hash-table-implementation Chained
+                    --hash-table-max-load-factor 1.0
+                pattern: '^Execute machine code:.*'
+            'ordered':
+                args: >-
+                    --grouping-implementations Ordered
+                    --xxx-asc-sorted-attributes Distinct_multi_i32.n1000_sorted
+                pattern: '^Execute machine code:.*'
+        cases:
+            0.0: SELECT n1000_sorted, COUNT(*), MIN(n100), MAX(n10000), SUM(n100000), AVG(id)
+                 FROM Distinct_multi_i32 GROUP BY Distinct_multi_i32.n1000_sorted;
+            0.1: SELECT n1000_sorted, COUNT(*), MIN(n100), MAX(n10000), SUM(n100000), AVG(id)
+                 FROM Distinct_multi_i32 GROUP BY Distinct_multi_i32.n1000_sorted;
+            0.2: SELECT n1000_sorted, COUNT(*), MIN(n100), MAX(n10000), SUM(n100000), AVG(id)
+                 FROM Distinct_multi_i32 GROUP BY Distinct_multi_i32.n1000_sorted;
+            0.3: SELECT n1000_sorted, COUNT(*), MIN(n100), MAX(n10000), SUM(n100000), AVG(id)
+                 FROM Distinct_multi_i32 GROUP BY Distinct_multi_i32.n1000_sorted;
+            0.4: SELECT n1000_sorted, COUNT(*), MIN(n100), MAX(n10000), SUM(n100000), AVG(id)
+                 FROM Distinct_multi_i32 GROUP BY Distinct_multi_i32.n1000_sorted;
+            0.5: SELECT n1000_sorted, COUNT(*), MIN(n100), MAX(n10000), SUM(n100000), AVG(id)
+                 FROM Distinct_multi_i32 GROUP BY Distinct_multi_i32.n1000_sorted;
+            0.6: SELECT n1000_sorted, COUNT(*), MIN(n100), MAX(n10000), SUM(n100000), AVG(id)
+                 FROM Distinct_multi_i32 GROUP BY Distinct_multi_i32.n1000_sorted;
+            0.7: SELECT n1000_sorted, COUNT(*), MIN(n100), MAX(n10000), SUM(n100000), AVG(id)
+                 FROM Distinct_multi_i32 GROUP BY Distinct_multi_i32.n1000_sorted;
+            0.8: SELECT n1000_sorted, COUNT(*), MIN(n100), MAX(n10000), SUM(n100000), AVG(id)
+                 FROM Distinct_multi_i32 GROUP BY Distinct_multi_i32.n1000_sorted;
+            0.9: SELECT n1000_sorted, COUNT(*), MIN(n100), MAX(n10000), SUM(n100000), AVG(id)
+                 FROM Distinct_multi_i32 GROUP BY Distinct_multi_i32.n1000_sorted;
+            1.0: SELECT n1000_sorted, COUNT(*), MIN(n100), MAX(n10000), SUM(n100000), AVG(id)
+                 FROM Distinct_multi_i32 GROUP BY Distinct_multi_i32.n1000_sorted;

@@ -1,0 +1,53 @@
+description: Different number of SIMD lanes used for read and write of a single attribute.
+suite: phys-cost-models
+benchmark: simd
+name: read write, varying lane
+readonly: true
+chart:
+    x:
+        scale: linear
+        type: O
+        label: 'Number of SIMD lanes'
+    y:
+        scale: linear
+        type: Q
+        label: 'Machine code execution time [ms]'
+data:
+    'Attributes_simd':
+        file: 'benchmark/phys-cost-models/data/Attributes_simd.csv'
+        format: 'csv'
+        delimiter: ','
+        header: 1
+        attributes:
+            'id': 'INT NOT NULL'
+            'i8': 'TINYINT NOT NULL'
+            'i8_2': 'TINYINT NOT NULL'
+            'i16': 'SMALLINT NOT NULL'
+            'i32': 'INT NOT NULL'
+            'i64': 'BIGINT NOT NULL'
+systems:
+    mutable:
+        args: >-
+            --backend WasmV8
+            --soft-pipeline-breaker AfterScan
+            --data-layout PAX128Tup
+            --soft-pipeline-breaker-layout PAX128Tup
+            --no-double-pumping
+        configurations:
+            '1':
+                args: ''
+                pattern: '^Execute machine code:.*'
+            '2':
+                args: --simd-lanes 2
+                pattern: '^Execute machine code:.*'
+            '4':
+                args: --simd-lanes 4
+                pattern: '^Execute machine code:.*'
+            '8':
+                args: --simd-lanes 8
+                pattern: '^Execute machine code:.*'
+            '16':
+                args: --simd-lanes 16
+                pattern: '^Execute machine code:.*'
+        cases:
+            dummy: SELECT i64 FROM Attributes_simd;

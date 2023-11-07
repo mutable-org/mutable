@@ -1,0 +1,75 @@
+description: Linear vs. quadratic probing in open-addressing hash tables for hash-based grouping.
+suite: phys-cost-models
+benchmark: hash-based-grouping
+name: linear vs. quadratic probing, varying scale factor
+readonly: true
+chart:
+    x:
+        scale: linear
+        type: Q
+        label: 'Scale factor of input relation'
+    y:
+        scale: linear
+        type: Q
+        label: 'Machine code execution time [ms]'
+data:
+    'Distinct_multi_i32':
+        file: 'benchmark/phys-cost-models/data/Distinct_multi_i32.csv'
+        format: 'csv'
+        delimiter: ','
+        header: 1
+        scale_factors:
+            0.0: 0.0
+            0.1: 0.1
+            0.2: 0.2
+            0.3: 0.3
+            0.4: 0.4
+            0.5: 0.5
+            0.6: 0.6
+            0.7: 0.7
+            0.8: 0.8
+            0.9: 0.9
+            1.0: 1.0
+        attributes:
+            'id': 'INT NOT NULL'
+            'n10': 'INT NOT NULL'
+            'n100': 'INT NOT NULL'
+            'n1000': 'INT NOT NULL'
+            'n1000_sorted': 'INT NOT NULL'
+            'n10000': 'INT NOT NULL'
+            'n100000': 'INT NOT NULL'
+            'n1000000': 'INT NOT NULL'
+            '_n1000000': 'INT NOT NULL'
+            '__n1000000': 'INT NOT NULL'
+            '___n1000000': 'INT NOT NULL'
+systems:
+    mutable:
+        args: >-
+            --backend WasmV8
+            --cardinality-estimator Injected
+            --use-cardinality-file benchmark/phys-cost-models/data/cardinalities.json
+            --data-layout Row
+            --grouping-implementations HashBased
+            --hash-table-implementation OpenAddressing
+            --no-simd
+        configurations:
+            'linear':
+                args: --hash-table-probing-strategy Linear
+                pattern: '^Execute machine code:.*'
+            'quadratic':
+                args: --hash-table-probing-strategy Quadratic
+                pattern: '^Execute machine code:.*'
+        cases:
+            0.0: SELECT 1 FROM Distinct_multi_i32 GROUP BY Distinct_multi_i32.n1000;
+            0.1: SELECT 1 FROM Distinct_multi_i32 GROUP BY Distinct_multi_i32.n1000;
+            0.2: SELECT 1 FROM Distinct_multi_i32 GROUP BY Distinct_multi_i32.n1000;
+            0.3: SELECT 1 FROM Distinct_multi_i32 GROUP BY Distinct_multi_i32.n1000;
+            0.4: SELECT 1 FROM Distinct_multi_i32 GROUP BY Distinct_multi_i32.n1000;
+            0.5: SELECT 1 FROM Distinct_multi_i32 GROUP BY Distinct_multi_i32.n1000;
+            0.6: SELECT 1 FROM Distinct_multi_i32 GROUP BY Distinct_multi_i32.n1000;
+            0.7: SELECT 1 FROM Distinct_multi_i32 GROUP BY Distinct_multi_i32.n1000;
+            0.8: SELECT 1 FROM Distinct_multi_i32 GROUP BY Distinct_multi_i32.n1000;
+            0.9: SELECT 1 FROM Distinct_multi_i32 GROUP BY Distinct_multi_i32.n1000;
+            1.0: SELECT 1 FROM Distinct_multi_i32 GROUP BY Distinct_multi_i32.n1000;
+
+# TODO: benchmark with different number of distinct values?

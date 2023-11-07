@@ -1,0 +1,73 @@
+description: Out-of-place vs. in-place value storage in open-addressing hash tables for hash-based grouping.
+suite: phys-cost-models
+benchmark: hash-based-grouping
+name: out-of-place vs. in-place
+readonly: true
+chart:
+    x:
+        scale: linear
+        type: O
+        label: 'Size of values [bytes]'
+    y:
+        scale: linear
+        type: Q
+        label: 'Machine code execution time [ms]'
+data:
+    'Distinct_multi_i32':
+        file: 'benchmark/phys-cost-models/data/Distinct_multi_i32.csv'
+        format: 'csv'
+        delimiter: ','
+        header: 1
+        attributes:
+            'id': 'INT NOT NULL'
+            'n10': 'INT NOT NULL'
+            'n100': 'INT NOT NULL'
+            'n1000': 'INT NOT NULL'
+            'n1000_sorted': 'INT NOT NULL'
+            'n10000': 'INT NOT NULL'
+            'n100000': 'INT NOT NULL'
+            'n1000000': 'INT NOT NULL'
+            '_n1000000': 'INT NOT NULL'
+            '__n1000000': 'INT NOT NULL'
+            '___n1000000': 'INT NOT NULL'
+systems:
+    mutable:
+        args: >-
+            --backend WasmV8
+            --cardinality-estimator Injected
+            --use-cardinality-file benchmark/phys-cost-models/data/cardinalities.json
+            --data-layout Row
+            --grouping-implementations HashBased
+            --hash-table-implementation OpenAddressing
+            --hash-table-probing-strategy Quadratic
+            --no-simd
+        configurations:
+            'out-of-place':
+                args: --hash-table-storing-strategy OutOfPlace
+                pattern: '^Execute machine code:.*'
+            'in-of-place':
+                args: --hash-table-storing-strategy InPlace
+                pattern: '^Execute machine code:.*'
+        cases:
+            0:  SELECT _n1000000
+                FROM Distinct_multi_i32 GROUP BY Distinct_multi_i32._n1000000;
+            8:  SELECT _n1000000, SUM(n10)
+                FROM Distinct_multi_i32 GROUP BY Distinct_multi_i32._n1000000;
+            16: SELECT _n1000000, SUM(n10), SUM(n100)
+                FROM Distinct_multi_i32 GROUP BY Distinct_multi_i32._n1000000;
+            24: SELECT _n1000000, SUM(n10), SUM(n100), SUM(n1000)
+                FROM Distinct_multi_i32 GROUP BY Distinct_multi_i32._n1000000;
+            32: SELECT _n1000000, SUM(n10), SUM(n100), SUM(n1000), SUM(n10000)
+                FROM Distinct_multi_i32 GROUP BY Distinct_multi_i32._n1000000;
+            40: SELECT _n1000000, SUM(n10), SUM(n100), SUM(n1000), SUM(n10000), SUM(n100000)
+                FROM Distinct_multi_i32 GROUP BY Distinct_multi_i32._n1000000;
+            48: SELECT _n1000000, SUM(n10), SUM(n100), SUM(n1000), SUM(n10000), SUM(n100000), SUM(n1000000)
+                FROM Distinct_multi_i32 GROUP BY Distinct_multi_i32._n1000000;
+            56: SELECT _n1000000, SUM(n10), SUM(n100), SUM(n1000), SUM(n10000), SUM(n100000), SUM(n1000000), SUM(__n1000000)
+                FROM Distinct_multi_i32 GROUP BY Distinct_multi_i32._n1000000;
+            64: SELECT _n1000000, SUM(n10), SUM(n100), SUM(n1000), SUM(n10000), SUM(n100000), SUM(n1000000), SUM(__n1000000), SUM(___n1000000)
+                FROM Distinct_multi_i32 GROUP BY Distinct_multi_i32._n1000000;
+            72: SELECT _n1000000, SUM(n10), SUM(n100), SUM(n1000), SUM(n10000), SUM(n100000), SUM(n1000000), SUM(__n1000000), SUM(___n1000000), SUM(n1000_sorted)
+                FROM Distinct_multi_i32 GROUP BY Distinct_multi_i32._n1000000;
+
+# TODO: benchmark for different scale factors?

@@ -1,0 +1,52 @@
+description: Possible use of soft pipeline breakers between a scan and an aggregation.
+suite: phys-cost-models
+benchmark: soft-pipeline-breaker
+name: change data layout
+readonly: true
+chart:
+    x:
+        scale: linear
+        type: N
+        label: 'Aggregate function used on a i32 attribute'
+    y:
+        scale: linear
+        type: Q
+        label: 'Machine code execution time [ms]'
+data:
+    'Attributes_simd':
+        file: 'benchmark/phys-cost-models/data/Attributes_simd.csv'
+        format: 'csv'
+        delimiter: ','
+        header: 1
+        attributes:
+            'id': 'INT NOT NULL'
+            'i8': 'TINYINT NOT NULL'
+            'i8_2': 'TINYINT NOT NULL'
+            'i16': 'SMALLINT NOT NULL'
+            'i32': 'INT NOT NULL'
+            'i64': 'BIGINT NOT NULL'
+systems:
+    mutable:
+        args: --backend WasmV8 --soft-pipeline-breaker-layout PAX128Tup --soft-pipeline-breaker-num-tuples 128
+        configurations:
+            'row-major':
+                args: --data-layout Row --no-simd
+                pattern: '^Execute machine code:.*'
+            'row-major to PAX128Tup':
+                args: --data-layout Row --no-simd --soft-pipeline-breaker AfterScan
+                pattern: '^Execute machine code:.*'
+            'row-major to PAX128Tup (SIMD)':
+                args: --data-layout Row           --soft-pipeline-breaker AfterScan
+                pattern: '^Execute machine code:.*'
+        cases:
+            count:        SELECT COUNT(*) FROM Attributes_simd;
+            sum:          SELECT SUM(i32)  FROM Attributes_simd;
+            sum, inv:     SELECT SUM(~i32) FROM Attributes_simd;
+            sum, inv-mul: SELECT SUM(i32 * ~i32) FROM Attributes_simd;
+            all:          SELECT SUM(i32), COUNT(i32), MIN(i32), MAX(i32), AVG(i32) FROM Attributes_simd;
+            all, inv:     SELECT SUM(i32), COUNT(i32), MIN(i32), MAX(i32), AVG(i32),
+                                 SUM(~i32), COUNT(~i32), MIN(~i32), MAX(~i32), AVG(~i32)
+                          FROM Attributes_simd;
+            all, inv-mul: SELECT SUM(i32), COUNT(i32), MIN(i32), MAX(i32), AVG(i32),
+                                 SUM(i32 * ~i32), COUNT(i32 * ~i32), MIN(i32 * ~i32), MAX(i32 * ~i32), AVG(i32 * ~i32)
+                          FROM Attributes_simd;

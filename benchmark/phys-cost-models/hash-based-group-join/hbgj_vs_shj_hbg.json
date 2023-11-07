@@ -1,0 +1,6 @@
+{
+    "phys_cost_models": [
+        { "relations": ["C", "P"], "size": 1000000 },
+        { "relations": ["g#P.id"], "size": 1000000 }
+    ]
+}

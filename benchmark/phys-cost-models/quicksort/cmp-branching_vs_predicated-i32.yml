@@ -1,0 +1,61 @@
+description: Branching vs. predicated comparison used in quicksort on i32 values.
+suite: phys-cost-models
+benchmark: quicksort
+name: compare branching vs. predicated, i32
+readonly: true
+chart:
+    x:
+        scale: linear
+        type: O
+        label: 'Number of i32 values to compare'
+    y:
+        scale: linear
+        type: Q
+        label: 'Machine code execution time [ms]'
+data:
+    'Distinct_multi_i32':
+        file: 'benchmark/phys-cost-models/data/Distinct_multi_i32.csv'
+        format: 'csv'
+        delimiter: ','
+        header: 1
+        attributes:
+            'id': 'INT NOT NULL'
+            'n10': 'INT NOT NULL'
+            'n100': 'INT NOT NULL'
+            'n1000': 'INT NOT NULL'
+            'n1000_sorted': 'INT NOT NULL'
+            'n10000': 'INT NOT NULL'
+            'n100000': 'INT NOT NULL'
+            'n1000000': 'INT NOT NULL'
+            '_n1000000': 'INT NOT NULL'
+            '__n1000000': 'INT NOT NULL'
+            '___n1000000': 'INT NOT NULL'
+systems:
+    mutable:
+        args: >-
+            --backend WasmV8
+            --cardinality-estimator Injected
+            --use-cardinality-file benchmark/phys-cost-models/data/cardinalities.json
+            --data-layout Row
+            --hard-pipeline-breaker-layout Row
+            --sorting-implementations Quicksort
+            --no-simd
+        configurations:
+            'branching':
+                args: --quicksort-cmp-selection-strategy Branching
+                pattern: '^Execute machine code:.*'
+            'predicated':
+                args: --quicksort-cmp-selection-strategy Predicated
+                pattern: '^Execute machine code:.*'
+        cases:
+            1: SELECT 1 FROM Distinct_multi_i32 ORDER BY n10;
+            2: SELECT 1 FROM Distinct_multi_i32 ORDER BY n10, n100;
+            3: SELECT 1 FROM Distinct_multi_i32 ORDER BY n10, n100, n1000;
+            4: SELECT 1 FROM Distinct_multi_i32 ORDER BY n10, n100, n1000, n10000;
+            5: SELECT 1 FROM Distinct_multi_i32 ORDER BY n10, n100, n1000, n10000, n100000;
+            6: SELECT 1 FROM Distinct_multi_i32 ORDER BY n10, n100, n1000, n10000, n100000, n1000000;
+            7: SELECT 1 FROM Distinct_multi_i32 ORDER BY n10, n100, n1000, n10000, n100000, n1000000, _n1000000;
+            8: SELECT 1 FROM Distinct_multi_i32 ORDER BY n10, n100, n1000, n10000, n100000, n1000000, _n1000000, __n1000000;
+            9: SELECT 1 FROM Distinct_multi_i32 ORDER BY n10, n100, n1000, n10000, n100000, n1000000, _n1000000, __n1000000, ___n1000000;
+
+# TODO: different number/order of distinct values?

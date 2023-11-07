@@ -154,6 +154,8 @@ bool heuristic_search(PlanTable &PT, const QueryGraph &G, const AdjacencyMatrix 
     try {
         State initial_state = Expand::template Start<State>(PT, G, M, CF, CE);
         H h(PT, G, M, CF, CE);
+
+        /*----- Run the search algorithm. -----*/
         const State &goal = S.search(
             /* initial_state= */ std::move(initial_state),
             /* expand=        */ Expand{},

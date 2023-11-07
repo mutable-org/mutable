@@ -18,8 +18,8 @@ namespace {
 void check_next_arg(const char **&argv)
 {
     if (not *++argv) {
-        std::cerr << "missing argument" << std::endl;
-        std::exit(EXIT_FAILURE);
+        std::cerr << "missing argument" << std::endl;               //M_LCOV_EXCL_LINE
+        std::exit(EXIT_FAILURE);                                    //M_LCOV_EXCL_LINE
     }
 }
 
@@ -43,20 +43,25 @@ void help_parse(const char **&argv, const std::function<void(T)> &callback)
         if constexpr (std::same_as<T, unsigned>) {
             const unsigned long v = std::stoul(*argv);
             if (v > std::numeric_limits<unsigned>::max())
-                throw std::out_of_range("input exceeds range of type unsigned int");
+                throw std::out_of_range("input exceeds range of type unsigned int");  //M_LCOV_EXCL_LINE
             i = unsigned(v);
         }
         if constexpr (std::same_as<T, unsigned long>)
             i = std::stoul(*argv);
         if constexpr (std::same_as<T, unsigned long long>)
             i = std::stoull(*argv);
-    } catch(std::invalid_argument ex) {
+    }
+
+    M_LCOV_EXCL_START
+    catch(std::invalid_argument ex) {
         std::cerr << "not a valid integer" << std::endl;
         std::exit(EXIT_FAILURE);
     } catch (std::out_of_range ex) {
         std::cerr << "value out of range" << std::endl;
         std::exit(EXIT_FAILURE);
     }
+    M_LCOV_EXCL_STOP
+
     callback(i);
 }
 
@@ -75,13 +80,18 @@ void help_parse(const char **&argv, const std::function<void(T)> &callback)
             fp = std::stod(*argv);
         if constexpr (std::same_as<T, long double>)
             fp = std::stold(*argv);
-    } catch (std::invalid_argument) {
+    }
+
+    M_LCOV_EXCL_START
+    catch (std::invalid_argument) {
         std::cerr << "not a valid floating-point number" << std::endl;
         std::exit(EXIT_FAILURE);
     } catch (std::out_of_range) {
         std::cerr << "value out of range" << std::endl;
         std::exit(EXIT_FAILURE);
     }
+    M_LCOV_EXCL_STOP
+
     callback(fp);
 }
 
@@ -144,6 +154,7 @@ void ArgParser::OptionImpl<std::vector<std::string_view>>::parse(const char **&a
 
 //----------------------------------------------------------------------------------------------------------------------
 
+M_LCOV_EXCL_START
 void ArgParser::print_args(std::ostream &out) const
 {
     auto print = [this, &out](const char *Short, const char *Long, const char *Descr) {
@@ -166,6 +177,7 @@ void ArgParser::print_args(std::ostream &out) const
             print(opt->short_name ? opt->short_name : "", opt->long_name ? opt->long_name : "", opt->description);
     }
 }
+M_LCOV_EXCL_STOP
 
 void ArgParser::parse_args(int, const char **argv) {
     for (++argv; *argv; ++argv) {
@@ -176,7 +188,7 @@ void ArgParser::parse_args(int, const char **argv) {
             it->second.get().parse(argv); // option
         } else {
             if (strneq(*argv, "--", 2))
-                std::cerr << "warning: ignore unknown option " << *argv << std::endl;
+                std::cerr << "warning: ignore unknown option " << *argv << std::endl;   //M_LCOV_EXCL_LINE
             else
                 args_.emplace_back(*argv); // positional argument
         }

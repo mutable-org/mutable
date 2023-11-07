@@ -142,10 +142,12 @@ class M_EXPORT ArgParser
     const std::vector<const char*> & args() const { return args_; }
 };
 
+M_LCOV_EXCL_START
 inline std::ostream & operator<<(std::ostream &out, const ArgParser &AP)
 {
     AP.print_args(out);
     return out;
 }
+M_LCOV_EXCL_STOP
 
 }

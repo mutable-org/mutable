@@ -11,6 +11,7 @@ set(
     util/ADTTest.cpp
     util/AlgorithmsTest.cpp
     util/AllocatorTest.cpp
+    util/ArgParserTest.cpp
     util/FnTest.cpp
     util/KmeansTest.cpp
     util/LinearModelTest.cpp

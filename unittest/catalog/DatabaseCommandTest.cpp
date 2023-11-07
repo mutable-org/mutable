@@ -46,7 +46,7 @@ TEST_CASE("DropTable::execute()", "[core][command]")
 
     SECTION("single table")
     {
-        std::vector<const char *> table_names = { table0_name };
+        std::vector<const char*> table_names = { table0_name };
         auto cmd = DropTable(table_names);
 
         CHECK(DB.has_table(table0_name));
@@ -58,7 +58,7 @@ TEST_CASE("DropTable::execute()", "[core][command]")
 
     SECTION("multiple tables")
     {
-        std::vector<const char *> table_names = { table0_name, table1_name };
+        std::vector<const char*> table_names = { table0_name, table1_name };
         auto cmd = DropTable(table_names);
 
         CHECK(DB.has_table(table0_name));

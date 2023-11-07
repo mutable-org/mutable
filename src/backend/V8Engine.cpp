@@ -526,7 +526,7 @@ struct CollectStringLiterals : ConstOperatorVisitor, ast::ConstASTExprVisitor
     static std::vector<const char*> Collect(const Operator &plan) {
         CollectStringLiterals CSL;
         CSL(plan);
-        return std::vector<const char *>(CSL.literals_.begin(), CSL.literals_.end());
+        return std::vector<const char*>(CSL.literals_.begin(), CSL.literals_.end());
     }
 
     private:

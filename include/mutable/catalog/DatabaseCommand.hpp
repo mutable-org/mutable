@@ -241,10 +241,10 @@ struct CreateTable : DDLCommand
 struct DropTable : DDLCommand
 {
     private:
-    std::vector<const char *> table_names_;
+    std::vector<const char*> table_names_;
 
     public:
-    DropTable(std::vector<const char *>table_names) : table_names_(std::move(table_names))
+    DropTable(std::vector<const char*>table_names) : table_names_(std::move(table_names))
     {
 #ifndef NDEBUG
         for (auto t : table_names_)

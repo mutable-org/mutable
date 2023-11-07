@@ -1590,7 +1590,7 @@ void Sema::operator()(DropTableStmt &s)
     auto &DB = C.get_database_in_use();
 
     bool ok = true;
-    std::vector<const char *> table_names;
+    std::vector<const char*> table_names;
     for (auto &tok : s.table_names) {
         const char *table_name = tok->text;
         if (DB.has_table(table_name))

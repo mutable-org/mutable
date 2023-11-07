@@ -1298,7 +1298,6 @@ struct BottomUpComplete : BottomUp
                         auto &model_left  = *PT[*outer_it].model;
                         auto &model_right = *PT[*inner_it].model;
                         PT[joined].model = CE.estimate_join(G, model_left, model_right, condition);
-                        PT[joined].cost = 0;
                     }
                     /* The cost of the final join is always the size of the result set, and hence the same for all
                      * plans.  We therefore omit this cost, as otherwise goal states might be artificially postponed in

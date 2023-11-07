@@ -327,6 +327,12 @@ struct M_EXPORT Catalog
     using TableFactoryDecoratorCallback = std::function<std::unique_ptr<TableFactory>(std::unique_ptr<TableFactory>)>;
     ComponentSet<TableFactoryDecoratorCallback> table_properties_; // stores callback functions that decorate a table with the given decorator
 
+    using PreOptimizationCallback = std::function<void(const QueryGraph &)>;
+    ComponentSet<PreOptimizationCallback> pre_optimizations_;
+
+    using PostOptimizationCallback = std::function<std::unique_ptr<Producer>(std::unique_ptr<Producer>)>;
+    ComponentSet<PostOptimizationCallback> post_optimizations_;
+
     public:
     /*===== Stores ===================================================================================================*/
     /** Registers a new `Store` with the given `name`. */
@@ -592,6 +598,42 @@ struct M_EXPORT Catalog
     auto table_properties_end()    const { return table_properties_.end(); }
     auto table_properties_cbegin() const { return table_properties_begin(); }
     auto table_properties_cend()   const { return table_properties_end(); }
+
+    /*===== Pre-Optimizations ========================================================================================*/
+    /** Registers a new pre-optimization with the given `name`. */
+    void register_pre_optimization(const char *name, PreOptimizationCallback optimization, const char *description = nullptr)
+    {
+        pre_optimizations_.add(
+                pool(name),
+                Component<PreOptimizationCallback>(description, std::make_unique<PreOptimizationCallback>(std::move(optimization)))
+        );
+    }
+
+    auto pre_optimizations()              { return range(pre_optimizations_.begin(), pre_optimizations_.end()); }
+    auto pre_optimizations_begin()        { return pre_optimizations_.begin(); }
+    auto pre_optimizations_end()          { return pre_optimizations_.end(); }
+    auto pre_optimizations_begin()  const { return pre_optimizations_.begin(); }
+    auto pre_optimizations_end()    const { return pre_optimizations_.end(); }
+    auto pre_optimizations_cbegin() const { return pre_optimizations_begin(); }
+    auto pre_optimizations_cend()   const { return pre_optimizations_end(); }
+
+    /*===== Post-Optimizations ========================================================================================*/
+    /** Registers a new post-optimization with the given `name`. */
+    void register_post_optimization(const char *name, PostOptimizationCallback optimization, const char *description = nullptr)
+    {
+        post_optimizations_.add(
+                pool(name),
+                Component<PostOptimizationCallback>(description, std::make_unique<PostOptimizationCallback>(std::move(optimization)))
+        );
+    }
+
+    auto post_optimizations()              { return range(post_optimizations_.begin(), post_optimizations_.end()); }
+    auto post_optimizations_begin()        { return post_optimizations_.begin(); }
+    auto post_optimizations_end()          { return post_optimizations_.end(); }
+    auto post_optimizations_begin()  const { return post_optimizations_.begin(); }
+    auto post_optimizations_end()    const { return post_optimizations_.end(); }
+    auto post_optimizations_cbegin() const { return post_optimizations_begin(); }
+    auto post_optimizations_cend()   const { return post_optimizations_end(); }
 };
 
 }

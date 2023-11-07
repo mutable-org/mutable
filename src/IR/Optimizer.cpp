@@ -165,6 +165,10 @@ Optimizer::optimize_with_plantable(const QueryGraph &G) const
         return { std::make_unique<ProjectionOperator>(G.projections()), std::move(plan_table) };
     }
 
+    /*----- Perform pre-optimizations on the QueryGraph. -------------------------------------------------------------*/
+    for (auto &pre_opt : C.pre_optimizations())
+        (*pre_opt.second).operator()(G);
+
     /*----- Initialize plan table and compute plans for data sources. ------------------------------------------------*/
     Producer **source_plans = new Producer*[num_sources];
     for (auto &ds : G.sources()) {
@@ -356,7 +360,10 @@ Optimizer::optimize_with_plantable(const QueryGraph &G) const
         plan = std::move(projection);
     }
 
-    plan->minimize_schema();
+    /*----- Perform post-optimizations on the Operator tree. ---------------------------------------------------------*/
+    for (auto &post_opt : C.post_optimizations())
+        plan = (*post_opt.second).operator()(std::move(plan)); // TODO add plan_table to post-optimizations
+
     delete[] source_plans;
     return { std::move(plan), std::move(plan_table) };
 }

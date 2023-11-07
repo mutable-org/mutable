@@ -543,3 +543,14 @@ void Operator::minimize_schema()
     SchemaMinimizer M;
     M(*this);
 }
+
+__attribute__((constructor(202)))
+void register_post_optimization()
+{
+    Catalog &C = Catalog::Get();
+
+    C.register_post_optimization("minimize schema", [](std::unique_ptr<Producer> plan) {
+        plan->minimize_schema();
+        return plan;
+    }, "minimizes the schema of an operator tree");
+}

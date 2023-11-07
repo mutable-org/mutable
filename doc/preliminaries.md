@@ -88,3 +88,19 @@ This way, our hooks are properly installed and contained in version control.
                             pygraphviz
    ```
 1. Run `pipenv sync` as usual.
+
+- On macOS, setting up the Pipenv virtual environment may fail while trying to install `psycopg2` with the following error.
+  ```plain
+  Error: pg_config executable not found
+  ```
+  In this case, the `postgresql` binaries are not in the `PATH`.
+
+1. Install a recent version of PostgreSQL, e.g. `postgresql@16`.
+   ```plain
+   $ brew install postgresql@16
+   ```
+1. Add the binaries of your install PostgreSQL version, e.g. `postgresql@16`, to your `PATH`.
+   ```plain
+   $ export PATH="$PATH:$(brew --prefix postgresql@16)/bin"
+   ```
+1. Run `pipenv sync` as usual.

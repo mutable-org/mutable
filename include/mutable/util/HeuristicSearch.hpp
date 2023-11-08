@@ -326,7 +326,7 @@ struct StateManager
              * it to the priority queue.  */
             const auto min_path_cost = [&]() {
                 if constexpr (use_weighted_search)
-                    return is_admissible<Heurisitc> ? state.g() + h : weighting_factor(), state.g();
+                    return is_admissible<Heurisitc> ? state.g() + h / weighting_factor() : state.g();
                 else
                     return is_admissible<Heurisitc> ? state.g() + h : state.g();
             }();

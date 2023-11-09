@@ -4,6 +4,7 @@
 #include "backend/WasmMacro.hpp"
 #include <mutable/util/concepts.hpp>
 #include <optional>
+#include <tuple>
 
 
 using namespace m;
@@ -1590,7 +1591,10 @@ compile_data_layout_sequential(const Schema &tuple_schema, Ptr<void> base_addres
         M_insist(stores.empty());
 #endif
 
-    return { std::move(inits), M_CONSTEXPR_COND(IsStore, std::move(stores), std::move(loads)), std::move(jumps) };
+    if constexpr (IsStore)
+        return std::make_tuple<Block, Block, Block>(std::move(inits), std::move(stores), std::move(jumps));
+    else
+        return std::make_tuple<Block, Block, Block>(std::move(inits), std::move(loads), std::move(jumps));
 }
 
 }

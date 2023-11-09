@@ -170,8 +170,8 @@ endif()
 
 if(${ENABLE_SANITIZERS})
     message("[mutable] Compiling with address and UB sanitizers")
-    add_compile_options(-fsanitize=address -fsanitize=undefined -fno-sanitize=vptr)
-    add_link_options(-fsanitize=address -fsanitize=undefined -fno-sanitize=vptr)
+    add_compile_options(-fsanitize=address -fsanitize=undefined -fno-sanitize=vptr -fsanitize-link-c++-runtime)
+    add_link_options(-fsanitize=address -fsanitize=undefined -fno-sanitize=vptr -fsanitize-link-c++-runtime)
 endif()
 
 if(${ENABLE_SANITY_FIELDS})

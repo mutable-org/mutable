@@ -578,8 +578,10 @@ compile_data_layout_sequential(const Schema &tuple_schema, Ptr<void> base_addres
     }
 
     /*----- Visit the data layout. -----*/
-    layout.for_sibling_leaves([&](const std::vector<DataLayout::leaf_info_t> &leaves,
-                                  const DataLayout::level_info_stack_t &levels, uint64_t inode_offset_in_bits)
+    layout.for_sibling_leaves(
+            [&, &inits=inits, &jumps=jumps, &stores=stores, &loads=loads] // explicitly capture references non-const
+            (const std::vector<DataLayout::leaf_info_t> &leaves, const DataLayout::level_info_stack_t &levels,
+             uint64_t inode_offset_in_bits)
     {
         /*----- Clear the per-leaf data structure. -----*/
         loading_context.clear();

@@ -1042,7 +1042,6 @@ struct Block final
     /** Create a named `Block` and set it *active* in the current `Module`. */
     explicit Block(const char *name, bool attach_to_parent) : Block(std::string(name), attach_to_parent) { }
 
-    Block(const Block&) = delete;
     Block(Block &&other) : Block() { swap(*this, other); }
 
     ~Block() {
@@ -1111,11 +1110,11 @@ struct Block final
 struct BlockUser
 {
     private:
-    const Block &block_; ///< the block to use (for code gen)
+    Block &block_; ///< the block to use (for code gen)
     ::wasm::Block *old_block_ = nullptr; ///< the previously active, now old block
 
     public:
-    BlockUser(const Block &block) : block_(block) {
+    BlockUser(Block &block) : block_(block) {
         old_block_ = Module::Get().set_active_block(block_.this_block_); // set active block
     }
 

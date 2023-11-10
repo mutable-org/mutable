@@ -30,6 +30,7 @@ class DuckDB(Connector):
         'NOT NULL':    lambda ty: 'NOT NULL',
         'PRIMARY KEY': lambda ty: 'PRIMARY KEY',
         'UNIQUE':      lambda ty: 'UNIQUE',
+        'REFERENCES':  lambda ty: f'REFERENCES {ty[ty.index("REFERENCES")+1]}',
     }
 
     # Runs an experiment 'n_runs' times, all parameters are in 'params'

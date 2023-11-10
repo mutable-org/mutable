@@ -87,6 +87,8 @@ class Connector(ABC):
                 typeList.append(typeParser['PRIMARY KEY'](ty))
             if 'UNIQUE' in typeInfo and 'UNIQUE' in typeParser:
                 typeList.append(typeParser['UNIQUE'](ty))
+            if 'REFERENCES' in typeInfo and 'REFERENCES' in typeParser:
+                typeList.append(typeParser['REFERENCES'](ty))
 
             columns.append(' '.join(typeList))
         return '(' + ',\n'.join(columns) + ')'

@@ -205,7 +205,7 @@ sys.stdout.flush()
                     raise Exception(f"Unknown type given for '{column_name}'")
 
             # The documentation at https://tableau.github.io/hyper-db/lang_docs/py/index.html lists no means to declare
-            # PRIMARY KEY or UNIQUE constraints.
+            # PRIMARY KEY, UNIQUE, or REFERENCES constraints.
             col = TableDefinition.Column(column_name, typ, NOT_NULLABLE if 'NOT NULL' in type_info else NULLABLE)
             columns.append(col)
         return columns

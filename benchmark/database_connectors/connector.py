@@ -104,7 +104,7 @@ class Connector(ABC):
     @staticmethod
     def check_with_scale_factors(params: dict[str, Any]) -> bool:
         for table in params.get('data', dict()).values():
-            if table.get('scale_factors'):
+            if 'scale_factors' in table and isinstance(table['scale_factors'], dict):
                 return True
         return False
 

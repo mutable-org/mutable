@@ -77,8 +77,14 @@ class PostgreSQL(Connector):
                         # Create tables from tmp tables with scale factor
                         for table_name, table in params['data'].items():
                             sf: float | int
-                            if table.get('scale_factors'):
-                                sf = table['scale_factors'][case]
+                            if table.get('scale_factors') is not None:
+                                scale_factors = table['scale_factors']
+                                if isinstance(scale_factors, float) or isinstance(scale_factors, int):
+                                    sf = scale_factors
+                                elif case is not None:
+                                    sf = scale_factors[case]
+                                else:
+                                    sf = 1
                             else:
                                 sf = 1
                             header: int = int(table.get('header', 0))

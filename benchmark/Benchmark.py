@@ -425,7 +425,10 @@ def run_benchmarks(args: argparse.Namespace) -> None:
                         tqdm_print(f'Table file \'{p}\' not found.  Skipping benchmark.\n')
                         table_access_error = True
                     else:
-                        info.experiment_data[table_name]['lines_in_file'] = int(os.popen(f"wc -l < {p}").read())
+                        if 'lines_in_file' in yml:  # use `if` for lazy evaluation
+                            info.experiment_data[table_name]['lines_in_file'] = yml['lines_in_file']
+                        else:
+                            info.experiment_data[table_name]['lines_in_file'] = int(os.popen(f"wc -l < {p}").read())
                 if table_access_error:
                     continue  # At least one table file could not be opened.  Skip benchmark.
 

@@ -126,6 +126,8 @@ class Connector(ABC):
         popen_args: dict[str, Any] = dict(),
         encode_query: bool = True,
     ) -> str:
+        if isinstance(command, Sequence) and not isinstance(command, str) and not isinstance(command, bytes):
+            command = list(filter(lambda elem : len(elem) > 0, command))    # remove whitespaces in command sequence
         process = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                                    cwd=os.getcwd(), **popen_args)
         try:

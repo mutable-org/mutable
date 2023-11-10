@@ -15,35 +15,25 @@ if __name__ == '__main__':
     with HyperProcess(telemetry=Telemetry.DO_NOT_SEND_USAGE_DATA_TO_TABLEAU) as hyper:
         with Connection(endpoint=hyper.endpoint, database='benchmark.hyper', create_mode=CreateMode.CREATE_AND_REPLACE) as connection:
             lineitem = hyperconf.table_defs['Lineitem']
+            part = hyperconf.table_defs['Part']
 
             query = f'''\
 SELECT
-        l_returnflag,
-        l_linestatus,
-        SUM(l_quantity) AS sum_qty,
-        SUM(l_extendedprice) AS sum_base_price,
-        SUM(l_extendedprice * (1 - l_discount)) AS sum_disc_price,
-        SUM(l_extendedprice * (1 - l_discount) * (1 + l_tax)) AS sum_charge,
-        AVG(l_quantity) AS avg_qty,
-        AVG(l_extendedprice) AS avg_price,
-        AVG(l_discount) AS avg_disc,
-        COUNT(*) AS count_order
+        SUM(l_extendedprice * (1 - l_discount)) AS promo_revenue
 FROM
-        {lineitem.table_name}
+        {lineitem.table_name},
+        {part.table_name}
 WHERE
-        l_shipdate <= date '1998-09-02'
-GROUP BY
-        l_returnflag,
-        l_linestatus
-ORDER BY
-        l_returnflag,
-        l_linestatus'''
+        l_partkey = p_partkey
+        AND l_shipdate >= date '1995-09-01'
+        AND l_shipdate < date '1995-10-01';'''
 
             times = list()
             for _ in range(3):
                 times.extend(
-                    hyperconf.benchmark_compilation_times(connection, [query], [
+                    hyperconf.benchmark_execution_times(connection, [query], [
                         (lineitem, 'benchmark/tpc-h/data/lineitem.tbl', { 'FORMAT': 'csv', 'DELIMITER': "'|'" }),
+                        (part,     'benchmark/tpc-h/data/part.tbl',     { 'FORMAT': 'csv', 'DELIMITER': "'|'" }),
                     ])
                 )
 

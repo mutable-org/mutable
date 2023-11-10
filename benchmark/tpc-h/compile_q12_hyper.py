@@ -15,35 +15,33 @@ if __name__ == '__main__':
     with HyperProcess(telemetry=Telemetry.DO_NOT_SEND_USAGE_DATA_TO_TABLEAU) as hyper:
         with Connection(endpoint=hyper.endpoint, database='benchmark.hyper', create_mode=CreateMode.CREATE_AND_REPLACE) as connection:
             lineitem = hyperconf.table_defs['Lineitem']
+            orders = hyperconf.table_defs['Orders']
 
             query = f'''\
 SELECT
-        l_returnflag,
-        l_linestatus,
-        SUM(l_quantity) AS sum_qty,
-        SUM(l_extendedprice) AS sum_base_price,
-        SUM(l_extendedprice * (1 - l_discount)) AS sum_disc_price,
-        SUM(l_extendedprice * (1 - l_discount) * (1 + l_tax)) AS sum_charge,
-        AVG(l_quantity) AS avg_qty,
-        AVG(l_extendedprice) AS avg_price,
-        AVG(l_discount) AS avg_disc,
-        COUNT(*) AS count_order
+    l_shipmode, COUNT(*)
 FROM
-        {lineitem.table_name}
+    {lineitem.table_name},
+    {orders.table_name}
 WHERE
-        l_shipdate <= date '1998-09-02'
+    o_orderkey = l_orderkey
+    AND (l_shipmode = 'MAIL' OR l_shipmode = 'SHIP')
+    AND l_commitdate < l_receiptdate
+    AND l_shipdate < l_commitdate
+    AND l_receiptdate >= date '1994-01-01'
+    AND l_receiptdate < date '1995-01-01'
+    AND (o_orderpriority = '1-URGENT' OR o_orderpriority = '2-HIGH')
 GROUP BY
-        l_returnflag,
-        l_linestatus
+    l_shipmode
 ORDER BY
-        l_returnflag,
-        l_linestatus'''
+    l_shipmode;'''
 
             times = list()
             for _ in range(3):
                 times.extend(
-                    hyperconf.benchmark_compilation_times(connection, [query], [
+                    hyperconf.benchmark_execution_times(connection, [query], [
                         (lineitem, 'benchmark/tpc-h/data/lineitem.tbl', { 'FORMAT': 'csv', 'DELIMITER': "'|'" }),
+                        (orders,   'benchmark/tpc-h/data/orders.tbl',   { 'FORMAT': 'csv', 'DELIMITER': "'|'" }),
                     ])
                 )
 

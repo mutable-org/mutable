@@ -422,7 +422,7 @@ def run_benchmarks(args: argparse.Namespace) -> None:
                         continue  # Skip counting files when table does not have a file with data
                     p: str = os.path.join(table['file'])  # Path to file
                     if not os.path.isfile(p):
-                        tqdm_print(f'Table file \'{p}\' not found.  Skipping benchmark.\n', file=sys.stderr)
+                        tqdm_print(f'Table file \'{p}\' not found.  Skipping benchmark.\n')
                         table_access_error = True
                     else:
                         info.experiment_data[table_name]['lines_in_file'] = int(os.popen(f"wc -l < {p}").read())

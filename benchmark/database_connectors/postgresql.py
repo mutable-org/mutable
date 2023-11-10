@@ -24,6 +24,8 @@ class PostgreSQL(Connector):
         self.verbose = args.get('verbose', False)   # optional
 
     POSTGRESQL_TYPE_PARSER: dict[str, Callable[[list[str]], str]] = {
+        'TINYINT':     lambda ty: 'SMALLINT', # TINYINT not supported by PostgreSQL, fallback to SMALLINT
+        'SMALLINT':    lambda ty: 'SMALLINT',
         'INT':         lambda ty: 'INT',
         'BIGINT':      lambda ty: 'BIGINT',
         'FLOAT':       lambda ty: 'REAL',

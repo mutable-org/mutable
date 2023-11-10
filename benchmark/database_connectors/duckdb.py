@@ -19,6 +19,8 @@ class DuckDB(Connector):
         self.multithreaded = args.get('multithreaded', False)   # optional
 
     DUCKDB_TYPE_PARSER: dict[str, Callable[[list[str]], str]] = {
+        'TINYINT':     lambda ty: 'TINYINT',
+        'SMALLINT':    lambda ty: 'SMALLINT',
         'INT':         lambda ty: 'INT',
         'BIGINT':      lambda ty: 'BIGINT',
         'FLOAT':       lambda ty: 'FLOAT',

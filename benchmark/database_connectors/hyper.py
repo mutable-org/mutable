@@ -185,6 +185,10 @@ sys.stdout.flush()
         for column_name, type_info in attributes.items():
             ty = type_info.split(' ')
             match ty[0]:
+                case 'TINYINT':
+                    typ = SqlType.small_int() # TINYINT not supported by HyPer, fallback to SMALLINT
+                case 'SMALLINT':
+                    typ = SqlType.small_int()
                 case 'INT':
                     typ = SqlType.int()
                 case 'BIGINT':

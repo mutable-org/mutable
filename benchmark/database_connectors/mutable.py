@@ -17,6 +17,8 @@ class Mutable(Connector):
         self.verbose: bool = args.get('verbose', False)       # optional
 
     MUTABLE_TYPE_PARSER: dict[str, Callable[[list[str]], str]] = {
+        'TINYINT':     lambda ty: 'INT(1)',
+        'SMALLINT':    lambda ty: 'INT(2)',
         'INT':         lambda ty: 'INT(4)',
         'BIGINT':      lambda ty: 'INT(8)',
         'FLOAT':       lambda ty: 'FLOAT',

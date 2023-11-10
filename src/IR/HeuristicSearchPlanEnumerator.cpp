@@ -124,27 +124,14 @@ template<
     typename PlanTable,
     typename State,
     typename Expand,
+    typename SearchAlgorithm,
     template<typename, typename, typename> typename Heuristic,
-    template<typename, typename, typename, typename, typename...> typename Search,
     ai::SearchConfigConcept StaticConfig
 >
 bool heuristic_search(PlanTable &PT, const QueryGraph &G, const AdjacencyMatrix &M, const CostFunction &CF,
-                      const CardinalityEstimator &CE, ai::SearchConfiguration<StaticConfig> config)
+                      const CardinalityEstimator &CE, SearchAlgorithm &S, ai::SearchConfiguration<StaticConfig> config)
 {
-    using H = Heuristic<PlanTable, State, Expand>;
     State::RESET_STATE_COUNTERS();
-
-    using search_algorithm = Search<
-        State, Expand, H, StaticConfig,
-        /*----- context -----*/
-        PlanTable&,
-        const QueryGraph&,
-        const AdjacencyMatrix&,
-        const CostFunction&,
-        const CardinalityEstimator&
-    >;
-
-    search_algorithm S(PT, G, M, CF, CE);
 
     if constexpr (StaticConfig::PerformCostBasedPruning) {
         if (Options::Get().statistics)
@@ -153,6 +140,7 @@ bool heuristic_search(PlanTable &PT, const QueryGraph &G, const AdjacencyMatrix 
 
     try {
         State initial_state = Expand::template Start<State>(PT, G, M, CF, CE);
+        using H = Heuristic<PlanTable, State, Expand>;
         H h(PT, G, M, CF, CE);
 
         /*----- Run the search algorithm. -----*/
@@ -175,7 +163,7 @@ bool heuristic_search(PlanTable &PT, const QueryGraph &G, const AdjacencyMatrix 
             reconstruct_plan_bottom_up(goal, PT, G, CE, CF);
         }
     } catch (std::logic_error) {
-        if constexpr (not search_algorithm::use_beam_search) {
+        if constexpr (not SearchAlgorithm::use_beam_search) {
             if (not Options::Get().quiet)
                 std::cout << "search did not reach a goal state, fall back to DPccp" << std::endl;
             DPccp{}(G, CF, PT);
@@ -186,11 +174,11 @@ bool heuristic_search(PlanTable &PT, const QueryGraph &G, const AdjacencyMatrix 
          * the state X with the lowest f-value (f(X)=g(X)+h(X)).  In the case that this state is a goal state, the found
          * path to this state is returned.  Otherwise, use GOO from this state to find a plan. */
 
-        M_insist(search_algorithm::use_anytime_search, "exception can only be thrown during anytime search");
+        M_insist(SearchAlgorithm::use_anytime_search, "exception can only be thrown during anytime search");
         if (Options::Get().statistics)
             S.dump(std::cout);
 
-        using partition_type = typename decltype(S)::state_manager_type::map_type; ///< map from State to StateInfo
+        using partition_type = typename SearchAlgorithm::state_manager_type::map_type; ///< map from State to StateInfo
         const auto &SM = S.state_manager();
         const auto &partitions = SM.partitions();
 
@@ -219,11 +207,11 @@ bool heuristic_search(PlanTable &PT, const QueryGraph &G, const AdjacencyMatrix 
                 return find_partition_closest_to_goal(partitions);
         }(partitions);
 
-        using entry_type = decltype(S)::state_manager_type::map_type::value_type;
-        auto min_state = [&S, &config](const entry_type *best, const entry_type &next) -> const entry_type* {
+        using entry_type = SearchAlgorithm::state_manager_type::map_type::value_type;
+        auto min_state = [&config](const entry_type *best, const entry_type &next) -> const entry_type* {
             /** Compute the *f*-value of an entry in the state manager. */
-            auto f = [&S, &config](const entry_type &e) {
-                if constexpr (S.use_weighted_search)
+            auto f = [&config](const entry_type &e) {
+                if constexpr (SearchAlgorithm::use_weighted_search)
                     return e.first.g() + e.second.h / config.weighting_factor;
                 else
                     return e.first.g() + e.second.h;
@@ -361,15 +349,28 @@ bool heuristic_search_helper(const char *vertex_str, const char *expand_str, con
                       << std::endl;
         }
 
+        using H = Heuristic<PlanTable, State, Expand>;
+
+        using SearchAlgorithm = Search<
+            State, Expand, H, StaticConfig,
+            /*----- context -----*/
+            PlanTable&,
+            const QueryGraph&,
+            const AdjacencyMatrix&,
+            const CostFunction&,
+            const CardinalityEstimator&
+        >;
+
+        SearchAlgorithm S(PT, G, M, CF, CE);
 
         return m::pe::hs::heuristic_search<
             PlanTable,
             State,
             Expand,
+            SearchAlgorithm,
             Heuristic,
-            Search,
             StaticConfig
-        >(PT, G, M, CF, CE, config);
+        >(PT, G, M, CF, CE, S, config);
     }
     return false;
 

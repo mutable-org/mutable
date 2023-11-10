@@ -2181,12 +2181,12 @@ template<
     typename PlanTable,
     typename State,
     typename Expand,
+    typename Search,
     template<typename, typename, typename> typename Heuristic,
-    template<typename, typename, typename, typename, typename...> typename Search,
     ai::SearchConfigConcept StaticConfig
 >
 bool heuristic_search(PlanTable &PT, const QueryGraph &G, const AdjacencyMatrix &M, const CostFunction &CF,
-                      const CardinalityEstimator &CE, ai::SearchConfiguration<StaticConfig> config);
+                      const CardinalityEstimator &CE, Search &S, ai::SearchConfiguration<StaticConfig> config);
 
 /** Computes the join order using heuristic search */
 struct HeuristicSearch final : PlanEnumeratorCRTP<HeuristicSearch>

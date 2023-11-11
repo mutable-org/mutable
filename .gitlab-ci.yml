@@ -165,8 +165,8 @@ build:debug:macos-amd64:
         - cmake -S . -B build/${BUILD_TYPE}
           --fresh
           -G Ninja
-          -DCMAKE_C_COMPILER=clang
-          -DCMAKE_CXX_COMPILER=clang++
+          -DCMAKE_C_COMPILER=$(brew --prefix llvm@17)/bin/clang
+          -DCMAKE_CXX_COMPILER=$(brew --prefix llvm@17)/bin/clang++
           -DCMAKE_BUILD_TYPE=Debug
           -DBUILD_SHARED_LIBS=ON
           -DWITH_V8=ON
@@ -321,8 +321,8 @@ build:release:macos-amd64:
         - cmake -S . -B build/${BUILD_TYPE}
           --fresh
           -G Ninja
-          -DCMAKE_C_COMPILER=clang
-          -DCMAKE_CXX_COMPILER=clang++
+          -DCMAKE_C_COMPILER=$(brew --prefix llvm@17)/bin/clang
+          -DCMAKE_CXX_COMPILER=$(brew --prefix llvm@17)/bin/clang++
           -DCMAKE_BUILD_TYPE=Release
           -DBUILD_SHARED_LIBS=OFF
           -DWITH_V8=ON

@@ -727,6 +727,12 @@ TEST_CASE("AStar_Clique_TopDown_sum", "[core][IR]")
  *   For weighted anytimeAStar the unweighted f-values have to be considered to determine the starting state for GOO
  *   path completion.  In this Test Case the starting state would differ if the weighted value had been considered.
  *
+ * - AnytimeAStar_OptFields:
+ *   This Test Case tests the correct usage of the `OptField`s in the `SearchConfiguration` for AnytimeAStar:
+ *   - the `weighting_factor` is only set/used for weighted search
+ *   - the `expansion_budget` is only set/used for anytime search
+ *   - the `upper_bound` is only used for search with cost-based pruning
+ *
  *  */
 
 
@@ -4022,4 +4028,567 @@ TEST_CASE("AnytimeAStar_weighted_path_completion", "[core][IR]")
         CHECK(SM.num_none_to_beam() == 0);
     }
 
+}
+
+TEST_CASE("AnytimeAStar_OptFields", "[core][IR]")
+{
+    using Subproblem = SmallBitset;
+    using PlanTable = PlanTableSmallOrDense;
+
+    /* Get Catalog and create new database to use for unit testing. */
+    Catalog::Clear();
+    Catalog &Cat = Catalog::Get();
+    auto &db = Cat.add_database("db");
+    Cat.set_database_in_use(db);
+
+    /* Create pooled strings. */
+    const char *str_R0 = Cat.pool("R0");
+    const char *str_R1 = Cat.pool("R1");
+    const char *str_R2 = Cat.pool("R2");
+    const char *str_R3 = Cat.pool("R3");
+
+    const char *col_id = Cat.pool("id");
+    const char *col_fid_R1 = Cat.pool("fid_R1");
+    const char *col_fid_R2 = Cat.pool("fid_R2");
+    const char *col_fid_R3 = Cat.pool("fid_R3");
+
+    /* Create tables. */
+    Table &tbl_R0 = db.add_table(str_R0);
+    Table &tbl_R1 = db.add_table(str_R1);
+    Table &tbl_R2 = db.add_table(str_R2);
+    Table &tbl_R3 = db.add_table(str_R3);
+
+    /* Add columns to tables. */
+    tbl_R0.push_back(col_id, Type::Get_Integer(Type::TY_Vector, 4));
+    tbl_R3.push_back(col_id, Type::Get_Integer(Type::TY_Vector, 4));
+    tbl_R1.push_back(col_id, Type::Get_Integer(Type::TY_Vector, 4));
+    tbl_R2.push_back(col_id, Type::Get_Integer(Type::TY_Vector, 4));
+
+    tbl_R0.push_back(col_fid_R1, Type::Get_Integer(Type::TY_Vector, 4));
+    tbl_R0.push_back(col_fid_R3, Type::Get_Integer(Type::TY_Vector, 4));
+    tbl_R1.push_back(col_fid_R2, Type::Get_Integer(Type::TY_Vector, 4));
+    tbl_R2.push_back(col_fid_R3, Type::Get_Integer(Type::TY_Vector, 4));
+
+    /* Add data to tables. */
+    std::size_t num_rows_R0 = 100;
+    std::size_t num_rows_R1 = 100;
+    std::size_t num_rows_R2 = 100;
+    std::size_t num_rows_R3 = 100;
+    tbl_R0.store(Cat.create_store(tbl_R0));
+    tbl_R1.store(Cat.create_store(tbl_R1));
+    tbl_R2.store(Cat.create_store(tbl_R2));
+    tbl_R3.store(Cat.create_store(tbl_R3));
+    tbl_R0.layout(Cat.data_layout());
+    tbl_R1.layout(Cat.data_layout());
+    tbl_R2.layout(Cat.data_layout());
+    tbl_R3.layout(Cat.data_layout());
+
+    for (std::size_t i = 0; i < num_rows_R0; ++i) { tbl_R0.store().append(); }
+    for (std::size_t i = 0; i < num_rows_R1; ++i) { tbl_R1.store().append(); }
+    for (std::size_t i = 0; i < num_rows_R2; ++i) { tbl_R2.store().append(); }
+    for (std::size_t i = 0; i < num_rows_R3; ++i) { tbl_R3.store().append(); }
+
+    /* Define query: cycle query
+     *
+     *    R0
+     *   /  \
+     *  R3  R1
+     *   \  /
+     *    R2
+     */
+
+    const std::string query = " SELECT * \
+                                FROM R0, R1, R2, R3 \
+                                WHERE R0.fid_R1 = R1.id \
+                                  AND R0.fid_R3 = R3.id \
+                                  AND R1.fid_R2 = R2.id \
+                                  AND R2.fid_R3 = R3.id;";
+
+    Diagnostic diag(false, std::cout, std::cerr); // What is diagnostic?
+    auto stmt = m::statement_from_string(diag, query); // TODO: use command_from_string
+    REQUIRE(not diag.num_errors());
+    auto query_graph = QueryGraph::Build(*stmt);
+    auto &G = *query_graph.get();
+
+    /* Create subproblems to manually add entries in the `PlanTable`. */
+    const Subproblem R0(1);
+    const Subproblem R1(2);
+    const Subproblem R2(4);
+    const Subproblem R3(8);
+
+    /* Initialize the `InjectionCardinalityEstimator`. */
+    std::istringstream json_input;
+    json_input.str("{ \"mine\": [ \
+                   {\"relations\": [\"R0\"], \"size\":100}, \
+                   {\"relations\": [\"R1\"], \"size\":100}, \
+                   {\"relations\": [\"R2\"], \"size\":100}, \
+                   {\"relations\": [\"R3\"], \"size\":100}, \
+                   {\"relations\": [\"R0\", \"R1\"], \"size\":240}, \
+                   {\"relations\": [\"R0\", \"R3\"], \"size\":290}, \
+                   {\"relations\": [\"R1\", \"R2\"], \"size\":250}, \
+                   {\"relations\": [\"R2\", \"R3\"], \"size\":3200}, \
+                   {\"relations\": [\"R0\", \"R1\", \"R3\"], \"size\":400}, \
+                   {\"relations\": [\"R0\", \"R1\", \"R2\"], \"size\":24000}, \
+                   {\"relations\": [\"R0\", \"R2\", \"R3\"], \"size\":380}, \
+                   {\"relations\": [\"R1\", \"R2\", \"R3\"], \"size\":700}, \
+                   {\"relations\": [\"R0\", \"R1\", \"R2\", \"R3\"], \"size\":15000} \
+                   ]}");
+
+    auto ICE = std::make_unique<InjectionCardinalityEstimator>(diag, "mine", json_input);
+    db.cardinality_estimator(std::move(ICE));
+
+    /* Initialize `PlanTable` for base case. */
+    PlanTable plan_table(G);
+    init_PT_base_case(G, plan_table, db.cardinality_estimator());
+
+    PlanTable expected(G);
+    init_PT_base_case(G, expected, db.cardinality_estimator());
+
+    /* Get `SmallBitset` respresentation of the goal state for testing the costs. */
+    const Subproblem All = Subproblem::All(G.num_sources());
+
+    /* Get costfunction Cout, adjacency matrix and join condition. */
+    CostFunctionCout C_out;
+    const AdjacencyMatrix &M = G.adjacency_matrix();
+    static cnf::CNF condition; // TODO use join condition
+
+    /* Heuristic search configurations. */
+    using State = search_states::SubproblemsArray;
+
+
+    SECTION("BottomUp_weighed_20_sum")
+    {
+        /* Run heuristic search. */
+        using H = heuristics::sum<PlanTable, State, expansions::BottomUpComplete>;
+
+        using SearchAlgorithm = ai::genericAStar<
+            State, expansions::BottomUpComplete, H, config::weighted_anytimeAStar,
+            /*----- context -----*/
+            PlanTable&,
+            const QueryGraph&,
+            const AdjacencyMatrix&,
+            const CostFunction&,
+            const CardinalityEstimator&
+        >;
+
+        SearchAlgorithm S(plan_table, G, M, C_out, db.cardinality_estimator());
+
+        uint64_t budget = std::numeric_limits<uint64_t>::max();
+
+        bool search_result = heuristic_search<PlanTable,
+                                              search_states::SubproblemsArray,
+                                              expansions::BottomUpComplete,
+                                              SearchAlgorithm,
+                                              heuristics::sum,
+                                              config::weighted_anytimeAStar
+                                              >(plan_table, G, M, C_out, db.cardinality_estimator(), S,
+                                              {
+                                                .weighting_factor = 20.f,
+                                                });
+
+        /* Fill `expected` with the anticipated plan. */
+        /* Check that the expected plan is achieved in the weighted version of the search. */
+        expected.update(G, db.cardinality_estimator(), C_out, R0, R3, condition);
+        expected.update(G, db.cardinality_estimator(), C_out, R2 , R0|R3, condition);
+        expected.update(G, db.cardinality_estimator(), C_out, R1, R0|R2|R3 , condition);
+
+        /* Check for successful run of the search */
+        CHECK(search_result == true);
+
+        /* Check for the result of the search to match the expected plan */
+        CHECK(expected == plan_table);
+
+        /* Check for the correct costs of the path */
+        CHECK(expected[All].cost == plan_table[All].cost);
+        CHECK(plan_table[All].cost == 15670);
+        CHECK(plan_table[plan_table[All].left].cost + plan_table[plan_table[All].right].cost== 670);
+
+        /* Dependencies between the search state counters. */
+        const auto &SM = S.state_manager();
+        check_state_counter_dependencies<State, SearchAlgorithm, decltype(SM)>(S, SM, budget);
+
+        /* Configuration-specific assertions. */
+        CHECK(State::NUM_STATES_GENERATED() == 13);
+        CHECK(State::NUM_STATES_EXPANDED() == 5);
+        CHECK(State::NUM_STATES_CONSTRUCTED() == 14);
+        CHECK(State::NUM_STATES_DISPOSED() == 2);
+
+        CHECK(SM.num_new() == 12);
+        CHECK(SM.num_duplicates() == 2);
+        CHECK(SM.num_discarded() == 2);
+        CHECK(SM.num_cheaper() == 0);
+        CHECK(SM.num_decrease_key() == 0);
+        CHECK(SM.num_pruned_by_cost() == 0);
+
+        CHECK(SM.num_states_seen() == 12);
+        CHECK(SM.num_states_in_regular_queue() == 6);
+        CHECK(SM.num_states_in_beam_queue() == 0);
+        CHECK(S.num_cached_heuristic_value() == 2);
+        CHECK(SM.num_regular_to_beam() == 0);
+        CHECK(SM.num_none_to_beam() == 0);
+    }
+
+    SECTION("BottomUp_sum_no_usage_of_weighting_factor")
+    {
+        /* Run heuristic search. */
+        using H = heuristics::sum<PlanTable, State, expansions::BottomUpComplete>;
+
+        using SearchAlgorithm = ai::genericAStar<
+            State, expansions::BottomUpComplete, H, config::anytimeAStar,
+            /*----- context -----*/
+            PlanTable&,
+            const QueryGraph&,
+            const AdjacencyMatrix&,
+            const CostFunction&,
+            const CardinalityEstimator&
+        >;
+
+        SearchAlgorithm S(plan_table, G, M, C_out, db.cardinality_estimator());
+
+        uint64_t budget = std::numeric_limits<uint64_t>::max();
+
+        bool search_result = heuristic_search<PlanTable,
+                                              search_states::SubproblemsArray,
+                                              expansions::BottomUpComplete,
+                                              SearchAlgorithm,
+                                              heuristics::sum,
+                                              config::anytimeAStar
+                                              >(plan_table, G, M, C_out, db.cardinality_estimator(), S,
+                                              {
+                                                .weighting_factor = 20.f,
+                                                });
+
+        /* Fill `expected` with the anticipated plan. */
+        /* Check that the provided weighting factor is not used for regular anytimeAStar.  Without the weighting factor
+         * a different plan is supposed to be found. */
+        expected.update(G, db.cardinality_estimator(), C_out, R1, R2, condition);
+        expected.update(G, db.cardinality_estimator(), C_out, R0, R3, condition);
+        expected.update(G, db.cardinality_estimator(), C_out, R1|R2, R0|R3 , condition);
+
+        /* Check for successful run of the search */
+        CHECK(search_result == true);
+
+        /* Check for the result of the search to match the expected plan */
+        CHECK(expected == plan_table);
+
+        /* Check for the correct costs of the path */
+        CHECK(expected[All].cost == plan_table[All].cost);
+        CHECK(plan_table[All].cost == 15540);
+        CHECK(plan_table[plan_table[All].left].cost + plan_table[plan_table[All].right].cost== 540);
+
+        /* Dependencies between the search state counters. */
+        const auto &SM = S.state_manager();
+        check_state_counter_dependencies<State, SearchAlgorithm, decltype(SM)>(S, SM, budget);
+
+        /* Configuration-specific assertions. */
+        CHECK(State::NUM_STATES_GENERATED() == 13);
+        CHECK(State::NUM_STATES_EXPANDED() == 5);
+        CHECK(State::NUM_STATES_CONSTRUCTED() == 14);
+        CHECK(State::NUM_STATES_DISPOSED() == 2);
+
+        CHECK(SM.num_new() == 12);
+        CHECK(SM.num_duplicates() == 2);
+        CHECK(SM.num_discarded() == 2);
+        CHECK(SM.num_cheaper() == 0);
+        CHECK(SM.num_decrease_key() == 0);
+        CHECK(SM.num_pruned_by_cost() == 0);
+
+        CHECK(SM.num_states_seen() == 12);
+        CHECK(SM.num_states_in_regular_queue() == 6);
+        CHECK(SM.num_states_in_beam_queue() == 0);
+        CHECK(S.num_cached_heuristic_value() == 2);
+        CHECK(SM.num_regular_to_beam() == 0);
+        CHECK(SM.num_none_to_beam() == 0);
+    }
+
+    SECTION("BottomUp_zero_budget_1")
+    {
+        /* Run heuristic search. */
+        using H = heuristics::zero<PlanTable, State, expansions::BottomUpComplete>;
+
+        using SearchAlgorithm = ai::genericAStar<
+            State, expansions::BottomUpComplete, H, config::anytimeAStar,
+            /*----- context -----*/
+            PlanTable&,
+            const QueryGraph&,
+            const AdjacencyMatrix&,
+            const CostFunction&,
+            const CardinalityEstimator&
+        >;
+
+        SearchAlgorithm S(plan_table, G, M, C_out, db.cardinality_estimator());
+
+        uint64_t budget = std::numeric_limits<uint64_t>::max();
+
+        bool search_result = heuristic_search<PlanTable,
+                                              search_states::SubproblemsArray,
+                                              expansions::BottomUpComplete,
+                                              SearchAlgorithm,
+                                              heuristics::zero,
+                                              config::anytimeAStar
+                                              >(plan_table, G, M, C_out, db.cardinality_estimator(), S,
+                                              {
+                                                .expansion_budget = 1,
+                                                });
+
+        /* Fill `expected` with the anticipated plan. */
+        /* Check that the expected plan is achieved in the budgeted version of the search. */
+        expected.update(G, db.cardinality_estimator(), C_out, R0, R1, condition);
+        expected.update(G, db.cardinality_estimator(), C_out, R0|R1, R3, condition);
+        expected.update(G, db.cardinality_estimator(), C_out, R0|R1|R3, R2, condition);
+
+        /* Check for successful run of the search */
+        CHECK(search_result == true);
+
+        /* Check for the result of the search to match the expected plan */
+        CHECK(expected == plan_table);
+
+        /* Check for the correct costs of the path */
+        CHECK(expected[All].cost == plan_table[All].cost);
+        CHECK(plan_table[All].cost == 15640);
+        CHECK(plan_table[plan_table[All].left].cost + plan_table[plan_table[All].right].cost== 640);
+
+        /* Dependencies between the search state counters. */
+        const auto &SM = S.state_manager();
+        check_state_counter_dependencies<State, SearchAlgorithm, decltype(SM)>(S, SM, budget);
+
+        /* Configuration-specific assertions. */
+        CHECK(State::NUM_STATES_GENERATED() == 4);
+        CHECK(State::NUM_STATES_EXPANDED() == 1);
+        CHECK(State::NUM_STATES_CONSTRUCTED() == 5);
+        CHECK(State::NUM_STATES_DISPOSED() == 0);
+
+        CHECK(SM.num_new() == 5);
+        CHECK(SM.num_duplicates() == 0);
+        CHECK(SM.num_discarded() == 0);
+        CHECK(SM.num_cheaper() == 0);
+        CHECK(SM.num_decrease_key() == 0);
+        CHECK(SM.num_pruned_by_cost() == 0);
+
+        CHECK(SM.num_states_seen() == 5);
+        CHECK(SM.num_states_in_regular_queue() == 4);
+        CHECK(SM.num_states_in_beam_queue() == 0);
+        CHECK(S.num_cached_heuristic_value() == 0);
+        CHECK(SM.num_regular_to_beam() == 0);
+        CHECK(SM.num_none_to_beam() == 0);
+    }
+
+    SECTION("AStar_BottomUp_zero_no_usage_of_budget")
+    {
+        /* Run heuristic search. */
+        using H = heuristics::zero<PlanTable, State, expansions::BottomUpComplete>;
+
+        using SearchAlgorithm = ai::genericAStar<
+            State, expansions::BottomUpComplete, H, config::AStar,
+            /*----- context -----*/
+            PlanTable&,
+            const QueryGraph&,
+            const AdjacencyMatrix&,
+            const CostFunction&,
+            const CardinalityEstimator&
+        >;
+
+        SearchAlgorithm S(plan_table, G, M, C_out, db.cardinality_estimator());
+
+        uint64_t budget = std::numeric_limits<uint64_t>::max();
+
+        bool search_result = heuristic_search<PlanTable,
+                                              search_states::SubproblemsArray,
+                                              expansions::BottomUpComplete,
+                                              SearchAlgorithm,
+                                              heuristics::zero,
+                                              config::AStar
+                                              >(plan_table, G, M, C_out, db.cardinality_estimator(), S,
+                                              {
+                                                .expansion_budget = 1,
+                                                });
+
+        /* Fill `expected` with the anticipated plan. */
+        /* Check that the provided expansion budget is not used. Without the usage of the expansion budget the
+         * following plan is supposed to be found. If the expansion budget would have been considered the plan from the
+         * previous test case is found. */
+        expected.update(G, db.cardinality_estimator(), C_out, R1, R2, condition);
+        expected.update(G, db.cardinality_estimator(), C_out, R0, R3, condition);
+        expected.update(G, db.cardinality_estimator(), C_out, R1|R2, R0|R3 , condition);
+
+        /* Check for successful run of the search */
+        CHECK(search_result == true);
+
+        /* Check for the result of the search to match the expected plan */
+        CHECK(expected == plan_table);
+
+        /* Check for the correct costs of the path */
+        CHECK(expected[All].cost == plan_table[All].cost);
+        CHECK(plan_table[All].cost == 15540);
+        CHECK(plan_table[plan_table[All].left].cost + plan_table[plan_table[All].right].cost== 540);
+
+        /* Dependencies between the search state counters. */
+        const auto &SM = S.state_manager();
+        check_state_counter_dependencies<State, SearchAlgorithm, decltype(SM)>(S, SM, budget);
+
+        /* Configuration-specific assertions. */
+        CHECK(State::NUM_STATES_GENERATED() == 13);
+        CHECK(State::NUM_STATES_EXPANDED() == 5);
+        CHECK(State::NUM_STATES_CONSTRUCTED() == 14);
+        CHECK(State::NUM_STATES_DISPOSED() == 2);
+
+        CHECK(SM.num_new() == 12);
+        CHECK(SM.num_duplicates() == 2);
+        CHECK(SM.num_discarded() == 2);
+        CHECK(SM.num_cheaper() == 0);
+        CHECK(SM.num_decrease_key() == 0);
+        CHECK(SM.num_pruned_by_cost() == 0);
+
+        CHECK(SM.num_states_seen() == 12);
+        CHECK(SM.num_states_in_regular_queue() == 6);
+        CHECK(SM.num_states_in_beam_queue() == 0);
+        CHECK(S.num_cached_heuristic_value() == 2);
+        CHECK(SM.num_regular_to_beam() == 0);
+        CHECK(SM.num_none_to_beam() == 0);
+    }
+
+
+    SECTION("BottomUp_zero_upper_bound_2000")
+    {
+        /* Run heuristic search. */
+        using H = heuristics::zero<PlanTable, State, expansions::BottomUpComplete>;
+
+        using SearchAlgorithm = ai::genericAStar<
+            State, expansions::BottomUpComplete, H, config::anytimeAStar_with_cbp,
+            /*----- context -----*/
+            PlanTable&,
+            const QueryGraph&,
+            const AdjacencyMatrix&,
+            const CostFunction&,
+            const CardinalityEstimator&
+        >;
+
+        SearchAlgorithm S(plan_table, G, M, C_out, db.cardinality_estimator());
+
+        bool search_result = heuristic_search<PlanTable,
+                                              search_states::SubproblemsArray,
+                                              expansions::BottomUpComplete,
+                                              SearchAlgorithm,
+                                              heuristics::zero,
+                                              config::anytimeAStar_with_cbp
+                                              >(plan_table, G, M, C_out, db.cardinality_estimator(), S,
+                                              {
+                                                .upper_bound = 2000.f,
+                                                });
+
+        /* Fill `expected` with the anticipated plan. */
+        /* Check that the expected plan is achieved in the version with cost-based pruning of the search. */
+        expected.update(G, db.cardinality_estimator(), C_out, R1, R2, condition);
+        expected.update(G, db.cardinality_estimator(), C_out, R0, R3, condition);
+        expected.update(G, db.cardinality_estimator(), C_out, R1|R2, R0|R3 , condition);
+
+        /* Check for successful run of the search */
+        CHECK(search_result == true);
+
+        /* Check for the result of the search to match the expected plan */
+        CHECK(expected == plan_table);
+
+        /* Check for the correct costs of the path */
+        CHECK(expected[All].cost == plan_table[All].cost);
+        CHECK(plan_table[All].cost == 15540);
+        CHECK(plan_table[plan_table[All].left].cost + plan_table[plan_table[All].right].cost== 540);
+
+        /* Dependencies between the search state counters do not hold for cost-based pruning. */
+        const auto &SM = S.state_manager();
+
+        /* Configuration-specific assertions. */
+        CHECK(State::NUM_STATES_GENERATED() == 13);
+        CHECK(State::NUM_STATES_EXPANDED() == 5);
+        CHECK(State::NUM_STATES_CONSTRUCTED() == 14);
+        CHECK(State::NUM_STATES_DISPOSED() == 5);
+
+        CHECK(SM.num_new() == 9);
+        /* Less duplicates occur since cost-based pruning is applied prior to duplicate checking */
+        CHECK(SM.num_duplicates() == 1);
+        CHECK(SM.num_discarded() == 1);
+        CHECK(SM.num_cheaper() == 0);
+        CHECK(SM.num_decrease_key() == 0);
+        /* Check that the expected number of states are pruned. */
+        CHECK(SM.num_pruned_by_cost() == 4);
+
+        CHECK(SM.num_states_seen() == 9);
+        CHECK(SM.num_states_in_regular_queue() == 3);
+        CHECK(SM.num_states_in_beam_queue() == 0);
+        CHECK(S.num_cached_heuristic_value() == 1);
+        CHECK(SM.num_regular_to_beam() == 0);
+        CHECK(SM.num_none_to_beam() == 0);
+    }
+
+    SECTION("BottomUp_zero_no_usage_of_upper_bound")
+    {
+        /* Run heuristic search. */
+        using H = heuristics::zero<PlanTable, State, expansions::BottomUpComplete>;
+
+        using SearchAlgorithm = ai::genericAStar<
+            State, expansions::BottomUpComplete, H, config::anytimeAStar,
+            /*----- context -----*/
+            PlanTable&,
+            const QueryGraph&,
+            const AdjacencyMatrix&,
+            const CostFunction&,
+            const CardinalityEstimator&
+        >;
+
+        SearchAlgorithm S(plan_table, G, M, C_out, db.cardinality_estimator());
+
+        uint64_t budget = std::numeric_limits<uint64_t>::max();
+
+        bool search_result = heuristic_search<PlanTable,
+                                              search_states::SubproblemsArray,
+                                              expansions::BottomUpComplete,
+                                              SearchAlgorithm,
+                                              heuristics::zero,
+                                              config::anytimeAStar
+                                              >(plan_table, G, M, C_out, db.cardinality_estimator(), S,
+                                              {
+                                                .upper_bound = 2000.f,
+                                                });
+
+        /* Fill `expected` with the anticipated plan. */
+        /* Leads to the same plan as the version with cost-based pruning.  The search differs in the number of states
+         * pruned. */
+        expected.update(G, db.cardinality_estimator(), C_out, R1, R2, condition);
+        expected.update(G, db.cardinality_estimator(), C_out, R0, R3, condition);
+        expected.update(G, db.cardinality_estimator(), C_out, R1|R2, R0|R3 , condition);
+
+        /* Check for successful run of the search */
+        CHECK(search_result == true);
+
+        /* Check for the result of the search to match the expected plan */
+        CHECK(expected == plan_table);
+
+        /* Check for the correct costs of the path */
+        CHECK(expected[All].cost == plan_table[All].cost);
+        CHECK(plan_table[All].cost == 15540);
+        CHECK(plan_table[plan_table[All].left].cost + plan_table[plan_table[All].right].cost== 540);
+
+        /* Dependencies between the search state counters. */
+        const auto &SM = S.state_manager();
+        check_state_counter_dependencies<State, SearchAlgorithm, decltype(SM)>(S, SM, budget);
+
+        /* Configuration-specific assertions. */
+        CHECK(State::NUM_STATES_GENERATED() == 13);
+        CHECK(State::NUM_STATES_EXPANDED() == 5);
+        CHECK(State::NUM_STATES_CONSTRUCTED() == 14);
+        CHECK(State::NUM_STATES_DISPOSED() == 2);
+
+        CHECK(SM.num_new() == 12);
+        CHECK(SM.num_duplicates() == 2);
+        CHECK(SM.num_discarded() == 2);
+        CHECK(SM.num_cheaper() == 0);
+        CHECK(SM.num_decrease_key() == 0);
+        CHECK(SM.num_pruned_by_cost() == 0);
+
+        CHECK(SM.num_states_seen() == 12);
+        CHECK(SM.num_states_in_regular_queue() == 6);
+        CHECK(SM.num_states_in_beam_queue() == 0);
+        CHECK(S.num_cached_heuristic_value() == 2);
+        CHECK(SM.num_regular_to_beam() == 0);
+        CHECK(SM.num_none_to_beam() == 0);
+    }
 }

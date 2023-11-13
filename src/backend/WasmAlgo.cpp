@@ -514,7 +514,7 @@ ChainedHashTable<IsGlobal>::~ChainedHashTable()
             Var<Ptr<void>> bucket_it(Ptr<void>(*it.to<uint32_t*>()));
             WHILE (not bucket_it.is_nullptr()) { // another entry in collision list
                 const Var<Ptr<void>> tmp(bucket_it);
-                bucket_it = Ptr<void>(*(bucket_it + ptr_offset_in_bytes_).to<uint32_t*>());
+                bucket_it = Ptr<void>(*(bucket_it + ptr_offset_in_bytes_).template to<uint32_t*>());
                 Module::Allocator().deallocate(tmp, entry_size_in_bytes_);
             }
             it += int32_t(sizeof(uint32_t));
@@ -605,7 +605,7 @@ void ChainedHashTable<IsGlobal>::teardown()
             Var<Ptr<void>> bucket_it(Ptr<void>(*it.to<uint32_t*>()));
             WHILE (not bucket_it.is_nullptr()) { // another entry in collision list
                 const Var<Ptr<void>> tmp(bucket_it);
-                bucket_it = Ptr<void>(*(bucket_it + ptr_offset_in_bytes_).to<uint32_t*>());
+                bucket_it = Ptr<void>(*(bucket_it + ptr_offset_in_bytes_).template to<uint32_t*>());
                 Module::Allocator().deallocate(tmp, entry_size_in_bytes_);
             }
             it += int32_t(sizeof(uint32_t));
@@ -662,7 +662,7 @@ void ChainedHashTable<IsGlobal>::clear()
             Module::Allocator().deallocate(tmp, entry_size_in_bytes_); // free collision list entry
         }
 #endif
-        *(it + ptr_offset_in_bytes_).to<uint32_t*>() = 0U; // set to nullptr
+        *(it + ptr_offset_in_bytes_).template to<uint32_t*>() = 0U; // set to nullptr
         it += int32_t(sizeof(uint32_t));
     }
 }
@@ -732,7 +732,7 @@ HashTable::entry_t ChainedHashTable<IsGlobal>::emplace_without_rehashing(std::ve
     Var<Ptr<void>> entry = Module::Allocator().allocate(entry_size_in_bytes_, entry_max_alignment_in_bytes_);
 
     /*----- Iff no predication is used or predicate is fulfilled, insert entry at collision list's front. -----*/
-    *(entry + ptr_offset_in_bytes_).to<uint32_t*>() = *bucket.to<uint32_t*>();
+    *(entry + ptr_offset_in_bytes_).template to<uint32_t*>() = *bucket.to<uint32_t*>();
     *bucket.to<uint32_t*>() = pred ? Select(*pred, entry.to<uint32_t>(), *bucket.to<uint32_t*>())
                                    : entry.to<uint32_t>(); // FIXME: entry memory never freed iff predicate is not fulfilled
 
@@ -784,13 +784,15 @@ std::pair<HashTable::entry_t, Boolx1> ChainedHashTable<IsGlobal>::try_emplace(st
         } ELSE {
             LOOP () {
                 GOTO(equal_key(bucket_it, clone(key)), insert_entry); // clone key (see above)
-                const Var<Ptr<void>> next_bucket_it(Ptr<void>(*(bucket_it + ptr_offset_in_bytes_).to<uint32_t*>()));
+                const Var<Ptr<void>> next_bucket_it(
+                    Ptr<void>(*(bucket_it + ptr_offset_in_bytes_).template to<uint32_t*>())
+                );
                 BREAK(next_bucket_it.is_nullptr());
                 bucket_it = next_bucket_it;
                 CONTINUE();
             }
         };
-        Wasm_insist(Ptr<void>(*(bucket_it + ptr_offset_in_bytes_).to<uint32_t*>()).is_nullptr());
+        Wasm_insist(Ptr<void>(*(bucket_it + ptr_offset_in_bytes_).template to<uint32_t*>()).is_nullptr());
         if (pred)
             Wasm_insist(*pred or bucket_it == bucket - ptr_offset_in_bytes_,
                         "predication dummy must always contain an empty collision list");
@@ -802,8 +804,8 @@ std::pair<HashTable::entry_t, Boolx1> ChainedHashTable<IsGlobal>::try_emplace(st
         Var<Ptr<void>> entry = Module::Allocator().allocate(entry_size_in_bytes_, entry_max_alignment_in_bytes_);
 
         /*----- Iff no predication is used or predicate is fulfilled, insert entry at the collision list's end. -----*/
-        *(bucket_it + ptr_offset_in_bytes_).to<uint32_t*>() = pred ? Select(*pred, entry.to<uint32_t>(), 0U)
-                                                                   : entry.to<uint32_t>(); // FIXME: entry memory never freed iff predicate is not fulfilled
+        *(bucket_it + ptr_offset_in_bytes_).template to<uint32_t*>() = pred ? Select(*pred, entry.to<uint32_t>(), 0U)
+                                                                            : entry.to<uint32_t>(); // FIXME: entry memory never freed iff predicate is not fulfilled
 
         /*----- Set bucket iterator to inserted entry. -----*/
         bucket_it = entry;
@@ -843,7 +845,7 @@ std::pair<HashTable::entry_t, Boolx1> ChainedHashTable<IsGlobal>::find(std::vect
     Var<Ptr<void>> bucket_it(Ptr<void>(*bucket.to<uint32_t*>()));
     WHILE (not bucket_it.is_nullptr()) { // another entry in collision list
         BREAK(equal_key(bucket_it, std::move(key))); // move key at last use
-        bucket_it = Ptr<void>(*(bucket_it + ptr_offset_in_bytes_).to<uint32_t*>());
+        bucket_it = Ptr<void>(*(bucket_it + ptr_offset_in_bytes_).template to<uint32_t*>());
     }
 
     /*----- Key is found iff end of collision list is not yet reached. -----*/
@@ -863,7 +865,7 @@ void ChainedHashTable<IsGlobal>::for_each(callback_t Pipeline) const
         Var<Ptr<void>> bucket_it(Ptr<void>(*it.to<uint32_t*>()));
         WHILE (not bucket_it.is_nullptr()) { // another entry in collision list
             Pipeline(entry(bucket_it));
-            bucket_it = Ptr<void>(*(bucket_it + ptr_offset_in_bytes_).to<uint32_t*>());
+            bucket_it = Ptr<void>(*(bucket_it + ptr_offset_in_bytes_).template to<uint32_t*>());
         }
         it += int32_t(sizeof(uint32_t));
     }
@@ -899,7 +901,7 @@ void ChainedHashTable<IsGlobal>::for_each_in_equal_range(std::vector<SQL_t> key,
                 Pipeline(entry(bucket_it));
             };
         }
-        bucket_it = Ptr<void>(*(bucket_it + ptr_offset_in_bytes_).to<uint32_t*>());
+        bucket_it = Ptr<void>(*(bucket_it + ptr_offset_in_bytes_).template to<uint32_t*>());
     }
 }
 
@@ -1207,10 +1209,10 @@ void ChainedHashTable<IsGlobal>::rehash()
                 const Var<Ptr<void>> bucket(hash_to_bucket(std::move(key)));
 
                 /*----- Store next entry's address in old collision list (since it will be overwritten). -----*/
-                const Var<Ptr<void>> tmp(Ptr<void>(*(bucket_it + ptr_offset_in_bytes_).to<uint32_t*>()));
+                const Var<Ptr<void>> tmp(Ptr<void>(*(bucket_it + ptr_offset_in_bytes_).template to<uint32_t*>()));
 
                 /*----- Insert old entry at new collision list's front. No reallocation of the entry is needed. -----*/
-                *(bucket_it + ptr_offset_in_bytes_).to<uint32_t*>() = *bucket.to<uint32_t*>();
+                *(bucket_it + ptr_offset_in_bytes_).template to<uint32_t*>() = *bucket.to<uint32_t*>();
                 *bucket.to<uint32_t*>() = bucket_it.to<uint32_t>();
 
                 /*----- Advance to next entry in old collision list. -----*/

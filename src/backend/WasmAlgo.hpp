@@ -162,7 +162,7 @@ struct HashTable
         Boolx1 operator==(T _value) {
             auto [value, is_null] = _value.split();
             if (is_null_byte_) {
-                auto is_null_ = (**is_null_byte_ bitand *is_null_mask_).to<bool>();
+                auto is_null_ = (**is_null_byte_ bitand *is_null_mask_).template to<bool>();
                 auto equal_nulls = is_null_.clone() == is_null;
                 return equal_nulls and (is_null_ or *value_ == value);
             } else {
@@ -173,7 +173,7 @@ struct HashTable
         ///> Loads the value of `this`.
         operator T() {
             if (is_null_byte_)
-                return T(*value_, (**is_null_byte_ bitand *is_null_mask_).to<bool>());
+                return T(*value_, (**is_null_byte_ bitand *is_null_mask_).template to<bool>());
             else
                 return T(*value_);
         }
@@ -314,7 +314,7 @@ struct HashTable
             auto [equal_addrs_val, equal_addrs_is_null] = _equal_addrs.split();
             equal_addrs_is_null.discard(); // use potentially-null value but it is overruled if it is invalid, i.e. NULL
             if (addr_.can_be_null()) {
-                auto is_nullptr_ = (**is_null_byte_ bitand *is_null_mask_).to<bool>();
+                auto is_nullptr_ = (**is_null_byte_ bitand *is_null_mask_).template to<bool>();
                 auto equal_nulls = is_nullptr_.clone() == is_nullptr;
                 return equal_nulls and (is_nullptr_ or equal_addrs_val);
             } else {
@@ -325,7 +325,7 @@ struct HashTable
         ///> Loads the value of `this`.
         operator NChar() {
             if (addr_.can_be_null()) {
-                Boolx1 is_null = (**is_null_byte_ bitand *is_null_mask_).to<bool>();
+                Boolx1 is_null = (**is_null_byte_ bitand *is_null_mask_).template to<bool>();
                 return NChar(Select(is_null, Ptr<Charx1>::Nullptr(), addr_.val()), /* can_be_null= */ true,
                              addr_.length(), addr_.guarantees_terminating_nul());
             } else {

@@ -34,7 +34,9 @@ LCOV_FLAGS="\
     --rc lcov_branch_coverage=1"
 
 # cleanup old files
-find build/coverage \( -iname '*.gcno' -or -iname '*.gcda' \) -exec rm {} +
+if [ -d build/coverage ]; then
+    find build/coverage \( -iname '*.gcno' -or -iname '*.gcda' \) -exec rm {} +
+fi
 
 env CFLAGS=--coverage CXXFLAGS=--coverage \
     cmake -S . -B build/coverage \

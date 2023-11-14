@@ -141,14 +141,6 @@ struct Timer
         M.stop();
     }
 
-    /** Erase a `Measurement` from this `Timer`. */
-    void erase(std::size_t id) {
-        if (id >= measurements_.size())
-            throw m::out_of_range("id out of bounds");
-        auto &M = measurements_[id];
-        M.clear(); // just clear it, don't remove it to avoid moving other measurements within the container
-    }
-
     public:
     /** Creates a new `TimingProcess` with the given `name`. */
     TimingProcess create_timing(std::string name) { return TimingProcess(*this, /* ID= */ start(name)); }

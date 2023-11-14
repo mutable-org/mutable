@@ -135,11 +135,9 @@ struct Timer
 
     /** Stops the `Measurement` with the given ID. */
     void stop(std::size_t id) {
-        if (id >= measurements_.size())
-            throw m::out_of_range("id out of bounds");
+        M_insist(id < measurements_.size(), "id out of bounds");
         auto &M = measurements_[id];
-        if (M.has_ended())
-            throw m::invalid_argument("cannot stop that measurement because it has already been stopped");
+        M_insist(not M.has_ended(), "cannot stop that measurement because it has already been stopped");
         M.stop();
     }
 

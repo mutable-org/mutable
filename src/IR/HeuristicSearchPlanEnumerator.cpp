@@ -163,10 +163,19 @@ bool heuristic_search(PlanTable &PT, const QueryGraph &G, const AdjacencyMatrix 
             reconstruct_plan_bottom_up(goal, PT, G, CE, CF);
         }
     } catch (std::logic_error) {
-        if constexpr (not SearchAlgorithm::use_beam_search) {
+        /*----- Handle incomplete search not finding a plan. -----*/
+        /* Any incplete search may *not* find a plan and hence throw a `std::logic_error`.  In this case, we can attempt
+         * to use a plan we found during initialization of the search.  If we do no have such a plan, we resort to a
+         * complete search, e.g. `DPccp`. */
+        if (PT.has_plan(Subproblem::All(G.num_sources()))) { // did we *not* already find a plan, e.g. during CBP
+                                                             // initialization?
             if (not Options::Get().quiet)
                 std::cout << "search did not reach a goal state, fall back to DPccp" << std::endl;
             DPccp{}(G, CF, PT);
+        } else {
+            if (not Options::Get().quiet)
+                std::cout << "search did not reach a goal state, fall back to plan found during initialization"
+                          << std::endl;
         }
     } catch (ai::budget_exhausted_exception) {
         /*--- No plan was found within the given budget for A* ⇒ use GOO to complete the *nearest* partial solution --*/
@@ -320,9 +329,6 @@ bool heuristic_search_helper(const char *vertex_str, const char *expand_str, con
             if (options::initialize_upper_bound) {
                 config.upper_bound = [&]() {
                     /*----- Run GOO to compute upper bound of plan cost. -----*/
-                    /* Beam search becomes incomplete if an upper bound derived from an actual plan is provided.  Beam
-                     * search may never find that plan or any better plan, and hence return without finding a path. In this
-                     * case, the initial plan found by GOO is used. */
                     GOO Goo;
                     Goo(G, CF, PT);
                     auto &plan = PT.get_final();

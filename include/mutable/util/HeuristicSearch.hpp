@@ -127,8 +127,10 @@ struct StateManager
     /*----- Counters -------------------------------------------------------------------------------------------------*/
 #ifndef NDEBUG
 #define DEF_COUNTER(NAME) \
+    private: \
     std::size_t num_##NAME##_ = 0; \
     void inc_##NAME() { ++num_##NAME##_; } \
+    public: \
     std::size_t num_##NAME() const { return num_##NAME##_; }
 #else
 #define DEF_COUNTER(NAME) \
@@ -290,6 +292,10 @@ struct StateManager
 
     range<partition_iterator> partitions() { return range(partitions_begin(), partitions_end()); }
     range<partition_const_iterator> partitions() const { return range(partitions_begin(), partitions_end()); }
+
+    std::size_t num_states_seen() const { return partitions_.size(); }
+    std::size_t num_states_in_regular_queue() const { return regular_queue_.size(); }
+    std::size_t num_states_in_beam_queue() const { return beam_queue_.size(); }
 
     /** Returns the weighting factor for the heuristic value. */
     float weighting_factor() const { return weighting_factor_; }
@@ -636,10 +642,12 @@ struct genericAStar
     ///> the weighting factor for the heuistic value of a state
     float weighting_factor_ = 1.;
 
-#if 1
+#ifndef NDEBUG
 #define DEF_COUNTER(NAME) \
+    private: \
     std::size_t num_##NAME##_ = 0; \
     void inc_##NAME() { ++num_##NAME##_; } \
+    public: \
     std::size_t num_##NAME() const { return num_##NAME##_; }
 #else
 #define DEF_COUNTER(NAME) \

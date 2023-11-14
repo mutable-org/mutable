@@ -5,6 +5,7 @@ import difflib
 import glob
 import itertools
 import math
+import multiprocessing
 import os
 import subprocess
 import yamale
@@ -12,6 +13,7 @@ import yaml
 
 from colorama import Fore, Back, Style
 from tqdm import tqdm
+from typing import Tuple
 
 
 # number of CLI args to discard from the front for reporting
@@ -21,6 +23,11 @@ NUM_CLI_ARGS_DISCARD = 5
 # HELPERS
 #-----------------------------------------------------------------------------------------------------------------------
 
+# Create dummy test case and test result class
+class TestCase: pass
+
+class TestResult: pass
+
 yml_schema = os.path.join(os.getcwd(), 'test', '_schema.yml')
 
 def schema_valid(test_case) -> bool:
@@ -29,7 +36,7 @@ def schema_valid(test_case) -> bool:
     try:
         yamale.validate(schema, data)
     except ValueError:
-        report_warning('YAML schema invalid', 'yaml_check', test_case)
+        tqdm.write('\n'.join(report_warning('YAML schema invalid', 'yaml_check', test_case)))
         return False
     return True
 
@@ -37,7 +44,7 @@ def schema_valid(test_case) -> bool:
 def location_valid(test_case) -> bool:
     subdir = os.path.basename(os.path.dirname(test_case.filename))
     if subdir != test_case.db:
-        report_warning('File is placed in incorrect directory', 'location_check', test_case)
+        tqdm.write('\n'.join(report_warning('File is placed in incorrect directory', 'location_check', test_case)))
         return False
     return True
 
@@ -105,7 +112,7 @@ def run_command(command, query):
             process.kill()
 
 
-def run_stage(args, test_case, stage_name, command):
+def run_stage(args, test_case, stage_name, command) -> Tuple[bool, list[str]]:
     stage = test_case.stages[stage_name]
     try:
         returncode, out, err = run_command(command, test_case.query)
@@ -124,12 +131,47 @@ def run_stage(args, test_case, stage_name, command):
         if 'out' in stage:
             check_stdout(stage['out'], out, args.verbose, is_sorted, consider_rounding_errors)
     except TestException as ex:
-        report_failure(str(ex), stage_name, test_case, args.debug, command)
-        return False
+        return False, report_failure(str(ex), stage_name, test_case, args.debug, command)
     cli_args = command[NUM_CLI_ARGS_DISCARD:]
     argsstr = f"[…, {', '.join(cli_args)}]" if cli_args else ''
-    report_success(argsstr, stage_name, test_case, args.verbose)
-    return True
+    return True, report_success(argsstr, stage_name, test_case, args.verbose)
+
+
+def run_test_case(test_case, args):
+    res = TestResult()
+    res.required_counter = 0
+    res.required_pass_counter = 0
+
+    stage_counter = dict()
+    stage_pass_counter = dict()
+    combined_reports = list()
+
+    success = True
+    for stage in test_case.stages:
+        # Set optionally provided additional CLI args
+        test_case.cli_args = test_case.stages[stage].get('cli_args', None)
+
+        # Execute test
+        if success:
+            cmds = COMMAND[stage](test_case)
+            for cmd in cmds:
+                stage_success, reports = run_stage(args, test_case, stage, cmd)
+                success = success and stage_success
+                combined_reports.extend(reports)
+        else:
+            combined_reports.extend(report_failure("earlier stage failed", stage, test_case, args.debug))
+
+        # Store results
+        stage_counter[stage] = stage_counter.get(stage, 0) + 1
+        stage_pass_counter[stage] = stage_pass_counter.get(stage, 0) + success
+        if test_case.required:
+            res.required_counter += 1
+            res.required_pass_counter += success
+
+    res.stage_counter = stage_counter
+    res.stage_pass_counter = stage_pass_counter
+    res.combined_reports = combined_reports
+    return res
 
 
 #-----------------------------------------------------------------------------------------------------------------------
@@ -193,34 +235,39 @@ def check_stdout(expected, actual, verbose, is_sorted, consider_rounding_errors)
 # REPORTING AND EXCEPTION HANDLING
 #-----------------------------------------------------------------------------------------------------------------------
 
-def report(message, stage_name, test_case, symbol):
+def report(message, stage_name, test_case, symbol) -> list[str]:
+    res = list()
     if not test_case.file_reported:
-        tqdm.write(f'{test_case.filename}')
+        res.append(f'{test_case.filename}')
         test_case.file_reported = True
-    tqdm.write(f'└─ {stage_name} {symbol} {message}')
+    res.append(f'└─ {stage_name} {symbol} {message}')
+    return res
 
 
-def print_debug_command(test_case, stage_name, command):
+def print_debug_command(test_case, stage_name, command) -> str:
     query = test_case.query.replace('\\', '\\\\').replace('"', '\\"').replace('\n', ' ').strip()
-    tqdm.write(f'     $ echo "{query}" > debug.sql; {" ".join(command)} debug.sql')
+    return f'     $ echo "{query}" > debug.sql; {" ".join(command)} debug.sql'
 
 
-def report_failure(message, stage_name, test_case, debug, command=None):
+def report_failure(message, stage_name, test_case, debug, command=None) -> list[str]:
     symbol = Fore.RED + '✘' + Style.RESET_ALL
-    report(message, stage_name, test_case, symbol)
+    res = report(message, stage_name, test_case, symbol)
     if debug and command:
-        print_debug_command(test_case, stage_name, command)
+        res.append(print_debug_command(test_case, stage_name, command))
+    return res
 
 
-def report_warning(message, stage_name, test_case):
+def report_warning(message, stage_name, test_case) -> list[str]:
     symbol = Fore.YELLOW + '!' + Style.RESET_ALL
-    report(message, stage_name, test_case, symbol)
+    return report(message, stage_name, test_case, symbol)
 
 
-def report_success(message, stage_name, test_case, verbose):
+def report_success(message, stage_name, test_case, verbose) -> list[str]:
     if verbose:
         symbol = Fore.GREEN + '✓' + Style.RESET_ALL
-        report(message, stage_name, test_case, symbol)
+        return report(message, stage_name, test_case, symbol)
+    else:
+        return list()
 
 
 def report_summary(stage_counter, stage_pass_counter, required_counter, required_pass_counter, bad_files_counter):
@@ -317,6 +364,7 @@ COMMAND = {
 
 BINARIES = dict()
 
+
 #-----------------------------------------------------------------------------------------------------------------------
 # MAIN ROUTINE
 #-----------------------------------------------------------------------------------------------------------------------
@@ -329,6 +377,8 @@ if __name__ == '__main__':
     parser.add_argument('-r', '--required-only', help='run only required tests', action='store_true')
     parser.add_argument('-v', '--verbose', help='increase output verbosity', action='store_true')
     parser.add_argument('-d', '--debug', help='print debug commands for failed test cases', action='store_true')
+    parser.add_argument('-j', '--jobs', help='Run N jobs in parallel. Defaults to number of CPU threads - 1.',
+                        default=(os.cpu_count() - 1), metavar='N', type=int)
     parser.add_argument('build_path', help='Path to the build directory.  Defaults to \'build/debug\'.',
                         default=os.path.join('build', 'debug'), type=str, metavar='PATH', nargs='?')
     args = parser.parse_args()
@@ -354,17 +404,12 @@ if __name__ == '__main__':
     TEST_GLOB = os.path.join('test', '**', '[!_]*.yml')
     test_files = sorted(glob.glob(TEST_GLOB, recursive=True))
 
-    # Create dummy test case class
-    class TestCase: pass
-    test_case = TestCase()
+    progress_bar = tqdm(total=len(test_files), position=0, ncols=80, leave=False, bar_format='|{bar}| {n}/{total}', disable=(not is_interactive))
 
-    # Set up event log
-    log = tqdm(total=0, position=1, ncols=80, leave=False, bar_format='{desc}', disable=(not is_interactive))
-
-    for test_file in tqdm(test_files, position=0, ncols=80, leave=False,
-            bar_format='|{bar}| {n}/{total}', disable=(not is_interactive)):
-        # Log current test file
-        log.set_description_str(f'Current file: {test_file}'.ljust(80))
+    # Read all test files and create test data
+    all_test_data = list()
+    for test_file in test_files:
+        test_case = TestCase()
 
         # Set up file report
         test_case.filename = test_file
@@ -373,6 +418,7 @@ if __name__ == '__main__':
         # Validate schema
         if not schema_valid(test_case):
             bad_files_counter += 1
+            progress_bar.update(1)
             continue
 
         # Open test file
@@ -387,36 +433,48 @@ if __name__ == '__main__':
         test_case.stages = yml_test_case['stages']
 
         if args.required_only and not test_case.required:
+            progress_bar.update(1)
             continue
 
         # Validate dataset location
         if not location_valid(test_case):
             bad_files_counter += 1
+            progress_bar.update(1)
             continue
 
-        # Execute test stages
-        success = True
-        for stage in test_case.stages:
-            # Set optionally provided additional CLI args
-            test_case.cli_args = test_case.stages[stage].get('cli_args', None)
+        all_test_data.append([test_case, args])
 
-            # Execute test
-            if success:
-                cmds = COMMAND[stage](test_case)
-                for cmd in cmds:
-                    success = run_stage(args, test_case, stage, cmd) and success
-            else:
-                report_failure("earlier stage failed", stage, test_case, args.debug)
-            # Store results
-            stage_counter[stage] = stage_counter.get(stage, 0) + 1
-            stage_pass_counter[stage] = stage_pass_counter.get(stage, 0) + success
-            if test_case.required:
-                required_counter += 1
-                required_pass_counter += success
+    # Start the process pool to run all test cases
+    n_tests_left = len(all_test_data)
+    process_pool = multiprocessing.Pool(args.jobs)
+    jobs = process_pool.starmap_async(run_test_case, all_test_data)
+    process_pool.close()
+
+    # Every 5 seconds, look at how many jobs are left. Update `progress_bar` aaccordingly
+    while True:
+        if not jobs.ready():
+            jobs_left = jobs._number_left
+            if jobs_left < n_tests_left:
+                progress_bar.update(n_tests_left - jobs_left)
+                n_tests_left = jobs_left
+            jobs.wait(5)
+        else:
+            break
+
+    # When all jobs are finished, process their results
+    for result in jobs.get():
+        for stage, count in result.stage_counter.items():
+            stage_counter[stage] = stage_counter.get(stage, 0) + count
+        for stage, count in result.stage_pass_counter.items():
+            stage_pass_counter[stage] = stage_pass_counter.get(stage, 0) + count
+        required_counter += result.required_counter
+        required_pass_counter += result.required_pass_counter
+        if result.combined_reports:
+            tqdm.write('\n'.join(result.combined_reports))
 
     # Close event log
-    log.clear()
-    log.close()
+    progress_bar.clear()
+    progress_bar.close()
 
     # Log test results
     report_summary(stage_counter, stage_pass_counter, required_counter, required_pass_counter, bad_files_counter)

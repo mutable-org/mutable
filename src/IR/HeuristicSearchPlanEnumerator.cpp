@@ -264,8 +264,8 @@ bool heuristic_search(PlanTable &PT, const QueryGraph &G, const AdjacencyMatrix 
             /* Run GOO from the starting state and update the PlanTable accordingly */
             pe::GOO{}.compute_plan(PT, G, M, CF, CE, nodes, nodes + num_nodes);
 
-            const Subproblem All = Subproblem::All(G.num_sources());
-            M_insist((PT[All].model != NULL), "No full plan found");
+            M_insist(PT.has_plan(Subproblem::All(G.num_sources())), "No full plan found");
+
 
         } else {
             /*----- TopDown -----*/
@@ -286,8 +286,7 @@ bool heuristic_search(PlanTable &PT, const QueryGraph &G, const AdjacencyMatrix 
             /* To complete the plan found by TDGOO, fill the PlanTable with the joins initially found by the search */
             reconstruct_plan_top_down(last_state_found, PT, G, CE, CF);
 
-            const Subproblem All = Subproblem::All(G.num_sources());
-            M_insist(PT.has_plan(All), "No full plan found");
+            M_insist(PT.has_plan(Subproblem::All(G.num_sources())), "No full plan found");
         }
     }
 #ifdef COUNTERS

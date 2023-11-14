@@ -2156,17 +2156,18 @@ struct combine<T> : T { };
 #define DEFINE_SEARCH(NAME, ...) \
     using NAME = combine<monotone<true>, Fibonacci_heap, __VA_ARGS__>
 
-DEFINE_SEARCH(AStar,                    weighted_search<false>, lazy<false>, cost_based_pruning<false>, beam<0>,    anytime_search<false>);
-DEFINE_SEARCH(lazyAStar,                weighted_search<false>, lazy<true>,  cost_based_pruning<false>, beam<0>,    anytime_search<false>);
-DEFINE_SEARCH(beam_search,              weighted_search<false>, lazy<false>, cost_based_pruning<false>, beam<2>,    anytime_search<false>);
-DEFINE_SEARCH(dynamic_beam_search,      weighted_search<false>, lazy<false>, cost_based_pruning<false>, beam<1, 5>, anytime_search<false>);
-DEFINE_SEARCH(AStar_with_cbp,           weighted_search<false>, lazy<false>, cost_based_pruning<true>,  beam<0>,    anytime_search<false>);
-DEFINE_SEARCH(beam_search_with_cbp,     weighted_search<false>, lazy<false>, cost_based_pruning<true>,  beam<2>,    anytime_search<false>);
-DEFINE_SEARCH(anytimeAStar,             weighted_search<false>, lazy<false>, cost_based_pruning<false>, beam<0>,    anytime_search<true>);
-DEFINE_SEARCH(anytimeAStar_with_cbp,    weighted_search<false>, lazy<false>, cost_based_pruning<true>,  beam<0>,    anytime_search<true>);
-DEFINE_SEARCH(weighted_AStar,           weighted_search<true>,  lazy<false>, cost_based_pruning<false>, beam<0>,    anytime_search<false>);
-DEFINE_SEARCH(weighted_AStar_with_cbp,  weighted_search<true>,  lazy<false>, cost_based_pruning<true>,  beam<0>,    anytime_search<false>);
-DEFINE_SEARCH(weighted_anytimeAStar,    weighted_search<true>,  lazy<false>, cost_based_pruning<false>, beam<0>,    anytime_search<true>);
+DEFINE_SEARCH(AStar,                            weighted_search<false>, lazy<false>, cost_based_pruning<false>, beam<0>,    anytime_search<false>);
+DEFINE_SEARCH(lazyAStar,                        weighted_search<false>, lazy<true>,  cost_based_pruning<false>, beam<0>,    anytime_search<false>);
+DEFINE_SEARCH(beam_search,                      weighted_search<false>, lazy<false>, cost_based_pruning<false>, beam<2>,    anytime_search<false>);
+DEFINE_SEARCH(dynamic_beam_search,              weighted_search<false>, lazy<false>, cost_based_pruning<false>, beam<1, 5>, anytime_search<false>);
+DEFINE_SEARCH(AStar_with_cbp,                   weighted_search<false>, lazy<false>, cost_based_pruning<true>,  beam<0>,    anytime_search<false>);
+DEFINE_SEARCH(beam_search_with_cbp,             weighted_search<false>, lazy<false>, cost_based_pruning<true>,  beam<2>,    anytime_search<false>);
+DEFINE_SEARCH(anytimeAStar,                     weighted_search<false>, lazy<false>, cost_based_pruning<false>, beam<0>,    anytime_search<true>);
+DEFINE_SEARCH(anytimeAStar_with_cbp,            weighted_search<false>, lazy<false>, cost_based_pruning<true>,  beam<0>,    anytime_search<true>);
+DEFINE_SEARCH(weighted_AStar,                   weighted_search<true>,  lazy<false>, cost_based_pruning<false>, beam<0>,    anytime_search<false>);
+DEFINE_SEARCH(weighted_AStar_with_cbp,          weighted_search<true>,  lazy<false>, cost_based_pruning<true>,  beam<0>,    anytime_search<false>);
+DEFINE_SEARCH(weighted_anytimeAStar,            weighted_search<true>,  lazy<false>, cost_based_pruning<false>, beam<0>,    anytime_search<true>);
+DEFINE_SEARCH(weighted_anytimeAStar_with_cbp,   weighted_search<true>,  lazy<false>, cost_based_pruning<true>,  beam<0>,    anytime_search<true>);
 
 #undef DEFINE_SEARCH
 

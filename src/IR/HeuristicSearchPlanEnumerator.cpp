@@ -401,65 +401,93 @@ void HeuristicSearch::operator()(enumerate_tag, PlanTable &PT, const QueryGraph 
 
     // bottom-up
     //   zero
-    HEURISTIC_SEARCH(   SubproblemsArray,   BottomUpComplete,   zero,         AStar                 )
-    HEURISTIC_SEARCH(   SubproblemsArray,   BottomUpComplete,   zero,         AStar_with_cbp        )
-    HEURISTIC_SEARCH(   SubproblemsArray,   BottomUpComplete,   zero,         beam_search           )
-    HEURISTIC_SEARCH(   SubproblemsArray,   BottomUpComplete,   zero,         beam_search_with_cbp  )
-    HEURISTIC_SEARCH(   SubproblemsArray,   BottomUpComplete,   zero,         dynamic_beam_search   )
+    HEURISTIC_SEARCH(   SubproblemsArray,   BottomUpComplete,   zero,         AStar                          )
+    HEURISTIC_SEARCH(   SubproblemsArray,   BottomUpComplete,   zero,         AStar_with_cbp                 )
+    HEURISTIC_SEARCH(   SubproblemsArray,   BottomUpComplete,   zero,         beam_search                    )
+    HEURISTIC_SEARCH(   SubproblemsArray,   BottomUpComplete,   zero,         beam_search_with_cbp           )
+    HEURISTIC_SEARCH(   SubproblemsArray,   BottomUpComplete,   zero,         dynamic_beam_search            )
+    HEURISTIC_SEARCH(   SubproblemsArray,   BottomUpComplete,   zero,         anytimeAStar                   )
+    HEURISTIC_SEARCH(   SubproblemsArray,   BottomUpComplete,   zero,         weighted_anytimeAStar          )
+    HEURISTIC_SEARCH(   SubproblemsArray,   BottomUpComplete,   zero,         anytimeAStar_with_cbp          )
+    HEURISTIC_SEARCH(   SubproblemsArray,   BottomUpComplete,   zero,         weighted_anytimeAStar_with_cbp )
+
 
     //   sum
-    HEURISTIC_SEARCH(   SubproblemsArray,   BottomUpComplete,   sum,          AStar                 )
-    HEURISTIC_SEARCH(   SubproblemsArray,   BottomUpComplete,   sum,          AStar_with_cbp        )
-    HEURISTIC_SEARCH(   SubproblemsArray,   BottomUpComplete,   sum,          weighted_AStar        )
-    HEURISTIC_SEARCH(   SubproblemsArray,   BottomUpComplete,   sum,          lazyAStar             )
-    HEURISTIC_SEARCH(   SubproblemsArray,   BottomUpComplete,   sum,          beam_search           )
-    HEURISTIC_SEARCH(   SubproblemsArray,   BottomUpComplete,   sum,          dynamic_beam_search   )
+    HEURISTIC_SEARCH(   SubproblemsArray,   BottomUpComplete,   sum,          AStar                          )
+    HEURISTIC_SEARCH(   SubproblemsArray,   BottomUpComplete,   sum,          AStar_with_cbp                 )
+    HEURISTIC_SEARCH(   SubproblemsArray,   BottomUpComplete,   sum,          weighted_AStar                 )
+    HEURISTIC_SEARCH(   SubproblemsArray,   BottomUpComplete,   sum,          lazyAStar                      )
+    HEURISTIC_SEARCH(   SubproblemsArray,   BottomUpComplete,   sum,          beam_search                    )
+    HEURISTIC_SEARCH(   SubproblemsArray,   BottomUpComplete,   sum,          dynamic_beam_search            )
+    HEURISTIC_SEARCH(   SubproblemsArray,   BottomUpComplete,   sum,          anytimeAStar                   )
+    HEURISTIC_SEARCH(   SubproblemsArray,   BottomUpComplete,   sum,          weighted_anytimeAStar          )
+    HEURISTIC_SEARCH(   SubproblemsArray,   BottomUpComplete,   sum,          anytimeAStar_with_cbp          )
+    HEURISTIC_SEARCH(   SubproblemsArray,   BottomUpComplete,   sum,          weighted_anytimeAStar_with_cbp )
+
 
     //   scaled_sum
-    HEURISTIC_SEARCH(   SubproblemsArray,   BottomUpComplete,   scaled_sum,   AStar                 )
-    HEURISTIC_SEARCH(   SubproblemsArray,   BottomUpComplete,   scaled_sum,   beam_search           )
-    HEURISTIC_SEARCH(   SubproblemsArray,   BottomUpComplete,   scaled_sum,   dynamic_beam_search   )
+    HEURISTIC_SEARCH(   SubproblemsArray,   BottomUpComplete,   scaled_sum,   AStar                          )
+    HEURISTIC_SEARCH(   SubproblemsArray,   BottomUpComplete,   scaled_sum,   beam_search                    )
+    HEURISTIC_SEARCH(   SubproblemsArray,   BottomUpComplete,   scaled_sum,   dynamic_beam_search            )
 
     //   avg_sel
-    HEURISTIC_SEARCH(   SubproblemsArray,   BottomUpComplete,   avg_sel,      AStar                 )
-    HEURISTIC_SEARCH(   SubproblemsArray,   BottomUpComplete,   avg_sel,      beam_search           )
+    HEURISTIC_SEARCH(   SubproblemsArray,   BottomUpComplete,   avg_sel,      AStar                          )
+    HEURISTIC_SEARCH(   SubproblemsArray,   BottomUpComplete,   avg_sel,      beam_search                    )
 
     //   product
-    HEURISTIC_SEARCH(   SubproblemsArray,   BottomUpComplete,   product,      AStar                 )
+    HEURISTIC_SEARCH(   SubproblemsArray,   BottomUpComplete,   product,      AStar                          )
 
     //   GOO
-    HEURISTIC_SEARCH(   SubproblemsArray,   BottomUpComplete,   GOO,          AStar                 )
-    HEURISTIC_SEARCH(   SubproblemsArray,   BottomUpComplete,   GOO,          AStar_with_cbp        )
-    HEURISTIC_SEARCH(   SubproblemsArray,   BottomUpComplete,   GOO,          weighted_AStar        )
-    HEURISTIC_SEARCH(   SubproblemsArray,   BottomUpComplete,   GOO,          beam_search           )
-    HEURISTIC_SEARCH(   SubproblemsArray,   BottomUpComplete,   GOO,          dynamic_beam_search   )
+    HEURISTIC_SEARCH(   SubproblemsArray,   BottomUpComplete,   GOO,          AStar                          )
+    HEURISTIC_SEARCH(   SubproblemsArray,   BottomUpComplete,   GOO,          AStar_with_cbp                 )
+    HEURISTIC_SEARCH(   SubproblemsArray,   BottomUpComplete,   GOO,          weighted_AStar                 )
+    HEURISTIC_SEARCH(   SubproblemsArray,   BottomUpComplete,   GOO,          beam_search                    )
+    HEURISTIC_SEARCH(   SubproblemsArray,   BottomUpComplete,   GOO,          dynamic_beam_search            )
+    HEURISTIC_SEARCH(   SubproblemsArray,   BottomUpComplete,   GOO,          anytimeAStar                   )
+    HEURISTIC_SEARCH(   SubproblemsArray,   BottomUpComplete,   GOO,          weighted_anytimeAStar          )
+    HEURISTIC_SEARCH(   SubproblemsArray,   BottomUpComplete,   GOO,          anytimeAStar_with_cbp          )
+    HEURISTIC_SEARCH(   SubproblemsArray,   BottomUpComplete,   GOO,          weighted_anytimeAStar_with_cbp )
+
 
     // HEURISTIC_SEARCH(   SubproblemsArray,   BottomUpComplete,   bottomup_lookahead_cheapest, AStar  )
     // HEURISTIC_SEARCH(   SubproblemsArray,   BottomUpComplete,   perfect_oracle,              AStar  )
 
     // top-down
     //   zero
-    HEURISTIC_SEARCH(   SubproblemsArray,   TopDownComplete,    zero,          AStar                )
-    HEURISTIC_SEARCH(   SubproblemsArray,   TopDownComplete,    zero,          AStar_with_cbp       )
-    HEURISTIC_SEARCH(   SubproblemsArray,   TopDownComplete,    zero,          beam_search          )
-    HEURISTIC_SEARCH(   SubproblemsArray,   TopDownComplete,    zero,          dynamic_beam_search  )
+    HEURISTIC_SEARCH(   SubproblemsArray,   TopDownComplete,    zero,          AStar                         )
+    HEURISTIC_SEARCH(   SubproblemsArray,   TopDownComplete,    zero,          AStar_with_cbp                )
+    HEURISTIC_SEARCH(   SubproblemsArray,   TopDownComplete,    zero,          beam_search                   )
+    HEURISTIC_SEARCH(   SubproblemsArray,   TopDownComplete,    zero,          dynamic_beam_search           )
+    HEURISTIC_SEARCH(   SubproblemsArray,   TopDownComplete,    zero,          anytimeAStar                  )
+    HEURISTIC_SEARCH(   SubproblemsArray,   TopDownComplete,    zero,          weighted_anytimeAStar         )
+    HEURISTIC_SEARCH(   SubproblemsArray,   TopDownComplete,    zero,          anytimeAStar_with_cbp         )
+    HEURISTIC_SEARCH(   SubproblemsArray,   TopDownComplete,    zero,          weighted_anytimeAStar_with_cbp)
 
     //   sqrt_sum
-    HEURISTIC_SEARCH(   SubproblemsArray,   TopDownComplete,    sqrt_sum,      AStar                )
+    HEURISTIC_SEARCH(   SubproblemsArray,   TopDownComplete,    sqrt_sum,      AStar                         )
 
     //   sum
-    HEURISTIC_SEARCH(   SubproblemsArray,   TopDownComplete,    sum,           AStar                )
-    HEURISTIC_SEARCH(   SubproblemsArray,   TopDownComplete,    sum,           AStar_with_cbp       )
-    HEURISTIC_SEARCH(   SubproblemsArray,   TopDownComplete,    sum,           weighted_AStar       )
-    HEURISTIC_SEARCH(   SubproblemsArray,   TopDownComplete,    sum,           beam_search          )
-    HEURISTIC_SEARCH(   SubproblemsArray,   TopDownComplete,    sum,           dynamic_beam_search  )
+    HEURISTIC_SEARCH(   SubproblemsArray,   TopDownComplete,    sum,           AStar                         )
+    HEURISTIC_SEARCH(   SubproblemsArray,   TopDownComplete,    sum,           AStar_with_cbp                )
+    HEURISTIC_SEARCH(   SubproblemsArray,   TopDownComplete,    sum,           weighted_AStar                )
+    HEURISTIC_SEARCH(   SubproblemsArray,   TopDownComplete,    sum,           beam_search                   )
+    HEURISTIC_SEARCH(   SubproblemsArray,   TopDownComplete,    sum,           dynamic_beam_search           )
+    HEURISTIC_SEARCH(   SubproblemsArray,   TopDownComplete,    sum,           anytimeAStar                  )
+    HEURISTIC_SEARCH(   SubproblemsArray,   TopDownComplete,    sum,           weighted_anytimeAStar         )
+    HEURISTIC_SEARCH(   SubproblemsArray,   TopDownComplete,    sum,           anytimeAStar_with_cbp         )
+    HEURISTIC_SEARCH(   SubproblemsArray,   TopDownComplete,    sum,           weighted_anytimeAStar_with_cbp)
 
     //    GOO
-    HEURISTIC_SEARCH(   SubproblemsArray,   TopDownComplete,    GOO,           AStar                )
-    HEURISTIC_SEARCH(   SubproblemsArray,   TopDownComplete,    GOO,           AStar_with_cbp       )
-    HEURISTIC_SEARCH(   SubproblemsArray,   TopDownComplete,    GOO,           weighted_AStar       )
-    HEURISTIC_SEARCH(   SubproblemsArray,   TopDownComplete,    GOO,           beam_search          )
-    HEURISTIC_SEARCH(   SubproblemsArray,   TopDownComplete,    GOO,           dynamic_beam_search  )
+    HEURISTIC_SEARCH(   SubproblemsArray,   TopDownComplete,    GOO,           AStar                         )
+    HEURISTIC_SEARCH(   SubproblemsArray,   TopDownComplete,    GOO,           AStar_with_cbp                )
+    HEURISTIC_SEARCH(   SubproblemsArray,   TopDownComplete,    GOO,           weighted_AStar                )
+    HEURISTIC_SEARCH(   SubproblemsArray,   TopDownComplete,    GOO,           beam_search                   )
+    HEURISTIC_SEARCH(   SubproblemsArray,   TopDownComplete,    GOO,           dynamic_beam_search           )
+    HEURISTIC_SEARCH(   SubproblemsArray,   TopDownComplete,    GOO,           anytimeAStar                  )
+    HEURISTIC_SEARCH(   SubproblemsArray,   TopDownComplete,    GOO,           weighted_anytimeAStar         )
+    HEURISTIC_SEARCH(   SubproblemsArray,   TopDownComplete,    GOO,           anytimeAStar_with_cbp         )
+    HEURISTIC_SEARCH(   SubproblemsArray,   TopDownComplete,    GOO,           weighted_anytimeAStar_with_cbp)
+
 
     throw std::invalid_argument("illegal search configuration");
 #undef HEURISTIC_SEARCH

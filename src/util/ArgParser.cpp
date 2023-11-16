@@ -71,8 +71,10 @@ void help_parse(const char **&argv, const std::function<void(T)> &callback)
     try {
         if constexpr (std::same_as<T, float>)
             fp = std::stof(*argv);
-        else
+        if constexpr (std::same_as<T, double>)
             fp = std::stod(*argv);
+        if constexpr (std::same_as<T, long double>)
+            fp = std::stold(*argv);
     } catch (std::invalid_argument) {
         std::cerr << "not a valid floating-point number" << std::endl;
         std::exit(EXIT_FAILURE);
@@ -80,7 +82,6 @@ void help_parse(const char **&argv, const std::function<void(T)> &callback)
         std::cerr << "value out of range" << std::endl;
         std::exit(EXIT_FAILURE);
     }
-
     callback(fp);
 }
 
@@ -100,9 +101,10 @@ PARSE(unsigned);
 PARSE(unsigned long);
 PARSE(unsigned long long);
 
-/*----- Float & Double -----------------------------------------------------------------------------------------------*/
+/*----- Floating point -----------------------------------------------------------------------------------------------*/
 PARSE(float);
 PARSE(double);
+PARSE(long double);
 
 /*----- String -------------------------------------------------------------------------------------------------------*/
 template<>

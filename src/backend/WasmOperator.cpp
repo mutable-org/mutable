@@ -1472,8 +1472,6 @@ void HashBasedGrouping::execute(const Match<HashBasedGrouping> &M, setup_t setup
     } else {
         if (M.grouping.has_info())
             initial_capacity = std::ceil(M.grouping.info().estimated_cardinality / M.load_factor);
-        else if (auto scan = cast<const ScanOperator>(M.grouping.child(0)))
-            initial_capacity = std::ceil(scan->store().num_rows() / M.load_factor);
         else
             initial_capacity = 1024; // fallback
     }
@@ -4540,8 +4538,6 @@ void HashBasedGroupJoin::execute(const Match<HashBasedGroupJoin> &M, setup_t set
     } else {
         if (M.build.has_info())
             initial_capacity = std::ceil(M.build.info().estimated_cardinality / M.load_factor);
-        else if (auto scan = cast<const ScanOperator>(&M.build))
-            initial_capacity = std::ceil(scan->store().num_rows() / M.load_factor);
         else
             initial_capacity = 1024; // fallback
     }

@@ -363,9 +363,11 @@ struct StateManager
                     if constexpr (HasRegularQueue)
                         it->second.queue->erase(it->second.handle); // erase from regular queue
                     if (state.g() < it->first.g())
+                        inc_cheaper();
                         it->first.decrease_g(state.parent(), state.g()); // update *g* value
                     it->second.handle = beam_queue_.push(&*it); // add to beam queue and update handle
                     it->second.queue = &beam_queue_; // update queue
+                    inc_decrease_key();
                     if constexpr (HasRegularQueue)
                         inc_regular_to_beam();
                     else

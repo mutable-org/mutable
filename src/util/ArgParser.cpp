@@ -27,25 +27,26 @@ void help_parse(const char **&argv, const std::function<void(T)> &callback)
         std::exit(EXIT_FAILURE);
     }
 
+    T i;
     try {
         /*----- Signed integer types. -----*/
         if constexpr (std::same_as<T, int>)
-            callback(std::stoi(*argv));
+            i = std::stoi(*argv);
         if constexpr (std::same_as<T, long>)
-            callback(std::stol(*argv));
+            i = std::stol(*argv);
         if constexpr (std::same_as<T, long long>)
-            callback(std::stoll(*argv));
+            i = std::stoll(*argv);
         /*----- Unsigned integer types. -----*/
         if constexpr (std::same_as<T, unsigned>) {
             const unsigned long v = std::stoul(*argv);
             if (v > std::numeric_limits<unsigned>::max())
                 throw std::out_of_range("input exceeds range of type unsigned int");
-            callback(unsigned(v));
+            i = unsigned(v);
         }
         if constexpr (std::same_as<T, unsigned long>)
-            callback(std::stoul(*argv));
+            i = std::stoul(*argv);
         if constexpr (std::same_as<T, unsigned long long>)
-            callback(std::stoull(*argv));
+            i = std::stoull(*argv);
     } catch(std::invalid_argument ex) {
         std::cerr << "not a valid integer" << std::endl;
         std::exit(EXIT_FAILURE);
@@ -53,6 +54,7 @@ void help_parse(const char **&argv, const std::function<void(T)> &callback)
         std::cerr << "value out of range" << std::endl;
         std::exit(EXIT_FAILURE);
     }
+    callback(i);
 }
 
 /** Helper function to parse floating-point values. */

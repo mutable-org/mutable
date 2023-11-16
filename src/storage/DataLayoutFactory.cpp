@@ -19,18 +19,20 @@ void DataLayoutFactory::dump(std::ostream &out) const { out << *this << std::end
 void DataLayoutFactory::dump() const { dump(std::cerr); }
 M_LCOV_EXCL_STOP
 
-namespace m {
+namespace {
 
 namespace options {
 
 /** Whether to reorder attributes when creating data layouts. */
-bool no_attribute_reordering = false;
+bool attribute_reordering = true;
+
+/** Whether to remove the NULL bitmap in all created data layouts. */
+bool remove_null_bitmap = false;
+
+/** Whether to pack one tuple less than theoretically possible in a created PAX data layout. */
+bool pax_pack_one_tuple_less = false;
 
 }
-
-}
-
-namespace {
 
 __attribute__((constructor(201)))
 static void add_storage_args()
@@ -43,7 +45,21 @@ static void add_storage_args()
         /* short=       */ nullptr,
         /* long=        */ "--no-attribute-reordering",
         /* description= */ "do not reorder attributes when creating data layouts, e.g. to minimize padding",
-        /* callback=    */ [](bool){ options::no_attribute_reordering = true; }
+        /* callback=    */ [](bool){ options::attribute_reordering = false; }
+    );
+    C.arg_parser().add<bool>(
+        /* group=       */ "Storage",
+        /* short=       */ nullptr,
+        /* long=        */ "--remove-null-bitmap",
+        /* description= */ "remove the NULL bitmap in all created data layouts",
+        /* callback=    */ [](bool){ options::remove_null_bitmap = true; }
+    );
+    C.arg_parser().add<bool>(
+        /* group=       */ "Storage",
+        /* short=       */ nullptr,
+        /* long=        */ "--pax-pack-one-tuple-less",
+        /* description= */ "pack one tuple less than possible into PAX blocks; only used for benchmarking purposes",
+        /* callback=    */ [](bool){ options::pax_pack_one_tuple_less = true; }
     );
 }
 
@@ -60,7 +76,7 @@ compute_attribute_order(const std::vector<const Type*> &types)
     auto indices = std::make_unique<std::size_t[]>(types.size());
     std::iota(indices.get(), indices.get() + types.size(), 0);
 
-    if (not options::no_attribute_reordering) {
+    if (options::attribute_reordering) {
         /*----- Sort indices by alignment. -----*/
         std::stable_sort(indices.get(), indices.get() + types.size(), [&](std::size_t left, std::size_t right) {
             return types[left]->alignment() > types[right]->alignment();
@@ -91,7 +107,8 @@ DataLayout RowLayoutFactory::make(std::vector<const Type*> types, std::size_t nu
     const uint64_t null_bitmap_offset = offset_in_bits;
 
     /*----- Compute row size with padding. -----*/
-    offset_in_bits += types.size(); // space for NULL bitmap
+    if (not options::remove_null_bitmap)
+        offset_in_bits += types.size(); // space for NULL bitmap
     if (uint64_t rem = offset_in_bits % alignment_in_bits; rem)
         offset_in_bits += alignment_in_bits - rem;
     const uint64_t row_size_in_bits = offset_in_bits;
@@ -101,12 +118,14 @@ DataLayout RowLayoutFactory::make(std::vector<const Type*> types, std::size_t nu
     auto &row = layout.add_inode(1, row_size_in_bits);
     for (std::size_t idx = 0; idx != types.size(); ++idx)
         row.add_leaf(types[idx], idx, offsets[idx], 0); // add attribute
-    row.add_leaf( // add NULL bitmap
-        /* type=           */ Type::Get_Bitmap(Type::TY_Vector, types.size()),
-        /* idx=            */ types.size(),
-        /* offset_in_bits= */ null_bitmap_offset,
-        /* stride_in_bits= */ 0
-    );
+    if (not options::remove_null_bitmap) {
+        row.add_leaf( // add NULL bitmap
+            /* type=           */ Type::Get_Bitmap(Type::TY_Vector, types.size()),
+            /* idx=            */ types.size(),
+            /* offset_in_bits= */ null_bitmap_offset,
+            /* stride_in_bits= */ 0
+        );
+    }
 
     return layout;
 }
@@ -136,7 +155,7 @@ DataLayout PAXLayoutFactory::make(std::vector<const Type*> types, std::size_t nu
 
     /*----- Compute NULL bitmap offset in a virtual row. -----*/
     const uint64_t null_bitmap_size_in_bits =
-        std::max(ceil_to_pow_2(types.size()), 8UL); // add padding to support SIMDfication
+        options::remove_null_bitmap ? 0 : std::max(ceil_to_pow_2(types.size()), 8UL); // add padding to support SIMDfication
     offsets[types.size()] = offset_in_bits;
     if (null_bitmap_size_in_bits % 8)
         ++num_not_byte_aligned;
@@ -159,6 +178,8 @@ DataLayout PAXLayoutFactory::make(std::vector<const Type*> types, std::size_t nu
         if (num_rows_per_block > num_simd_lanes)
             num_rows_per_block =
                 (num_rows_per_block / num_simd_lanes) * num_simd_lanes; // floor to multiple of possible number of SIMD lanes
+        if (options::pax_pack_one_tuple_less and num_rows_per_block > 1)
+            --num_rows_per_block;
         num_blocks_per_row = (row_size_in_bits + num_bytes_ * 8 - 1UL) / (num_bytes_ * 8);
     }
 
@@ -193,12 +214,14 @@ DataLayout PAXLayoutFactory::make(std::vector<const Type*> types, std::size_t nu
     auto &pax_block = layout.add_inode(num_rows_per_block, num_blocks_per_row * block_size_in_bits);
     for (std::size_t idx = 0; idx != types.size(); ++idx)
         pax_block.add_leaf(types[idx], idx, offsets[idx], types[idx]->size());
-    pax_block.add_leaf( // add NULL bitmap
-        /* type=           */ Type::Get_Bitmap(Type::TY_Vector, types.size()),
-        /* idx=            */ types.size(),
-        /* offset_in_bits= */ offsets[types.size()],
-        /* stride_in_bits= */ null_bitmap_size_in_bits
-    );
+    if (not options::remove_null_bitmap) {
+        pax_block.add_leaf( // add NULL bitmap
+            /* type=           */ Type::Get_Bitmap(Type::TY_Vector, types.size()),
+            /* idx=            */ types.size(),
+            /* offset_in_bits= */ offsets[types.size()],
+            /* stride_in_bits= */ null_bitmap_size_in_bits
+        );
+    }
 
     return layout;
 }

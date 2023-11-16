@@ -12,6 +12,43 @@ using namespace m::storage;
 using namespace m::wasm;
 
 
+namespace {
+
+namespace options {
+
+/** Whether data layout compilation makes use of pointer sharing optimization. */
+bool pointer_sharing = true;
+
+/** Whether data layout compilation makes use of remainder removal optimization. */
+bool remainder_removal = true;
+
+}
+
+__attribute__((constructor(201)))
+static void add_wasm_util_args()
+{
+    Catalog &C = Catalog::Get();
+
+    /*----- Command-line arguments -----*/
+    C.arg_parser().add<bool>(
+        /* group=       */ "Wasm",
+        /* short=       */ nullptr,
+        /* long=        */ "--no-pointer-sharing",
+        /* description= */ "do not use pointer sharing optimization for data layout compilation",
+        /* callback=    */ [](bool){ options::pointer_sharing = false; }
+    );
+    C.arg_parser().add<bool>(
+        /* group=       */ "Wasm",
+        /* short=       */ nullptr,
+        /* long=        */ "--no-remainder-removal",
+        /* description= */ "do not use remainder removal optimization for data layout compilation",
+        /* callback=    */ [](bool){ options::remainder_removal = false; }
+    );
+}
+
+}
+
+
 /*======================================================================================================================
  * Helper functions
  *====================================================================================================================*/
@@ -496,7 +533,7 @@ namespace wasm {
  *
  * Does not emit any code but returns three `wasm::Block`s containing code: the first one initializes all needed
  * variables, the second one stores/loads one tuple, and the third one advances to the next tuple. */
-template<bool IsStore, std::size_t L, bool SinglePass, VariableKind Kind>
+template<bool IsStore, std::size_t L, bool SinglePass, bool PointerSharing, VariableKind Kind>
 requires (L > 0) and (is_pow_2(L))
 std::tuple<Block, Block, Block>
 compile_data_layout_sequential(const Schema &tuple_schema, Ptr<void> base_address, const storage::DataLayout &layout,
@@ -528,10 +565,12 @@ compile_data_layout_sequential(const Schema &tuple_schema, Ptr<void> base_addres
         ptr_t ptr;
         std::optional<mask_t> mask;
     };
-    /** a map from bit offset (mod 8) and stride in bits to runtime pointer and mask; reset for each leaf; used to
-     * share pointers between attributes of the same leaf that have equal stride and to share masks between attributes
-     * of the same leaf that have equal offset (mod 8) */
-    std::unordered_map<key_t, value_t> loading_context;
+    /** a map from bit offset (mod 8) and stride in bits to runtime pointer and mask; reset for each leaf;
+     * if \tparam PointerSharing, used to share pointers between attributes of the same leaf that have equal stride
+     * and to share masks between attributes of the same leaf that have equal offset (mod 8) */
+    std::conditional_t<
+        PointerSharing, std::unordered_map<key_t, value_t>, std::vector<std::pair<key_t, value_t>>
+    > loading_context;
 
     auto &env = CodeGenContext::Get().env(); // the current codegen environment
 
@@ -874,8 +913,11 @@ compile_data_layout_sequential(const Schema &tuple_schema, Ptr<void> base_addres
                         }
                     }();
 
+                    key_t key(leaf_info.offset_in_bits % 8, leaf_info.stride_in_bits);
                     auto [it, inserted] =
-                        loading_context.try_emplace(key_t(leaf_info.offset_in_bits % 8, leaf_info.stride_in_bits));
+                        M_CONSTEXPR_COND(PointerSharing,
+                                         loading_context.try_emplace(std::move(key)),
+                                         std::make_pair(loading_context.emplace(loading_context.end(), std::move(key), value_t()), true));
                     if (inserted) {
                         BLOCK_OPEN(inits) {
                             it->second.ptr = base_address.clone() + byte_offset;
@@ -1087,8 +1129,11 @@ compile_data_layout_sequential(const Schema &tuple_schema, Ptr<void> base_addres
                         }
                     }
 
+                    key_t key(leaf_info.offset_in_bits % 8, leaf_info.stride_in_bits);
                     auto [it, inserted] =
-                        loading_context.try_emplace(key_t(leaf_info.offset_in_bits % 8, leaf_info.stride_in_bits));
+                        M_CONSTEXPR_COND(PointerSharing,
+                                         loading_context.try_emplace(std::move(key)),
+                                         std::make_pair(loading_context.emplace(loading_context.end(), std::move(key), value_t()), true));
                     M_insist(inserted == not it->second.mask);
                     if (inserted) {
                         BLOCK_OPEN(inits) {
@@ -1176,8 +1221,11 @@ compile_data_layout_sequential(const Schema &tuple_schema, Ptr<void> base_addres
                     const uint8_t static_bit_offset  = leaf_info.offset_in_bits % 8;
                     const int32_t static_byte_offset = leaf_info.offset_in_bits / 8;
 
+                    key_t key(leaf_info.offset_in_bits % 8, leaf_info.stride_in_bits);
                     auto [it, inserted] =
-                        loading_context.try_emplace(key_t(leaf_info.offset_in_bits % 8, leaf_info.stride_in_bits));
+                        M_CONSTEXPR_COND(PointerSharing,
+                                         loading_context.try_emplace(std::move(key)),
+                                         std::make_pair(loading_context.emplace(loading_context.end(), std::move(key), value_t()), true));
                     if (inserted) {
                         BLOCK_OPEN(inits) {
                             it->second.ptr = base_address.clone() + byte_offset;
@@ -1325,8 +1373,9 @@ compile_data_layout_sequential(const Schema &tuple_schema, Ptr<void> base_addres
                     if (curr->num_tuples != 1U) {
                         Boolx1 cond_mod = (tuple_id % uint32_t(curr->num_tuples)).eqz();
                         Boolx1 cond_and = (tuple_id bitand uint32_t(curr->num_tuples - 1U)).eqz();
-                        Boolx1 cond = is_pow_2(curr->num_tuples) ? cond_and : cond_mod; // select implementation to use...
-                        (is_pow_2(curr->num_tuples) ? cond_mod : cond_and).discard(); // ... and discard the other
+                        const bool use_and = is_pow_2(curr->num_tuples) and options::remainder_removal;
+                        Boolx1 cond = use_and ? cond_and : cond_mod; // select implementation to use...
+                        (use_and ? cond_mod : cond_and).discard(); // ... and discard the other
 
                         /*----- Emit conditional stride jumps. -----*/
                         IF (cond) {
@@ -1508,10 +1557,9 @@ compile_data_layout_sequential(const Schema &tuple_schema, Ptr<void> base_addres
                     if (levels.back().num_tuples != 1U) {
                         Boolx1 cond_mod = (tuple_id % uint32_t(levels.back().num_tuples)).eqz();
                         Boolx1 cond_and = (tuple_id bitand uint32_t(levels.back().num_tuples - 1U)).eqz();
-                        /* Select implementation to use... */
-                        Boolx1 cond = is_pow_2(levels.back().num_tuples) ? cond_and : cond_mod;
-                        /* ... and discard the other. */
-                        (is_pow_2(levels.back().num_tuples) ? cond_mod : cond_and).discard();
+                        const bool use_and = is_pow_2(levels.back().num_tuples) and options::remainder_removal;
+                        Boolx1 cond = use_and ? cond_and : cond_mod; // select implementation to use...
+                        (use_and ? cond_mod : cond_and).discard(); // ... and discard the other
 
                         /*----- Emit conditional stride jumps from outermost Block. -----*/
                         IF (cond) {
@@ -1608,20 +1656,38 @@ m::wasm::compile_store_sequential(const Schema &tuple_schema, Ptr<void> base_add
                                   std::size_t num_simd_lanes, const Schema &layout_schema,
                                   Variable<uint32_t, Kind, false> &tuple_id)
 {
-    switch (num_simd_lanes) {
-        default: M_unreachable("unsupported number of SIMD lanes");
-        case  1: return compile_data_layout_sequential<true,  1, false>(tuple_schema, base_address, layout,
-                                                                        layout_schema, tuple_id);
-        case  2: return compile_data_layout_sequential<true,  2, false>(tuple_schema, base_address, layout,
-                                                                        layout_schema, tuple_id);
-        case  4: return compile_data_layout_sequential<true,  4, false>(tuple_schema, base_address, layout,
-                                                                        layout_schema, tuple_id);
-        case  8: return compile_data_layout_sequential<true,  8, false>(tuple_schema, base_address, layout,
-                                                                        layout_schema, tuple_id);
-        case 16: return compile_data_layout_sequential<true, 16, false>(tuple_schema, base_address, layout,
-                                                                        layout_schema, tuple_id);
-        case 32: return compile_data_layout_sequential<true, 32, false>(tuple_schema, base_address, layout,
-                                                                        layout_schema, tuple_id);
+    if (options::pointer_sharing) {
+        switch (num_simd_lanes) {
+            default: M_unreachable("unsupported number of SIMD lanes");
+            case  1: return compile_data_layout_sequential<true,  1, false, true>(tuple_schema, base_address, layout,
+                                                                                  layout_schema, tuple_id);
+            case  2: return compile_data_layout_sequential<true,  2, false, true>(tuple_schema, base_address, layout,
+                                                                                  layout_schema, tuple_id);
+            case  4: return compile_data_layout_sequential<true,  4, false, true>(tuple_schema, base_address, layout,
+                                                                                  layout_schema, tuple_id);
+            case  8: return compile_data_layout_sequential<true,  8, false, true>(tuple_schema, base_address, layout,
+                                                                                  layout_schema, tuple_id);
+            case 16: return compile_data_layout_sequential<true, 16, false, true>(tuple_schema, base_address, layout,
+                                                                                  layout_schema, tuple_id);
+            case 32: return compile_data_layout_sequential<true, 32, false, true>(tuple_schema, base_address, layout,
+                                                                                  layout_schema, tuple_id);
+        }
+    } else {
+        switch (num_simd_lanes) {
+            default: M_unreachable("unsupported number of SIMD lanes");
+            case  1: return compile_data_layout_sequential<true,  1, false, false>(tuple_schema, base_address, layout,
+                                                                                   layout_schema, tuple_id);
+            case  2: return compile_data_layout_sequential<true,  2, false, false>(tuple_schema, base_address, layout,
+                                                                                   layout_schema, tuple_id);
+            case  4: return compile_data_layout_sequential<true,  4, false, false>(tuple_schema, base_address, layout,
+                                                                                   layout_schema, tuple_id);
+            case  8: return compile_data_layout_sequential<true,  8, false, false>(tuple_schema, base_address, layout,
+                                                                                   layout_schema, tuple_id);
+            case 16: return compile_data_layout_sequential<true, 16, false, false>(tuple_schema, base_address, layout,
+                                                                                   layout_schema, tuple_id);
+            case 32: return compile_data_layout_sequential<true, 32, false, false>(tuple_schema, base_address, layout,
+                                                                                   layout_schema, tuple_id);
+        }
     }
 }
 
@@ -1631,20 +1697,38 @@ m::wasm::compile_store_sequential_single_pass(const Schema &tuple_schema, Ptr<vo
                                               const storage::DataLayout &layout, std::size_t num_simd_lanes,
                                               const Schema &layout_schema, Variable<uint32_t, Kind, false> &tuple_id)
 {
-    switch (num_simd_lanes) {
-        default: M_unreachable("unsupported number of SIMD lanes");
-        case  1: return compile_data_layout_sequential<true,  1, true>(tuple_schema, base_address, layout,
-                                                                       layout_schema, tuple_id);
-        case  2: return compile_data_layout_sequential<true,  2, true>(tuple_schema, base_address, layout,
-                                                                       layout_schema, tuple_id);
-        case  4: return compile_data_layout_sequential<true,  4, true>(tuple_schema, base_address, layout,
-                                                                       layout_schema, tuple_id);
-        case  8: return compile_data_layout_sequential<true,  8, true>(tuple_schema, base_address, layout,
-                                                                       layout_schema, tuple_id);
-        case 16: return compile_data_layout_sequential<true, 16, true>(tuple_schema, base_address, layout,
-                                                                       layout_schema, tuple_id);
-        case 32: return compile_data_layout_sequential<true, 32, true>(tuple_schema, base_address, layout,
-                                                                       layout_schema, tuple_id);
+    if (options::pointer_sharing) {
+        switch (num_simd_lanes) {
+            default: M_unreachable("unsupported number of SIMD lanes");
+            case  1: return compile_data_layout_sequential<true,  1, true, true>(tuple_schema, base_address, layout,
+                                                                                 layout_schema, tuple_id);
+            case  2: return compile_data_layout_sequential<true,  2, true, true>(tuple_schema, base_address, layout,
+                                                                                 layout_schema, tuple_id);
+            case  4: return compile_data_layout_sequential<true,  4, true, true>(tuple_schema, base_address, layout,
+                                                                                 layout_schema, tuple_id);
+            case  8: return compile_data_layout_sequential<true,  8, true, true>(tuple_schema, base_address, layout,
+                                                                                 layout_schema, tuple_id);
+            case 16: return compile_data_layout_sequential<true, 16, true, true>(tuple_schema, base_address, layout,
+                                                                                 layout_schema, tuple_id);
+            case 32: return compile_data_layout_sequential<true, 32, true, true>(tuple_schema, base_address, layout,
+                                                                                 layout_schema, tuple_id);
+        }
+    } else {
+        switch (num_simd_lanes) {
+            default: M_unreachable("unsupported number of SIMD lanes");
+            case  1: return compile_data_layout_sequential<true,  1, true, false>(tuple_schema, base_address, layout,
+                                                                                  layout_schema, tuple_id);
+            case  2: return compile_data_layout_sequential<true,  2, true, false>(tuple_schema, base_address, layout,
+                                                                                  layout_schema, tuple_id);
+            case  4: return compile_data_layout_sequential<true,  4, true, false>(tuple_schema, base_address, layout,
+                                                                                  layout_schema, tuple_id);
+            case  8: return compile_data_layout_sequential<true,  8, true, false>(tuple_schema, base_address, layout,
+                                                                                  layout_schema, tuple_id);
+            case 16: return compile_data_layout_sequential<true, 16, true, false>(tuple_schema, base_address, layout,
+                                                                                  layout_schema, tuple_id);
+            case 32: return compile_data_layout_sequential<true, 32, true, false>(tuple_schema, base_address, layout,
+                                                                                  layout_schema, tuple_id);
+        }
     }
 }
 
@@ -1654,20 +1738,38 @@ m::wasm::compile_load_sequential(const Schema &tuple_schema, Ptr<void> base_addr
                                  std::size_t num_simd_lanes, const Schema &layout_schema,
                                  Variable<uint32_t, Kind, false> &tuple_id)
 {
-    switch (num_simd_lanes) {
-        default: M_unreachable("unsupported number of SIMD lanes");
-        case  1: return compile_data_layout_sequential<false,  1, true>(tuple_schema, base_address, layout,
-                                                                        layout_schema, tuple_id);
-        case  2: return compile_data_layout_sequential<false,  2, true>(tuple_schema, base_address, layout,
-                                                                        layout_schema, tuple_id);
-        case  4: return compile_data_layout_sequential<false,  4, true>(tuple_schema, base_address, layout,
-                                                                        layout_schema, tuple_id);
-        case  8: return compile_data_layout_sequential<false,  8, true>(tuple_schema, base_address, layout,
-                                                                        layout_schema, tuple_id);
-        case 16: return compile_data_layout_sequential<false, 16, true>(tuple_schema, base_address, layout,
-                                                                        layout_schema, tuple_id);
-        case 32: return compile_data_layout_sequential<false, 32, true>(tuple_schema, base_address, layout,
-                                                                        layout_schema, tuple_id);
+    if (options::pointer_sharing) {
+        switch (num_simd_lanes) {
+            default: M_unreachable("unsupported number of SIMD lanes");
+            case  1: return compile_data_layout_sequential<false,  1, true, true>(tuple_schema, base_address, layout,
+                                                                                  layout_schema, tuple_id);
+            case  2: return compile_data_layout_sequential<false,  2, true, true>(tuple_schema, base_address, layout,
+                                                                                  layout_schema, tuple_id);
+            case  4: return compile_data_layout_sequential<false,  4, true, true>(tuple_schema, base_address, layout,
+                                                                                  layout_schema, tuple_id);
+            case  8: return compile_data_layout_sequential<false,  8, true, true>(tuple_schema, base_address, layout,
+                                                                                  layout_schema, tuple_id);
+            case 16: return compile_data_layout_sequential<false, 16, true, true>(tuple_schema, base_address, layout,
+                                                                                  layout_schema, tuple_id);
+            case 32: return compile_data_layout_sequential<false, 32, true, true>(tuple_schema, base_address, layout,
+                                                                                  layout_schema, tuple_id);
+        }
+    } else {
+        switch (num_simd_lanes) {
+            default: M_unreachable("unsupported number of SIMD lanes");
+            case  1: return compile_data_layout_sequential<false,  1, true, false>(tuple_schema, base_address, layout,
+                                                                                   layout_schema, tuple_id);
+            case  2: return compile_data_layout_sequential<false,  2, true, false>(tuple_schema, base_address, layout,
+                                                                                   layout_schema, tuple_id);
+            case  4: return compile_data_layout_sequential<false,  4, true, false>(tuple_schema, base_address, layout,
+                                                                                   layout_schema, tuple_id);
+            case  8: return compile_data_layout_sequential<false,  8, true, false>(tuple_schema, base_address, layout,
+                                                                                   layout_schema, tuple_id);
+            case 16: return compile_data_layout_sequential<false, 16, true, false>(tuple_schema, base_address, layout,
+                                                                                   layout_schema, tuple_id);
+            case 32: return compile_data_layout_sequential<false, 32, true, false>(tuple_schema, base_address, layout,
+                                                                                   layout_schema, tuple_id);
+        }
     }
 }
 

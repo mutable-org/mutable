@@ -627,9 +627,7 @@ struct CollectStringLiterals : ConstOperatorVisitor, ast::ConstASTExprVisitor
 
 V8Engine::V8Engine()
 {
-#define REGISTER(CLASS) phys_opt_.register_operator<m::wasm::CLASS>();
-    M_WASM_OPERATOR_LIST(REGISTER)
-#undef REGISTER
+    register_wasm_operators(phys_opt_);
 
     initialize();
 }

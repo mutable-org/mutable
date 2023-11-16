@@ -13,6 +13,558 @@ using namespace m::wasm;
 
 
 /*======================================================================================================================
+ * CLI arguments
+ *====================================================================================================================*/
+
+option_configs::GroupingImplementation options::grouping_implementations = option_configs::GroupingImplementation::ALL;
+option_configs::SortingImplementation options::sorting_implementations = option_configs::SortingImplementation::ALL;
+option_configs::JoinImplementation options::join_implementations = option_configs::JoinImplementation::ALL;
+option_configs::SelectionStrategy options::filter_selection_strategy = option_configs::SelectionStrategy::AUTO;
+option_configs::SelectionStrategy options::quicksort_cmp_selection_strategy = option_configs::SelectionStrategy::AUTO;
+option_configs::SelectionStrategy options::nested_loops_join_selection_strategy =
+    option_configs::SelectionStrategy::AUTO;
+option_configs::SelectionStrategy options::simple_hash_join_selection_strategy =
+    option_configs::SelectionStrategy::AUTO;
+option_configs::OrderingStrategy options::simple_hash_join_ordering_strategy = option_configs::OrderingStrategy::AUTO;
+option_configs::SelectionStrategy options::sort_merge_join_selection_strategy = option_configs::SelectionStrategy::AUTO;
+option_configs::SelectionStrategy options::sort_merge_join_cmp_selection_strategy =
+    option_configs::SelectionStrategy::AUTO;
+option_configs::HashTableImplementation options::hash_table_implementation =
+    option_configs::HashTableImplementation::ALL;
+option_configs::ProbingStrategy options::hash_table_probing_strategy = option_configs::ProbingStrategy::AUTO;
+option_configs::StoringStrategy options::hash_table_storing_strategy = option_configs::StoringStrategy::AUTO;
+double options::load_factor_open_addressing = 0.8;
+double options::load_factor_chained = 1.5;
+std::optional<uint32_t> options::hash_table_initial_capacity = std::optional<uint32_t>();
+bool options::hash_based_group_join = true;
+std::unique_ptr<const storage::DataLayoutFactory> options::hard_pipeline_breaker_layout =
+    std::make_unique<storage::RowLayoutFactory>();
+option_configs::SoftPipelineBreakerStrategy options::soft_pipeline_breaker =
+    option_configs::SoftPipelineBreakerStrategy::NONE;
+std::unique_ptr<const storage::DataLayoutFactory> options::soft_pipeline_breaker_layout =
+    std::make_unique<storage::RowLayoutFactory>();
+std::size_t options::soft_pipeline_breaker_num_tuples = 0;
+std::size_t options::result_set_window_size = 0;
+bool options::exploit_unique_build = true;
+bool options::simd = true;
+bool options::double_pumping = true;
+std::size_t options::simd_lanes = 1;
+std::vector<std::pair<Schema::Identifier, bool>> options::sorted_attributes = {}; // hack to assume sortedness for some benchmarks
+
+namespace {
+
+__attribute__((constructor(201)))
+static void add_wasm_operator_args()
+{
+    Catalog &C = Catalog::Get();
+
+    /*----- Command-line arguments -----*/
+    C.arg_parser().add<std::vector<std::string_view>>(
+        /* group=       */ "Wasm",
+        /* short=       */ nullptr,
+        /* long=        */ "--grouping-implementations",
+        /* description= */ "a comma seperated list of physical grouping implementations to consider (`HashBased` or "
+                           "`Ordered`)",
+        /* callback=    */ [](std::vector<std::string_view> impls){
+            options::grouping_implementations = option_configs::GroupingImplementation(0UL);
+            for (const auto &elem : impls) {
+                if (strneq(elem.data(), "HashBased", elem.size()))
+                    options::grouping_implementations |= option_configs::GroupingImplementation::HASH_BASED;
+                else if (strneq(elem.data(), "Ordered", elem.size()))
+                    options::grouping_implementations |= option_configs::GroupingImplementation::ORDERED;
+                else
+                    std::cerr << "warning: ignore invalid physical grouping implementation " << elem << std::endl;
+            }
+        }
+    );
+    C.arg_parser().add<std::vector<std::string_view>>(
+        /* group=       */ "Wasm",
+        /* short=       */ nullptr,
+        /* long=        */ "--sorting-implementations",
+        /* description= */ "a comma seperated list of physical sorting implementations to consider (`Quicksort` or "
+                           "`NoOp`)",
+        /* callback=    */ [](std::vector<std::string_view> impls){
+            options::sorting_implementations = option_configs::SortingImplementation(0UL);
+            for (const auto &elem : impls) {
+                if (strneq(elem.data(), "Quicksort", elem.size()))
+                    options::sorting_implementations |= option_configs::SortingImplementation::QUICKSORT;
+                else if (strneq(elem.data(), "NoOp", elem.size()))
+                    options::sorting_implementations |= option_configs::SortingImplementation::NOOP;
+                else
+                    std::cerr << "warning: ignore invalid physical sorting implementation " << elem << std::endl;
+            }
+        }
+    );
+    C.arg_parser().add<std::vector<std::string_view>>(
+        /* group=       */ "Wasm",
+        /* short=       */ nullptr,
+        /* long=        */ "--join-implementations",
+        /* description= */ "a comma seperated list of physical join implementations to consider (`NestedLoops`, "
+                           "`SimpleHash`, or `SortMerge`)",
+        /* callback=    */ [](std::vector<std::string_view> impls){
+            options::join_implementations = option_configs::JoinImplementation(0UL);
+            for (const auto &elem : impls) {
+                if (strneq(elem.data(), "NestedLoops", elem.size()))
+                    options::join_implementations |= option_configs::JoinImplementation::NESTED_LOOPS;
+                else if (strneq(elem.data(), "SimpleHash", elem.size()))
+                    options::join_implementations |= option_configs::JoinImplementation::SIMPLE_HASH;
+                else if (strneq(elem.data(), "SortMerge", elem.size()))
+                    options::join_implementations |= option_configs::JoinImplementation::SORT_MERGE;
+                else
+                    std::cerr << "warning: ignore invalid physical join implementation " << elem << std::endl;
+            }
+        }
+    );
+    C.arg_parser().add<const char*>(
+        /* group=       */ "Wasm",
+        /* short=       */ nullptr,
+        /* long=        */ "--filter-selection-strategy",
+        /* description= */ "specify the selection strategy for filters (`Branching` or `Predicated`)",
+        /* callback=    */ [](const char *strategy){
+            if (streq(strategy, "Branching"))
+                options::filter_selection_strategy = option_configs::SelectionStrategy::BRANCHING;
+            else if (streq(strategy, "Predicated"))
+                options::filter_selection_strategy = option_configs::SelectionStrategy::PREDICATED;
+            else
+                std::cerr << "warning: ignore invalid filter selection strategy " << strategy << std::endl;
+        }
+    );
+    C.arg_parser().add<const char*>(
+        /* group=       */ "Wasm",
+        /* short=       */ nullptr,
+        /* long=        */ "--quicksort-cmp-selection-strategy",
+        /* description= */ "specify the selection strategy for comparisons in quicksort (`Branching` or `Predicated`)",
+        /* callback=    */ [](const char *strategy){
+            if (streq(strategy, "Branching"))
+                options::quicksort_cmp_selection_strategy = option_configs::SelectionStrategy::BRANCHING;
+            else if (streq(strategy, "Predicated"))
+                options::quicksort_cmp_selection_strategy = option_configs::SelectionStrategy::PREDICATED;
+            else
+                std::cerr << "warning: ignore invalid quicksort comparison selection strategy " << strategy << std::endl;
+        }
+    );
+    C.arg_parser().add<const char*>(
+        /* group=       */ "Wasm",
+        /* short=       */ nullptr,
+        /* long=        */ "--nested-loops-join-selection-strategy",
+        /* description= */ "specify the selection strategy for nested-loops joins (`Branching` or `Predicated`)",
+        /* callback=    */ [](const char *strategy){
+            if (streq(strategy, "Branching"))
+                options::nested_loops_join_selection_strategy = option_configs::SelectionStrategy::BRANCHING;
+            else if (streq(strategy, "Predicated"))
+                options::nested_loops_join_selection_strategy = option_configs::SelectionStrategy::PREDICATED;
+            else
+                std::cerr << "warning: ignore invalid nested-loops join selection strategy " << strategy << std::endl;
+        }
+    );
+    C.arg_parser().add<const char*>(
+        /* group=       */ "Wasm",
+        /* short=       */ nullptr,
+        /* long=        */ "--simple-hash-join-selection-strategy",
+        /* description= */ "specify the selection strategy for simple hash joins (`Branching` or `Predicated`)",
+        /* callback=    */ [](const char *strategy){
+            if (streq(strategy, "Branching"))
+                options::simple_hash_join_selection_strategy = option_configs::SelectionStrategy::BRANCHING;
+            else if (streq(strategy, "Predicated"))
+                options::simple_hash_join_selection_strategy = option_configs::SelectionStrategy::PREDICATED;
+            else
+                std::cerr << "warning: ignore invalid simple hash join selection strategy " << strategy << std::endl;
+        }
+    );
+    C.arg_parser().add<const char*>(
+        /* group=       */ "Wasm",
+        /* short=       */ nullptr,
+        /* long=        */ "--simple-hash-join-ordering-strategy",
+        /* description= */ "specify the ordering strategy for simple hash joins (`BuildOnLeft` or `BuildOnRight`)",
+        /* callback=    */ [](const char *strategy){
+            if (streq(strategy, "BuildOnLeft"))
+                options::simple_hash_join_ordering_strategy = option_configs::OrderingStrategy::BUILD_ON_LEFT;
+            else if (streq(strategy, "BuildOnRight"))
+                options::simple_hash_join_ordering_strategy = option_configs::OrderingStrategy::BUILD_ON_RIGHT;
+            else
+                std::cerr << "warning: ignore invalid simple hash join ordering strategy " << strategy << std::endl;
+        }
+    );
+    C.arg_parser().add<const char*>(
+        /* group=       */ "Wasm",
+        /* short=       */ nullptr,
+        /* long=        */ "--sort-merge-join-selection-strategy",
+        /* description= */ "specify the selection strategy for sort merge joins (`Branching` or `Predicated`)",
+        /* callback=    */ [](const char *strategy){
+            if (streq(strategy, "Branching"))
+                options::sort_merge_join_selection_strategy = option_configs::SelectionStrategy::BRANCHING;
+            else if (streq(strategy, "Predicated"))
+                options::sort_merge_join_selection_strategy = option_configs::SelectionStrategy::PREDICATED;
+            else
+                std::cerr << "warning: ignore invalid sort merge join selection strategy " << strategy << std::endl;
+        }
+    );
+    C.arg_parser().add<const char*>(
+        /* group=       */ "Wasm",
+        /* short=       */ nullptr,
+        /* long=        */ "--sort-merge-join-cmp-selection-strategy",
+        /* description= */ "specify the selection strategy for comparisons while sorting in sort merge joins "
+                           "(`Branching` or `Predicated`)",
+        /* callback=    */ [](const char *strategy){
+            if (streq(strategy, "Branching"))
+                options::sort_merge_join_cmp_selection_strategy = option_configs::SelectionStrategy::BRANCHING;
+            else if (streq(strategy, "Predicated"))
+                options::sort_merge_join_cmp_selection_strategy = option_configs::SelectionStrategy::PREDICATED;
+            else
+                std::cerr << "warning: ignore invalid sort merge join comparison selection strategy " << strategy
+                          << std::endl;
+        }
+    );
+    C.arg_parser().add<const char*>(
+        /* group=       */ "Wasm",
+        /* short=       */ nullptr,
+        /* long=        */ "--hash-table-implementation",
+        /* description= */ "specify the hash table implementation (`OpenAddressing` or `Chained`)",
+        /* callback=    */ [](const char *impl){
+            if (streq(impl, "OpenAddressing"))
+                options::hash_table_implementation = option_configs::HashTableImplementation::OPEN_ADDRESSING;
+            else if (streq(impl, "Chained"))
+                options::hash_table_implementation = option_configs::HashTableImplementation::CHAINED;
+            else
+                std::cerr << "warning: ignore invalid hash table implementation " << impl << std::endl;
+        }
+    );
+    C.arg_parser().add<const char*>(
+        /* group=       */ "Wasm",
+        /* short=       */ nullptr,
+        /* long=        */ "--hash-table-probing-strategy",
+        /* description= */ "specify the probing strategy for hash tables (`Linear` or `Quadratic`)",
+        /* callback=    */ [](const char *strategy){
+            if (streq(strategy, "Linear"))
+                options::hash_table_probing_strategy = option_configs::ProbingStrategy::LINEAR;
+            else if (streq(strategy, "Quadratic"))
+                options::hash_table_probing_strategy = option_configs::ProbingStrategy::QUADRATIC;
+            else
+                std::cerr << "warning: ignore invalid hash table probing strategy " << strategy << std::endl;
+        }
+    );
+    C.arg_parser().add<const char*>(
+        /* group=       */ "Wasm",
+        /* short=       */ nullptr,
+        /* long=        */ "--hash-table-storing-strategy",
+        /* description= */ "specify the storing strategy for hash tables (`InPlace` or `OutOfPlace`)",
+        /* callback=    */ [](const char *strategy){
+            if (streq(strategy, "InPlace"))
+                options::hash_table_storing_strategy = option_configs::StoringStrategy::IN_PLACE;
+            else if (streq(strategy, "OutOfPlace"))
+                options::hash_table_storing_strategy = option_configs::StoringStrategy::OUT_OF_PLACE;
+            else
+                std::cerr << "warning: ignore invalid hash table storing strategy " << strategy << std::endl;
+        }
+    );
+    C.arg_parser().add<double>(
+        /* group=       */ "Wasm",
+        /* short=       */ nullptr,
+        /* long=        */ "--hash-table-max-load-factor",
+        /* description= */ "specify the maximal load factor for hash tables, i.e. the load factor at which rehashing "
+                           "should occur (must be in [1,∞) for chained and in [0.5,1) for open-addressing hash tables)",
+        /* callback=    */ [](double load_factor){
+            options::load_factor_open_addressing = load_factor;
+            options::load_factor_chained = load_factor;
+        }
+    );
+    C.arg_parser().add<double>(
+        /* group=       */ "Wasm",
+        /* short=       */ nullptr,
+        /* long=        */ "--hash-table-initial-capacity",
+        /* description= */ "specify the initial capacity for hash tables",
+        /* callback=    */ [](uint32_t initial_capacity){
+            options::hash_table_initial_capacity = initial_capacity;
+        }
+    );
+    C.arg_parser().add<bool>(
+        /* group=       */ "Wasm",
+        /* short=       */ nullptr,
+        /* long=        */ "--no-hash-based-group-join",
+        /* description= */ "disable potential use of hash-based group-join",
+        /* callback=    */ [](bool){ options::hash_based_group_join = false; }
+    );
+    C.arg_parser().add<const char*>(
+        /* group=       */ "Wasm",
+        /* short=       */ nullptr,
+        /* long=        */ "--hard-pipeline-breaker-layout",
+        /* description= */ "specify the layout for hard pipeline breakers (`Row`, `PAX4K`, `PAX64K`, `PAX512K`, "
+                           "`PAX4M`, or `PAX64M`)",
+        /* callback=    */ [](const char *layout){
+            if (streq(layout, "Row")) {
+                options::hard_pipeline_breaker_layout = std::make_unique<RowLayoutFactory>();
+            } else {
+                PAXLayoutFactory::block_size_t size_type;
+                uint64_t block_size;
+                if (streq(layout, "PAX4K")) {
+                    size_type = PAXLayoutFactory::NBytes;
+                    block_size = 1UL << 12;
+                } else if (streq(layout, "PAX64K")) {
+                    size_type = PAXLayoutFactory::NBytes;
+                    block_size = 1UL << 16;
+                } else if (streq(layout, "PAX512K")) {
+                    size_type = PAXLayoutFactory::NBytes;
+                    block_size = 1UL << 19;
+                } else if (streq(layout, "PAX4M")) {
+                    size_type = PAXLayoutFactory::NBytes;
+                    block_size = 1UL << 22;
+                } else if (streq(layout, "PAX64M")) {
+                    size_type = PAXLayoutFactory::NBytes;
+                    block_size = 1UL << 26;
+                } else if (streq(layout, "PAX16Tup")) {
+                    size_type = PAXLayoutFactory::NTuples;
+                    block_size = 16;
+                } else if (streq(layout, "PAX128Tup")) {
+                    size_type = PAXLayoutFactory::NTuples;
+                    block_size = 128;
+                } else if (streq(layout, "PAX1024Tup")) {
+                    size_type = PAXLayoutFactory::NTuples;
+                    block_size = 1024;
+                } else {
+                    std::cerr << "warning: ignore invalid layout for hard pipeline breakers " << layout << std::endl;
+                }
+                options::hard_pipeline_breaker_layout = std::make_unique<PAXLayoutFactory>(size_type, block_size);
+            }
+        }
+    );
+    C.arg_parser().add<std::vector<std::string_view>>(
+        /* group=       */ "Wasm",
+        /* short=       */ nullptr,
+        /* long=        */ "--soft-pipeline-breaker",
+        /* description= */ "a comma seperated list where to insert soft pipeline breakers (`AfterAll`, `AfterScan`, "
+                           "`AfterFilter`, `AfterProjection`, `AfterNestedLoopsJoin`, or `AfterSimpleHashJoin`)",
+        /* callback=    */ [](std::vector<std::string_view> location){
+            options::soft_pipeline_breaker = option_configs::SoftPipelineBreakerStrategy(0UL);
+            for (const auto &elem : location) {
+                if (strneq(elem.data(), "AfterAll", elem.size()))
+                    options::soft_pipeline_breaker |= option_configs::SoftPipelineBreakerStrategy::AFTER_ALL;
+                else if (strneq(elem.data(), "AfterScan", elem.size()))
+                    options::soft_pipeline_breaker |= option_configs::SoftPipelineBreakerStrategy::AFTER_SCAN;
+                else if (strneq(elem.data(), "AfterFilter", elem.size()))
+                    options::soft_pipeline_breaker |= option_configs::SoftPipelineBreakerStrategy::AFTER_FILTER;
+                else if (strneq(elem.data(), "AfterProjection", elem.size()))
+                    options::soft_pipeline_breaker |= option_configs::SoftPipelineBreakerStrategy::AFTER_PROJECTION;
+                else if (strneq(elem.data(), "AfterNestedLoopsJoin", elem.size()))
+                    options::soft_pipeline_breaker |= option_configs::SoftPipelineBreakerStrategy::AFTER_NESTED_LOOPS_JOIN;
+                else if (strneq(elem.data(), "AfterSimpleHashJoin", elem.size()))
+                    options::soft_pipeline_breaker |= option_configs::SoftPipelineBreakerStrategy::AFTER_SIMPLE_HASH_JOIN;
+                else
+                    std::cerr << "warning: ignore invalid location for soft pipeline breakers " << elem << std::endl;
+            }
+        }
+    );
+    C.arg_parser().add<const char*>(
+        /* group=       */ "Wasm",
+        /* short=       */ nullptr,
+        /* long=        */ "--soft-pipeline-breaker-layout",
+        /* description= */ "specify the layout for soft pipeline breakers (`Row`, `PAX4K`, `PAX64K`, `PAX512K`, "
+                           "`PAX4M`, or `PAX64M`)",
+        /* callback=    */ [](const char *layout){
+            if (streq(layout, "Row")) {
+                options::soft_pipeline_breaker_layout = std::make_unique<RowLayoutFactory>();
+            } else {
+                PAXLayoutFactory::block_size_t size_type;
+                uint64_t block_size;
+                if (streq(layout, "PAX4K")) {
+                    size_type = PAXLayoutFactory::NBytes;
+                    block_size = 1UL << 12;
+                } else if (streq(layout, "PAX64K")) {
+                    size_type = PAXLayoutFactory::NBytes;
+                    block_size = 1UL << 16;
+                } else if (streq(layout, "PAX512K")) {
+                    size_type = PAXLayoutFactory::NBytes;
+                    block_size = 1UL << 19;
+                } else if (streq(layout, "PAX4M")) {
+                    size_type = PAXLayoutFactory::NBytes;
+                    block_size = 1UL << 22;
+                } else if (streq(layout, "PAX64M")) {
+                    size_type = PAXLayoutFactory::NBytes;
+                    block_size = 1UL << 26;
+                } else if (streq(layout, "PAX16Tup")) {
+                    size_type = PAXLayoutFactory::NTuples;
+                    block_size = 16;
+                } else if (streq(layout, "PAX128Tup")) {
+                    size_type = PAXLayoutFactory::NTuples;
+                    block_size = 128;
+                } else if (streq(layout, "PAX1024Tup")) {
+                    size_type = PAXLayoutFactory::NTuples;
+                    block_size = 1024;
+                } else {
+                    std::cerr << "warning: ignore invalid layout for soft pipeline breakers " << layout << std::endl;
+                }
+                options::soft_pipeline_breaker_layout = std::make_unique<PAXLayoutFactory>(size_type, block_size);
+            }
+        }
+    );
+    C.arg_parser().add<std::size_t>(
+        /* group=       */ "Wasm",
+        /* short=       */ nullptr,
+        /* long=        */ "--soft-pipeline-breaker-num-tuples",
+        /* description= */ "set the size in tuples for soft pipeline breakers (0 means infinite)",
+        /* callback=    */ [](std::size_t num_tuples){ options::soft_pipeline_breaker_num_tuples = num_tuples; }
+    );
+    C.arg_parser().add<std::size_t>(
+        /* group=       */ "Wasm",
+        /* short=       */ nullptr,
+        /* long=        */ "--result-set-window-size",
+        /* description= */ "set the window size in tuples for the result set (0 means infinite)",
+        /* callback=    */ [](std::size_t size){ options::result_set_window_size = size; }
+    );
+    C.arg_parser().add<bool>(
+        /* group=       */ "Wasm",
+        /* short=       */ nullptr,
+        /* long=        */ "--no-exploit-unique-build",
+        /* description= */ "disable potential exploitation of uniqueness of build key in hash joins",
+        /* callback=    */ [](bool){ options::exploit_unique_build = true; }
+    );
+    C.arg_parser().add<bool>(
+        /* group=       */ "Wasm",
+        /* short=       */ nullptr,
+        /* long=        */ "--no-simd",
+        /* description= */ "disable potential use of SIMDfication",
+        /* callback=    */ [](bool){ options::simd = false; }
+    );
+    C.arg_parser().add<bool>(
+        /* group=       */ "Wasm",
+        /* short=       */ nullptr,
+        /* long=        */ "--no-double-pumping",
+        /* description= */ "disable use of double pumping (has only an effect if SIMDfication is enabled)",
+        /* callback=    */ [](bool){ options::double_pumping = false; }
+    );
+    C.arg_parser().add<std::size_t>(
+        /* group=       */ "Wasm",
+        /* short=       */ nullptr,
+        /* long=        */ "--simd-lanes",
+        /* description= */ "set the number of SIMD lanes to prefer",
+        /* callback=    */ [](std::size_t lanes){ options::simd_lanes = lanes; }
+    );
+    C.arg_parser().add<std::vector<std::string_view>>(
+        /* group=       */ "Hacks",
+        /* short=       */ nullptr,
+        /* long=        */ "--xxx-asc-sorted-attributes",
+        /* description= */ "a comma seperated list of attributes, i.e. of the format `T.x` where `T` is either the "
+                           "table name or the alias and `x` is the attribute name, which are assumed to be sorted "
+                           "ascending",
+        /* callback=    */ [&C](std::vector<std::string_view> attrs){
+            for (const auto &elem : attrs) {
+                auto idx = elem.find('.');
+                if (idx == std::string_view::npos)
+                    std::cerr << "warning: ignore invalid attribute " << elem << std::endl;
+                Schema::Identifier attr(C.pool(elem.substr(0, idx)), C.pool(elem.substr(idx + 1)));
+                options::sorted_attributes.emplace_back(attr, true);
+            }
+        }
+    );
+    C.arg_parser().add<std::vector<std::string_view>>(
+        /* group=       */ "Hacks",
+        /* short=       */ nullptr,
+        /* long=        */ "--xxx-desc-sorted-attributes",
+        /* description= */ "a comma seperated list of attributes, i.e. of the format `T.x` where `T` is either the "
+                           "table name or the alias and `x` is the attribute name, which are assumed to be sorted "
+                           "descending",
+        /* callback=    */ [&C](std::vector<std::string_view> attrs){
+            for (const auto &elem : attrs) {
+                auto idx = elem.find('.');
+                if (idx == std::string_view::npos)
+                    std::cerr << "warning: ignore invalid attribute " << elem << std::endl;
+                Schema::Identifier attr(C.pool(elem.substr(0, idx)), C.pool(elem.substr(idx + 1)));
+                options::sorted_attributes.emplace_back(attr, false);
+            }
+        }
+    );
+}
+
+}
+
+
+/*======================================================================================================================
+ * register_wasm_operators()
+ *====================================================================================================================*/
+
+void m::register_wasm_operators(PhysicalOptimizer &phys_opt)
+{
+    phys_opt.register_operator<NoOp>();
+    phys_opt.register_operator<Callback<false>>();
+    phys_opt.register_operator<Callback<true>>();
+    phys_opt.register_operator<Print<false>>();
+    phys_opt.register_operator<Print<true>>();
+    phys_opt.register_operator<Scan<false>>();
+    if (options::simd)
+        phys_opt.register_operator<Scan<true>>();
+    if (bool(options::filter_selection_strategy bitand option_configs::SelectionStrategy::BRANCHING))
+        phys_opt.register_operator<Filter<false>>();
+    if (bool(options::filter_selection_strategy bitand option_configs::SelectionStrategy::PREDICATED))
+        phys_opt.register_operator<Filter<true>>();
+    phys_opt.register_operator<LazyDisjunctiveFilter>();
+    phys_opt.register_operator<Projection>();
+    if (bool(options::grouping_implementations bitand option_configs::GroupingImplementation::HASH_BASED))
+        phys_opt.register_operator<HashBasedGrouping>();
+    if (bool(options::grouping_implementations bitand option_configs::GroupingImplementation::ORDERED))
+        phys_opt.register_operator<OrderedGrouping>();
+    phys_opt.register_operator<Aggregation>();
+    if (bool(options::sorting_implementations bitand option_configs::SortingImplementation::QUICKSORT)) {
+        if (bool(options::quicksort_cmp_selection_strategy bitand option_configs::SelectionStrategy::BRANCHING))
+            phys_opt.register_operator<Quicksort<false>>();
+        if (bool(options::quicksort_cmp_selection_strategy bitand option_configs::SelectionStrategy::PREDICATED))
+            phys_opt.register_operator<Quicksort<true>>();
+    }
+    if (bool(options::sorting_implementations bitand option_configs::SortingImplementation::NOOP))
+        phys_opt.register_operator<NoOpSorting>();
+    if (bool(options::join_implementations bitand option_configs::JoinImplementation::NESTED_LOOPS)) {
+        if (bool(options::nested_loops_join_selection_strategy bitand option_configs::SelectionStrategy::BRANCHING))
+            phys_opt.register_operator<NestedLoopsJoin<false>>();
+        if (bool(options::nested_loops_join_selection_strategy bitand option_configs::SelectionStrategy::PREDICATED))
+            phys_opt.register_operator<NestedLoopsJoin<true>>();
+    }
+    if (bool(options::join_implementations bitand option_configs::JoinImplementation::SIMPLE_HASH)) {
+        if (bool(options::simple_hash_join_selection_strategy bitand option_configs::SelectionStrategy::BRANCHING)) {
+            phys_opt.register_operator<SimpleHashJoin<false, false>>();
+            if (options::exploit_unique_build)
+                phys_opt.register_operator<SimpleHashJoin<true,  false>>();
+        }
+        if (bool(options::simple_hash_join_selection_strategy bitand option_configs::SelectionStrategy::PREDICATED)) {
+            phys_opt.register_operator<SimpleHashJoin<false, true>>();
+            if (options::exploit_unique_build)
+                phys_opt.register_operator<SimpleHashJoin<true,  true>>();
+        }
+    }
+    if (bool(options::join_implementations bitand option_configs::JoinImplementation::SORT_MERGE)) {
+        if (bool(options::sort_merge_join_selection_strategy bitand option_configs::SelectionStrategy::BRANCHING)) {
+            if (bool(options::sort_merge_join_cmp_selection_strategy bitand option_configs::SelectionStrategy::BRANCHING)) {
+                phys_opt.register_operator<SortMergeJoin<false, false, false, false>>();
+                phys_opt.register_operator<SortMergeJoin<false, true,  false, false>>();
+                phys_opt.register_operator<SortMergeJoin<true,  false, false, false>>();
+                phys_opt.register_operator<SortMergeJoin<true,  true,  false, false>>();
+            }
+            if (bool(options::sort_merge_join_cmp_selection_strategy bitand option_configs::SelectionStrategy::PREDICATED)) {
+                phys_opt.register_operator<SortMergeJoin<false, false, false, true>>();
+                phys_opt.register_operator<SortMergeJoin<false, true,  false, true>>();
+                phys_opt.register_operator<SortMergeJoin<true,  false, false, true>>();
+                phys_opt.register_operator<SortMergeJoin<true,  true,  false, true>>();
+            }
+        }
+        if (bool(options::sort_merge_join_selection_strategy bitand option_configs::SelectionStrategy::PREDICATED)) {
+            if (bool(options::sort_merge_join_cmp_selection_strategy bitand option_configs::SelectionStrategy::BRANCHING)) {
+                phys_opt.register_operator<SortMergeJoin<false, false, true, false>>();
+                phys_opt.register_operator<SortMergeJoin<false, true,  true, false>>();
+                phys_opt.register_operator<SortMergeJoin<true,  false, true, false>>();
+                phys_opt.register_operator<SortMergeJoin<true,  true,  true, false>>();
+            }
+            if (bool(options::sort_merge_join_cmp_selection_strategy bitand option_configs::SelectionStrategy::PREDICATED)) {
+                phys_opt.register_operator<SortMergeJoin<false, false, true, true>>();
+                phys_opt.register_operator<SortMergeJoin<false, true,  true, true>>();
+                phys_opt.register_operator<SortMergeJoin<true,  false, true, true>>();
+                phys_opt.register_operator<SortMergeJoin<true,  true,  true, true>>();
+            }
+        }
+    }
+    phys_opt.register_operator<Limit>();
+    if (options::hash_based_group_join)
+        phys_opt.register_operator<HashBasedGroupJoin>();
+}
+
+
+/*======================================================================================================================
  * Helper structs and functions
  *====================================================================================================================*/
 
@@ -492,6 +1044,19 @@ ConditionSet Scan<SIMDfied>::post_condition(const Match<Scan> &M)
         post_cond.add_condition(NoSIMD());
     }
 
+    /*----- Check if any attribute of scanned table is assumed to be sorted. -----*/
+    Sortedness::order_t orders;
+    for (auto &e : M.scan.schema()) {
+        auto pred = [&e](const auto &p){ return e.id == p.first; };
+        if (auto it = std::find_if(options::sorted_attributes.cbegin(), options::sorted_attributes.cend(), pred);
+            it != options::sorted_attributes.cend())
+        {
+            orders.add(e.id, it->second ? Sortedness::O_ASC : Sortedness::O_DESC);
+        }
+    }
+    if (not orders.empty())
+        post_cond.add_condition(Sortedness(std::move(orders)));
+
     return post_cond;
 }
 
@@ -508,12 +1073,13 @@ void Scan<SIMDfied>::execute(const Match<Scan> &M, setup_t setup, pipeline_t pip
 
     /*----- Compute possible number of SIMD lanes and decide which to use with regard to other operators preferences. */
     const auto layout_schema = table.schema(M.scan.alias());
+    CodeGenContext::Get().update_num_simd_lanes_preferred(options::simd_lanes); // set configured preference
     const auto num_simd_lanes_preferred =
         CodeGenContext::Get().num_simd_lanes_preferred(); // get other operators preferences
     const std::size_t num_simd_lanes =
-        M_CONSTEXPR_COND(SIMDfied,
-                         std::max(num_simd_lanes_preferred, get_num_simd_lanes(table.layout(), layout_schema, schema)),
-                         1);
+        SIMDfied ? (options::double_pumping ? 2 : 1)
+                    * std::max(num_simd_lanes_preferred, get_num_simd_lanes(table.layout(), layout_schema, schema))
+                 : 1;
     CodeGenContext::Get().set_num_simd_lanes(num_simd_lanes);
 
     /*----- Import the number of rows of `table`. -----*/
@@ -596,7 +1162,7 @@ double Filter<Predicated>::cost(const Match<Filter> &M)
     const unsigned cost = std::accumulate(cond.cbegin(), cond.cend(), 0U, [](unsigned cost, const cnf::Clause &clause) {
         return cost + clause.size();
     });
-    return cost * (Predicated ? 2.0 : 1.0);
+    return cost;
 }
 
 template<bool Predicated>
@@ -877,10 +1443,8 @@ void HashBasedGrouping::execute(const Match<HashBasedGrouping> &M, setup_t setup
                                 teardown_t teardown)
 {
     // TODO: determine setup
-    using PROBING_STRATEGY = QuadraticProbing;
-    constexpr bool USE_CHAINED_HASHING = false;
-    constexpr uint64_t AGGREGATES_SIZE_THRESHOLD_IN_BITS = std::numeric_limits<uint64_t>::infinity();
-    constexpr double HIGH_WATERMARK = 0.7;
+    const uint64_t AGGREGATES_SIZE_THRESHOLD_IN_BITS =
+        M.use_in_place_values ? std::numeric_limits<uint64_t>::max() : 0;
 
     const auto num_keys = M.grouping.group_by().size();
 
@@ -903,28 +1467,35 @@ void HashBasedGrouping::execute(const Match<HashBasedGrouping> &M, setup_t setup
 
     /*----- Compute initial capacity of hash table. -----*/
     uint32_t initial_capacity;
-    if (M.grouping.has_info())
-        initial_capacity = std::ceil(M.grouping.info().estimated_cardinality / HIGH_WATERMARK);
-    else if (auto scan = cast<const ScanOperator>(M.grouping.child(0)))
-        initial_capacity = std::ceil(scan->store().num_rows() / HIGH_WATERMARK);
-    else
-        initial_capacity = 1024; // fallback
+    if (options::hash_table_initial_capacity) {
+        initial_capacity = *options::hash_table_initial_capacity;
+    } else {
+        if (M.grouping.has_info())
+            initial_capacity = std::ceil(M.grouping.info().estimated_cardinality / M.load_factor);
+        else if (auto scan = cast<const ScanOperator>(M.grouping.child(0)))
+            initial_capacity = std::ceil(scan->store().num_rows() / M.load_factor);
+        else
+            initial_capacity = 1024; // fallback
+    }
 
     /*----- Create hash table. -----*/
     std::unique_ptr<HashTable> ht;
     std::vector<HashTable::index_t> key_indices(num_keys);
     std::iota(key_indices.begin(), key_indices.end(), 0);
-    if (USE_CHAINED_HASHING) {
-        ht = std::make_unique<GlobalChainedHashTable>(ht_schema, std::move(key_indices), initial_capacity);
-    } else {
+    if (M.use_open_addressing_hashing) {
         ++initial_capacity; // since at least one entry must always be unoccupied for lookups
-        if (aggregates_size_in_bits <= AGGREGATES_SIZE_THRESHOLD_IN_BITS)
+        if (aggregates_size_in_bits < AGGREGATES_SIZE_THRESHOLD_IN_BITS)
             ht = std::make_unique<GlobalOpenAddressingInPlaceHashTable>(ht_schema, std::move(key_indices),
                                                                         initial_capacity);
         else
             ht = std::make_unique<GlobalOpenAddressingOutOfPlaceHashTable>(ht_schema, std::move(key_indices),
                                                                            initial_capacity);
-        as<OpenAddressingHashTableBase>(*ht).set_probing_strategy<PROBING_STRATEGY>();
+        if (M.use_quadratic_probing)
+            as<OpenAddressingHashTableBase>(*ht).set_probing_strategy<QuadraticProbing>();
+        else
+            as<OpenAddressingHashTableBase>(*ht).set_probing_strategy<LinearProbing>();
+    } else {
+        ht = std::make_unique<GlobalChainedHashTable>(ht_schema, std::move(key_indices), initial_capacity);
     }
 
     /*----- Create child function. -----*/
@@ -937,7 +1508,7 @@ void HashBasedGrouping::execute(const Match<HashBasedGrouping> &M, setup_t setup
         M.child.execute(
             /* setup=    */ setup_t::Make_Without_Parent([&](){
                 ht->setup();
-                ht->set_high_watermark(HIGH_WATERMARK);
+                ht->set_high_watermark(M.load_factor);
                 dummy.emplace(ht->dummy_entry()); // create dummy slot to ignore NULL values in aggregate computations
             }),
             /* pipeline= */ [&](){
@@ -3331,8 +3902,13 @@ ConditionSet SimpleHashJoin<UniqueBuild, Predicated>::adapt_post_conditions(
 template<bool UniqueBuild, bool Predicated>
 double SimpleHashJoin<UniqueBuild, Predicated>::cost(const Match<SimpleHashJoin> &M)
 {
-    return 1.3 * M.build.info().estimated_cardinality +
-           (UniqueBuild ? 1.0 : 1.1) * M.probe.info().estimated_cardinality;
+    if (options::simple_hash_join_ordering_strategy == option_configs::OrderingStrategy::BUILD_ON_LEFT)
+        return (M.build.id() == M.join.child(0)->id() ? 1.0 : 2.0) + (UniqueBuild ? 0.0 : 0.1);
+    else if (options::simple_hash_join_ordering_strategy == option_configs::OrderingStrategy::BUILD_ON_RIGHT)
+        return M.build.id() == M.join.child(1)->id() ? 1.0 : 2.0 + (UniqueBuild ? 0.0 : 0.1);
+    else
+        return 1.3 * M.build.info().estimated_cardinality +
+            (UniqueBuild ? 1.0 : 1.1) * M.probe.info().estimated_cardinality;
 }
 
 template<bool UniqueBuild, bool Predicated>
@@ -3340,10 +3916,8 @@ void SimpleHashJoin<UniqueBuild, Predicated>::execute(const Match<SimpleHashJoin
                                                       pipeline_t pipeline, teardown_t teardown)
 {
     // TODO: determine setup
-    using PROBING_STRATEGY = QuadraticProbing;
-    constexpr bool USE_CHAINED_HASHING = false;
-    constexpr uint64_t PAYLOAD_SIZE_THRESHOLD_IN_BITS = std::numeric_limits<uint64_t>::infinity();
-    constexpr double HIGH_WATERMARK = 0.7;
+    const uint64_t PAYLOAD_SIZE_THRESHOLD_IN_BITS =
+        M.use_in_place_values ? std::numeric_limits<uint64_t>::max() : 0;
 
     M_insist(((M.join.schema() | M.join.predicate().get_required()) & M.build.schema()) == M.build.schema());
     M_insist(M.build.schema().drop_constants() == M.build.schema());
@@ -3365,29 +3939,36 @@ void SimpleHashJoin<UniqueBuild, Predicated>::execute(const Match<SimpleHashJoin
 
     /*----- Compute initial capacity of hash table. -----*/
     uint32_t initial_capacity;
-    if (M.build.has_info())
-        initial_capacity = std::ceil(M.build.info().estimated_cardinality / HIGH_WATERMARK);
-    else if (auto scan = cast<const ScanOperator>(&M.build))
-        initial_capacity = std::ceil(scan->store().num_rows() / HIGH_WATERMARK);
-    else
-        initial_capacity = 1024; // fallback
+    if (options::hash_table_initial_capacity) {
+        initial_capacity = *options::hash_table_initial_capacity;
+    } else {
+        if (M.build.has_info())
+            initial_capacity = std::ceil(M.build.info().estimated_cardinality / M.load_factor);
+        else if (auto scan = cast<const ScanOperator>(&M.build))
+            initial_capacity = std::ceil(scan->store().num_rows() / M.load_factor);
+        else
+            initial_capacity = 1024; // fallback
+    }
 
     /*----- Create hash table for build child. -----*/
     std::unique_ptr<HashTable> ht;
     std::vector<HashTable::index_t> build_key_indices;
     for (auto &build_key : build_keys)
         build_key_indices.push_back(ht_schema[build_key].first);
-    if (USE_CHAINED_HASHING) {
-        ht = std::make_unique<GlobalChainedHashTable>(ht_schema, std::move(build_key_indices), initial_capacity);
-    } else {
+    if (M.use_open_addressing_hashing) {
         ++initial_capacity; // since at least one entry must always be unoccupied for lookups
-        if (payload_size_in_bits <= PAYLOAD_SIZE_THRESHOLD_IN_BITS)
+        if (payload_size_in_bits < PAYLOAD_SIZE_THRESHOLD_IN_BITS)
             ht = std::make_unique<GlobalOpenAddressingInPlaceHashTable>(ht_schema, std::move(build_key_indices),
                                                                         initial_capacity);
         else
             ht = std::make_unique<GlobalOpenAddressingOutOfPlaceHashTable>(ht_schema, std::move(build_key_indices),
                                                                            initial_capacity);
-        as<OpenAddressingHashTableBase>(*ht).set_probing_strategy<PROBING_STRATEGY>();
+        if (M.use_quadratic_probing)
+            as<OpenAddressingHashTableBase>(*ht).set_probing_strategy<QuadraticProbing>();
+        else
+            as<OpenAddressingHashTableBase>(*ht).set_probing_strategy<LinearProbing>();
+    } else {
+        ht = std::make_unique<GlobalChainedHashTable>(ht_schema, std::move(build_key_indices), initial_capacity);
     }
 
     /*----- Create function for build child. -----*/
@@ -3398,7 +3979,7 @@ void SimpleHashJoin<UniqueBuild, Predicated>::execute(const Match<SimpleHashJoin
         M.children[0].get().execute(
             /* setup=    */ setup_t::Make_Without_Parent([&](){
                 ht->setup();
-                ht->set_high_watermark(HIGH_WATERMARK);
+                ht->set_high_watermark(M.load_factor);
             }),
             /* pipeline= */ [&](){
                 auto &env = CodeGenContext::Get().env();
@@ -3905,10 +4486,8 @@ void HashBasedGroupJoin::execute(const Match<HashBasedGroupJoin> &M, setup_t set
                                  teardown_t teardown)
 {
     // TODO: determine setup
-    using PROBING_STRATEGY = QuadraticProbing;
-    constexpr bool USE_CHAINED_HASHING = false;
-    constexpr uint64_t AGGREGATES_SIZE_THRESHOLD_IN_BITS = std::numeric_limits<uint64_t>::infinity();
-    constexpr double HIGH_WATERMARK = 0.7;
+    const uint64_t AGGREGATES_SIZE_THRESHOLD_IN_BITS =
+        M.use_in_place_values ? std::numeric_limits<uint64_t>::max() : 0;
 
     auto &C = Catalog::Get();
     const auto num_keys = M.grouping.group_by().size();
@@ -3956,28 +4535,35 @@ void HashBasedGroupJoin::execute(const Match<HashBasedGroupJoin> &M, setup_t set
 
     /*----- Compute initial capacity of hash table. -----*/
     uint32_t initial_capacity;
-    if (M.build.has_info())
-        initial_capacity = std::ceil(M.build.info().estimated_cardinality / HIGH_WATERMARK);
-    else if (auto scan = cast<const ScanOperator>(&M.build))
-        initial_capacity = std::ceil(scan->store().num_rows() / HIGH_WATERMARK);
-    else
-        initial_capacity = 1024; // fallback
+    if (options::hash_table_initial_capacity) {
+        initial_capacity = *options::hash_table_initial_capacity;
+    } else {
+        if (M.build.has_info())
+            initial_capacity = std::ceil(M.build.info().estimated_cardinality / M.load_factor);
+        else if (auto scan = cast<const ScanOperator>(&M.build))
+            initial_capacity = std::ceil(scan->store().num_rows() / M.load_factor);
+        else
+            initial_capacity = 1024; // fallback
+    }
 
     /*----- Create hash table for build relation. -----*/
     std::unique_ptr<HashTable> ht;
     std::vector<HashTable::index_t> key_indices(num_keys);
     std::iota(key_indices.begin(), key_indices.end(), 0);
-    if (USE_CHAINED_HASHING) {
-        ht = std::make_unique<GlobalChainedHashTable>(ht_schema, std::move(key_indices), initial_capacity);
-    } else {
+    if (M.use_open_addressing_hashing) {
         ++initial_capacity; // since at least one entry must always be unoccupied for lookups
-        if (aggregates_size_in_bits <= AGGREGATES_SIZE_THRESHOLD_IN_BITS)
+        if (aggregates_size_in_bits < AGGREGATES_SIZE_THRESHOLD_IN_BITS)
             ht = std::make_unique<GlobalOpenAddressingInPlaceHashTable>(ht_schema, std::move(key_indices),
                                                                         initial_capacity);
         else
             ht = std::make_unique<GlobalOpenAddressingOutOfPlaceHashTable>(ht_schema, std::move(key_indices),
                                                                            initial_capacity);
-        as<OpenAddressingHashTableBase>(*ht).set_probing_strategy<PROBING_STRATEGY>();
+        if (M.use_quadratic_probing)
+            as<OpenAddressingHashTableBase>(*ht).set_probing_strategy<QuadraticProbing>();
+        else
+            as<OpenAddressingHashTableBase>(*ht).set_probing_strategy<LinearProbing>();
+    } else {
+        ht = std::make_unique<GlobalChainedHashTable>(ht_schema, std::move(key_indices), initial_capacity);
     }
 
     std::optional<HashTable::entry_t> dummy; ///< *local* dummy slot
@@ -4311,7 +4897,7 @@ void HashBasedGroupJoin::execute(const Match<HashBasedGroupJoin> &M, setup_t set
         M.children[0].get().execute(
             /* setup=    */ setup_t::Make_Without_Parent([&](){
                 ht->setup();
-                ht->set_high_watermark(HIGH_WATERMARK);
+                ht->set_high_watermark(M.load_factor);
                 dummy.emplace(ht->dummy_entry()); // create dummy slot to ignore NULL values in aggregate computations
             }),
             /* pipeline= */ [&](){

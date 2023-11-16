@@ -8,18 +8,19 @@ using namespace m;
 using namespace m::wasm;
 
 
-namespace m {
+namespace {
 
 namespace options {
 
 /** Whether there must not occur any rehashing. */
 bool insist_no_rehashing = false;
+/** Whether to add special case handling for sorting two elements using quicksort. */
+bool special_case_quicksort_two_elements = true;
+/** Whether to partition using a hard boundary, i.e. pivot element strictly splits the data.  Otherwise, a soft
+ * boundary is used, i.e. boundary can be anywhere in the data range equal to the pivot. */
+bool partition_hard_boundary = false;
 
 }
-
-}
-
-namespace {
 
 __attribute__((constructor(201)))
 static void add_wasm_algo_args()
@@ -33,6 +34,22 @@ static void add_wasm_algo_args()
         /* long=        */ "--insist-no-rehashing",
         /* description= */ "insist that no rehashing occurs",
         /* callback=    */ [](bool){ options::insist_no_rehashing = true; }
+    );
+    C.arg_parser().add<bool>(
+        /* group=       */ "Wasm",
+        /* short=       */ nullptr,
+        /* long=        */ "--no-special-case-quicksort-two-elements",
+        /* description= */ "disable special case handling for sorting two elements using quicksort",
+        /* callback=    */ [](bool){ options::special_case_quicksort_two_elements = false; }
+    );
+    C.arg_parser().add<bool>(
+        /* group=       */ "Wasm",
+        /* short=       */ nullptr,
+        /* long=        */ "--partition-hard-boundary",
+        /* description= */ "partition data using a hard boundary, i.e. pivot element strictly splits the data; "
+                           "otherwise, a soft boundary is used, i.e. boundary can be anywhere in the data range equal "
+                           "to the pivot",
+        /* callback=    */ [](bool){ options::partition_hard_boundary = true; }
     );
 }
 
@@ -57,8 +74,8 @@ void m::wasm::quicksort(Buffer<IsGlobal> &buffer, const std::vector<SortingOpera
      * containing the entries of the pivot element needed for ordering as parameters (note that the pivot element
      * must not be contained in the interval [begin, end[ since these entries may be swapped which would render the
      * given environment invalid). Returns ID of partition boundary s.t. all elements before this boundary are smaller
-     * than or equal to the pivot element and all elements after or equal this boundary are greater than or equal to
-     * the pivot element. */
+     * than or equal to the pivot element and all elements after or equal this boundary are greater than (or equal to
+     * iff `options::partition_hard_boundary` is unset) the pivot element. */
     auto partition = [&](U32x1 _begin, U32x1 _end, const Environment &env_pivot) -> U32x1 {
         Var<U32x1> begin(_begin), end(_end);
 
@@ -101,10 +118,12 @@ void m::wasm::quicksort(Buffer<IsGlobal> &buffer, const std::vector<SortingOpera
             }
 
             /*----- Compare begin and last tuples to pivot element and advance cursors respectively. -----*/
-            Boolx1 begin_le_pivot = compare<CmpPredicated>(env_begin, env_pivot, order) <= 0;
-            Boolx1 last_ge_pivot  = compare<CmpPredicated>(env_last, env_pivot, order) >= 0;
+            Boolx1 begin_cmp_pivot =
+                options::partition_hard_boundary ? compare<CmpPredicated>(env_begin, env_pivot, order) < 0
+                                                   : compare<CmpPredicated>(env_begin, env_pivot, order) <= 0;
+            Boolx1 last_ge_pivot = compare<CmpPredicated>(env_last, env_pivot, order) >= 0;
 
-            begin += begin_le_pivot.to<uint32_t>();
+            begin += begin_cmp_pivot.to<uint32_t>();
             end -= last_ge_pivot.to<uint32_t>();
         }
 
@@ -125,7 +144,8 @@ void m::wasm::quicksort(Buffer<IsGlobal> &buffer, const std::vector<SortingOpera
 
         U32x1 last = end - 1U;
 
-        WHILE(end - begin > 2U) {
+        Boolx1 cmp = options::special_case_quicksort_two_elements ? end - begin > 2U : end - begin >= 2U;
+        WHILE(cmp) {
             Var<U32x1> mid((begin + end) >> 1U); // (begin + end) / 2
 
             /*----- Load entire begin tuple. -----*/
@@ -192,28 +212,31 @@ void m::wasm::quicksort(Buffer<IsGlobal> &buffer, const std::vector<SortingOpera
             end = mid - 1U;
         }
 
-        /* TODO: remove this special case handling and integrate into loop iff buffer elements are small */
-        IF (end - begin == 2U) {
-            /*----- Load entire begin tuple. -----*/
-            auto env_begin = [&](){
-                auto S = CodeGenContext::Get().scoped_environment();
-                load(begin);
-                return S.extract();
-            }();
+        if (options::special_case_quicksort_two_elements) {
+            IF (end - begin == 2U) {
+                /*----- Load entire begin tuple. -----*/
+                auto env_begin = [&](){
+                    auto S = CodeGenContext::Get().scoped_environment();
+                    load(begin);
+                    return S.extract();
+                }();
 
-            /*----- Load entire last tuple. -----*/
-            auto env_last = [&](){
-                auto S = CodeGenContext::Get().scoped_environment();
-                load(last.clone());
-                return S.extract();
-            }();
+                /*----- Load entire last tuple. -----*/
+                auto env_last = [&](){
+                    auto S = CodeGenContext::Get().scoped_environment();
+                    load(last.clone());
+                    return S.extract();
+                }();
 
-            /*----- Swap begin and last if they are not yet sorted. -----.*/
-            Boolx1 begin_gt_last = compare<CmpPredicated>(env_begin, env_last, order) > 0;
-            IF (begin_gt_last) {
-                swap(begin, last, env_begin, env_last);
+                /*----- Swap begin and last if they are not yet sorted. -----.*/
+                Boolx1 begin_gt_last = compare<CmpPredicated>(env_begin, env_last, order) > 0;
+                IF (begin_gt_last) {
+                    swap(begin, last, env_begin, env_last);
+                };
             };
-        };
+        } else {
+            last.discard(); // since it was always cloned
+        }
 
         buffer.teardown_base_address();
     }

@@ -1,9 +1,175 @@
 #pragma once
 
+#include <mutable/util/enum_ops.hpp>
 #include "backend/PhysicalOperator.hpp"
 #include "backend/WasmUtil.hpp"
 #include <mutable/storage/DataLayoutFactory.hpp>
 
+
+namespace m {
+
+namespace option_configs {
+
+/*----- algorithmic decisions ----------------------------------------------------------------------------------------*/
+enum class GroupingImplementation : uint64_t {
+    ALL         = 0b11,
+    HASH_BASED  = 0b01,
+    ORDERED     = 0b10,
+};
+
+enum class SortingImplementation : uint64_t {
+    ALL       = 0b11,
+    QUICKSORT = 0b01,
+    NOOP      = 0b10,
+};
+
+enum class JoinImplementation : uint64_t {
+    ALL          = 0b111,
+    NESTED_LOOPS = 0b001,
+    SIMPLE_HASH  = 0b010,
+    SORT_MERGE   = 0b100,
+};
+
+enum class SoftPipelineBreakerStrategy : uint64_t {
+    AFTER_ALL                   = 0b111111,
+    AFTER_SCAN                  = 0b000001,
+    AFTER_FILTER                = 0b000010,
+    AFTER_PROJECTION            = 0b000100,
+    AFTER_NESTED_LOOPS_JOIN     = 0b001000,
+    AFTER_SIMPLE_HASH_JOIN      = 0b010000,
+    AFTER_HASH_BASED_GROUP_JOIN = 0b100000,
+    NONE                        = 0b000000,
+};
+
+/*----- implementation decisions -------------------------------------------------------------------------------------*/
+enum class SelectionStrategy : uint64_t {
+    AUTO       = 0b11,
+    BRANCHING  = 0b01,
+    PREDICATED = 0b10,
+};
+
+enum class HashTableImplementation : uint64_t {
+    ALL             = 0b11,
+    OPEN_ADDRESSING = 0b01,
+    CHAINED         = 0b10,
+};
+
+enum class ProbingStrategy : uint64_t {
+    AUTO      = 0b11,
+    LINEAR    = 0b01,
+    QUADRATIC = 0b10,
+};
+
+enum class StoringStrategy : uint64_t {
+    AUTO         = 0b11,
+    IN_PLACE     = 0b01,
+    OUT_OF_PLACE = 0b10,
+};
+
+enum class OrderingStrategy : uint64_t {
+    AUTO           = 0b11,
+    BUILD_ON_LEFT  = 0b01,
+    BUILD_ON_RIGHT = 0b10,
+};
+
+}
+
+}
+
+namespace {
+
+namespace options {
+
+/*----- options ------------------------------------------------------------------------------------------------------*/
+/** Which implementations should be considered for a `GroupingOperator`. */
+extern m::option_configs::GroupingImplementation grouping_implementations;
+
+/** Which implementations should be considered for a `SortingOperator`. */
+extern m::option_configs::SortingImplementation sorting_implementations;
+
+/** Which implementations should be considered for a `JoinOperator`. */
+extern m::option_configs::JoinImplementation join_implementations;
+
+/** Which selection strategy should be used for `wasm::Filter`. */
+extern m::option_configs::SelectionStrategy filter_selection_strategy;
+
+/** Which selection strategy should be used for comparisons in `wasm::Quicksort`. */
+extern m::option_configs::SelectionStrategy quicksort_cmp_selection_strategy;
+
+/** Which selection strategy should be used for `wasm::NestedLoopsJoin`. */
+extern m::option_configs::SelectionStrategy nested_loops_join_selection_strategy;
+
+/** Which selection strategy should be used for `wasm::SimpleHashJoin`. */
+extern m::option_configs::SelectionStrategy simple_hash_join_selection_strategy;
+
+/** Which ordering strategy should be used for `wasm::SimpleHashJoin`. */
+extern m::option_configs::OrderingStrategy simple_hash_join_ordering_strategy;
+
+/** Which selection strategy should be used for `wasm::SortMergeJoin`. */
+extern m::option_configs::SelectionStrategy sort_merge_join_selection_strategy;
+
+/** Which selection strategy should be used for comparisons while sorting in `wasm::SortMergeJoin`. */
+extern m::option_configs::SelectionStrategy sort_merge_join_cmp_selection_strategy;
+
+/** Which implementation should be used for `wasm::HashTable`s. */
+extern m::option_configs::HashTableImplementation hash_table_implementation;
+
+/** Which probing strategy should be used for `wasm::OpenAddressingHashTable`s.  Does not have any effect if
+ * `wasm::ChainedHashTable`s are used. */
+extern m::option_configs::ProbingStrategy hash_table_probing_strategy;
+
+/** Which storing strategy should be used for `wasm::OpenAddressingHashTable`s.  Does not have any effect if
+ * `wasm::ChainedHashTable`s are used. */
+extern m::option_configs::StoringStrategy hash_table_storing_strategy;
+
+/** Which maximal load factor should be used for `wasm::OpenAddressingHashTable`s.  Does not have any effect if
+ * `wasm::ChainedHashTable`s are used. */
+extern double load_factor_open_addressing;
+
+/** Which maximal load factor should be used for `wasm::ChainedHashTable`s.  Does not have any effect if
+ * `wasm::OpenAddressingHashTable`s are used. */
+extern double load_factor_chained;
+
+/** Which initial capacity should be used for `wasm::HashTable`s. */
+extern std::optional<uint32_t> hash_table_initial_capacity;
+
+/** Whether to use `wasm::HashBasedGroupJoin` if possible. */
+extern bool hash_based_group_join;
+
+/** Which layout factory should be used for hard pipeline breakers. */
+extern std::unique_ptr<const m::storage::DataLayoutFactory> hard_pipeline_breaker_layout;
+
+/** Where soft pipeline breakers should be added. */
+extern m::option_configs::SoftPipelineBreakerStrategy soft_pipeline_breaker;
+
+/** Which layout factory should be used for soft pipeline breakers. */
+extern std::unique_ptr<const m::storage::DataLayoutFactory> soft_pipeline_breaker_layout;
+
+/** Which size in tuples should be used for soft pipeline breakers. */
+extern std::size_t soft_pipeline_breaker_num_tuples;
+
+/** Which window size should be used for the result set. */
+extern std::size_t result_set_window_size;
+
+/** Whether to exploit uniqueness of build key in hash joins. */
+extern bool exploit_unique_build;
+
+/** Whether to use SIMDfication. */
+extern bool simd;
+
+/** Whether to use double pumping if SIMDfication is enabled. */
+extern bool double_pumping;
+
+/** Which number of SIMD lanes to prefer. */
+extern std::size_t simd_lanes;
+
+/** Which attributes are assumed to be sorted.  For each entry, the first element is the name of the attribute and the
+ * second one is `true` iff the attribute is sorted ascending and vice versa. */
+extern std::vector<std::pair<m::Schema::Identifier, bool>> sorted_attributes;
+
+}
+
+}
 
 namespace m {
 
@@ -299,7 +465,7 @@ struct HashBasedGroupJoin
     : PhysicalOperator<HashBasedGroupJoin, pattern_t<GroupingOperator, pattern_t<JoinOperator, Wildcard, Wildcard>>>
 {
     static void execute(const Match<HashBasedGroupJoin> &M, setup_t setup, pipeline_t pipeline, teardown_t teardown);
-    static double cost(const Match<HashBasedGroupJoin>&) { return 2.0; }
+    static double cost(const Match<HashBasedGroupJoin>&) { return 1.0; }
     static ConditionSet
     pre_condition(std::size_t child_idx,
                   const std::tuple<const GroupingOperator*, const JoinOperator*, const Wildcard*, const Wildcard*>
@@ -308,6 +474,9 @@ struct HashBasedGroupJoin
 };
 
 }
+
+/** Registers physical Wasm operators in \p phys_opt depending on the set CLI options. */
+void register_wasm_operators(PhysicalOptimizer &phys_opt);
 
 template<typename T>
 void execute_buffered(const Match<T> &M, const Schema &schema,
@@ -359,16 +528,13 @@ struct Match<wasm::Callback<SIMDfied>> : MatchBase
 {
     const CallbackOperator &callback;
     const MatchBase &child;
-    std::unique_ptr<const storage::DataLayoutFactory> result_set_factory;
-    std::size_t result_set_window_size;
+    std::unique_ptr<const storage::DataLayoutFactory> result_set_factory =
+        M_notnull(options::hard_pipeline_breaker_layout.get())->clone();
+    std::size_t result_set_window_size = options::result_set_window_size;
 
     Match(const CallbackOperator *Callback, std::vector<std::reference_wrapper<const MatchBase>> &&children)
         : callback(*Callback)
         , child(children[0])
-        , result_set_factory(M_CONSTEXPR_COND_UNCAPTURED(SIMDfied,
-             std::make_unique<storage::PAXLayoutFactory>(storage::PAXLayoutFactory::NTuples, 128),
-             std::make_unique<storage::RowLayoutFactory>()
-        )) // TODO: let optimizer decide this
     {
         M_insist(children.size() == 1);
     }
@@ -386,16 +552,13 @@ struct Match<wasm::Print<SIMDfied>> : MatchBase
 {
     const PrintOperator &print_op;
     const MatchBase &child;
-    std::unique_ptr<const storage::DataLayoutFactory> result_set_factory;
-    std::size_t result_set_window_size;
+    std::unique_ptr<const storage::DataLayoutFactory> result_set_factory =
+        M_notnull(options::hard_pipeline_breaker_layout.get())->clone();
+    std::size_t result_set_window_size = options::result_set_window_size;
 
     Match(const PrintOperator *print, std::vector<std::reference_wrapper<const MatchBase>> &&children)
         : print_op(*print)
         , child(children[0])
-        , result_set_factory(M_CONSTEXPR_COND_UNCAPTURED(SIMDfied,
-             std::make_unique<storage::PAXLayoutFactory>(storage::PAXLayoutFactory::NTuples, 128),
-             std::make_unique<storage::RowLayoutFactory>()
-        )) // TODO: let optimizer decide this
     {
         M_insist(children.size() == 1);
     }
@@ -411,12 +574,15 @@ struct Match<wasm::Print<SIMDfied>> : MatchBase
 template<bool SIMDfied>
 struct Match<wasm::Scan<SIMDfied>> : MatchBase
 {
-    private:
-    std::unique_ptr<const storage::DataLayoutFactory> buffer_factory_;
-    std::size_t buffer_num_tuples_;
-    public:
     const ScanOperator &scan;
+    private:
+    std::unique_ptr<const storage::DataLayoutFactory> buffer_factory_ =
+        bool(options::soft_pipeline_breaker bitand option_configs::SoftPipelineBreakerStrategy::AFTER_SCAN)
+            ? M_notnull(options::soft_pipeline_breaker_layout.get())->clone()
+            : std::unique_ptr<storage::DataLayoutFactory>();
+    std::size_t buffer_num_tuples_ = options::soft_pipeline_breaker_num_tuples;
 
+    public:
     Match(const ScanOperator *scan, std::vector<std::reference_wrapper<const MatchBase>> &&children)
         : scan(*scan)
     {
@@ -428,7 +594,7 @@ struct Match<wasm::Scan<SIMDfied>> : MatchBase
             auto buffer_schema = scan.schema().drop_constants().deduplicate();
             if (buffer_schema.num_entries()) {
                 /* Use local buffer since scan loop will not be executed partially in multiple function calls. */
-                wasm::LocalBuffer buffer(buffer_schema, *buffer_factory_, SIMDfied, buffer_num_tuples_,
+                wasm::LocalBuffer buffer(buffer_schema, *buffer_factory_, SIMDfied or options::simd, buffer_num_tuples_,
                                          std::move(setup), std::move(pipeline), std::move(teardown));
                 wasm::Scan<SIMDfied>::execute(
                     /* M=        */ *this,
@@ -454,13 +620,16 @@ struct Match<wasm::Scan<SIMDfied>> : MatchBase
 template<bool Predicated>
 struct Match<wasm::Filter<Predicated>> : MatchBase
 {
-    private:
-    std::unique_ptr<const storage::DataLayoutFactory> buffer_factory_;
-    std::size_t buffer_num_tuples_;
-    public:
     const FilterOperator &filter;
     const MatchBase &child;
+    private:
+    std::unique_ptr<const storage::DataLayoutFactory> buffer_factory_ =
+        bool(options::soft_pipeline_breaker bitand option_configs::SoftPipelineBreakerStrategy::AFTER_FILTER)
+            ? M_notnull(options::soft_pipeline_breaker_layout.get())->clone()
+            : std::unique_ptr<storage::DataLayoutFactory>();
+    std::size_t buffer_num_tuples_ = options::soft_pipeline_breaker_num_tuples;
 
+    public:
     Match(const FilterOperator *filter, std::vector<std::reference_wrapper<const MatchBase>> &&children)
         : filter(*filter)
         , child(children[0])
@@ -483,8 +652,11 @@ struct Match<wasm::LazyDisjunctiveFilter> : MatchBase
     const DisjunctiveFilterOperator &filter;
     const MatchBase &child;
     private:
-    std::unique_ptr<const storage::DataLayoutFactory> buffer_factory_;
-    std::size_t buffer_num_tuples_;
+    std::unique_ptr<const storage::DataLayoutFactory> buffer_factory_ =
+        bool(options::soft_pipeline_breaker bitand option_configs::SoftPipelineBreakerStrategy::AFTER_FILTER)
+            ? M_notnull(options::soft_pipeline_breaker_layout.get())->clone()
+            : std::unique_ptr<storage::DataLayoutFactory>();
+    std::size_t buffer_num_tuples_ = options::soft_pipeline_breaker_num_tuples;
 
     public:
     Match(const DisjunctiveFilterOperator *filter, std::vector<std::reference_wrapper<const MatchBase>> &&children)
@@ -508,10 +680,12 @@ struct Match<wasm::Projection> : MatchBase
 {
     const ProjectionOperator &projection;
     std::optional<std::reference_wrapper<const MatchBase>> child;
-
     private:
-    std::unique_ptr<const storage::DataLayoutFactory> buffer_factory_;
-    std::size_t buffer_num_tuples_;
+    std::unique_ptr<const storage::DataLayoutFactory> buffer_factory_ =
+        bool(options::soft_pipeline_breaker bitand option_configs::SoftPipelineBreakerStrategy::AFTER_PROJECTION)
+            ? M_notnull(options::soft_pipeline_breaker_layout.get())->clone()
+            : std::unique_ptr<storage::DataLayoutFactory>();
+    std::size_t buffer_num_tuples_ = options::soft_pipeline_breaker_num_tuples;
 
     public:
     Match(const ProjectionOperator *projection, std::vector<std::reference_wrapper<const MatchBase>> &&children)
@@ -537,6 +711,12 @@ struct Match<wasm::HashBasedGrouping> : MatchBase
 {
     const GroupingOperator &grouping;
     const MatchBase &child;
+    bool use_open_addressing_hashing =
+        bool(options::hash_table_implementation bitand option_configs::HashTableImplementation::OPEN_ADDRESSING);
+    bool use_in_place_values = bool(options::hash_table_storing_strategy bitand option_configs::StoringStrategy::IN_PLACE);
+    bool use_quadratic_probing = bool(options::hash_table_probing_strategy bitand option_configs::ProbingStrategy::QUADRATIC);
+    double load_factor =
+        use_open_addressing_hashing ? options::load_factor_open_addressing : options::load_factor_chained;
 
     Match(const GroupingOperator *grouping, std::vector<std::reference_wrapper<const MatchBase>> &&children)
         : grouping(*grouping)
@@ -600,12 +780,12 @@ struct Match<wasm::Quicksort<CmpPredicated>> : MatchBase
 {
     const SortingOperator &sorting;
     const MatchBase &child;
-    std::unique_ptr<const storage::DataLayoutFactory> materializing_factory;
+    std::unique_ptr<const storage::DataLayoutFactory> materializing_factory =
+        M_notnull(options::hard_pipeline_breaker_layout.get())->clone();
 
     Match(const SortingOperator *sorting, std::vector<std::reference_wrapper<const MatchBase>> &&children)
         : sorting(*sorting)
         , child(children[0])
-        , materializing_factory(std::make_unique<storage::RowLayoutFactory>()) // TODO: let optimizer decide this
     {
         M_insist(children.size() == 1);
     }
@@ -640,14 +820,17 @@ struct Match<wasm::NoOpSorting> : MatchBase
 template<bool Predicated>
 struct Match<wasm::NestedLoopsJoin<Predicated>> : MatchBase
 {
-    private:
-    std::unique_ptr<const storage::DataLayoutFactory> buffer_factory_;
-    std::size_t buffer_num_tuples_;
-    public:
     const JoinOperator &join;
-    std::vector<std::reference_wrapper<const MatchBase>> children;
+    const std::vector<std::reference_wrapper<const MatchBase>> children;
     std::vector<std::unique_ptr<const storage::DataLayoutFactory>> materializing_factories_;
+    private:
+    std::unique_ptr<const storage::DataLayoutFactory> buffer_factory_ =
+        bool(options::soft_pipeline_breaker bitand option_configs::SoftPipelineBreakerStrategy::AFTER_NESTED_LOOPS_JOIN)
+            ? M_notnull(options::soft_pipeline_breaker_layout.get())->clone()
+            : std::unique_ptr<storage::DataLayoutFactory>();
+    std::size_t buffer_num_tuples_ = options::soft_pipeline_breaker_num_tuples;
 
+    public:
     Match(const JoinOperator *join, std::vector<std::reference_wrapper<const MatchBase>> &&children)
         : join(*join)
         , children(std::move(children))
@@ -655,7 +838,7 @@ struct Match<wasm::NestedLoopsJoin<Predicated>> : MatchBase
         M_insist(this->children.size() >= 2);
 
         for (std::size_t i = 0; i < this->children.size() - 1; ++i)
-            materializing_factories_.emplace_back(std::make_unique<storage::RowLayoutFactory>()); // TODO: let optimizer decide this
+            materializing_factories_.push_back(M_notnull(options::hard_pipeline_breaker_layout.get())->clone());
     }
 
     void execute(setup_t setup, pipeline_t pipeline, teardown_t teardown) const override {
@@ -670,15 +853,24 @@ struct Match<wasm::NestedLoopsJoin<Predicated>> : MatchBase
 template<bool UniqueBuild, bool Predicated>
 struct Match<wasm::SimpleHashJoin<UniqueBuild, Predicated>> : MatchBase
 {
-    private:
-    std::unique_ptr<const storage::DataLayoutFactory> buffer_factory_;
-    std::size_t buffer_num_tuples_;
-    public:
     const JoinOperator &join;
     const Wildcard &build;
     const Wildcard &probe;
-    std::vector<std::reference_wrapper<const MatchBase>> children;
+    const std::vector<std::reference_wrapper<const MatchBase>> children;
+    bool use_open_addressing_hashing =
+        bool(options::hash_table_implementation bitand option_configs::HashTableImplementation::OPEN_ADDRESSING);
+    bool use_in_place_values = bool(options::hash_table_storing_strategy bitand option_configs::StoringStrategy::IN_PLACE);
+    bool use_quadratic_probing = bool(options::hash_table_probing_strategy bitand option_configs::ProbingStrategy::QUADRATIC);
+    double load_factor =
+        use_open_addressing_hashing ? options::load_factor_open_addressing : options::load_factor_chained;
+    private:
+    std::unique_ptr<const storage::DataLayoutFactory> buffer_factory_ =
+        bool(options::soft_pipeline_breaker bitand option_configs::SoftPipelineBreakerStrategy::AFTER_SIMPLE_HASH_JOIN)
+            ? M_notnull(options::soft_pipeline_breaker_layout.get())->clone()
+            : std::unique_ptr<storage::DataLayoutFactory>();
+    std::size_t buffer_num_tuples_ = options::soft_pipeline_breaker_num_tuples;
 
+    public:
     Match(const JoinOperator *join, const Wildcard *build, const Wildcard *probe,
           std::vector<std::reference_wrapper<const MatchBase>> &&children)
         : join(*join)
@@ -705,8 +897,10 @@ struct Match<wasm::SortMergeJoin<SortLeft, SortRight, Predicated, CmpPredicated>
     const Wildcard &parent; ///< the referenced relation with unique join attributes
     const Wildcard &child; ///< the relation referencing the parent relation
     std::vector<std::reference_wrapper<const MatchBase>> children;
-    std::unique_ptr<const storage::DataLayoutFactory> left_materializing_factory;
-    std::unique_ptr<const storage::DataLayoutFactory> right_materializing_factory;
+    std::unique_ptr<const storage::DataLayoutFactory> left_materializing_factory =
+        M_notnull(options::hard_pipeline_breaker_layout.get())->clone();
+    std::unique_ptr<const storage::DataLayoutFactory> right_materializing_factory =
+        M_notnull(options::hard_pipeline_breaker_layout.get())->clone();
 
     Match(const JoinOperator *join, const Wildcard *parent, const Wildcard *child,
           std::vector<std::reference_wrapper<const MatchBase>> &&children)
@@ -714,8 +908,6 @@ struct Match<wasm::SortMergeJoin<SortLeft, SortRight, Predicated, CmpPredicated>
         , parent(*parent)
         , child(*child)
         , children(std::move(children))
-        , left_materializing_factory(std::make_unique<storage::RowLayoutFactory>()) // TODO: let optimizer decide this
-        , right_materializing_factory(std::make_unique<storage::RowLayoutFactory>()) // TODO: let optimizer decide this
     {
         M_insist(this->children.size() == 2);
     }
@@ -759,9 +951,18 @@ struct Match<wasm::HashBasedGroupJoin> : MatchBase
     const Wildcard &build;
     const Wildcard &probe;
     std::vector<std::reference_wrapper<const MatchBase>> children;
+    bool use_open_addressing_hashing =
+        bool(options::hash_table_implementation bitand option_configs::HashTableImplementation::OPEN_ADDRESSING);
+    bool use_in_place_values = bool(options::hash_table_storing_strategy bitand option_configs::StoringStrategy::IN_PLACE);
+    bool use_quadratic_probing = bool(options::hash_table_probing_strategy bitand option_configs::ProbingStrategy::QUADRATIC);
+    double load_factor =
+        use_open_addressing_hashing ? options::load_factor_open_addressing : options::load_factor_chained;
     private:
-    std::unique_ptr<const storage::DataLayoutFactory> buffer_factory_;
-    std::size_t buffer_num_tuples_;
+    std::unique_ptr<const storage::DataLayoutFactory> buffer_factory_ =
+        bool(options::soft_pipeline_breaker bitand option_configs::SoftPipelineBreakerStrategy::AFTER_HASH_BASED_GROUP_JOIN)
+            ? M_notnull(options::soft_pipeline_breaker_layout.get())->clone()
+            : std::unique_ptr<storage::DataLayoutFactory>();
+    std::size_t buffer_num_tuples_ = options::soft_pipeline_breaker_num_tuples;
 
     public:
     Match(const GroupingOperator* grouping, const JoinOperator *join, const Wildcard *build, const Wildcard *probe,

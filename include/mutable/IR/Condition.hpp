@@ -87,6 +87,8 @@ struct ConditionPropertyMap
     auto cbegin() const { return begin(); }
     auto cend() const { return end(); }
 
+    bool empty() const { return attrs.empty(); }
+
     bool operator==(const ConditionPropertyMap &other) const { return this->attrs == other.attrs; }
 };
 

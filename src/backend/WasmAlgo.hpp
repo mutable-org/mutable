@@ -676,7 +676,11 @@ struct ChainedHashTable : HashTable
     /** Sets the high watermark, i.e. the fraction of occupied entries before growing the hash table is required, to
      * \p percentage. */
     void set_high_watermark(double percentage) override {
-        M_insist(percentage >= 1.0, "using chained collisions the load factor should be at least 1");
+        if (percentage < 1.0) {
+            std::cerr << "warning: using chained collisions the load factor must be in [1,∞), ignore invalid value "
+                      << percentage << std::endl;
+            return;
+        }
         high_watermark_percentage_ = percentage;
         update_high_watermark();
     }
@@ -812,7 +816,11 @@ struct OpenAddressingHashTableBase : HashTable
     /** Sets the high watermark, i.e. the fraction of occupied entries before growing the hash table is required, to
      * \p percentage. */
     void set_high_watermark(double percentage) override {
-        M_insist(percentage >= 0.5 and percentage < 1.0, "using open addressing the load factor must be in [0.5,1)");
+        if (percentage < 0.5 or percentage >= 1.0) {
+            std::cerr << "warning: using open addressing the load factor must be in [0.5,1), ignore invalid value "
+                      << percentage << std::endl;
+            return;
+        }
         high_watermark_percentage_ = percentage;
         update_high_watermark();
     }

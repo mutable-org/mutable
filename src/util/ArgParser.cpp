@@ -23,7 +23,7 @@ requires integral<T>
 void help_parse(const char **&argv, const std::function<void(T)> &callback)
 {
     if (not *++argv) {
-        std::cerr << "missing argument" << std::endl;;
+        std::cerr << "missing argument" << std::endl;
         std::exit(EXIT_FAILURE);
     }
 

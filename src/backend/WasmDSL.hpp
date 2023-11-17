@@ -30,21 +30,21 @@
 
 namespace m {
 
-namespace options {
-
 #if !defined(NDEBUG) && defined(M_ENABLE_SANITY_FIELDS)
+namespace dsl_options {
+
 /** Whether there must not be any ternary logic, i.e. NULL value computation.  Note that NULL values have different
  * origins, e.g. NULL values stored in a table or default aggregate values in an aggregation operator. */
-extern bool insist_no_ternary_logic;
+static bool insist_no_ternary_logic = false;
 
-#define M_insist_no_ternary_logic() M_insist(not options::insist_no_ternary_logic, "ternary logic must not occur")
+}
+
+#define M_insist_no_ternary_logic() M_insist(not m::dsl_options::insist_no_ternary_logic, "ternary logic must not occur")
 
 #else
 #define M_insist_no_ternary_logic()
 
 #endif
-
-}
 
 // forward declarations
 struct Table;
@@ -351,9 +351,9 @@ using uint_t = typename uint<W>::type;
 
 #ifdef M_ENABLE_SANITY_FIELDS
 #define WASM_INSIST2_(COND, MSG) ({ \
-    auto old = std::exchange(m::options::insist_no_ternary_logic, false); \
+    auto old = std::exchange(m::dsl_options::insist_no_ternary_logic, false); \
     m::wasm::Module::Get().emit_insist((COND), __FILE__, __LINE__, (MSG)); \
-    m::options::insist_no_ternary_logic = old; \
+    m::dsl_options::insist_no_ternary_logic = old; \
 })
 #else
 #define WASM_INSIST2_(COND, MSG) ({ \

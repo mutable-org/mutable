@@ -66,9 +66,14 @@ else()
     list(
         APPEND static_libs
         "${LIBRARY_OUTPUT_PATH}/${CMAKE_STATIC_LIBRARY_PREFIX}${PROJECT_NAME}${CMAKE_STATIC_LIBRARY_SUFFIX}"
-        "${PROJECT_BINARY_DIR}/third-party/src/V8-build/out/obj/${CMAKE_STATIC_LIBRARY_PREFIX}v8_monolith${CMAKE_STATIC_LIBRARY_SUFFIX}"
-        "${PROJECT_BINARY_DIR}/third-party/src/Binaryen-build/lib/${CMAKE_STATIC_LIBRARY_PREFIX}binaryen${CMAKE_STATIC_LIBRARY_SUFFIX}"
     )
+    if(${WITH_V8})
+        list(
+            APPEND static_libs
+            "${PROJECT_BINARY_DIR}/third-party/src/Binaryen-build/lib/${CMAKE_STATIC_LIBRARY_PREFIX}binaryen${CMAKE_STATIC_LIBRARY_SUFFIX}"
+            "${PROJECT_BINARY_DIR}/third-party/src/V8-build/out/obj/${CMAKE_STATIC_LIBRARY_PREFIX}v8_monolith${CMAKE_STATIC_LIBRARY_SUFFIX}"
+        )
+    endif()
     foreach(lib_target ${Boost_LIBRARIES})
         get_target_property(lib_location ${lib_target} LOCATION)
         list(APPEND static_libs ${lib_location})

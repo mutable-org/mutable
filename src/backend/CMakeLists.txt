@@ -6,7 +6,6 @@ set(
 
 if(${WITH_V8})
     list(APPEND BACKEND_SOURCES
-        PhysicalOperator.cpp
         V8Engine.cpp
         WasmDSL.cpp
         WasmAlgo.cpp

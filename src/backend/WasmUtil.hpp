@@ -1,9 +1,9 @@
 #pragma once
 
-#include "backend/PhysicalOperator.hpp"
 #include "backend/WasmDSL.hpp"
 #include <functional>
 #include <mutable/catalog/Schema.hpp>
+#include <mutable/IR/PhysicalOptimizer.hpp>
 #include <mutable/parse/AST.hpp>
 #include <mutable/util/concepts.hpp>
 #include <optional>

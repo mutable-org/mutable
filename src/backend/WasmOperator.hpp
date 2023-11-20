@@ -1,9 +1,9 @@
 #pragma once
 
-#include <mutable/util/enum_ops.hpp>
-#include "backend/PhysicalOperator.hpp"
 #include "backend/WasmUtil.hpp"
+#include <mutable/IR/PhysicalOptimizer.hpp>
 #include <mutable/storage/DataLayoutFactory.hpp>
+#include <mutable/util/enum_ops.hpp>
 
 
 namespace m {

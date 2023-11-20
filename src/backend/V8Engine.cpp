@@ -1,7 +1,6 @@
 #include "backend/V8Engine.hpp"
 
 #include "backend/Interpreter.hpp"
-#include "backend/PhysicalOperator.hpp"
 #include "backend/WasmOperator.hpp"
 #include "backend/WasmUtil.hpp"
 #include "storage/Store.hpp"
@@ -14,6 +13,7 @@
 #include <fstream>
 #include <libplatform/libplatform.h>
 #include <mutable/catalog/Catalog.hpp>
+#include <mutable/IR/PhysicalOptimizer.hpp>
 #include <mutable/IR/Tuple.hpp>
 #include <mutable/Options.hpp>
 #include <mutable/storage/DataLayoutFactory.hpp>

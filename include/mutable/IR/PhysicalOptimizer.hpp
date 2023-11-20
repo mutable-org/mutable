@@ -291,8 +291,7 @@ struct PhysicalOptimizer : ConstPostOrderOperatorVisitor
 
     /** Handles the found match `match` with children entries `children` for the logical plan rooted in `op`. */
     template<typename PhysOp>
-    void handle_match(const Operator &op, std::unique_ptr<Match<PhysOp>> &&match,
-                      table_entry::order_t children) {
+    void handle_match(const Operator &op, std::unique_ptr<Match<PhysOp>> &&match, table_entry::order_t children) {
         /* Compute cost of the match and its children. */
         auto cost = PhysOp::cost(*match);
         for (const auto &child : children)
@@ -637,6 +636,11 @@ struct pattern_matcher_impl : pattern_matcher_base
         pattern_matcher_recursive<PhysOp, 0, pattern>{}.matches(opt, current_nodes, current_children, op);
     }
 };
+
+
+/*======================================================================================================================
+ * Delayed definitions
+ *====================================================================================================================*/
 
 template<typename PhysOp>
 void PhysicalOptimizer::register_operator()

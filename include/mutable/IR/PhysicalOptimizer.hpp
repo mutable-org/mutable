@@ -2,8 +2,8 @@
 
 #include <functional>
 #include <limits>
-#include <mutable/IR/Condition.hpp>
 #include <mutable/IR/Operator.hpp>
+#include <mutable/IR/PhysicalPlanTable.hpp>
 #include <type_traits>
 #include <unordered_map>
 #include <utility>

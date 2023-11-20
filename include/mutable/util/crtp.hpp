@@ -17,8 +17,37 @@ struct crtp
     const actual_type & actual() const { return *static_cast<const actual_type*>(this); }
 
     private:
-    crtp() { }                      // no one can construct this
+    crtp() { }                                 // no one can construct this
     friend crtpType<actual_type, Others...>;   // except classes that properly inherit from this class
+};
+
+/** A helper class to define CRTP class hierarchies with an additional boolean template parameter (this is often used
+ * for iterators taking a boolean template parameter to decide on constness). */
+template<typename T, template<typename, bool, typename...> typename crtpType, bool B, typename... Others>
+struct crtp_boolean
+{
+    using actual_type = T;
+    actual_type & actual() { return *static_cast<actual_type*>(this); }
+    const actual_type & actual() const { return *static_cast<const actual_type*>(this); }
+
+    private:
+    crtp_boolean() { }                  // no one can construct this
+    friend crtpType<T, B, Others...>;   // except classes that properly inherit from this class
+};
+
+/** A helper class to define CRTP class hierarchies with an additional boolean template template parameter (this is
+ * often used for iterators taking a boolean template parameter to decide on constness). */
+template<typename T, template<typename, template<bool> typename, typename...> typename crtpType,
+         template<bool> typename It, typename... Others>
+struct crtp_boolean_templated
+{
+    using actual_type = T;
+    actual_type & actual() { return *static_cast<actual_type*>(this); }
+    const actual_type & actual() const { return *static_cast<const actual_type*>(this); }
+
+    private:
+    crtp_boolean_templated() { }                   // no one can construct this
+    friend crtpType<actual_type, It, Others...>;   // except classes that properly inherit from this class
 };
 
 /** A helper class to introduce a virtual method overload per type to a class hierarchy. */

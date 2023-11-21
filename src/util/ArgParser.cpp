@@ -17,15 +17,21 @@ using namespace m;
 
 namespace {
 
-/** Helper function to parse integral values. */
-template<typename T>
-requires integral<T>
-void help_parse(const char **&argv, const std::function<void(T)> &callback)
+/** Helper function to check if next argument was given. */
+void check_next_arg(const char **&argv)
 {
     if (not *++argv) {
         std::cerr << "missing argument" << std::endl;
         std::exit(EXIT_FAILURE);
     }
+}
+
+/** Helper function to parse integral values. */
+template<typename T>
+requires integral<T>
+void help_parse(const char **&argv, const std::function<void(T)> &callback)
+{
+    check_next_arg(argv);
 
     T i;
     try {
@@ -62,10 +68,7 @@ template<typename T>
 requires std::floating_point<T>
 void help_parse(const char **&argv, const std::function<void(T)> &callback)
 {
-    if (not *++argv) {
-        std::cerr << "missing argument" << std::endl;
-        std::exit(EXIT_FAILURE);
-    }
+    check_next_arg(argv);
 
     T fp;
     try {
@@ -110,10 +113,7 @@ PARSE(long double);
 template<>
 void ArgParser::OptionImpl<const char*>::parse(const char **&argv) const
 {
-    if (not *++argv) {
-        std::cerr << "missing argument" << std::endl;
-        std::exit(EXIT_FAILURE);
-    }
+    check_next_arg(argv);
     callback(*argv);
 }
 
@@ -121,10 +121,7 @@ void ArgParser::OptionImpl<const char*>::parse(const char **&argv) const
 template<>
 void ArgParser::OptionImpl<std::vector<std::string_view>>::parse(const char **&argv) const
 {
-    if (not *++argv) {
-        std::cerr << "missing argument" << std::endl;
-        std::exit(EXIT_FAILURE);
-    }
+    check_next_arg(argv);
 
     std::vector<std::string_view> args;
     std::string_view sv(*argv);

@@ -72,7 +72,7 @@ struct V8Engine : m::WasmEngine
     static inline v8::Platform *PLATFORM_ = nullptr;
     v8::ArrayBuffer::Allocator *allocator_ = nullptr;
     v8::Isolate *isolate_ = nullptr;
-    PhysicalOptimizer phys_opt_;
+    std::unique_ptr<PhysicalOptimizer> phys_opt_;
 
     /*----- Objects for remote debugging via CDT. --------------------------------------------------------------------*/
     std::unique_ptr<V8InspectorClientImpl> inspector_;
@@ -627,7 +627,7 @@ struct CollectStringLiterals : ConstOperatorVisitor, ast::ConstASTExprVisitor
 
 V8Engine::V8Engine()
 {
-    register_wasm_operators(phys_opt_);
+    register_wasm_operators(*phys_opt_);
 
     initialize();
 }
@@ -701,7 +701,7 @@ void V8Engine::compile(const Operator &plan) const
         auto S = CodeGenContext::Get().scoped_environment(); // create scoped environment for this function
 
         /*----- Compile plan. ----------------------------------------------------------------------------------------*/
-        phys_opt_.execute(plan); // emit code
+        phys_opt_->execute(plan); // emit code
 
         /*----- Return size of result set. ---------------------------------------------------------------------------*/
         main.emit_return(CodeGenContext::Get().num_tuples());
@@ -752,12 +752,12 @@ void V8Engine::execute(const Operator &plan)
 
     Catalog &C = Catalog::Get();
 
-    M_TIME_EXPR(phys_opt_.cover(plan), "Compute optimal physical operator covering", C.timer());
-    if (Options::Get().physplan) phys_opt_.dump_plan(plan);
+    M_TIME_EXPR(phys_opt_->cover(plan), "Compute optimal physical operator covering", C.timer());
+    if (Options::Get().physplan) phys_opt_->dump_plan(plan);
     if (Options::Get().physplandot) {
         Diagnostic diag(Options::Get().has_color, std::cout, std::cerr);
         DotTool dot(diag);
-        phys_opt_.dot_plan(plan, dot.stream());
+        phys_opt_->dot_plan(plan, dot.stream());
         dot.show("physical_plan", true);
     }
 

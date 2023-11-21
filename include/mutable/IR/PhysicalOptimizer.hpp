@@ -14,6 +14,8 @@ namespace m {
 
 // forward declarations
 template<typename T> struct Match;
+struct PhysOptVisitor;
+struct ConstPhysOptVisitor;
 struct PhysicalOptimizer;
 
 
@@ -161,8 +163,8 @@ struct teardown_t : std::function<void(void)>
 
 struct MatchBase
 {
-    template<typename T> friend struct Match; // to invoke `print()`
-    friend struct PhysicalOptimizer;
+    template<typename> friend struct Match; // to invoke `print()`
+    template<typename> friend struct PhysicalOptimizerImpl; // to set costs
 
     private:
     double cost_ = std::numeric_limits<double>::infinity();
@@ -208,94 +210,97 @@ struct pattern_matcher_base
 /** A `PhysicalOptimizer` stores available `PhysicalOperator`s covering possibly multiple logical `Operator`s.  It
  * is able to find an optimal physical operator covering (similar to instruction selection used in compilers) using
  * dynamic programming. */
-struct PhysicalOptimizer : ConstPostOrderOperatorVisitor
+struct PhysicalOptimizer
 {
-    template<typename, std::size_t, typename...> friend struct pattern_matcher_recursive;
-
-    struct table_entry;
-
-    private:
-    using conditional_phys_op_map = std::vector<std::pair<ConditionSet, table_entry>>;
-
-    public:
-    struct table_entry
-    {
-        using order_t = std::vector<std::reference_wrapper<const conditional_phys_op_map::value_type>>;
-
-        ///> found match
-        std::unique_ptr<const MatchBase> match;
-        ///> all children entries of the physical operator
-        order_t children;
-        ///> cumulative cost for this entry, i.e. cost of the physical operator itself plus costs of its children
-        double cost;
-
-        table_entry(std::unique_ptr<const MatchBase> &&match, order_t &&children, double cost)
-            : match(std::move(match))
-            , children(std::move(children))
-            , cost(cost)
-        { }
-
-        table_entry(const table_entry&) = delete;
-        table_entry(table_entry&&) = default;
-
-        table_entry & operator=(table_entry&&) = default;
-    };
-
-    private:
+    protected:
     ///> all pattern matchers for all registered physical operators
     std::vector<std::unique_ptr<const pattern_matcher_base>> pattern_matchers_;
-    ///> dynamic programming table, stores the best covering for each logical operator per unique post-condition
-    std::vector<conditional_phys_op_map> table_;
 
     public:
+    virtual ~PhysicalOptimizer() { }
+
     /** Registers a new physical operator which then may be used to find a covering. */
     template<typename PhysOp> void register_operator();
 
-    const std::vector<conditional_phys_op_map> & table() const { return table_; }
+    /** Finds an optimal physical operator covering for the logical plan rooted in \p plan. */
+    virtual void cover(const Operator &plan) = 0;
 
-    /** Finds an optimal physical operator covering for the logical plan rooted in `plan`. */
-    void cover(const Operator &plan) {
+    /** Returns true iff a physical operator covering is found for the plan rooted in \p plan. */
+    virtual bool has_plan(const Operator &plan) const = 0;
+
+    /** Executes the found physical operator covering for the logical plan rooted in \p plan. */
+    virtual void execute(const Operator &plan) const = 0;
+
+    virtual void accept(PhysOptVisitor &v) = 0;
+    virtual void accept(ConstPhysOptVisitor &v) const = 0;
+
+    /** Prints a representation of the found physical operator covering for the logical plan rooted in \p plan in the
+     * dot language to \p out. */
+    virtual void dot_plan(const Operator &plan, std::ostream &out) const = 0;
+
+    /** Prints a representation of the found physical operator covering for the logical plan rooted in \p plan to
+     * \p out. */
+    virtual void dump_plan(const Operator &plan, std::ostream &out) const = 0;
+    /** Prints a representation of the found physical operator covering for the logical plan rooted in \p plan to
+     * `std::cout`. */
+    virtual void dump_plan(const Operator &plan) const = 0;
+};
+
+/** Concrete `PhysicalOptimizer` implementation using a concrete statically-typed \tparam PhysicalPlanTable
+ * implementing the `PhysicalPlanTable` interface. */
+template<typename PhysicalPlanTable>
+struct PhysicalOptimizerImpl : PhysicalOptimizer, ConstPostOrderOperatorVisitor
+{
+    template<typename, std::size_t, typename...> friend struct pattern_matcher_recursive;
+
+    using entry_type = PhysicalPlanTable::condition2entry_map_type::entry_type;
+    using cost_type = PhysicalPlanTable::condition2entry_map_type::entry_type::cost_type;
+    using children_type = std::vector<typename PhysicalPlanTable::condition2entry_map_type::const_iterator>;
+
+    private:
+    ///> dynamic programming table, stores the best covering for each logical operator per unique post-condition
+    PhysicalPlanTable table_;
+    cost_type phys_op_cost_; ///< the currently cheapest cost for a physical operator
+
+    public:
+    PhysicalPlanTable & table() { return table_; }
+    const PhysicalPlanTable & table() const { return table_; }
+
+    void cover(const Operator &plan) override {
         plan.assign_post_order_ids();
-        table_.clear();
-        table_.resize(plan.id() + 1);
+        table().clear();
+        table().resize(plan.id() + 1);
         (*this)(plan);
     }
 
-    /** Return true iff a physical operator covering is found for the plan rooted in `plan`. */
-    bool has_plan(const Operator &plan) const {
-        M_insist(plan.id() < table_.size(), "invalid operator");
-        return not table_[plan.id()].empty();
+    bool has_plan(const Operator &plan) const override {
+        M_insist(plan.id() < table().size(), "invalid operator");
+        return not table()[plan.id()].empty();
     }
-
-    private:
-    /** Returns the optimal physical operator covering for the plan rooted in `plan`. */
-    const table_entry & get_plan(const Operator &plan) const {
+    /** Returns the optimal physical operator covering for the plan rooted in \p plan. */
+    const entry_type & get_plan(const Operator &plan) const {
         M_insist(has_plan(plan), "no physical operator covering found");
-        conditional_phys_op_map::const_iterator it_best;
+        typename PhysicalPlanTable::condition2entry_map_type::const_iterator it_best;
         double min_cost = std::numeric_limits<double>::infinity();
-        for (auto it = table_[plan.id()].cbegin(); it != table_[plan.id()].cend(); ++it) {
-            if (auto cost = it->second.cost; cost < min_cost) {
+        for (auto it = table()[plan.id()].cbegin(); it != table()[plan.id()].cend(); ++it) {
+            if (auto cost = it->entry.cost(); cost < min_cost) {
                 it_best = it;
                 min_cost = cost;
             }
         }
-        return it_best->second;
+        return it_best->entry;
     }
 
-    public:
-    /** Executed the found physical operator covering for the logical plan rooted in `plan`. */
-    void execute(const Operator &plan) const;
+    void execute(const Operator &plan) const override;
 
     private:
-    double phys_op_cost_; ///< the currently cheapest cost for a physical operator
-
-    /** Handles the found match `match` with children entries `children` for the logical plan rooted in `op`. */
+    /** Handles the found match \p match with children entries \p children for the logical plan rooted in \p op. */
     template<typename PhysOp>
-    void handle_match(const Operator &op, std::unique_ptr<Match<PhysOp>> &&match, table_entry::order_t children) {
+    void handle_match(const Operator &op, std::unique_ptr<Match<PhysOp>> &&match, const children_type &children) {
         /* Compute cost of the match and its children. */
         auto cost = PhysOp::cost(*match);
         for (const auto &child : children)
-            cost += child.get().second.cost;
+            cost += child->entry.cost();
         match->cost(cost);
 
         if (cost < phys_op_cost_) { // XXX: this should be removed because of possible multiple post conditions
@@ -305,29 +310,27 @@ struct PhysicalOptimizer : ConstPostOrderOperatorVisitor
                 if (children.size() <= 1) {
                     ConditionSet empty_cond;
                     post_cond = PhysOp::adapt_post_condition_(*match, children.empty() ? empty_cond
-                                                                                       : children.front().get().first);
+                                                                                       : children.front()->condition);
                 } else {
                     std::vector<std::reference_wrapper<const ConditionSet>> children_post_conditions;
                     children_post_conditions.reserve(children.size());
                     for (const auto &child : children)
-                        children_post_conditions.emplace_back(child.get().first);
+                        children_post_conditions.emplace_back(child->condition);
                     post_cond = PhysOp::adapt_post_conditions_(*match, std::move(children_post_conditions));
                 }
             }
 
             /* Compare to the best physical operator matched so far for *that* post-condition. */
-            auto it = std::find_if(table_[op.id()].begin(), table_[op.id()].end(), [&post_cond](const auto &p) {
-                return p.first == post_cond;
+            auto it = std::find_if(table()[op.id()].begin(), table()[op.id()].end(), [&post_cond](const auto &e) {
+                return e.condition == post_cond;
             });
 
             /* Update table and physical operator cost. */
-            if (it == table_[op.id()].end()) {
-                table_[op.id()].emplace_back(
-                    std::move(post_cond), PhysicalOptimizer::table_entry(std::move(match), std::move(children), cost)
-                );
+            if (it == table()[op.id()].end()) {
+                table()[op.id()].insert(std::move(post_cond), entry_type(std::move(match), children, cost));
             } else {
-                if (cost < it->second.cost)
-                    it->second = PhysicalOptimizer::table_entry(std::move(match), std::move(children), cost);
+                if (cost < it->entry.cost())
+                    it->entry = entry_type(std::move(match), children, cost);
                 else
                     return; // better match already exists
             }
@@ -336,6 +339,7 @@ struct PhysicalOptimizer : ConstPostOrderOperatorVisitor
     }
 
     /*----- OperatorVisitor ------------------------------------------------------------------------------------------*/
+    public:
     using ConstPostOrderOperatorVisitor::operator();
 #define DECLARE(CLASS) \
     void operator()(const CLASS &op) override { \
@@ -346,43 +350,29 @@ struct PhysicalOptimizer : ConstPostOrderOperatorVisitor
     M_OPERATOR_LIST(DECLARE)
 #undef DECLARE
 
+    void accept(PhysOptVisitor &v) override;
+    void accept(ConstPhysOptVisitor &v) const override;
+
     private:
-    void dot_plan_helper(const table_entry &e, std::ostream &out) const {
-#define q(X) '"' << X << '"' // quote
-#define id(X) q(std::hex << &X << std::dec) // convert virtual address to identifier
-        out << "    " << id(e) << " [label=<<B>" << html_escape(to_string(*e.match))
-            << "</B> (cumulative cost=" << e.cost << ")>];\n";
-        for (const auto &child : e.children) {
-            dot_plan_helper(child.get().second, out);
-            out << "    " << id(child.get().second) << " -> " << id(e) << ";\n";
-        }
-#undef id
-#undef q
-    }
-
+    void dot_plan_helper(const entry_type &e, std::ostream &out) const;
     public:
-    /** Prints a representation of the found physical operator covering for the logical plan rooted in `plan` in the
-     * dot language. */
-    void dot_plan(const Operator &plan, std::ostream &out) const {
-        out << "digraph plan\n{\n"
-            << "    forcelabels=true;\n"
-            << "    overlap=false;\n"
-            << "    rankdir=BT;\n"
-            << "    graph [compound=true];\n"
-            << "    graph [fontname = \"DejaVu Sans\"];\n"
-            << "    node [fontname = \"DejaVu Sans\"];\n"
-            << "    edge [fontname = \"DejaVu Sans\"];\n";
-        dot_plan_helper(get_plan(plan), out);
-        out << "}\n";
-    };
+    void dot_plan(const Operator &plan, std::ostream &out) const override;
 
-    /** Prints a representation of the found physical operator covering for the logical plan rooted in `plan` to
-     * `out`. */
-    void dump_plan(const Operator &plan, std::ostream &out) const;
-    /** Prints a representation of the found physical operator covering for the logical plan rooted in `plan` to
-     * `std::cout`. */
-    void dump_plan(const Operator &plan) const;
+    void dump_plan(const Operator &plan, std::ostream &out) const override;
+    void dump_plan(const Operator &plan) const override;
 };
+
+// TODO: define list
+#define M_PHYS_OPT_LIST(X)
+
+M_DECLARE_VISITOR(PhysOptVisitor, PhysicalOptimizer, M_PHYS_OPT_LIST)
+M_DECLARE_VISITOR(ConstPhysOptVisitor, const PhysicalOptimizer, M_PHYS_OPT_LIST)
+
+// explicit instantiation declarations
+#define DECLARE(CLASS) \
+    extern template struct m::CLASS;
+M_PHYS_OPT_LIST(DECLARE)
+#undef DECLARE
 
 
 /*======================================================================================================================
@@ -390,32 +380,30 @@ struct PhysicalOptimizer : ConstPostOrderOperatorVisitor
  *====================================================================================================================*/
 
 /** A `PhysicalOperator` represents a physical operation in a *query plan*.  A single `PhysicalOperator` may combine
- * multiple logical `Operator`s according to the specified `Pattern`. */
+ * multiple logical `Operator`s according to the specified \tparam Pattern. */
 template<typename Actual, valid_pattern Pattern>
 struct PhysicalOperator : crtp<Actual, PhysicalOperator, Pattern>
 {
-    friend struct PhysicalOptimizer;
+    template<typename> friend struct PhysicalOptimizerImpl;
     template<typename, std::size_t, typename...> friend struct pattern_matcher_recursive;
 
     using crtp<Actual, PhysicalOperator, Pattern>::actual;
-
     using pattern = Pattern;
-    using order_t = PhysicalOptimizer::table_entry::order_t;
 
-    /** Executes this physical operator given the match `M` and three callbacks: `Setup` for some initializations,
-     * `Pipeline` for the actual computation, and `Teardown` for post-processing. */
+    /** Executes this physical operator given the match \p M and three callbacks: \p Setup for some initializations,
+     * \p Pipeline for the actual computation, and \p Teardown for post-processing. */
     static void execute(const Match<Actual> &M, setup_t setup, pipeline_t pipeline, teardown_t teardown) {
         Actual::execute(M, std::move(setup), std::move(pipeline), std::move(teardown));
     }
 
-    /** Returns the cost of this physical operator given the match `M`. */
+    /** Returns the cost of this physical operator given the match \p M. */
     static double cost(const Match<Actual> &M) { return Actual::cost(M); }
 
     private:
-    /** Returns the pre-condition for the `child_idx`-th child (indexed from left to right starting with 0) of the
+    /** Returns the pre-condition for the \p child_idx-th child (indexed from left to right starting with 0) of the
      * pattern (note that children are logical operators which either match to a `Wildcard` in the pattern or to a
      * child of a non-wildcard operator in the pattern, i.e. there may be more children than leaves in the pattern)
-     * given the (potentially partially) matched logical operators `partial_inner_nodes` in pre-order (note that the
+     * given the (potentially partially) matched logical operators \p partial_inner_nodes in pre-order (note that the
      * operators not yet matched are nullptr). */
     static ConditionSet pre_condition_(std::size_t child_idx, const get_nodes_t<Pattern> &partial_inner_nodes) {
         return Actual::pre_condition(child_idx, partial_inner_nodes);
@@ -425,19 +413,19 @@ struct PhysicalOperator : crtp<Actual, PhysicalOperator, Pattern>
     static ConditionSet pre_condition(std::size_t, const get_nodes_t<Pattern>&) { return ConditionSet(); }
 
     private:
-    /** Returns the post-condition of this physical operator given the match `M`. */
+    /** Returns the post-condition of this physical operator given the match \p M. */
     static ConditionSet post_condition_(const Match<Actual> &M) { return Actual::post_condition(M); }
     public:
     /** Overwrite this to implement a custom post-condition. */
     static ConditionSet post_condition(const Match<Actual>&) { return ConditionSet(); }
 
     private:
-    /** Returns the adapted post-condition of this physical operator given the match `M` and the former
+    /** Returns the adapted post-condition of this physical operator given the match \p M and the former
      * post-condition of its only child. */
     static ConditionSet adapt_post_condition_(const Match<Actual> &M, const ConditionSet &post_cond_child) {
         return Actual::adapt_post_condition(M, post_cond_child);
     }
-    /** Returns the adapted post-condition of this physical operator given the match `M` and the former
+    /** Returns the adapted post-condition of this physical operator given the match \p M and the former
      * post-conditions of its children. */
     static ConditionSet
     adapt_post_conditions_(const Match<Actual> &M,
@@ -458,13 +446,15 @@ struct PhysicalOperator : crtp<Actual, PhysicalOperator, Pattern>
                       "must be overwritten");
     }
 
-    /** Instantiates this physical operator given the matched logical operators `inner_nodes` in pre-order and the
-     * children entries `children` by returning a corresponding match. */
-    static std::unique_ptr<Match<Actual>> instantiate(get_nodes_t<Pattern> inner_nodes, const order_t &children) {
+    /** Instantiates this physical operator given the matched logical operators \p inner_nodes in pre-order and the
+     * children entries \p children by returning a corresponding match. */
+    template<typename It>
+    static std::unique_ptr<Match<Actual>>
+    instantiate(get_nodes_t<Pattern> inner_nodes, const std::vector<It> &children) {
         std::vector<std::reference_wrapper<const MatchBase>> children_matches;
         children_matches.reserve(children.size());
         for (const auto &child : children)
-            children_matches.emplace_back(*child.get().second.match);
+            children_matches.emplace_back(child->entry.match());
         return std::apply([children_matches=std::move(children_matches)](auto... args) mutable {
             return std::make_unique<Match<Actual>>(args..., std::move(children_matches));
         }, inner_nodes);
@@ -484,13 +474,12 @@ struct pattern_matcher_recursive<PhysOp, Idx, Op, PatternQueue...>
 {
     template<typename, std::size_t, typename...> friend struct pattern_matcher_recursive;
 
-    using pattern = typename PhysOp::pattern;
-    using order_t = PhysicalOptimizer::table_entry::order_t;
+    using pattern = PhysOp::pattern;
 
-    template<typename... OpQueue>
-    void matches(PhysicalOptimizer &opt,
+    template<typename PhysOpt, typename... OpQueue>
+    void matches(PhysOpt &opt,
                  get_nodes_t<pattern> &current_nodes,
-                 order_t &current_children,
+                 PhysOpt::children_type &current_children,
                  const Operator &op_,
                  const OpQueue&... op_queue) const
     {
@@ -506,12 +495,12 @@ struct pattern_matcher_recursive<PhysOp, Idx, Op, PatternQueue...>
         if constexpr (std::same_as<Op, Wildcard>) {
             if (op->id() >= opt.table().size())
                 return; // no match for this child exists
-            PhysicalOptimizer::conditional_phys_op_map::const_iterator new_child;
+            typename PhysOpt::children_type::value_type new_child;
             double min_cost = std::numeric_limits<double>::infinity();
             for (auto it = opt.table()[op->id()].cbegin(); it != opt.table()[op->id()].cend(); ++it) {
-                if (auto cost = it->second.cost;
+                if (auto cost = it->entry.cost();
                     cost < min_cost and
-                    PhysOp::pre_condition_(current_children.size(), current_nodes).implied_by(it->first))
+                    PhysOp::pre_condition_(current_children.size(), current_nodes).implied_by(it->condition))
                 {
                     new_child = it;
                     min_cost = cost;
@@ -519,23 +508,23 @@ struct pattern_matcher_recursive<PhysOp, Idx, Op, PatternQueue...>
             }
             if (min_cost == std::numeric_limits<double>::infinity())
                 return; // no match fulfills pre-condition for this physical operator
-            current_children.emplace_back(*new_child);
+            current_children.push_back(new_child);
         } else if constexpr (consumer<Op>) {
-            order_t new_children;
+            typename PhysOpt::children_type new_children;
             for (const auto c : op->children()) {
                 if (c->id() >= opt.table().size())
                     return; // no match for current child exists
-                PhysicalOptimizer::conditional_phys_op_map::const_iterator new_child;
+                typename PhysOpt::children_type::value_type new_child;
                 double min_cost = std::numeric_limits<double>::infinity();
                 /* FIXME: The following loop already performs local optimization by searching the cheapest child.
                  *        However, post conditions are not yet considered and thus there will be stored only a
                  *        single locally optimal plan rather than the locally optimal one *per* unique post
                  *        condition which may result in finding no plan covering even if there is one. */
                 for (auto it = opt.table()[c->id()].cbegin(); it != opt.table()[c->id()].cend(); ++it) {
-                    if (auto cost = it->second.cost;
+                    if (auto cost = it->entry.cost();
                         cost < min_cost and PhysOp::pre_condition_(
                             current_children.size() + new_children.size(), current_nodes
-                        ).implied_by(it->first))
+                        ).implied_by(it->condition))
                     {
                         new_child = it;
                         min_cost = cost;
@@ -543,7 +532,7 @@ struct pattern_matcher_recursive<PhysOp, Idx, Op, PatternQueue...>
                 }
                 if (min_cost == std::numeric_limits<double>::infinity())
                     return; // no match fulfills pre-condition for this physical operator
-                new_children.emplace_back(*new_child);
+                new_children.push_back(new_child);
             }
             current_children.insert(current_children.end(), new_children.begin(), new_children.end());
         } else { // special case for handling leaf producer, e.g. scan operator
@@ -560,7 +549,7 @@ struct pattern_matcher_recursive<PhysOp, Idx, Op, PatternQueue...>
 #endif
             /* Perform the callback with an instance of the found match. */
             auto M = PhysOp::instantiate(current_nodes, current_children);
-            opt.handle_match<PhysOp>(*std::get<0>(current_nodes), std::move(M), current_children);
+            opt.template handle_match<PhysOp>(*std::get<0>(current_nodes), std::move(M), current_children);
         } else {
             /* Proceed with queue. */
             pattern_matcher_recursive<PhysOp, Idx + 1, PatternQueue...> m;
@@ -580,13 +569,12 @@ struct pattern_matcher_recursive<PhysOp, Idx, pattern_t<Op, Children...>, Patter
 {
     template<typename, std::size_t, typename...> friend struct pattern_matcher_recursive;
 
-    using pattern = typename PhysOp::pattern;
-    using order_t = PhysicalOptimizer::table_entry::order_t;
+    using pattern = PhysOp::pattern;
 
-    template<typename... OpQueue>
-    void matches(PhysicalOptimizer &opt,
+    template<typename PhysOpt, typename... OpQueue>
+    void matches(PhysOpt &opt,
                  get_nodes_t<pattern> &current_nodes,
-                 order_t &current_children,
+                 PhysOpt::children_type &current_children,
                  const Operator &op_,
                  const OpQueue&... op_queue) const
     {
@@ -624,16 +612,16 @@ struct pattern_matcher_recursive<PhysOp, Idx, pattern_t<Op, Children...>, Patter
     }
 };
 
-template<typename PhysOp>
+template<typename PhysOp, typename PhysOpt>
 struct pattern_matcher_impl : pattern_matcher_base
 {
-    using pattern = typename PhysOp::pattern;
-    using order_t = PhysicalOptimizer::table_entry::order_t;
+    using pattern = PhysOp::pattern;
 
     void matches(PhysicalOptimizer &opt, const Operator &op) const override {
         get_nodes_t<pattern> current_nodes;
-        order_t current_children;
-        pattern_matcher_recursive<PhysOp, 0, pattern>{}.matches(opt, current_nodes, current_children, op);
+        typename PhysOpt::children_type current_children;
+        pattern_matcher_recursive<PhysOp, 0, pattern> m;
+        m.matches(as<PhysOpt>(opt), current_nodes, current_children, op);
     }
 };
 
@@ -645,7 +633,11 @@ struct pattern_matcher_impl : pattern_matcher_base
 template<typename PhysOp>
 void PhysicalOptimizer::register_operator()
 {
-    pattern_matchers_.push_back(std::make_unique<pattern_matcher_impl<PhysOp>>());
+    visit(overloaded{
+        [this]<typename PhysOpt>(PhysOpt&) {
+            pattern_matchers_.push_back(std::make_unique<pattern_matcher_impl<PhysOp, PhysOpt>>());
+        },
+    }, *this);
 }
 
 }

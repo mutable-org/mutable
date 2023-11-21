@@ -677,6 +677,9 @@ struct range
     range() { }
     range(It begin, It end) : begin_(begin), end_(end) { }
 
+    bool empty() const { return begin() == end(); }
+    std::size_t size() const { return std::distance(begin(), end()); }
+
     It begin() const { return begin_; }
     It end() const { return end_; }
     It cbegin() const { return begin_; }

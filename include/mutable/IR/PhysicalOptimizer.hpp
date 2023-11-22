@@ -1,9 +1,9 @@
 #pragma once
 
 #include <functional>
+#include "IR/PhysicalPlanTable.hpp"
 #include <limits>
 #include <mutable/IR/Operator.hpp>
-#include <mutable/IR/PhysicalPlanTable.hpp>
 #include <type_traits>
 #include <unordered_map>
 #include <utility>
@@ -362,8 +362,8 @@ struct PhysicalOptimizerImpl : PhysicalOptimizer, ConstPostOrderOperatorVisitor
     void dump_plan(const Operator &plan) const override;
 };
 
-// TODO: define list
-#define M_PHYS_OPT_LIST(X)
+#define M_PHYS_OPT_LIST(X) \
+    X(PhysicalOptimizerImpl<ConcretePhysicalPlanTable>)
 
 M_DECLARE_VISITOR(PhysOptVisitor, PhysicalOptimizer, M_PHYS_OPT_LIST)
 M_DECLARE_VISITOR(ConstPhysOptVisitor, const PhysicalOptimizer, M_PHYS_OPT_LIST)

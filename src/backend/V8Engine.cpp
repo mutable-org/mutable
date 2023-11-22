@@ -72,7 +72,7 @@ struct V8Engine : m::WasmEngine
     static inline v8::Platform *PLATFORM_ = nullptr;
     v8::ArrayBuffer::Allocator *allocator_ = nullptr;
     v8::Isolate *isolate_ = nullptr;
-    std::unique_ptr<PhysicalOptimizer> phys_opt_;
+    std::unique_ptr<PhysicalOptimizer> phys_opt_ = std::make_unique<PhysicalOptimizerImpl<ConcretePhysicalPlanTable>>();
 
     /*----- Objects for remote debugging via CDT. --------------------------------------------------------------------*/
     std::unique_ptr<V8InspectorClientImpl> inspector_;

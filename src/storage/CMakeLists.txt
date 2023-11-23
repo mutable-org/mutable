@@ -4,6 +4,7 @@ add_library(
     ColumnStore.cpp
     DataLayout.cpp
     DataLayoutFactory.cpp
+    Index.cpp
     PaxStore.cpp
     RowStore.cpp
     Store.cpp

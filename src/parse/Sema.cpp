@@ -1626,11 +1626,13 @@ void Sema::operator()(CreateIndexStmt &s)
         return;
     }
 
-    /* Check that the index name does not already exist. */
+    /* Check that an index name is set. */
     if (not s.index_name) {
         diag.err() << "Indexes without name not supported.\n";
         return;
     }
+
+    /* Check that the index name does not yet exist. */
     auto index_name = s.index_name.text;
     if (DB.has_index(index_name)) {
         if (s.has_if_not_exists) {
@@ -1652,35 +1654,33 @@ void Sema::operator()(CreateIndexStmt &s)
     }
     auto &table = DB.get_table(table_name);
 
-    /** Check that the index method exists. */
-    auto index = std::make_unique<idx::IndexBase>();
-    if (s.method) {
-        switch(s.method.type) {
-            case TK_Default: {
-                index = std::make_unique<idx::IndexBase>();
+    /* Check that the index method exists. */
+    if (not s.method) // if method is not set, set to default
+        s.method = Token(s.table_name.pos, nullptr, TK_Default);
+    switch(s.method.type) {
+        case TK_Default: // ok
+            break;
+
+        case TK_IDENTIFIER:
+            if (s.method.text == C.pool("array")) // ok
                 break;
-            }
-            case TK_IDENTIFIER: {
-                if (s.method.text == C.pool("array")) {
-                    index = std::make_unique<idx::IndexBase>();
-                    break;
-                } else {
-                    diag.e(s.method.pos) << "Index method " << s.method.text << " not supported.\n";
-                    return;
-                }
-            }
-            default: {
+            else { // unknown method, not ok
                 diag.e(s.method.pos) << "Index method " << s.method.text << " not supported.\n";
                 return;
             }
-        }
+
+        default: // unknown token type, not ok
+            diag.e(s.method.pos) << "Index method " << s.method.text << " not supported.\n";
+            return;
     }
 
-    /* Check validity of key fields. */
+    /* Check that at most one key field is set. */
     if (s.key_fields.size() > 1) {
         diag.err() << "More than one key field for indexes not supported.\n";
         return;
     }
+
+    /* Compute attribute from key field. */
     for (auto it = s.key_fields.cbegin(), end = s.key_fields.cend(); it != end; ++it) {
         auto field = it->get();
         if (auto d = cast<Designator>(field)) {
@@ -1695,8 +1695,48 @@ void Sema::operator()(CreateIndexStmt &s)
         }
     }
     auto attribute_name = cast<Designator>(s.key_fields.front())->attr_name.text;
+    auto &attribute = table.at(attribute_name);
 
-    /* TODO: Check compatibility of key fields and index method. */
+    /* Build index based on selected method and key type. */
+    std::unique_ptr<idx::IndexBase> index;
+    auto set_index = [&]<template<typename> typename Index>() {
+        visit(overloaded {
+            [&](const Boolean&) { index = std::make_unique<Index<bool>>(); },
+            [&](const Numeric &n) {
+                switch (n.kind) {
+                    case Numeric::N_Int:
+                    case Numeric::N_Decimal:
+                        switch (n.size()) {
+                            default: M_unreachable("invalid size");
+                            case  8: index = std::make_unique<Index<int8_t>>(); break;
+                            case 16: index = std::make_unique<Index<int16_t>>(); break;
+                            case 32: index = std::make_unique<Index<int32_t>>(); break;
+                            case 64: index = std::make_unique<Index<int64_t>>(); break;
+                        }
+                        break;
+                    case Numeric::N_Float:
+                        switch (n.size()) {
+                            default: M_unreachable("invalid size");
+                            case 32: index = std::make_unique<Index<float>>(); break;
+                            case 64: index = std::make_unique<Index<double>>(); break;
+                    }
+                }
+            },
+            [&](const CharacterSequence&) { index = std::make_unique<Index<const char*>>(); },
+            [&](const Date&) { index = std::make_unique<Index<int32_t>>(); },
+            [&](const DateTime&) { index = std::make_unique<Index<int64_t>>(); },
+            [](auto&&) { M_unreachable("invalid type"); },
+        }, *attribute.type);
+    };
+    switch(s.method.type) {
+        case TK_Default: set_index.operator()<idx::ArrayIndex>(); break;
+        case TK_IDENTIFIER:
+            if (s.method.text == C.pool("array"))
+                set_index.operator()<idx::ArrayIndex>();
+            break;
+        default:
+            M_unreachable("invalid token type");
+    }
 
     command_ = std::make_unique<CreateIndex>(std::move(index), table_name, attribute_name, index_name);
 }

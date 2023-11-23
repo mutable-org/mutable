@@ -2,9 +2,11 @@
 
 #include "backend/StackMachine.hpp"
 #include <mutable/catalog/Catalog.hpp>
+#include <mutable/catalog/Schema.hpp>
 #include <mutable/IR/Optimizer.hpp>
 #include <mutable/mutable.hpp>
 #include <mutable/Options.hpp>
+#include <mutable/storage/Index.hpp>
 #include <mutable/util/DotTool.hpp>
 
 
@@ -254,11 +256,29 @@ void CreateIndex::execute(Diagnostic &diag)
 {
     auto &C = Catalog::Get();
     auto &DB = C.get_database_in_use();
+    const auto &table = DB.get_table(table_name_);
 
+    /* Compute bulkloading schema from attribute name. */
+    Schema schema;
+    for (auto &entry : table.schema()) {
+        if (entry.id.name == attribute_name_) {
+            schema.add(entry);
+            break; // only one-dimensional indexes are supported
+        }
+    }
+
+    /* Bulkload index. */
+    try {
+        M_TIME_EXPR(index_->bulkload(table, schema), "Bulkload index", C.timer());
+    } catch (invalid_argument) {
+        diag.err() << "Could not bulkload index." << '\n';
+    }
+
+    /* Add index to database. */
     try {
         DB.add_index(std::move(index_), table_name_, attribute_name_, index_name_);
-            if (not Options::Get().quiet)
-                diag.out() << "Created index " << index_name_ << ".\n";
+        if (not Options::Get().quiet)
+            diag.out() << "Created index " << index_name_ << ".\n";
     } catch (std::out_of_range) {
         diag.err() << "Table " << table_name_ << " or Attribute " << attribute_name_ << " does not exist in Database "
                    << DB.name << ".\n";

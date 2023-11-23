@@ -2420,7 +2420,7 @@ TEST_CASE("Sema/Statements/CreateIndex", "[core][parse][sema]")
         /* Create index idx on mytable(a). */
         auto attribute_name = C.pool("a");
         auto index_name = C.pool("idx");
-        DB.add_index(std::make_unique<idx::IndexBase>(), table_name, attribute_name, index_name);
+        DB.add_index(std::make_unique<idx::ArrayIndex<bool>>(), table_name, attribute_name, index_name);
 
         /* Try to create another index idx. */
         LEXER("CREATE INDEX new_idx ON mytable(a);");
@@ -2496,7 +2496,7 @@ TEST_CASE("Sema/Statements/CreateIndex", "[core][parse][sema]")
         /* Create index idx on mytable(a). */
         auto attribute_name = C.pool("a");
         auto index_name = C.pool("idx");
-        DB.add_index(std::make_unique<idx::IndexBase>(), table_name, attribute_name, index_name);
+        DB.add_index(std::make_unique<idx::ArrayIndex<bool>>(), table_name, attribute_name, index_name);
 
         /* Try to create another index idx. */
         LEXER("CREATE INDEX idx ON mytable(b);");
@@ -2528,7 +2528,7 @@ TEST_CASE("Sema/Statements/DropIndex", "[core][parse][sema]")
 
     /* Create default index on mytable(a). */
     auto index_name = C.pool("idx");
-    DB.add_index(std::make_unique<idx::IndexBase>(), table_name, attribute_name, index_name);
+    DB.add_index(std::make_unique<idx::ArrayIndex<bool>>(), table_name, attribute_name, index_name);
 
     SECTION("Drop Index Statement is ok.")
     {

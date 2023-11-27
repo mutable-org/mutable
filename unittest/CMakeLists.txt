@@ -51,6 +51,7 @@ set(
 
     # storage
     storage/ColumnStoreTest.cpp
+    storage/IndexTest.cpp
     storage/PaxStoreTest.cpp
     storage/RowStoreTest.cpp
     storage/StoreTest.cpp

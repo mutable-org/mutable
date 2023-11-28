@@ -945,9 +945,9 @@ struct M_EXPORT Database
 
     /*===== Indexes ==================================================================================================*/
     /** Adds an index with \p index_name on \p attribute_name from \p table_name.  Throws `std::out_of_range` if a
-     * `Table` with the given \p `table_name` does not exist.  Throws `std::out_of_range` if an `Attribute` with the
-     * given \p attribute_name does not exist.  Throws `m::invalid_argument` if an index with the given \p index_name
-     * already exists. */
+     * `Table` with the given \p table_name does not exist.  Throws `std::out_of_range` if an `Attribute` with the given
+     * \p attribute_name does not exist.  Throws `m::invalid_argument` if an index with the given \p index_name already
+     * exists. */
     void add_index(std::unique_ptr<idx::IndexBase> index, const char *table_name, const char *attribute_name,
                    const char *index_name)
     {

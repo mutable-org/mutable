@@ -1002,6 +1002,33 @@ struct M_EXPORT Database
         }
         return false;
     }
+    /** Returns the index with the given \p index_name.  Throws `m::invalid_argument` an index with the given \p
+     * index_name does not exist. */
+    const idx::IndexBase & get_index(const char *index_name) const {
+        for (auto &entry : indexes_) {
+            if (entry.name == index_name)
+                return *entry.index;
+        }
+        throw m::invalid_argument("Index of that name does not exist.");
+    }
+    /** Returns an index on `Attribute` \p attribute_name of `Table` \p table_name iff one exists.  Throws
+     * `m::invalid_argument` if such an index does not exist.  Throws `m::invalid_argument` if a `Table` with the given
+     * \p table_name does not exist. Throws `m::invalid_argument` if an `Attribute` with \p attribute_name does not
+     * exist in `Table` \p table_name. */
+    const idx::IndexBase & get_index(const char *table_name, const char *attribute_name) const {
+        auto it = tables_.find(table_name);
+        if (it == tables_.end())
+            throw m::invalid_argument("Table with that name does not exist.");
+        auto &table = it->second;
+        if (not table->has_attribute(attribute_name))
+            throw m::invalid_argument("Attribute with that name does not exist.");
+        for (auto &entry : indexes_) {
+            if (entry.table.name() == table_name and entry.attribute.name == attribute_name)
+                return *entry.index;
+        }
+        throw m::invalid_argument("Index on that attribute of that table does not exist.");
+    }
+
 };
 
 }

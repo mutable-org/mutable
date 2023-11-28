@@ -981,7 +981,7 @@ struct M_EXPORT Database
         }
     }
     /** Returns `true` iff there is an index with the given \p index_name. */
-    bool has_index(const char *index_name) {
+    bool has_index(const char *index_name) const {
         for (auto it = indexes_.cbegin(); it != indexes_.cend(); ++it)
             if (it->name == index_name) return true;
         return false;

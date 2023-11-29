@@ -756,11 +756,12 @@ void V8Engine::execute(const MatchBase &plan)
         memory::Memory mem = Catalog::Get().allocator().allocate(bytes_remaining);
         mem.map(bytes_remaining, 0, wasm_context.vm, wasm_context.heap);
 
+        auto compile_time = C.timer().create_timing("Compile SQL to machine code");
         /* Compile the plan and thereby build the Wasm module. */
-        M_TIME_EXPR(compile(plan), "Compile to WebAssembly", C.timer());
-
+        M_TIME_EXPR(compile(plan), "|- Compile SQL to WebAssembly", C.timer());
         /* Create a WebAssembly instance object. */
-        auto instance = M_TIME_EXPR(instantiate(*isolate_, imports), "Compile Wasm to machine code", C.timer());
+        auto instance = M_TIME_EXPR(instantiate(*isolate_, imports), " ` Compile WebAssembly to machine code", C.timer());
+        compile_time.stop();
 
         /* Set the underlying memory for the instance. */
         v8::SetWasmInstanceRawMemory(instance, wasm_context.vm.as<uint8_t*>(), wasm_context.vm.size());

@@ -1,7 +1,7 @@
-description: Compile TPC-H Query 1
+description: TPC-H Query 6
 suite: TPC
 benchmark: TPC-H Compilation Times
-name: Q1
+name: Q6
 readonly: true
 chart:
     x:
@@ -15,11 +15,8 @@ chart:
 data:
     Lineitem:
         file: benchmark/tpc-h/data/lineitem.tbl
-        format: 'CSV'
         delimiter: '|'
         header: 0
-        scale_factors:
-            1: 0.01
         attributes:
             'l_orderkey': 'INT NOT NULL'
             'l_partkey': 'INT NOT NULL'
@@ -41,31 +38,15 @@ systems:
     mutable:
         configurations:
             'WasmV8, PAX4M':
-                args: >-
-                  --backend WasmV8
-                  --data-layout PAX4M
-                  --cardinality-estimator Injected
-                  --use-cardinality-file benchmark/tpc-h/q1.json
+                args: --backend WasmV8 --data-layout PAX4M
                 pattern: '^Compile SQL to machine code:.*'
         cases:
-            1:  SELECT
-                        l_returnflag,
-                        l_linestatus,
-                        SUM(l_quantity) AS sum_qty,
-                        SUM(l_extendedprice) AS sum_base_price,
-                        SUM(l_extendedprice * (1 - l_discount)) AS sum_disc_price,
-                        SUM(l_extendedprice * (1 - l_discount) * (1 + l_tax)) AS sum_charge,
-                        AVG(l_quantity) AS avg_qty,
-                        AVG(l_extendedprice) AS avg_price,
-                        AVG(l_discount) AS avg_disc,
-                        COUNT(*) AS count_order
+            1: |
+                SELECT
+                        SUM(l_extendedprice * l_discount) AS revenue
                 FROM
                         Lineitem
                 WHERE
-                        l_shipdate <= d'1998-09-02'
-                GROUP BY
-                        l_returnflag,
-                        l_linestatus
-                ORDER BY
-                        l_returnflag,
-                        l_linestatus;
+                        l_shipdate >= d'1994-01-01'
+                        AND l_shipdate < d'1995-01-01'
+                        AND l_quantity < 24;

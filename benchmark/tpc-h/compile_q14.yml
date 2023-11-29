@@ -1,7 +1,7 @@
-description: Compile TPC-H Query 1
+description: TPC-H Query 14
 suite: TPC
 benchmark: TPC-H Compilation Times
-name: Q1
+name: Q14
 readonly: true
 chart:
     x:
@@ -15,11 +15,8 @@ chart:
 data:
     Lineitem:
         file: benchmark/tpc-h/data/lineitem.tbl
-        format: 'CSV'
         delimiter: '|'
         header: 0
-        scale_factors:
-            1: 0.01
         attributes:
             'l_orderkey': 'INT NOT NULL'
             'l_partkey': 'INT NOT NULL'
@@ -37,35 +34,38 @@ data:
             'l_shipinstruct': 'CHAR 25 NOT NULL'
             'l_shipmode': 'CHAR 10 NOT NULL'
             'l_comment': 'CHAR 44 NOT NULL'
+    Part:
+        file: benchmark/tpc-h/data/part.tbl
+        delimiter: '|'
+        header: 0
+        attributes:
+            'p_partkey':       'INT 4 NOT NULL'
+            'p_name':          'CHAR 55 NOT NULL'
+            'p_mfgr':          'CHAR 25 NOT NULL'
+            'p_brand':         'CHAR 10 NOT NULL'
+            'p_type':          'CHAR 25 NOT NULL'
+            'p_size':          'INT 4 NOT NULL'
+            'p_container':     'CHAR 10 NOT NULL'
+            'p_retailprice':   'DECIMAL 10 2 NOT NULL'
+            'p_comment':       'CHAR 23 NOT NULL'
 systems:
     mutable:
         configurations:
             'WasmV8, PAX4M':
                 args: >-
-                  --backend WasmV8
-                  --data-layout PAX4M
-                  --cardinality-estimator Injected
-                  --use-cardinality-file benchmark/tpc-h/q1.json
+                    --backend WasmV8
+                    --data-layout PAX4M
+                    --cardinality-estimator Injected
+                    --use-cardinality-file benchmark/tpc-h/q14.json
                 pattern: '^Compile SQL to machine code:.*'
         cases:
-            1:  SELECT
-                        l_returnflag,
-                        l_linestatus,
-                        SUM(l_quantity) AS sum_qty,
-                        SUM(l_extendedprice) AS sum_base_price,
-                        SUM(l_extendedprice * (1 - l_discount)) AS sum_disc_price,
-                        SUM(l_extendedprice * (1 - l_discount) * (1 + l_tax)) AS sum_charge,
-                        AVG(l_quantity) AS avg_qty,
-                        AVG(l_extendedprice) AS avg_price,
-                        AVG(l_discount) AS avg_disc,
-                        COUNT(*) AS count_order
+            1: |
+                SELECT
+                        SUM(l_extendedprice * (1 - l_discount)) AS promo_revenue
                 FROM
-                        Lineitem
+                        Lineitem,
+                        Part
                 WHERE
-                        l_shipdate <= d'1998-09-02'
-                GROUP BY
-                        l_returnflag,
-                        l_linestatus
-                ORDER BY
-                        l_returnflag,
-                        l_linestatus;
+                        l_partkey = p_partkey
+                        AND l_shipdate >= d'1995-09-01'
+                        AND l_shipdate < d'1995-10-01';

@@ -27,7 +27,13 @@ struct Timer
         TimingProcess(Timer &timer, std::size_t index) : timer_(timer), id_(index) { }
 
         public:
-        ~TimingProcess() { timer_.stop(id_); }
+        ~TimingProcess() {
+            auto &M = timer_.get(id_);
+            if (not M.has_ended())
+                timer_.stop(id_);
+        }
+
+        void stop() { timer_.stop(id_); }
     };
 
     using clock = std::chrono::high_resolution_clock;

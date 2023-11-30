@@ -1,6 +1,7 @@
 set(
     BACKEND_SOURCES
     Interpreter.cpp
+    InterpreterOperator.cpp
     StackMachine.cpp
 )
 

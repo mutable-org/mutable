@@ -1,5 +1,6 @@
 #pragma once
 
+#include "backend/InterpreterOperator.hpp"
 #include "backend/StackMachine.hpp"
 #include <cerrno>
 #include <ctime>
@@ -216,9 +217,11 @@ struct Interpreter : Backend, ConstOperatorVisitor
     public:
     Interpreter() = default;
 
-    void register_operators(PhysicalOptimizer &phys_opt) const override { /* nothing to be done */ }
+    void register_operators(PhysicalOptimizer &phys_opt) const override { register_interpreter_operators(phys_opt); }
 
-    void execute(const MatchBase &plan) const override { M_unreachable("currently not supported"); }
+    void execute(const MatchBase &plan) const override {
+        (*const_cast<Interpreter*>(this))(plan.get_matched_singleton()); // use former visitor pattern on logical operators
+    }
 
     using ConstOperatorVisitor::operator();
 #define DECLARE(CLASS) void operator()(Const<CLASS> &op) override;

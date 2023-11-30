@@ -216,7 +216,9 @@ struct Interpreter : Backend, ConstOperatorVisitor
     public:
     Interpreter() = default;
 
-    void execute(const Operator &plan) const override { (*const_cast<Interpreter*>(this))(plan); }
+    void register_operators(PhysicalOptimizer &phys_opt) const override { /* nothing to be done */ }
+
+    void execute(const MatchBase &plan) const override { M_unreachable("currently not supported"); }
 
     using ConstOperatorVisitor::operator();
 #define DECLARE(CLASS) void operator()(Const<CLASS> &op) override;

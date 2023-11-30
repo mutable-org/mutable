@@ -1,5 +1,6 @@
 #include "backend/WebAssembly.hpp"
 
+#include "backend/WasmOperator.hpp"
 #include <binaryen-c.h>
 #include <iostream>
 #include <sys/mman.h>
@@ -52,7 +53,7 @@ M_LCOV_EXCL_STOP
  * WasmEngine
  *====================================================================================================================*/
 
-WasmEngine::WasmContext::WasmContext(uint32_t id, config_t config, const Operator &plan, std::size_t size)
+WasmEngine::WasmContext::WasmContext(uint32_t id, const MatchBase &plan, config_t config, std::size_t size)
     : config_(config)
     , id(id)
     , plan(plan)
@@ -102,4 +103,5 @@ void WasmEngine::WasmContext::install_guard_page()
  * WasmBackend
  *====================================================================================================================*/
 
-void WasmBackend::execute(const Operator &plan) const { engine_->execute(plan); }
+void WasmBackend::register_operators(PhysicalOptimizer &phys_opt) const { register_wasm_operators(phys_opt); }
+void WasmBackend::execute(const MatchBase &plan) const { engine_->execute(plan); }

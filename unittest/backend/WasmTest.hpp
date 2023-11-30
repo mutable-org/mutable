@@ -5,13 +5,13 @@
 #include <mutable/catalog/Catalog.hpp>
 
 
-/*======================================================================================================================
- * Helper macros and functions
- *====================================================================================================================*/
-
 namespace m {
 
 namespace wasm {
+
+/*======================================================================================================================
+ * Helper macros and functions
+ *====================================================================================================================*/
 
 inline void wasm_check(Boolx1 cond, const char *msg)
 {
@@ -39,6 +39,21 @@ inline void check_string(const char *expected, Ptr<Charx1> actual, std::size_t l
     actual.discard();
 }
 
+
+/*======================================================================================================================
+ * Dummy physical operator
+ *====================================================================================================================*/
+
+struct DummyOp { };
+
 }
+
+template<>
+struct Match<wasm::DummyOp> : MatchBase
+{
+    void execute(setup_t, pipeline_t, teardown_t) const override { M_unreachable("must not be called"); }
+    const Operator & get_matched_singleton() const override { M_unreachable("must not be called"); }
+    void print(std::ostream&, unsigned) const override { M_unreachable("must not be called"); }
+};
 
 }

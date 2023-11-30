@@ -1,12 +1,7 @@
 #include <mutable/IR/PhysicalOptimizer.hpp>
 
-#include "backend/WasmDSL.hpp"
-#include "backend/WasmMacro.hpp"
-#include "backend/WasmUtil.hpp"
-
 
 using namespace m;
-using namespace m::wasm;
 
 
 /*======================================================================================================================
@@ -22,20 +17,6 @@ M_LCOV_EXCL_STOP
 /*======================================================================================================================
  * PhysicalOptimizerImpl
  *====================================================================================================================*/
-
-template<typename PhysicalPlanTable>
-void PhysicalOptimizerImpl<PhysicalPlanTable>::execute() const
-{
-    /* Emit code for run function which computes the last pipeline and calls other pipeline functions. */
-    FUNCTION(run, void(void))
-    {
-        auto S = CodeGenContext::Get().scoped_environment(); // create scoped environment for this function
-        get_plan().match().execute(setup_t::Make_Without_Parent(), pipeline_t(), teardown_t::Make_Without_Parent());
-    }
-
-    /* Call run function. */
-    run();
-}
 
 template<typename PhysicalPlanTable>
 void PhysicalOptimizerImpl<PhysicalPlanTable>::accept(PhysOptVisitor &v) { v(*this); }
@@ -68,14 +49,14 @@ void PhysicalOptimizerImpl<PhysicalPlanTable>::dot_plan(std::ostream &out) const
         << "    graph [fontname = \"DejaVu Sans\"];\n"
         << "    node [fontname = \"DejaVu Sans\"];\n"
         << "    edge [fontname = \"DejaVu Sans\"];\n";
-    dot_plan_helper(get_plan(), out);
+    dot_plan_helper(get_plan_entry(), out);
     out << "}\n";
 };
 
 template<typename PhysicalPlanTable>
 void PhysicalOptimizerImpl<PhysicalPlanTable>::dump_plan(std::ostream &out) const
 {
-    out << get_plan().match() << std::endl;
+    out << get_plan() << std::endl;
 }
 template<typename PhysicalPlanTable>
 void PhysicalOptimizerImpl<PhysicalPlanTable>::dump_plan() const { dump_plan(std::cerr); }

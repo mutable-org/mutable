@@ -72,12 +72,13 @@ struct invoke_v8<PrimitiveExpr<ReturnType, ReturnL>(PrimitiveExpr<ParamTypes, Pa
     v8::ArrayBuffer::Allocator *allocator_ = nullptr;
     bool context_created_ = false;
     std::unique_ptr<V8InspectorClientImpl> inspector_;
+    static inline const Match<DummyOp> dummy_plan_; ///< only needed to create Wasm context without having a physical plan
 
     public:
     invoke_v8() {
         /* Ensure context for SIMD result vector in memory or CDT debugging. */
         if ((not std::same_as<ReturnType, void> and ReturnL > 1) or getenv("MUTABLE_CDT_PORT") != NULL)
-            context_created_ = m::WasmEngine::Ensure_Wasm_Context_For_ID(Module::ID()).second;
+            context_created_ = m::WasmEngine::Ensure_Wasm_Context_For_ID(Module::ID(), dummy_plan_).second;
     }
 
     ~invoke_v8() {

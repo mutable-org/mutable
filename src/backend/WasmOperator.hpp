@@ -507,10 +507,12 @@ void execute_buffered(const Match<T> &M, const Schema &schema,
 template<>
 struct Match<wasm::NoOp> : MatchBase
 {
+    const NoOpOperator &noop;
     const MatchBase &child;
 
-    Match(const NoOpOperator*, std::vector<std::reference_wrapper<const MatchBase>> &&children)
-        : child(children[0])
+    Match(const NoOpOperator *noop, std::vector<std::reference_wrapper<const MatchBase>> &&children)
+        : noop(*noop)
+        , child(children[0])
     {
         M_insist(children.size() == 1);
     }
@@ -518,6 +520,8 @@ struct Match<wasm::NoOp> : MatchBase
     void execute(setup_t setup, pipeline_t pipeline, teardown_t teardown) const override {
         wasm::NoOp::execute(*this, std::move(setup), std::move(pipeline), std::move(teardown));
     }
+
+    const Operator & get_matched_singleton() const override { return noop; }
 
     protected:
     void print(std::ostream &out, unsigned level) const override;
@@ -532,8 +536,8 @@ struct Match<wasm::Callback<SIMDfied>> : MatchBase
         M_notnull(options::hard_pipeline_breaker_layout.get())->clone();
     std::size_t result_set_window_size = options::result_set_window_size;
 
-    Match(const CallbackOperator *Callback, std::vector<std::reference_wrapper<const MatchBase>> &&children)
-        : callback(*Callback)
+    Match(const CallbackOperator *callback, std::vector<std::reference_wrapper<const MatchBase>> &&children)
+        : callback(*callback)
         , child(children[0])
     {
         M_insist(children.size() == 1);
@@ -542,6 +546,8 @@ struct Match<wasm::Callback<SIMDfied>> : MatchBase
     void execute(setup_t setup, pipeline_t pipeline, teardown_t teardown) const override {
         wasm::Callback<SIMDfied>::execute(*this, std::move(setup), std::move(pipeline), std::move(teardown));
     }
+
+    const Operator & get_matched_singleton() const override { return callback; }
 
     protected:
     void print(std::ostream &out, unsigned level) const override;
@@ -566,6 +572,8 @@ struct Match<wasm::Print<SIMDfied>> : MatchBase
     void execute(setup_t setup, pipeline_t pipeline, teardown_t teardown) const override {
         wasm::Print<SIMDfied>::execute(*this, std::move(setup), std::move(pipeline), std::move(teardown));
     }
+
+    const Operator & get_matched_singleton() const override { return print_op; }
 
     protected:
     void print(std::ostream &out, unsigned level) const override;
@@ -613,6 +621,8 @@ struct Match<wasm::Scan<SIMDfied>> : MatchBase
         }
     }
 
+    const Operator & get_matched_singleton() const override { return scan; }
+
     protected:
     void print(std::ostream &out, unsigned level) const override;
 };
@@ -642,6 +652,8 @@ struct Match<wasm::Filter<Predicated>> : MatchBase
                          std::move(setup), std::move(pipeline), std::move(teardown));
     }
 
+    const Operator & get_matched_singleton() const override { return filter; }
+
     protected:
     void print(std::ostream &out, unsigned level) const override;
 };
@@ -670,6 +682,8 @@ struct Match<wasm::LazyDisjunctiveFilter> : MatchBase
         execute_buffered(*this, filter.schema(), buffer_factory_, buffer_num_tuples_,
                          std::move(setup), std::move(pipeline), std::move(teardown));
     }
+
+    const Operator & get_matched_singleton() const override { return filter; }
 
     protected:
     void print(std::ostream &out, unsigned level) const override;
@@ -702,6 +716,8 @@ struct Match<wasm::Projection> : MatchBase
                          std::move(setup), std::move(pipeline), std::move(teardown));
     }
 
+    const Operator & get_matched_singleton() const override { return projection; }
+
     protected:
     void print(std::ostream &out, unsigned level) const override;
 };
@@ -729,6 +745,8 @@ struct Match<wasm::HashBasedGrouping> : MatchBase
         wasm::HashBasedGrouping::execute(*this, std::move(setup), std::move(pipeline), std::move(teardown));
     }
 
+    const Operator & get_matched_singleton() const override { return grouping; }
+
     protected:
     void print(std::ostream &out, unsigned level) const override;
 };
@@ -750,6 +768,8 @@ struct Match<wasm::OrderedGrouping> : MatchBase
         wasm::OrderedGrouping::execute(*this, std::move(setup), std::move(pipeline), std::move(teardown));
     }
 
+    const Operator & get_matched_singleton() const override { return grouping; }
+
     protected:
     void print(std::ostream &out, unsigned level) const override;
 };
@@ -770,6 +790,8 @@ struct Match<wasm::Aggregation> : MatchBase
     void execute(setup_t setup, pipeline_t pipeline, teardown_t teardown) const override {
         wasm::Aggregation::execute(*this, std::move(setup), std::move(pipeline), std::move(teardown));
     }
+
+    const Operator & get_matched_singleton() const override { return aggregation; }
 
     protected:
     void print(std::ostream &out, unsigned level) const override;
@@ -794,6 +816,8 @@ struct Match<wasm::Quicksort<CmpPredicated>> : MatchBase
         wasm::Quicksort<CmpPredicated>::execute(*this, std::move(setup), std::move(pipeline), std::move(teardown));
     }
 
+    const Operator & get_matched_singleton() const override { return sorting; }
+
     protected:
     void print(std::ostream &out, unsigned level) const override;
 };
@@ -801,10 +825,12 @@ struct Match<wasm::Quicksort<CmpPredicated>> : MatchBase
 template<>
 struct Match<wasm::NoOpSorting> : MatchBase
 {
+    const SortingOperator &sorting;
     const MatchBase &child;
 
-    Match(const SortingOperator*, std::vector<std::reference_wrapper<const MatchBase>> &&children)
-        : child(children[0])
+    Match(const SortingOperator *sorting, std::vector<std::reference_wrapper<const MatchBase>> &&children)
+        : sorting(*sorting)
+        , child(children[0])
     {
         M_insist(children.size() == 1);
     }
@@ -812,6 +838,8 @@ struct Match<wasm::NoOpSorting> : MatchBase
     void execute(setup_t setup, pipeline_t pipeline, teardown_t teardown) const override {
         wasm::NoOpSorting::execute(*this, std::move(setup), std::move(pipeline), std::move(teardown));
     }
+
+    const Operator & get_matched_singleton() const override { return sorting; }
 
     protected:
     void print(std::ostream &out, unsigned level) const override;
@@ -845,6 +873,8 @@ struct Match<wasm::NestedLoopsJoin<Predicated>> : MatchBase
         execute_buffered(*this, join.schema(), buffer_factory_, buffer_num_tuples_,
                          std::move(setup), std::move(pipeline), std::move(teardown));
     }
+
+    const Operator & get_matched_singleton() const override { return join; }
 
     protected:
     void print(std::ostream &out, unsigned level) const override;
@@ -886,6 +916,8 @@ struct Match<wasm::SimpleHashJoin<UniqueBuild, Predicated>> : MatchBase
                          std::move(setup), std::move(pipeline), std::move(teardown));
     }
 
+    const Operator & get_matched_singleton() const override { return join; }
+
     protected:
     void print(std::ostream &out, unsigned level) const override;
 };
@@ -918,6 +950,8 @@ struct Match<wasm::SortMergeJoin<SortLeft, SortRight, Predicated, CmpPredicated>
         );
     }
 
+    const Operator & get_matched_singleton() const override { return join; }
+
     protected:
     void print(std::ostream &out, unsigned level) const override;
 };
@@ -938,6 +972,8 @@ struct Match<wasm::Limit> : MatchBase
     void execute(setup_t setup, pipeline_t pipeline, teardown_t teardown) const override {
         wasm::Limit::execute(*this, std::move(setup), std::move(pipeline), std::move(teardown));
     }
+
+    const Operator & get_matched_singleton() const override { return limit; }
 
     protected:
     void print(std::ostream &out, unsigned level) const override;
@@ -980,6 +1016,8 @@ struct Match<wasm::HashBasedGroupJoin> : MatchBase
         execute_buffered(*this, grouping.schema(), buffer_factory_, buffer_num_tuples_,
                          std::move(setup), std::move(pipeline), std::move(teardown));
     }
+
+    const Operator & get_matched_singleton() const override { M_unreachable("not a singleton pattern"); }
 
     protected:
     void print(std::ostream &out, unsigned level) const override;

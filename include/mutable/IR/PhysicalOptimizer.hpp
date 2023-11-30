@@ -172,7 +172,14 @@ struct MatchBase
     public:
     virtual ~MatchBase() { }
 
+    /** Executes this physical operator match.  Recursively calls children operators to execute.  The three callbacks
+     * are specified by the parent operator and are used as follows: \p setup for some initializations, \p pipeline
+     * for the actual computation, and \p teardown for post-processing. */
     virtual void execute(setup_t setup, pipeline_t pipeline, teardown_t teardown) const = 0;
+
+    /** Returns the matched logical operator for physical operators with singleton patterns.  Must not be called for
+     * physical operators with a pattern tree. */
+    virtual const Operator & get_matched_singleton() const = 0;
 
     double cost() const { return cost_; }
     private:
@@ -228,9 +235,8 @@ struct PhysicalOptimizer
 
     /** Returns true iff a physical operator covering is found. */
     virtual bool has_plan() const = 0;
-
-    /** Executes the found physical operator covering. */
-    virtual void execute() const = 0;
+    /** Returns the found physical operator covering. */
+    virtual const MatchBase & get_plan() const = 0;
 
     virtual void accept(PhysOptVisitor &v) = 0;
     virtual void accept(ConstPhysOptVisitor &v) const = 0;
@@ -272,8 +278,9 @@ struct PhysicalOptimizerImpl : PhysicalOptimizer, ConstPostOrderOperatorVisitor
     }
 
     bool has_plan() const override { return not table().back().empty(); }
+    private:
     /** Returns the entry for the found physical operator covering. */
-    const entry_type & get_plan() const {
+    const entry_type & get_plan_entry() const {
         M_insist(has_plan(), "no physical operator covering found");
         typename PhysicalPlanTable::condition2entry_map_type::const_iterator it_best;
         double min_cost = std::numeric_limits<double>::infinity();
@@ -285,8 +292,8 @@ struct PhysicalOptimizerImpl : PhysicalOptimizer, ConstPostOrderOperatorVisitor
         }
         return it_best->entry;
     }
-
-    void execute() const override;
+    public:
+    const MatchBase & get_plan() const override { return get_plan_entry().match(); }
 
     private:
     /** Handles the found match \p match with children entries \p children for the logical plan rooted in \p op. */

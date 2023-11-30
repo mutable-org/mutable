@@ -72,7 +72,6 @@ struct V8Engine : m::WasmEngine
     static inline v8::Platform *PLATFORM_ = nullptr;
     v8::ArrayBuffer::Allocator *allocator_ = nullptr;
     v8::Isolate *isolate_ = nullptr;
-    std::unique_ptr<PhysicalOptimizer> phys_opt_ = std::make_unique<PhysicalOptimizerImpl<ConcretePhysicalPlanTable>>();
 
     /*----- Objects for remote debugging via CDT. --------------------------------------------------------------------*/
     std::unique_ptr<V8InspectorClientImpl> inspector_;
@@ -90,8 +89,8 @@ struct V8Engine : m::WasmEngine
     }
 
     void initialize();
-    void compile(const m::Operator &plan) const override;
-    void execute(const m::Operator &plan) override;
+    void compile(const MatchBase &plan) const override;
+    void execute(const MatchBase &plan) override;
 };
 
 
@@ -294,7 +293,8 @@ void m::wasm::detail::read_result_set(const v8::FunctionCallbackInfo<v8::Value> 
 {
     auto &context = WasmEngine::Get_Wasm_Context_By_ID(Module::ID());
 
-    auto &schema = context.plan.schema();
+    auto &root_op = context.plan.get_matched_singleton();
+    auto &schema = root_op.schema();
     auto deduplicated_schema = schema.deduplicate();
     auto deduplicated_schema_without_constants = deduplicated_schema.drop_constants();
 
@@ -332,7 +332,7 @@ void m::wasm::detail::read_result_set(const v8::FunctionCallbackInfo<v8::Value> 
         };
         return find_projection_impl(op, find_projection_impl);
     };
-    auto &projections = find_projection(context.plan).projections();
+    auto &projections = find_projection(root_op).projections();
 
     ///> helper function to print given `ast::Constant` \p c of `Type` \p type to \p out
     auto print_constant = [](std::ostringstream &out, const ast::Constant &c, const Type *type){
@@ -389,7 +389,7 @@ void m::wasm::detail::read_result_set(const v8::FunctionCallbackInfo<v8::Value> 
 
     if (deduplicated_schema_without_constants.num_entries() == 0) {
         /* Schema contains only constants. Create simple loop to generate `num_tuples` constant result tuples. */
-        if (auto callback_op = cast<const CallbackOperator>(&context.plan)) {
+        if (auto callback_op = cast<const CallbackOperator>(&root_op)) {
             Tuple tup(schema); // tuple entries which are not set are implicitly NULL
             for (std::size_t i = 0; i < schema.num_entries(); ++i) {
                 auto &e = schema[i];
@@ -399,7 +399,7 @@ void m::wasm::detail::read_result_set(const v8::FunctionCallbackInfo<v8::Value> 
             }
             for (std::size_t i = 0; i < num_tuples; ++i)
                 callback_op->callback()(schema, tup);
-        } else if (auto print_op = cast<const PrintOperator>(&context.plan)) {
+        } else if (auto print_op = cast<const PrintOperator>(&root_op)) {
             std::ostringstream tup;
             for (std::size_t i = 0; i < schema.num_entries(); ++i) {
                 auto &e = schema[i];
@@ -419,7 +419,7 @@ void m::wasm::detail::read_result_set(const v8::FunctionCallbackInfo<v8::Value> 
     auto layout = context.result_set_factory->make(deduplicated_schema_without_constants);
 
     /* Extract results. */
-    if (auto callback_op = cast<const CallbackOperator>(&context.plan)) {
+    if (auto callback_op = cast<const CallbackOperator>(&root_op)) {
         auto loader = Interpreter::compile_load(deduplicated_schema_without_constants, result_set, layout,
                                                 deduplicated_schema_without_constants);
         if (schema.num_entries() == deduplicated_schema.num_entries()) {
@@ -468,7 +468,7 @@ void m::wasm::detail::read_result_set(const v8::FunctionCallbackInfo<v8::Value> 
                 callback_op->callback()(schema, tup_dupl);
             }
         }
-    } else if (auto print_op = cast<const PrintOperator>(&context.plan)) {
+    } else if (auto print_op = cast<const PrintOperator>(&root_op)) {
         /* Compute a `Tuple` with duplicates and constants. */
         Tuple tup(deduplicated_schema_without_constants);
         Tuple *args[] = { &tup };
@@ -599,12 +599,7 @@ struct CollectStringLiterals : ConstOperatorVisitor, ast::ConstASTExprVisitor
  * V8Engine implementation
  *====================================================================================================================*/
 
-V8Engine::V8Engine()
-{
-    register_wasm_operators(*phys_opt_);
-
-    initialize();
-}
+V8Engine::V8Engine() { initialize(); }
 
 V8Engine::~V8Engine()
 {
@@ -661,24 +656,27 @@ void V8Engine::initialize()
     isolate_ = v8::Isolate::New(create_params);
 }
 
-void V8Engine::compile(const Operator &plan) const
+void V8Engine::compile(const MatchBase &plan) const
 {
 #if 1
     /*----- Add print function. --------------------------------------------------------------------------------------*/
     Module::Get().emit_function_import<void(uint32_t)>("print");
 #endif
 
+    /*----- Emit code for run function which computes the last pipeline and calls other pipeline functions. ----------*/
+    FUNCTION(run, void(void))
+    {
+        auto S = CodeGenContext::Get().scoped_environment(); // create scoped environment for this function
+        plan.execute(setup_t::Make_Without_Parent(), pipeline_t(), teardown_t::Make_Without_Parent()); // emit code
+    }
+
     /*----- Create function `main` which executes the given query. ---------------------------------------------------*/
     m::wasm::Function<uint32_t(uint32_t)> main("main");
     BLOCK_OPEN(main.body())
     {
         auto S = CodeGenContext::Get().scoped_environment(); // create scoped environment for this function
-
-        /*----- Compile plan. ----------------------------------------------------------------------------------------*/
-        phys_opt_->execute(); // emit code
-
-        /*----- Return size of result set. ---------------------------------------------------------------------------*/
-        main.emit_return(CodeGenContext::Get().num_tuples());
+        run(); // call run function
+        main.emit_return(CodeGenContext::Get().num_tuples()); // return size of result set
     }
 
     /*----- Export main. ---------------------------------------------------------------------------------------------*/
@@ -719,21 +717,12 @@ void V8Engine::compile(const Operator &plan) const
 #endif
 }
 
-void V8Engine::execute(const Operator &plan)
+void V8Engine::execute(const MatchBase &plan)
 {
-    Module::Init();
-    CodeGenContext::Init(); // fresh context
-
     Catalog &C = Catalog::Get();
 
-    M_TIME_EXPR(phys_opt_->cover(plan), "Compute optimal physical operator covering", C.timer());
-    if (Options::Get().physplan) phys_opt_->dump_plan();
-    if (Options::Get().physplandot) {
-        Diagnostic diag(Options::Get().has_color, std::cout, std::cerr);
-        DotTool dot(diag);
-        phys_opt_->dot_plan(dot.stream());
-        dot.show("physical_plan", true);
-    }
+    Module::Init();
+    CodeGenContext::Init(); // fresh context
 
     M_insist(bool(isolate_), "must have an isolate");
     v8::Locker locker(isolate_);
@@ -755,7 +744,7 @@ void V8Engine::execute(const Operator &plan)
         WasmContext::config_t wasm_config{0};
         if (options::cdt_port < 1024)
             wasm_config |= WasmContext::TRAP_GUARD_PAGES;
-        auto &wasm_context = Create_Wasm_Context_For_ID(Module::ID(), wasm_config, plan);
+        auto &wasm_context = Create_Wasm_Context_For_ID(Module::ID(), plan, wasm_config);
 
         auto imports = v8::Object::New(isolate_);
         auto env = create_env(*isolate_, plan);
@@ -795,10 +784,11 @@ void V8Engine::execute(const Operator &plan)
                         "Execute machine code", C.timer());
 
         /* Print total number of result tuples. */
-        if (auto print_op = cast<const PrintOperator>(&plan)) {
+        auto &root_op = plan.get_matched_singleton();
+        if (auto print_op = cast<const PrintOperator>(&root_op)) {
             if (not Options::Get().quiet)
                 print_op->out << num_rows << " rows\n";
-        } else if (auto noop_op = cast<const NoOpOperator>(&plan)) {
+        } else if (auto noop_op = cast<const NoOpOperator>(&root_op)) {
             if (not Options::Get().quiet)
                 noop_op->out << num_rows << " rows\n";
         }
@@ -905,7 +895,7 @@ v8::Local<v8::WasmModuleObject> m::wasm::detail::instantiate(v8::Isolate &isolat
                ->CallAsConstructor(Ctx, 2, instance_args).ToLocalChecked().As<v8::WasmModuleObject>();
 }
 
-v8::Local<v8::Object> m::wasm::detail::create_env(v8::Isolate &isolate, const Operator &plan)
+v8::Local<v8::Object> m::wasm::detail::create_env(v8::Isolate &isolate, const MatchBase &plan)
 {
     auto &context = WasmEngine::Get_Wasm_Context_By_ID(Module::ID());
     auto Ctx = isolate.GetCurrentContext();
@@ -931,7 +921,7 @@ v8::Local<v8::Object> m::wasm::detail::create_env(v8::Isolate &isolate, const Op
 
     /* Map all string literals into the Wasm module. */
     M_insist(Is_Page_Aligned(context.heap));
-    auto literals = CollectStringLiterals::Collect(plan);
+    auto literals = CollectStringLiterals::Collect(plan.get_matched_singleton());
     std::size_t bytes = 0;
     for (auto literal : literals)
         bytes += strlen(literal) + 1;

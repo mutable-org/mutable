@@ -34,13 +34,13 @@ struct WasmEngine
 
         public:
         unsigned id; ///< a unique ID
-        const Operator &plan; ///< current plan
+        const MatchBase &plan; ///< current plan
         ///> factory used to create the result set data layout
         std::unique_ptr<const storage::DataLayoutFactory> result_set_factory;
         memory::AddressSpace vm; ///<  WebAssembly module instance's virtual address space aka.\ *linear memory*
         uint32_t heap = 0; ///< beginning of the heap, encoded as offset from the beginning of the virtual address space
 
-        WasmContext(uint32_t id, config_t configuration, const Operator &plan, std::size_t size);
+        WasmContext(uint32_t id, const MatchBase &plan, config_t configuration, std::size_t size);
 
         bool config(config_t cfg) const { return bool(cfg & config_); }
 
@@ -61,11 +61,11 @@ struct WasmEngine
     public:
     /** Creates a new `WasmContext` for ID `id` with `size` bytes of virtual address space. */
     static WasmContext & Create_Wasm_Context_For_ID(unsigned id,
+                                                    const MatchBase &plan,
                                                     WasmContext::config_t configuration = WasmContext::config_t(0x0),
-                                                    const Operator &plan = NoOpOperator(std::cout),
                                                     std::size_t size = WASM_MAX_MEMORY)
     {
-        auto wasm_context = std::make_unique<WasmContext>(id, configuration, plan, size);
+        auto wasm_context = std::make_unique<WasmContext>(id, plan, configuration, size);
         auto [it, inserted] = contexts_.emplace(id, std::move(wasm_context));
         M_insist(inserted, "WasmContext with that ID already exists");
         return *it->second;
@@ -74,12 +74,12 @@ struct WasmEngine
     /** If none exists, creates a new `WasmContext` for ID `id` with `size` bytes of virtual address space. */
     static std::pair<std::reference_wrapper<WasmContext>, bool>
     Ensure_Wasm_Context_For_ID(unsigned id,
+                               const MatchBase &plan,
                                WasmContext::config_t configuration = WasmContext::config_t(0x0),
-                               const Operator &plan = NoOpOperator(std::cout),
                                std::size_t size = WASM_MAX_MEMORY)
     {
         auto [it, inserted] = contexts_.try_emplace(id, lazy_construct(
-            [&](){ return std::make_unique<WasmContext>(id, configuration, plan, size); }
+            [&](){ return std::make_unique<WasmContext>(id, plan, configuration, size); }
         ));
         return { std::ref(*it->second), inserted };
     }
@@ -109,11 +109,11 @@ struct WasmEngine
     WasmEngine(const WasmEngine&) = delete;
     WasmEngine(WasmEngine&&) = default;
 
-    /** Compiles the given `plan` for this `WasmEngine`. */
-    virtual void compile(const Operator &plan) const = 0;
+    /** Compiles the already computed physical covering represented by \p plan using this `WasmEngine`. */
+    virtual void compile(const MatchBase &plan) const = 0;
 
-    /** Executes the given `plan` on this `WasmEngine`. */
-    virtual void execute(const Operator &plan) = 0;
+    /** Executes the already computed physical covering represented by \p plan using this `WasmEngine`. */
+    virtual void execute(const MatchBase &plan) = 0;
 };
 
 /** A `Backend` to execute a plan on a specific `WasmEngine`. */
@@ -128,8 +128,9 @@ struct WasmBackend : Backend
     /** Returns this backend's `WasmEngine`. */
     const WasmEngine & engine() const { return *engine_; }
 
-    /** Executes the given `plan` with this backend. */
-    void execute(const Operator &plan) const override;
+    void register_operators(PhysicalOptimizer &phys_opt) const override;
+
+    void execute(const MatchBase &plan) const override;
 };
 
 }

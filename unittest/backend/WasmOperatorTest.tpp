@@ -54,7 +54,8 @@ struct DummyStore : m::Store
 TEST_CASE("Wasm/" BACKEND_NAME "/Scan", "[core][wasm]")
 {
     Module::Init(); // fresh module
-    auto &wasm_context = m::WasmEngine::Create_Wasm_Context_For_ID(Module::ID()); // create fresh wasm context
+    static const Match<DummyOp> dummy_plan; ///< only needed to create Wasm context without having a physical plan
+    auto &wasm_context = m::WasmEngine::Create_Wasm_Context_For_ID(Module::ID(), dummy_plan); // create fresh wasm context
 
     /* Create table. */
     m::ConcreteTable table("dummy_table");

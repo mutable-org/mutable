@@ -4,6 +4,7 @@
 #include <mutable/catalog/Catalog.hpp>
 #include <mutable/catalog/Schema.hpp>
 #include <mutable/IR/Optimizer.hpp>
+#include <mutable/IR/PhysicalOptimizer.hpp>
 #include <mutable/mutable.hpp>
 #include <mutable/Options.hpp>
 #include <mutable/storage/Index.hpp>
@@ -80,14 +81,14 @@ void QueryDatabase::execute(Diagnostic &diag)
     }
 
     Optimizer Opt(C.plan_enumerator(), C.cost_function());
-    std::unique_ptr<Producer> producer = M_TIME_EXPR(Opt(*graph_), "Compute the query plan", C.timer());
+    std::unique_ptr<Producer> producer = M_TIME_EXPR(Opt(*graph_), "Compute the logical query plan", C.timer());
 
     if (Options::Get().plan)
         producer->dump(diag.out());
     if (Options::Get().plandot) {
         DotTool dot(diag);
         producer->dot(dot.stream());
-        dot.show("plan", false, "dot");
+        dot.show("logical_plan", false, "dot");
     }
 
     M_insist(bool(producer), "logical plan must have been computed");
@@ -97,13 +98,26 @@ void QueryDatabase::execute(Diagnostic &diag)
         logical_plan_ = std::make_unique<PrintOperator>(std::cout);
     logical_plan_->add_child(producer.release());
 
-    if (Options::Get().dryrun)
-        return;
-
     static thread_local std::unique_ptr<Backend> backend;
     if (not backend)
         backend = M_TIME_EXPR(C.create_backend(), "Create backend", C.timer());
-    M_TIME_EXPR(backend->execute(*logical_plan_), "Execute query", C.timer());
+
+    PhysicalOptimizerImpl<ConcretePhysicalPlanTable> PhysOpt;
+    backend->register_operators(PhysOpt);
+    M_TIME_EXPR(PhysOpt.cover(*logical_plan_), "Compute the physical query plan", C.timer());
+
+    if (Options::Get().physplan)
+        PhysOpt.dump_plan(std::cout);
+    if (Options::Get().physplandot) {
+        DotTool dot(diag);
+        PhysOpt.dot_plan(dot.stream());
+        dot.show("physical_plan", false, "dot");
+    }
+
+    if (Options::Get().dryrun)
+        return;
+
+    M_TIME_EXPR(backend->execute(PhysOpt.get_plan()), "Execute query", C.timer());
 }
 
 void InsertRecords::execute(Diagnostic&)

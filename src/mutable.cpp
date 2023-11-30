@@ -132,7 +132,7 @@ void m::execute_statement(Diagnostic &diag, const ast::Stmt &stmt, const bool is
         if (Options::Get().output_partial_plans_file) {
             auto res = M_TIME_EXPR(
                 Opt.optimize_with_plantable<PlanTableLargeAndSparse>(*query_graph),
-                "Compute the query plan",
+                "Compute the logical query plan",
                 timer
             );
             optree = std::move(res.first);
@@ -155,46 +155,41 @@ void m::execute_statement(Diagnostic &diag, const ast::Stmt &stmt, const bool is
                 PartialPlanGenerator{}.write_partial_plans_JSON(JSON_file, *query_graph, res.second, for_each);
             }
         } else {
-            optree = M_TIME_EXPR(Opt(*query_graph), "Compute the query plan", timer);
+            optree = M_TIME_EXPR(Opt(*query_graph), "Compute the logical query plan", timer);
         }
         M_insist(bool(optree), "optree must have been computed");
         if (Options::Get().plan) optree->dump(std::cout);
         if (Options::Get().plandot) {
             DotTool dot(diag);
             optree->dot(dot.stream());
-            dot.show("plan", is_stdin);
+            dot.show("logical_plan", is_stdin);
         }
 
-        std::unique_ptr<Consumer> plan;
-        if (Options::Get().benchmark) {
-            plan = std::make_unique<NoOpOperator>(std::cout);
-        } else {
-#if 0
-            auto print = [&](const Schema &S, const Tuple &t) { t.print(std::cout, S); std::cout << '\n'; };
-            plan = std::make_unique<CallbackOperator>(print);
-#else
-            plan = std::make_unique<PrintOperator>(std::cout);
-#endif
-        }
-        plan->add_child(optree.release());
+        std::unique_ptr<Consumer> logical_plan;
+        if (Options::Get().benchmark)
+            logical_plan = std::make_unique<NoOpOperator>(std::cout);
+        else
+            logical_plan = std::make_unique<PrintOperator>(std::cout);
+        logical_plan->add_child(optree.release());
 
-/* TODO implement as command line argument of plugin
-    if (Options::Get().dryrun and streq("WasmV8", C.default_backend_name())) {
-        Backend &backend = C.backend();
-        auto &engine = as<WasmBackend>(backend).engine();
-        Module::Init(); // fresh module
-        M_TIME_EXPR(engine.compile(*plan), "Compile to WebAssembly", timer);
-        Module::Get().dump(std::cout);
-        Module::Dispose();
-    }
-*/
+        static thread_local std::unique_ptr<Backend> backend;
+        if (not backend)
+            backend = M_TIME_EXPR(C.create_backend(), "Create backend", timer);
 
-        if (not Options::Get().dryrun) {
-            static thread_local std::unique_ptr<Backend> backend;
-            if (not backend)
-                backend = M_TIME_EXPR(C.create_backend(), "Create backend", timer);
-            M_TIME_EXPR(backend->execute(*plan), "Execute query", timer);
+        PhysicalOptimizerImpl<ConcretePhysicalPlanTable> PhysOpt;
+        backend->register_operators(PhysOpt);
+        M_TIME_EXPR(PhysOpt.cover(*logical_plan), "Compute the physical query plan", timer);
+
+        if (Options::Get().physplan)
+            PhysOpt.dump_plan(std::cout);
+        if (Options::Get().physplandot) {
+            DotTool dot(diag);
+            PhysOpt.dot_plan(dot.stream());
+            dot.show("physical_plan", false, "dot");
         }
+
+        if (not Options::Get().dryrun)
+            M_TIME_EXPR(backend->execute(PhysOpt.get_plan()), "Execute query", timer);
     } else if (auto I = cast<const ast::InsertStmt>(&stmt)) {
         auto &DB = C.get_database_in_use();
         auto &T = DB.get_table(I->table_name.text);
@@ -333,14 +328,19 @@ void m::execute_query(Diagnostic&, const SelectStmt &stmt, std::unique_ptr<Consu
     auto query_graph = M_TIME_EXPR(QueryGraph::Build(stmt), "Construct the query graph", C.timer());
 
     Optimizer Opt(C.plan_enumerator(), C.cost_function());
-    auto optree = M_TIME_EXPR(Opt(*query_graph), "Compute the query plan", C.timer());
+    auto optree = M_TIME_EXPR(Opt(*query_graph), "Compute the logical query plan", C.timer());
 
     consumer->add_child(optree.release());
 
     static thread_local std::unique_ptr<Backend> backend;
     if (not backend)
         backend = M_TIME_EXPR(C.create_backend(), "Create backend", C.timer());
-    M_TIME_EXPR(backend->execute(*consumer), "Execute the query", C.timer());
+
+    PhysicalOptimizerImpl<ConcretePhysicalPlanTable> PhysOpt;
+    backend->register_operators(PhysOpt);
+    M_TIME_EXPR(PhysOpt.cover(*consumer), "Compute the physical query plan", C.timer());
+
+    M_TIME_EXPR(backend->execute(PhysOpt.get_plan()), "Execute query", C.timer());
 }
 
 void m::load_from_CSV(Diagnostic &diag, Table &table, const std::filesystem::path &path, std::size_t num_rows,

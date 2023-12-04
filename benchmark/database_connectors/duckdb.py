@@ -214,10 +214,10 @@ class DuckDB(Connector):
     @staticmethod
     def parse_results(results: str) -> list[float]:
         durations_str: str = os.popen(
-            f"echo '{results}'" + " | grep 'Run Time' | cut -d ' ' -f 5 | awk '{print $1 * 1000;}'").read()
+            f"echo '{results}'" + " | grep 'Run Time' | cut -d ' ' -f 5").read()
         durations: list[str] = durations_str.split('\n')
         durations.remove('')
-        timings: list[float] = [float(dur.replace("\n", "").replace(",", ".")) for dur in durations]
+        timings: list[float] = [float(dur.replace("\n", "").replace(",", ".")) * 1000 for dur in durations]
         return timings
 
 

@@ -124,7 +124,7 @@ class DuckDB(Connector):
 
             else:
                 # Otherwise, tables have to be created just once before the measurements (done above)
-                timeout: int = DEFAULT_TIMEOUT + TIMEOUT_PER_CASE * len(cases) * n_runs
+                timeout: int = (DEFAULT_TIMEOUT + TIMEOUT_PER_CASE * len(cases)) * n_runs
 
                 statements: list[str] = list()
                 statements.extend(complete_tables)

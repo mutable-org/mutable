@@ -171,10 +171,14 @@ struct MatchBase
 
     public:
     virtual ~MatchBase() { }
+
     virtual void execute(setup_t setup, pipeline_t pipeline, teardown_t teardown) const = 0;
 
     double cost() const { return cost_; }
+    private:
+    void cost(double new_cost) { cost_ = new_cost; }
 
+    public:
     void dump(std::ostream &out) const;
     void dump() const;
 
@@ -190,9 +194,6 @@ struct MatchBase
         return out;
     }
     virtual void print(std::ostream &out, unsigned level = 0) const = 0;
-
-    private:
-    void cost(double new_cost) { cost_ = new_cost; }
 };
 
 /** Abstract base class of all matchable patterns. */

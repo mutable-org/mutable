@@ -182,6 +182,9 @@ struct PhysicalPlanTable : crtp<Actual, PhysicalPlanTable, Condition2EntryMap>
     const condition2entry_map_type & operator[](size_type idx) const {
         return actual().operator[](idx);
     }
+
+    condition2entry_map_type & back() { return actual().back(); }
+    const condition2entry_map_type & back() const { return actual().back(); }
 };
 
 }

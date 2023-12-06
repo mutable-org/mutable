@@ -24,21 +24,17 @@ M_LCOV_EXCL_STOP
  *====================================================================================================================*/
 
 template<typename PhysicalPlanTable>
-void PhysicalOptimizerImpl<PhysicalPlanTable>::execute(const Operator &plan) const
+void PhysicalOptimizerImpl<PhysicalPlanTable>::execute() const
 {
     /* Emit code for run function which computes the last pipeline and calls other pipeline functions. */
     FUNCTION(run, void(void))
     {
         auto S = CodeGenContext::Get().scoped_environment(); // create scoped environment for this function
-        get_plan(plan).match().execute(setup_t::Make_Without_Parent(), pipeline_t(), teardown_t::Make_Without_Parent());
+        get_plan().match().execute(setup_t::Make_Without_Parent(), pipeline_t(), teardown_t::Make_Without_Parent());
     }
 
     /* Call run function. */
     run();
-
-#ifndef NDEBUG
-    plan.reset_ids(); // XXX: ok?
-#endif
 }
 
 template<typename PhysicalPlanTable>
@@ -62,7 +58,7 @@ void PhysicalOptimizerImpl<PhysicalPlanTable>::dot_plan_helper(const entry_type 
 #undef q
 }
 template<typename PhysicalPlanTable>
-void PhysicalOptimizerImpl<PhysicalPlanTable>::dot_plan(const Operator &plan, std::ostream &out) const
+void PhysicalOptimizerImpl<PhysicalPlanTable>::dot_plan(std::ostream &out) const
 {
     out << "digraph plan\n{\n"
         << "    forcelabels=true;\n"
@@ -72,17 +68,17 @@ void PhysicalOptimizerImpl<PhysicalPlanTable>::dot_plan(const Operator &plan, st
         << "    graph [fontname = \"DejaVu Sans\"];\n"
         << "    node [fontname = \"DejaVu Sans\"];\n"
         << "    edge [fontname = \"DejaVu Sans\"];\n";
-    dot_plan_helper(get_plan(plan), out);
+    dot_plan_helper(get_plan(), out);
     out << "}\n";
 };
 
 template<typename PhysicalPlanTable>
-void PhysicalOptimizerImpl<PhysicalPlanTable>::dump_plan(const Operator &plan, std::ostream &out) const
+void PhysicalOptimizerImpl<PhysicalPlanTable>::dump_plan(std::ostream &out) const
 {
-    out << get_plan(plan).match() << std::endl;
+    out << get_plan().match() << std::endl;
 }
 template<typename PhysicalPlanTable>
-void PhysicalOptimizerImpl<PhysicalPlanTable>::dump_plan(const Operator &plan) const { dump_plan(plan, std::cerr); }
+void PhysicalOptimizerImpl<PhysicalPlanTable>::dump_plan() const { dump_plan(std::cerr); }
 M_LCOV_EXCL_STOP
 
 // explicit template instantiations

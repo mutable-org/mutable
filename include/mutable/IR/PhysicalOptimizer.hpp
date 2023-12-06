@@ -226,25 +226,22 @@ struct PhysicalOptimizer
     /** Finds an optimal physical operator covering for the logical plan rooted in \p plan. */
     virtual void cover(const Operator &plan) = 0;
 
-    /** Returns true iff a physical operator covering is found for the plan rooted in \p plan. */
-    virtual bool has_plan(const Operator &plan) const = 0;
+    /** Returns true iff a physical operator covering is found. */
+    virtual bool has_plan() const = 0;
 
-    /** Executes the found physical operator covering for the logical plan rooted in \p plan. */
-    virtual void execute(const Operator &plan) const = 0;
+    /** Executes the found physical operator covering. */
+    virtual void execute() const = 0;
 
     virtual void accept(PhysOptVisitor &v) = 0;
     virtual void accept(ConstPhysOptVisitor &v) const = 0;
 
-    /** Prints a representation of the found physical operator covering for the logical plan rooted in \p plan in the
-     * dot language to \p out. */
-    virtual void dot_plan(const Operator &plan, std::ostream &out) const = 0;
+    /** Prints a representation of the found physical operator covering in the dot language to \p out. */
+    virtual void dot_plan(std::ostream &out) const = 0;
 
-    /** Prints a representation of the found physical operator covering for the logical plan rooted in \p plan to
-     * \p out. */
-    virtual void dump_plan(const Operator &plan, std::ostream &out) const = 0;
-    /** Prints a representation of the found physical operator covering for the logical plan rooted in \p plan to
-     * `std::cout`. */
-    virtual void dump_plan(const Operator &plan) const = 0;
+    /** Prints a representation of the found physical operator covering to \p out. */
+    virtual void dump_plan(std::ostream &out) const = 0;
+    /** Prints a representation of the found physical operator covering to `std::cout`. */
+    virtual void dump_plan() const = 0;
 };
 
 /** Concrete `PhysicalOptimizer` implementation using a concrete statically-typed \tparam PhysicalPlanTable
@@ -274,16 +271,13 @@ struct PhysicalOptimizerImpl : PhysicalOptimizer, ConstPostOrderOperatorVisitor
         (*this)(plan);
     }
 
-    bool has_plan(const Operator &plan) const override {
-        M_insist(plan.id() < table().size(), "invalid operator");
-        return not table()[plan.id()].empty();
-    }
-    /** Returns the optimal physical operator covering for the plan rooted in \p plan. */
-    const entry_type & get_plan(const Operator &plan) const {
-        M_insist(has_plan(plan), "no physical operator covering found");
+    bool has_plan() const override { return not table().back().empty(); }
+    /** Returns the entry for the found physical operator covering. */
+    const entry_type & get_plan() const {
+        M_insist(has_plan(), "no physical operator covering found");
         typename PhysicalPlanTable::condition2entry_map_type::const_iterator it_best;
         double min_cost = std::numeric_limits<double>::infinity();
-        for (auto it = table()[plan.id()].cbegin(); it != table()[plan.id()].cend(); ++it) {
+        for (auto it = table().back().cbegin(); it != table().back().cend(); ++it) {
             if (auto cost = it->entry.cost(); cost < min_cost) {
                 it_best = it;
                 min_cost = cost;
@@ -292,7 +286,7 @@ struct PhysicalOptimizerImpl : PhysicalOptimizer, ConstPostOrderOperatorVisitor
         return it_best->entry;
     }
 
-    void execute(const Operator &plan) const override;
+    void execute() const override;
 
     private:
     /** Handles the found match \p match with children entries \p children for the logical plan rooted in \p op. */
@@ -357,10 +351,10 @@ struct PhysicalOptimizerImpl : PhysicalOptimizer, ConstPostOrderOperatorVisitor
     private:
     void dot_plan_helper(const entry_type &e, std::ostream &out) const;
     public:
-    void dot_plan(const Operator &plan, std::ostream &out) const override;
+    void dot_plan(std::ostream &out) const override;
 
-    void dump_plan(const Operator &plan, std::ostream &out) const override;
-    void dump_plan(const Operator &plan) const override;
+    void dump_plan(std::ostream &out) const override;
+    void dump_plan() const override;
 };
 
 #define M_PHYS_OPT_LIST(X) \

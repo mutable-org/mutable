@@ -228,6 +228,9 @@ struct ConcretePhysicalPlanTable : PhysicalPlanTable<ConcretePhysicalPlanTable, 
     const condition2entry_map_type & operator[](size_type idx) const {
         return const_cast<ConcretePhysicalPlanTable*>(this)->operator[](idx);
     }
+
+    condition2entry_map_type & back() { return table_.back(); }
+    const condition2entry_map_type & back() const { return const_cast<ConcretePhysicalPlanTable*>(this)->back(); }
 };
 
 }

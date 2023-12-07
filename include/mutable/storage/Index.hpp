@@ -34,6 +34,8 @@ struct IndexBase
 
     /** Bulkloads the index by executing a query on \p table using \p key_schema. */
     virtual void bulkload(const Table &table, const Schema &key_schema) = 0;
+    /** Returns the `IndexMethod` of the index. */
+    virtual IndexMethod method() const = 0;
 
     virtual void dump(std::ostream &out) const = 0;
     virtual void dump() const = 0;
@@ -75,6 +77,9 @@ struct ArrayIndex : IndexBase
      * entry after another.  The index is finalized in the end.  Throws `m::invalid_arguent` if \p key_schema contains
      * more than one entry or `key_type` and the attribute type of the entry in \p key_schema do not match. */
     void bulkload(const Table &table, const Schema &key_schema) override;
+
+    /** Returns the `IndexMethod` of the index. */
+    IndexMethod method() const override { return IndexMethod::Array; }
 
     /** Adds a single pair of \p key and \p value to the index.  Note that `finalize()` has to be called afterwards for
      * the vector to be sorted and the index to be usable. */

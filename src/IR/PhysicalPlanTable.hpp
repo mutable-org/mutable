@@ -8,7 +8,6 @@
 namespace m {
 
 // forward declarations
-namespace detail { template<bool Ref, bool C> requires (not Ref) or C struct ConcretePhysicalPlanTableIterator; }
 struct ConcretePhysicalPlanTableEntry;
 
 
@@ -51,9 +50,7 @@ struct ConcretePhysicalPlanTableIterator
         M_insist(idx <= iterable.size(), "invalid index");
     }
 
-    bool operator==(const ConcretePhysicalPlanTableIterator &other) const {
-        return this->current_ == other.current_;
-    }
+    bool operator==(const ConcretePhysicalPlanTableIterator &other) const { return this->current_ == other.current_; }
     bool operator!=(const ConcretePhysicalPlanTableIterator &other) const { return not operator==(other); }
 
     ConcretePhysicalPlanTableIterator & operator++() {
@@ -83,7 +80,7 @@ struct ConcretePhysicalPlanTableIterator
         return M_CONSTEXPR_COND(IsReference, &current_->get(), &*current_);
     }
 };
-template<bool C> using ConditionPhysicalPlanTableEntryMapIterator = ConcretePhysicalPlanTableIterator<false, C>;
+template<bool C> using Condition2PPTEntryMapIterator = ConcretePhysicalPlanTableIterator<false, C>;
 template<bool C> using PhysicalPlanTableEntryChildIterator = ConcretePhysicalPlanTableIterator<true, C>;
 
 }
@@ -151,15 +148,11 @@ struct ConcretePhysicalPlanTableEntry
 
 struct ConcreteCondition2PPTEntryMap
     : Condition2PPTEntryMap<
-          ConcreteCondition2PPTEntryMap,
-          detail::ConditionPhysicalPlanTableEntryMapIterator,
-          ConcretePhysicalPlanTableEntry
+          ConcreteCondition2PPTEntryMap, detail::Condition2PPTEntryMapIterator, ConcretePhysicalPlanTableEntry
       >
 {
     using super = Condition2PPTEntryMap<
-        ConcreteCondition2PPTEntryMap,
-        detail::ConditionPhysicalPlanTableEntryMapIterator,
-        ConcretePhysicalPlanTableEntry
+        ConcreteCondition2PPTEntryMap, detail::Condition2PPTEntryMapIterator, ConcretePhysicalPlanTableEntry
     >;
     using iterator = super::iterator;
     using const_iterator = super::const_iterator;

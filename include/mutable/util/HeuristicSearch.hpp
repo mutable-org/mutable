@@ -326,10 +326,14 @@ struct StateManager
              * pruning.  Note, that the weighting factor was initially applied when computing `h` of a state for adding
              * it to the priority queue.  */
             const auto min_path_cost = [&]() {
-                if constexpr (use_weighted_search)
-                    return is_admissible<Heurisitc> ? state.g() + h / weighting_factor() : state.g();
-                else
-                    return is_admissible<Heurisitc> ? state.g() + h : state.g();
+                if constexpr (is_admissible<Heurisitc>) {
+                    if constexpr (use_weighted_search)
+                        return state.g() + h / weighting_factor();
+                    else
+                        return state.g() + h;
+                } else {
+                    return state.g();
+                }
             }();
             if (min_path_cost >= least_path_cost) [[unlikely]] {
                 inc_pruned_by_cost();
@@ -417,10 +421,14 @@ struct StateManager
                      * factor before pruning.  Note, that the weighting factor was initially applied when computing `h`
                      * of a state for adding it to the priority queue.  */
                     const auto min_path_cost = [&]() {
-                        if constexpr (use_weighted_search)
-                            return is_admissible<Heurisitc> ? state.g() + h / weighting_factor() : state.g();
-                        else
-                            return is_admissible<Heurisitc> ? state.g() + h : state.g();
+                        if constexpr (is_admissible<Heurisitc>) {
+                            if constexpr (use_weighted_search)
+                                return state.g() + h / weighting_factor();
+                            else
+                                return state.g() + h;
+                        } else {
+                            return state.g();
+                        }
                     }();
                     if (min_path_cost >= least_path_cost) [[unlikely]] {
                         inc_pruned_by_cost();

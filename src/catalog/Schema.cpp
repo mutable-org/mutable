@@ -224,23 +224,23 @@ void apply_timestamp_filter(QueryGraph &G)
                         &bt->table()[C.pool("$ts_end")]
                 );
 
-                // 1
-                std::unique_ptr<ast::Expr> zero_constant = std::make_unique<ast::Constant>(ast::Token(
+                // -1
+                std::unique_ptr<ast::Expr> neg_one_constant = std::make_unique<ast::Constant>(ast::Token(
                         pos,
-                        C.pool("0"),
+                        C.pool("-1"),
                         m::TK_DEC_INT
                 ));
-                zero_constant->type(Type::Get_Integer(Type::TY_Vector, 8));
+                neg_one_constant->type(Type::Get_Integer(Type::TY_Vector, 8));
 
-                // $ts_end = 0
+                // $ts_end = -1
                 std::unique_ptr<ast::Expr> ts_end_eq_zero = std::make_unique<ast::BinaryExpr>(
                         ast::Token(pos, C.pool("="), TK_EQUAL),
                         std::move(ts_end_designator_2),
-                        std::move(zero_constant)
+                        std::move(neg_one_constant)
                 );
                 ts_end_eq_zero->type(Type::Get_Boolean(Type::TY_Vector));
 
-                // $ts_end > TST OR $ts_end = 0
+                // $ts_end > TST OR $ts_end = -1
                 std::unique_ptr<ast::Expr> ts_end_filter_clause = std::make_unique<ast::BinaryExpr>(
                         ast::Token(pos, C.pool("OR"), TK_Or),
                         std::move(ts_end_greater_transaction_expr),

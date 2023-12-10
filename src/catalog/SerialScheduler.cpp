@@ -89,7 +89,7 @@ void SerialScheduler::CommandQueue::stop_transaction(Transaction &t) {
 }
 
 SerialScheduler::CommandQueue SerialScheduler::query_queue_;
-std::atomic<int64_t> SerialScheduler::next_start_time = 1; // skip 0 as we interpret 0 as the UNDEFINED value
+std::atomic<int64_t> SerialScheduler::next_start_time = 0;
 
 SerialScheduler::~SerialScheduler()
 {
@@ -132,17 +132,18 @@ void SerialScheduler::schedule_thread()
 {
     Catalog &C = Catalog::Get();
     while (not query_queue_.is_closed()) {
-        // TODO: save currently executing transaction and only execute it's statements until it commits
         auto ret = query_queue_.pop();
         // pop() should only return no value if the queue is closed
         if (not ret.has_value()) continue;
 
         auto [t, ast, diag, promise] = std::move(ret.value());
 
-        // check if transaction has a start_time, set one if not
-        if (t.start_time() == 0) t.start_time(next_start_time++);
-        // overflow detection
-        if (next_start_time <= 0) [[unlikely]] next_start_time = 1;
+        // check if transaction has a start_time, set one if not. -1 represents an undefined value.
+        if (t.start_time() == -1) t.start_time(next_start_time++);
+        /* TODO: Implement overflow handling: if the transaction timestamps overflow, then outdated versions of tuples
+         * can become visible and other weird behaviour can occur. For this to happen, (2^63)-1 Transactions need to
+         * run without every restarting mutable. */
+        if (next_start_time < 0) [[unlikely]] M_unreachable("Transaction timestamp overflow");
 
         ast::Sema sema(diag);
         bool err = diag.num_errors() > 0; // parser errors

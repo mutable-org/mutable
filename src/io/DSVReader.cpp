@@ -84,6 +84,16 @@ void DSVReader::operator()(std::istream &in, const char *name)
         }
     }
 
+    /* Find timestamp attributes */
+    auto ts_begin = std::find_if(table.cbegin_hidden(), table.end_hidden(),
+                                 [&](const Attribute & attr) {
+                                    return attr.name == C.pool("$ts_begin");
+    });
+    auto ts_end = std::find_if(table.cbegin_hidden(), table.end_hidden(),
+                               [&](const Attribute & attr) {
+                                    return attr.name == C.pool("$ts_end");
+    });
+
     /*----- Read data. -----------------------------------------------------------------------------------------------*/
     std::size_t idx = 0;
     while (in.good() and idx < config().num_rows) {
@@ -122,13 +132,11 @@ void DSVReader::operator()(std::istream &in, const char *name)
                                                                               S, store.num_rows() - 1));
             }
             /*----- set timestamps if available. -----*/
-            auto it = std::find_if(table.cbegin_hidden(), table.end_hidden(),
-                                   [&](const Attribute & attr) {
-                                       return attr.name == C.pool("$ts_begin");
-            });
-            if (this->transaction and it != table.end_hidden()) {
-                col_idx = it->id;
-                tup.set(col_idx, Value(transaction->start_time()));
+            if (this->transaction and ts_begin != table.end_hidden()) {
+                tup.set(ts_begin->id, Value(transaction->start_time()));
+                /* Set $ts_end to -1. It is a special value representing infinity. */
+                M_insist(ts_end != table.end_hidden());
+                tup.set(ts_end->id, Value(-1));
             }
 
             Tuple *args[] = { &tup };

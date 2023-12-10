@@ -132,6 +132,16 @@ void InsertRecords::execute(Diagnostic&)
     auto &S = W.schema();
     Tuple tup(S);
 
+    /* Find timestamp attributes */
+    auto ts_begin = std::find_if(T.cbegin_hidden(), T.end_hidden(),
+                                 [&](const Attribute & attr) {
+                                    return attr.name == C.pool("$ts_begin");
+    });
+    auto ts_end = std::find_if(T.cbegin_hidden(), T.end_hidden(),
+                               [&](const Attribute & attr) {
+                                    return attr.name == C.pool("$ts_end");
+    });
+
     /* Write all tuples to the store. */
     for (auto &t : I.tuples) {
         StackMachine get_tuple(Schema{});
@@ -158,12 +168,11 @@ void InsertRecords::execute(Diagnostic&)
         get_tuple(args);
 
         /*----- set timestamps if available. -----*/
-        auto it = std::find_if(T.cbegin_hidden(), T.end_hidden(),
-                               [&](const Attribute & attr) {
-                                   return attr.name == C.pool("$ts_begin");
-                               });
-        if (it != T.end_hidden()) {
-            tup.set(it->id, Value(transaction()->start_time()));
+        if (ts_begin != T.end_hidden()) {
+            tup.set(ts_begin->id, Value(transaction()->start_time()));
+            /* Set $ts_end to -1. It is a special value representing infinity. */
+            M_insist(ts_end != T.end_hidden());
+            tup.set(ts_end->id, Value(-1));
         }
 
         W.append(tup);

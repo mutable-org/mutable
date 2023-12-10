@@ -18,7 +18,7 @@ struct M_EXPORT Scheduler
         ///> the Transaction ID
         uint64_t id_;
         ///> the start time of the transaction. Used for multi-versioning and should be set when the transaction executes something.
-        int64_t start_time_ = 0;
+        int64_t start_time_ = -1;
 
         ///> Stores the next available Transaction ID, stored atomically to prevent race conditions
         static std::atomic<uint64_t> next_id_;
@@ -26,8 +26,9 @@ struct M_EXPORT Scheduler
         public:
         Transaction() : id_(next_id_.fetch_add(1, std::memory_order_relaxed)) { }
 
-        void start_time(uint64_t time) { M_insist(start_time_ == 0); start_time_ = time; };
-        uint64_t start_time() const { return start_time_; };
+        ///> sets the start time of the Transaction. Should only be set once and only to a positive number.
+        void start_time(int64_t time) { M_insist(start_time_ == -1 and time >= 0); start_time_ = time; };
+        int64_t start_time() const { return start_time_; };
 
         auto operator==(const Transaction &other) const { return id_ == other.id_; };
         auto operator<=>(const Transaction &other) const { return id_ <=> other.id_; };

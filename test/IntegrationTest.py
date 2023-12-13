@@ -267,7 +267,7 @@ def report_warning(message, stage_name, test_case) -> list[str]:
 
 
 def report_success(message, stage_name, test_case, verbose) -> list[str]:
-    if verbose:
+    if verbose or 'TERM' not in os.environ:
         symbol = Fore.GREEN + '✓' + Style.RESET_ALL
         return report(message, stage_name, test_case, symbol)
     else:

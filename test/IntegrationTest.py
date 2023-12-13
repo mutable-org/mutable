@@ -137,7 +137,11 @@ def run_stage(args, test_case, stage_name, command) -> Tuple[bool, list[str]]:
     return True, report_success(argsstr, stage_name, test_case, args.verbose)
 
 
-def run_test_case(test_case, args):
+def run_test_case(test_case, args, binaries):
+    # Set global binaries
+    global BINARIES
+    BINARIES = dict(binaries)
+
     res = TestResult()
     res.required_counter = 0
     res.required_pass_counter = 0
@@ -442,7 +446,7 @@ if __name__ == '__main__':
             progress_bar.update(1)
             continue
 
-        all_test_data.append([test_case, args])
+        all_test_data.append([test_case, args, BINARIES])
 
     # Start the process pool to run all test cases
     n_tests_left = len(all_test_data)
@@ -450,7 +454,7 @@ if __name__ == '__main__':
     jobs = process_pool.starmap_async(run_test_case, all_test_data)
     process_pool.close()
 
-    # Every 5 seconds, look at how many jobs are left. Update `progress_bar` aaccordingly
+    # Every 5 seconds, look at how many jobs are left. Update `progress_bar` accordingly
     while True:
         if not jobs.ready():
             jobs_left = jobs._number_left

@@ -41,10 +41,10 @@ struct ConcretePhysicalPlanTableIterator
     using difference_type = iterator_type::difference_type; // to satisfy std::input_iterator for std::find_if()
 
     ConcretePhysicalPlanTableIterator() = default;
-    ConcretePhysicalPlanTableIterator(std::vector<iterable_entry_type> &iterable, std::size_t idx)
-        : current_(iterable.begin() + idx)
+    ConcretePhysicalPlanTableIterator(const std::vector<iterable_entry_type> &iterable, std::size_t idx)
+        : current_(const_cast<std::vector<iterable_entry_type>&>(iterable).begin() + idx)
 #ifdef M_ENABLE_SANITY_FILEDS
-        , end_(iterable.end())
+        , end_(const_cast<std::vector<iterable_entry_type>&>(iterable).end())
 #endif
     {
         M_insist(idx <= iterable.size(), "invalid index");
@@ -136,12 +136,8 @@ struct ConcretePhysicalPlanTableEntry
 
     cost_type cost() const { return cost_; }
 
-    const_child_iterator begin_children() const {
-        return const_child_iterator(const_cast<ConcretePhysicalPlanTableEntry*>(this)->children_, 0);
-    }
-    const_child_iterator end_children()   const {
-        return const_child_iterator(const_cast<ConcretePhysicalPlanTableEntry*>(this)->children_, children_.size());
-    }
+    const_child_iterator begin_children() const { return const_child_iterator(children_, 0); }
+    const_child_iterator end_children()   const { return const_child_iterator(children_, children_.size()); }
     const_child_iterator cbegin_children() const { return begin_children(); }
     const_child_iterator cend_children()   const { return end_children(); }
 };
@@ -185,12 +181,8 @@ struct ConcreteCondition2PPTEntryMap
 
     iterator begin() { return iterator(map_, 0); }
     iterator end()   { return iterator(map_, map_.size()); }
-    const_iterator begin() const {
-        return const_iterator(const_cast<ConcreteCondition2PPTEntryMap*>(this)->map_, 0);
-    }
-    const_iterator end()   const {
-        return const_iterator(const_cast<ConcreteCondition2PPTEntryMap*>(this)->map_, map_.size());
-    }
+    const_iterator begin() const { return const_iterator(map_, 0); }
+    const_iterator end()   const { return const_iterator(map_, map_.size()); }
     const_iterator cbegin() const { return begin(); }
     const_iterator cend()   const { return end(); }
 };

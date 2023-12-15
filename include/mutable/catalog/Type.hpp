@@ -50,8 +50,8 @@ struct M_EXPORT Type
     virtual bool operator==(const Type &other) const = 0;
     bool operator!=(const Type &other) const { return not operator==(other); }
 
-    bool is_error() const { return (void*) this == Get_Error(); }
-    bool is_none() const { return (void*) this == Get_None(); }
+    bool is_error() const { return Get_Error() == this; }
+    bool is_none() const { return Get_None() == this; }
     /** Returns `true` iff this `Type` is a `PrimitiveType`. */
     bool is_primitive() const { return is<const PrimitiveType>(this); }
     bool is_boolean() const { return is<const Boolean>(this); }
@@ -95,31 +95,31 @@ M_LCOV_EXCL_STOP
 
     /*----- Type factory methods -------------------------------------------------------------------------------------*/
     /** Returns a `ErrorType`. */
-    static const ErrorType * Get_Error();
+    static Pooled<ErrorType> Get_Error();
     /** Returns a `NoneType`. */
-    static const NoneType * Get_None();
+    static Pooled<NoneType> Get_None();
     /** Returns a `Boolean` type of the given `category`. */
-    static const Boolean * Get_Boolean(category_t category);
+    static Pooled<Boolean> Get_Boolean(category_t category);
     /** Returns a `Bitmap` type of the given `category` and `length`. */
-    static const Bitmap * Get_Bitmap(category_t category, std::size_t length);
+    static Pooled<Bitmap> Get_Bitmap(category_t category, std::size_t length);
     /** Returns a `CharacterSequence` type of the given `category` and fixed `length`. */
-    static const CharacterSequence * Get_Char(category_t category, std::size_t length);
+    static Pooled<CharacterSequence> Get_Char(category_t category, std::size_t length);
     /** Returns a `CharacterSequence` type of the given `category` and varying `length`. */
-    static const CharacterSequence * Get_Varchar(category_t category, std::size_t length);
+    static Pooled<CharacterSequence> Get_Varchar(category_t category, std::size_t length);
     /** Returns a `Date` type of the given `category`. */
-    static const Date * Get_Date(category_t category);
+    static Pooled<Date> Get_Date(category_t category);
     /** Returns a `DateTime` type of the given `category`. */
-    static const DateTime * Get_Datetime(category_t category);
+    static Pooled<DateTime> Get_Datetime(category_t category);
     /** Returns a `Numeric` type for decimals of given `category`, decimal `digits`, and `scale`. */
-    static const Numeric * Get_Decimal(category_t category, unsigned digits, unsigned scale);
+    static Pooled<Numeric> Get_Decimal(category_t category, unsigned digits, unsigned scale);
     /** Returns a `Numeric` type for integrals of given `category` and `num_bytes` bytes. */
-    static const Numeric * Get_Integer(category_t category, unsigned num_bytes);
+    static Pooled<Numeric> Get_Integer(category_t category, unsigned num_bytes);
     /** Returns a `Numeric` type of given `category` for 32 bit floating-points. */
-    static const Numeric * Get_Float(category_t category);
+    static Pooled<Numeric> Get_Float(category_t category);
     /** Returns a `Numeric` type of given `category` for 64 bit floating-points. */
-    static const Numeric * Get_Double(category_t category);
+    static Pooled<Numeric> Get_Double(category_t category);
     /** Returns a `FnType` for a function with parameter types `parameter_types` and return type `return_type`. */
-    static const FnType * Get_Function(const Type *return_type, std::vector<const Type*> parameter_types);
+    static Pooled<FnType> Get_Function(const Type *return_type, std::vector<const Type*> parameter_types);
 };
 
 template<typename T>

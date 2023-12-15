@@ -58,77 +58,77 @@ const Numeric * m::arithmetic_join(const Numeric *lhs, const Numeric *rhs)
 
 /*===== Factory Methods ==============================================================================================*/
 
-const ErrorType * Type::Get_Error()
+Pooled<ErrorType> Type::Get_Error()
 {
     static ErrorType err;
-    return &err;
+    return err;
 }
 
-const NoneType * Type::Get_None()
+Pooled<NoneType> Type::Get_None()
 {
     static NoneType none;
-    return &none;
+    return none;
 }
 
-const Boolean * Type::Get_Boolean(category_t category)
+Pooled<Boolean> Type::Get_Boolean(category_t category)
 {
     static Boolean b_scalar(Type::TY_Scalar);
     static Boolean b_vector(Type::TY_Vector);
-    return category == TY_Scalar ? &b_scalar : &b_vector;
+    return category == TY_Scalar ? b_scalar : b_vector;
 }
 
-const Bitmap * Type::Get_Bitmap(category_t category, std::size_t length)
+Pooled<Bitmap> Type::Get_Bitmap(category_t category, std::size_t length)
 {
-    return static_cast<const Bitmap*>(types_(Bitmap(category, length)));
+    return types_(Bitmap(category, length));
 }
 
-const CharacterSequence * Type::Get_Char(category_t category, std::size_t length)
+Pooled<CharacterSequence> Type::Get_Char(category_t category, std::size_t length)
 {
-    return static_cast<const CharacterSequence*>(types_(CharacterSequence(category, length, false)));
+    return types_(CharacterSequence(category, length, false));
 }
 
-const CharacterSequence * Type::Get_Varchar(category_t category, std::size_t length)
+Pooled<CharacterSequence> Type::Get_Varchar(category_t category, std::size_t length)
 {
-    return static_cast<const CharacterSequence*>(types_(CharacterSequence(category, length, true)));
+    return types_(CharacterSequence(category, length, true));
 }
 
-const Date * Type::Get_Date(category_t category)
+Pooled<Date> Type::Get_Date(category_t category)
 {
     static Date d_scalar(Type::TY_Scalar);
     static Date d_vector(Type::TY_Vector);
-    return category == TY_Scalar ? &d_scalar : &d_vector;
+    return category == TY_Scalar ? d_scalar : d_vector;
 }
 
-const DateTime * Type::Get_Datetime(category_t category)
+Pooled<DateTime> Type::Get_Datetime(category_t category)
 {
     static DateTime dt_scalar(Type::TY_Scalar);
     static DateTime dt_vector(Type::TY_Vector);
-    return category == TY_Scalar ? &dt_scalar : &dt_vector;
+    return category == TY_Scalar ? dt_scalar : dt_vector;
 }
 
-const Numeric * Type::Get_Decimal(category_t category, unsigned digits, unsigned scale)
+Pooled<Numeric> Type::Get_Decimal(category_t category, unsigned digits, unsigned scale)
 {
-    return static_cast<const Numeric*>(types_(Numeric(category, Numeric::N_Decimal, digits, scale)));
+    return types_(Numeric(category, Numeric::N_Decimal, digits, scale));
 }
 
-const Numeric * Type::Get_Integer(category_t category, unsigned num_bytes)
+Pooled<Numeric> Type::Get_Integer(category_t category, unsigned num_bytes)
 {
-    return static_cast<const Numeric*>(types_(Numeric(category, Numeric::N_Int, num_bytes, 0)));
+    return types_(Numeric(category, Numeric::N_Int, num_bytes, 0));
 }
 
-const Numeric * Type::Get_Float(category_t category)
+Pooled<Numeric> Type::Get_Float(category_t category)
 {
-    return static_cast<const Numeric*>(types_(Numeric(category, Numeric::N_Float, 32, 0)));
+    return types_(Numeric(category, Numeric::N_Float, 32, 0));
 }
 
-const Numeric * Type::Get_Double(category_t category)
+Pooled<Numeric> Type::Get_Double(category_t category)
 {
-    return static_cast<const Numeric*>(types_(Numeric(category, Numeric::N_Float, 64, 0)));
+    return types_(Numeric(category, Numeric::N_Float, 64, 0));
 }
 
-const FnType * Type::Get_Function(const Type *return_type, std::vector<const Type*> parameter_types)
+Pooled<FnType> Type::Get_Function(const Type *return_type, std::vector<const Type*> parameter_types)
 {
-    return static_cast<const FnType*>(types_(FnType(return_type, parameter_types)));
+    return types_(FnType(return_type, parameter_types));
 }
 
 /*===== Type visitor =================================================================================================*/
@@ -247,23 +247,23 @@ const PrimitiveType * Boolean::as_vectorial() const { return Type::Get_Boolean(T
 const PrimitiveType * Bitmap::as_scalar() const
 {
     if (is_scalar()) return this;
-    return static_cast<const Bitmap*>(types_(Bitmap(TY_Scalar, length)));
+    return as<const Bitmap>(&*types_(Bitmap(TY_Scalar, length)));
 }
 const PrimitiveType * Bitmap::as_vectorial() const
 {
     if (is_vectorial()) return this;
-    return static_cast<const Bitmap*>(types_(Bitmap(TY_Vector, length)));
+    return as<const Bitmap>(&*types_(Bitmap(TY_Vector, length)));
 }
 
 const PrimitiveType * CharacterSequence::as_scalar() const
 {
     if (is_scalar()) return this;
-    return static_cast<const CharacterSequence*>(types_(CharacterSequence(TY_Scalar, length, is_varying)));
+    return as<const CharacterSequence>(&*types_(CharacterSequence(TY_Scalar, length, is_varying)));
 }
 const PrimitiveType * CharacterSequence::as_vectorial() const
 {
     if (is_vectorial()) return this;
-    return static_cast<const CharacterSequence*>(types_(CharacterSequence(TY_Vector, length, is_varying)));
+    return as<const CharacterSequence>(&*types_(CharacterSequence(TY_Vector, length, is_varying)));
 }
 
 const PrimitiveType * Date::as_scalar() const { return Type::Get_Date(TY_Scalar); }
@@ -276,11 +276,11 @@ const PrimitiveType * DateTime::as_vectorial() const { return Type::Get_Datetime
 
 const PrimitiveType * Numeric::as_scalar() const
 {
-    return static_cast<const Numeric*>(types_(Numeric(TY_Scalar, kind, precision, scale)));
+    return as<const Numeric>(&*types_(Numeric(TY_Scalar, kind, precision, scale)));
 }
 const PrimitiveType * Numeric::as_vectorial() const
 {
-    return static_cast<const Numeric*>(types_(Numeric(TY_Vector, kind, precision, scale)));
+    return as<const Numeric>(&*types_(Numeric(TY_Vector, kind, precision, scale)));
 }
 
 /*===== Pretty Printing ==============================================================================================*/

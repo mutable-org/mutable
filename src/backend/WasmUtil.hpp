@@ -366,6 +366,9 @@ inline To convert(SQL_t &variant)
         [](auto actual) -> To requires requires { actual.template to<type, num_simd_lanes>(); } {
             return actual.template to<type, num_simd_lanes>();
         },
+        [](NChar actual) -> NChar requires std::same_as<To, NChar> {
+            return actual;
+        },
         [](auto actual) -> To requires (not requires { actual.template to<type, num_simd_lanes>(); }) {
             M_unreachable("illegal conversion");
         },

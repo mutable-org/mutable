@@ -3,7 +3,6 @@
 #include <algorithm>
 #include <cstring>
 #include <iostream>
-#include <type_traits>
 #include <utility>
 #include <vector>
 #include <mutable/util/exception.hpp>

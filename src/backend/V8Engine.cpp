@@ -3,6 +3,7 @@
 #include "backend/Interpreter.hpp"
 #include "backend/WasmOperator.hpp"
 #include "backend/WasmUtil.hpp"
+#include "mutable/util/macro.hpp"
 #include "storage/Store.hpp"
 #include <chrono>
 #include <cstdint>
@@ -530,6 +531,35 @@ void m::wasm::detail::read_result_set(const v8::FunctionCallbackInfo<v8::Value> 
     }
 }
 
+template<typename Index, typename V8ValueT, bool IsLower>
+void m::wasm::detail::index_seek(const v8::FunctionCallbackInfo<v8::Value> &info)
+{
+    using key_type = Index::key_type;
+
+    /*----- Unpack function parameters -----*/
+    auto index_id = info[0].As<v8::BigInt>()->Uint64Value();
+    key_type key;
+    if constexpr (std::same_as<V8ValueT, v8::BigInt>)
+        key = info[1].As<V8ValueT>()->Int64Value();
+    else if constexpr (std::same_as<V8ValueT, v8::String>) {
+        auto offset = info[1].As<v8::Uint32>()->Value();
+        auto &context = WasmEngine::Get_Wasm_Context_By_ID(Module::ID());
+        key = reinterpret_cast<const char*>(context.vm.as<uint8_t*>() + offset);
+    } else
+        key = info[1].As<V8ValueT>()->Value();
+
+    /*----- Obtain index and cast to correct type. -----*/
+    auto &context = WasmEngine::Get_Wasm_Context_By_ID(Module::ID());
+    auto &index = as<const Index>(context.indexes[index_id]);
+
+    /*----- Seek index and return offset. -----*/
+    std::size_t offset = std::distance(
+        index.begin(),
+        M_CONSTEXPR_COND(IsLower, index.lower_bound(key), index.upper_bound(key))
+    );
+    M_insist(std::in_range<uint32_t>(offset), "should fit in uint32_t");
+    info.GetReturnValue().Set(uint32_t(offset));
+}
 
 /*======================================================================================================================
  * V8Engine helper classes

@@ -33,6 +33,8 @@ struct IndexBase
 
     /** Bulkloads the index by executing a query on \p table using \p key_schema. */
     virtual void bulkload(const Table &table, const Schema &key_schema) = 0;
+    /* Returns the number of entries in the index. */
+    virtual std::size_t num_entries() const = 0;
     /** Returns the `IndexMethod` of the index. */
     virtual IndexMethod method() const = 0;
 
@@ -113,8 +115,8 @@ struct ArrayIndex : IndexBase
     const_iterator end() const  { return data_.cend(); }
     const_iterator cend() const { return data_.cend(); }
 
-    /* Returns the number of entries in the index. */
-    std::size_t num_entries() const { return data_.size(); }
+    /** Returns the number of entries in the index. */
+    std::size_t num_entries() const override { return data_.size(); }
 
     /** Returns `true` iff the index is currently finalized. */
     bool finalized() const { return finalized_; }

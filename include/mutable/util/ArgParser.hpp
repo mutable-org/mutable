@@ -6,7 +6,7 @@
 #include <memory>
 #include <mutable/util/Diagnostic.hpp>
 #include <mutable/util/macro.hpp>
-#include <mutable/util/StringPool.hpp>
+#include <mutable/util/Pool.hpp>
 #include <unordered_map>
 #include <vector>
 

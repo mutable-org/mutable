@@ -8,13 +8,13 @@ using namespace m;
 
 TEST_CASE("Pool c'tor", "[core][util][pool]")
 {
-    Pool<int> pool(42);
+    PODPool<int> pool(42);
     REQUIRE(pool.size() == 0);
 }
 
 TEST_CASE("Pool internalize simple", "[core][util][pool]")
 {
-    Pool<int> pool;
+    PODPool<int> pool;
 
     auto i0 = pool(42);
     REQUIRE(pool.size() == 1);
@@ -34,12 +34,13 @@ TEST_CASE("Pool internalize object", "[core][util][pool]")
 {
     struct Object
     {
+        int *p = nullptr;
+
         Object() : p(nullptr) { }
         Object(int n) : p(new int(n)) { }
         Object(const Object &other) = delete;
-        Object(Object &&other) { std::swap(this->p, other.p); }
+        Object(Object &&other) : Object() { std::swap(this->p, other.p); }
         ~Object() { delete p; }
-        int *p = nullptr;
 
         bool operator==(const Object &other) const { return *this->p == *other.p; }
     };
@@ -65,4 +66,34 @@ TEST_CASE("Pool internalize object", "[core][util][pool]")
     REQUIRE(pool.size() == 2);
     REQUIRE(*i2->p == 42);
     REQUIRE(i0 == i2);
+}
+
+TEST_CASE("StringPool c'tor", "[core][util][pool]")
+{
+    StringPool pool(42);
+    REQUIRE(pool.size() == 0);
+}
+
+TEST_CASE("StringPool internalize", "[core][util][pool]")
+{
+    StringPool pool;
+
+    REQUIRE(pool.size() == 0);
+
+    auto s0 = pool("Hello");
+    REQUIRE(pool.size() == 1);
+
+    auto s1 = pool("hello");
+    REQUIRE(pool.size() == 2);
+    REQUIRE(s0 != s1);
+
+    auto s2 = pool(std::string_view("hello"));
+    REQUIRE(pool.size() == 2);
+    REQUIRE(s1 == s2);
+
+    auto s3 = pool("");
+    REQUIRE(pool.size() == 3);
+
+    auto s4 = pool(std::string_view(""));
+    REQUIRE(s3 == s4);
 }

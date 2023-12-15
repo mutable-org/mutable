@@ -33,7 +33,6 @@
 #include <mutable/util/memory.hpp>
 #include <mutable/util/Pool.hpp>
 #include <mutable/util/Position.hpp>
-#include <mutable/util/StringPool.hpp>
 #include <mutable/util/Timer.hpp>
 #include <mutable/version.hpp>
 

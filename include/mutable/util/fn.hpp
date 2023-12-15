@@ -69,17 +69,39 @@ inline uint64_t FNV1a(const char *c_str, std::size_t len)
 /** Computes the FNV-1a 64-bit hash of a cstring. */
 struct M_EXPORT StrHash
 {
+    ///> Mark this callable as *transparent*, allowing for computing the hash of various types that are interoperable.
+    ///> See https://en.cppreference.com/w/cpp/container/unordered_map/find.
+    using is_transparent = void;
+
     uint64_t operator()(const char *c_str) const { return FNV1a(c_str); }
-
     uint64_t operator()(const char *c_str, std::size_t len) const { return FNV1a(c_str, len); }
-
     uint64_t operator()(const std::string &s) const { return operator()(s.c_str()); }
+    uint64_t operator()(const std::string_view &sv) const { return FNV1a(sv.data(), sv.size()); }
+
+    template<typename T>
+    requires requires (T &&t) { std::string_view(std::forward<T>(t)); }
+    uint64_t operator()(T &&t) {
+        const auto sv = std::string_view(std::forward<T>(t));
+        return FNV1a(sv.data(), sv.length());
+    }
 };
 
 /** Compares two cstrings for equality. */
 struct M_EXPORT StrEqual
 {
+    ///> Mark this callable as *transparent*, allowing for comparing various types that are interoperable.
+    ///> See https://en.cppreference.com/w/cpp/container/unordered_map/find.
+    using is_transparent = void;
+
     bool operator()(const char *first, const char *second) const { return streq(first, second); }
+    bool operator()(const std::string_view &first, const std::string_view &second) const { return first == second; }
+
+    template<typename T, typename U>
+    requires requires (T &&t) { std::string_view(std::forward<T>(t)); } and
+             requires (U &&u) { std::string_view(std::forward<U>(u)); }
+    bool operator()(T &&first, U &&second) const {
+        return std::string_view(std::forward<T>(first)) == std::string_view(std::forward<U>(second));
+    }
 };
 
 /** Compares two cstrings for equality.  Allows `nullptr`. */

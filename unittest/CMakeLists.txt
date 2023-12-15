@@ -19,7 +19,6 @@ set(
     util/PoolTest.cpp
     util/PositionTest.cpp
     util/SpnTest.cpp
-    util/StringPoolTest.cpp
     util/TimerTest.cpp
 
     # util/container

@@ -1,7 +1,6 @@
 #pragma once
 
 #include <mutable/catalog/Schema.hpp>
-#include <mutable/util/StringPool.hpp>
 
 
 namespace m {

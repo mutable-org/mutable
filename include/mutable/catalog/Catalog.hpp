@@ -16,7 +16,6 @@
 #include <mutable/util/macro.hpp>
 #include <mutable/util/memory.hpp>
 #include <mutable/util/Pool.hpp>
-#include <mutable/util/StringPool.hpp>
 #include <mutable/util/Timer.hpp>
 #include <type_traits>
 

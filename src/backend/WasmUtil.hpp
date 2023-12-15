@@ -50,6 +50,12 @@ struct NChar : Ptr<Charx1>
 
     Ptr<Charx1> val() { return *this; }
 
+    Ptr<Charx1> insist_not_null() {
+        if (can_be_null())
+            Wasm_insist(clone().not_null(), "must not be NULL");
+        return val();
+    }
+
     Boolx1 is_null() {
         if (can_be_null()) {
             return Ptr<Charx1>::is_null();

@@ -2,6 +2,7 @@
 
 #include <memory>
 #include <mutable/backend/Backend.hpp>
+#include <mutable/storage/Index.hpp>
 #include <mutable/IR/Operator.hpp>
 #include <mutable/storage/DataLayoutFactory.hpp>
 #include <mutable/util/macro.hpp>
@@ -39,6 +40,7 @@ struct WasmEngine
         std::unique_ptr<const storage::DataLayoutFactory> result_set_factory;
         memory::AddressSpace vm; ///<  WebAssembly module instance's virtual address space aka.\ *linear memory*
         uint32_t heap = 0; ///< beginning of the heap, encoded as offset from the beginning of the virtual address space
+        std::vector<std::reference_wrapper<const idx::IndexBase>> indexes; ///< the indexes used in the query
 
         WasmContext(uint32_t id, const MatchBase &plan, config_t configuration, std::size_t size);
 
@@ -52,6 +54,12 @@ struct WasmEngine
         /** Installs a guard page at the current `heap` and increments `heap` to the next page.  Acknowledges
          * `TRAP_GUARD_PAGES`. */
         void install_guard_page();
+
+        /** Adds an index to the `WasmContext` and returns its position in the vector as id. */
+        std::size_t add_index(const idx::IndexBase &index) {
+            indexes.emplace_back(index);
+            return indexes.size() - 1;
+        }
     };
 
     private:

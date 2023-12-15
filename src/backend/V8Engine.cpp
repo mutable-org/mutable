@@ -877,6 +877,22 @@ void V8Engine::execute(const m::MatchBase &plan)
         v8::Local<v8::ObjectTemplate> global = v8::ObjectTemplate::New(isolate_);
         global->Set(isolate_, "set_wasm_instance_raw_memory", v8::FunctionTemplate::New(isolate_, set_wasm_instance_raw_memory));
         global->Set(isolate_, "read_result_set", v8::FunctionTemplate::New(isolate_, read_result_set));
+
+#define CREATE_TEMPLATES(IDXTYPE, KEYTYPE, V8TYPE, IDXNAME, SUFFIX) \
+        global->Set(isolate_, M_STR(idx_lower_bound_##IDXNAME##_##SUFFIX), v8::FunctionTemplate::New(isolate_, index_seek<IDXTYPE<KEYTYPE>, V8TYPE, true>)); \
+        global->Set(isolate_, M_STR(idx_upper_bound_##IDXNAME##_##SUFFIX), v8::FunctionTemplate::New(isolate_, index_seek<IDXTYPE<KEYTYPE>, V8TYPE, false>)); \
+        global->Set(isolate_, M_STR(idx_scan_##IDXNAME##_##SUFFIX),        v8::FunctionTemplate::New(isolate_, index_sequential_scan<IDXTYPE<KEYTYPE>>))
+
+        CREATE_TEMPLATES(idx::ArrayIndex, bool,        v8::Boolean, array, b);
+        CREATE_TEMPLATES(idx::ArrayIndex, int8_t,      v8::Int32,   array, i1);
+        CREATE_TEMPLATES(idx::ArrayIndex, int16_t,     v8::Int32,   array, i2);
+        CREATE_TEMPLATES(idx::ArrayIndex, int32_t,     v8::Int32,   array, i4);
+        CREATE_TEMPLATES(idx::ArrayIndex, int64_t,     v8::BigInt,  array, i8);
+        CREATE_TEMPLATES(idx::ArrayIndex, float,       v8::Number,  array, f);
+        CREATE_TEMPLATES(idx::ArrayIndex, double,      v8::Number,  array, d);
+        CREATE_TEMPLATES(idx::ArrayIndex, const char*, v8::String,  array, p);
+#undef CREATE_TEMPLATES
+
         v8::Local<v8::Context> context = v8::Context::New(isolate_, /* extensions= */ nullptr, global);
         v8::Context::Scope context_scope(context);
 
@@ -1096,19 +1112,49 @@ v8::Local<v8::Object> m::wasm::detail::create_env(v8::Isolate &isolate, const m:
 
     /* Add functions to environment. */
     Module::Get().emit_function_import<void(void*,uint32_t)>("read_result_set");
-#define ADD_FUNC(FUNC) { \
+
+#define EMIT_FUNC_IMPORTS(KEYTYPE, IDXNAME, SUFFIX) \
+    Module::Get().emit_function_import<uint32_t(std::size_t,KEYTYPE)>(M_STR(idx_lower_bound_##IDXNAME##_##SUFFIX)); \
+    Module::Get().emit_function_import<uint32_t(std::size_t,KEYTYPE)>(M_STR(idx_upper_bound_##IDXNAME##_##SUFFIX)); \
+    Module::Get().emit_function_import<void(std::size_t,uint32_t,void*,uint32_t)>(M_STR(idx_scan_##IDXNAME##_##SUFFIX))
+
+    EMIT_FUNC_IMPORTS(bool,        array, b);
+    EMIT_FUNC_IMPORTS(int8_t,      array, i1);
+    EMIT_FUNC_IMPORTS(int16_t,     array, i2);
+    EMIT_FUNC_IMPORTS(int32_t,     array, i4);
+    EMIT_FUNC_IMPORTS(int64_t,     array, i8);
+    EMIT_FUNC_IMPORTS(float,       array, f);
+    EMIT_FUNC_IMPORTS(double,      array, d);
+    EMIT_FUNC_IMPORTS(const char*, array, p);
+#undef EMIT_FUNC_IMPORTS
+
+#define ADD_FUNC(FUNC, NAME) { \
     auto func = v8::Function::New(Ctx, (FUNC)).ToLocalChecked(); \
-    env->Set(Ctx, mkstr(isolate, #FUNC), func).Check(); \
+    env->Set(Ctx, mkstr(isolate, NAME), func).Check(); \
 }
-    ADD_FUNC(insist)
-    ADD_FUNC(print)
-    ADD_FUNC(print_memory_consumption)
-    ADD_FUNC(read_result_set)
+#define ADD_FUNC_(FUNC) ADD_FUNC(FUNC, #FUNC)
+    ADD_FUNC_(insist)
+    ADD_FUNC_(print)
+    ADD_FUNC_(print_memory_consumption)
+    ADD_FUNC_(read_result_set)
+    ADD_FUNC(_throw, "throw")
+
+#define ADD_FUNCS(IDXTYPE, KEYTYPE, V8TYPE, IDXNAME, SUFFIX) \
+    ADD_FUNC(index_seek<M_COMMA(IDXTYPE<KEYTYPE>) M_COMMA(V8TYPE) true>,  M_STR(idx_lower_bound_##IDXNAME##_##SUFFIX)) \
+    ADD_FUNC(index_seek<M_COMMA(IDXTYPE<KEYTYPE>) M_COMMA(V8TYPE) false>, M_STR(idx_upper_bound_##IDXNAME##_##SUFFIX)) \
+    ADD_FUNC(index_sequential_scan<IDXTYPE<KEYTYPE>>, M_STR(idx_scan_##IDXNAME##_##SUFFIX))
+
+    ADD_FUNCS(idx::ArrayIndex,          bool,        v8::Boolean, array, b);
+    ADD_FUNCS(idx::ArrayIndex,          int8_t,      v8::Int32,   array, i1);
+    ADD_FUNCS(idx::ArrayIndex,          int16_t,     v8::Int32,   array, i2);
+    ADD_FUNCS(idx::ArrayIndex,          int32_t,     v8::Int32,   array, i4);
+    ADD_FUNCS(idx::ArrayIndex,          int64_t,     v8::BigInt,  array, i8);
+    ADD_FUNCS(idx::ArrayIndex,          float,       v8::Number,  array, f);
+    ADD_FUNCS(idx::ArrayIndex,          double,      v8::Number,  array, d);
+    ADD_FUNCS(idx::ArrayIndex,          const char*, v8::String,  array, p);
+#undef ADD_FUNCS
+#undef ADD_FUNC_
 #undef ADD_FUNC
-    {
-        auto func = v8::Function::New(Ctx, _throw).ToLocalChecked();
-        env->Set(Ctx, mkstr(isolate, "throw"), func).Check();
-    }
 
     return env;
 }

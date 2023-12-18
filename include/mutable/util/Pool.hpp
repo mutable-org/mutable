@@ -259,3 +259,15 @@ struct StringPool : PODPool<const char*, StrHash, StrEqual, StrClone>
 using PooledString = StringPool::proxy_type;
 
 }
+
+namespace std {
+
+template<typename T, typename Pool>
+struct std::hash<m::Pooled<T, Pool>>
+{
+    uint64_t operator()(const m::Pooled<T, Pool> &pooled) const {
+        return std::hash<const T*>{}(&*pooled); // hash of the address where the object is stored in the pool
+    }
+};
+
+}

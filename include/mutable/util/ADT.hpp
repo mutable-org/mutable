@@ -724,38 +724,34 @@ struct view<It, ReturnType&(It)>
         public:
         iterator(It it, const projection_type &project) : it_(it), project_(project) { }
 
-        template<typename = decltype(std::declval<It>() == std::declval<It>())>
-        bool operator==(iterator other) const { return this->it_ == other.it_; }
-        template<typename = decltype(std::declval<It>() != std::declval<It>())>
-        bool operator!=(iterator other) const { return this->it_ != other.it_; }
+        bool operator==(iterator other) const requires requires (It it) { { it == it } -> std::same_as<bool>; } {
+            return this->it_ == other.it_;
+        }
+        bool operator!=(iterator other) const requires requires (It it) { { it != it } -> std::same_as<bool>; } {
+            return this->it_ != other.it_;
+        }
 
-        template<typename = decltype(++std::declval<It>())>
-        iterator & operator++() { ++it_; return *this; }
-        template<typename = decltype(std::declval<It>()++)>
-        iterator operator++(int) { return it_++; }
+        iterator & operator++()  requires requires (It it) { ++it; } { ++it_; return *this; }
+        iterator operator++(int) requires requires (It it) { it++; } { return it_++; }
 
-        template<typename = decltype(--std::declval<It>())>
-        iterator & operator--() { --it_; return *this; }
-        template<typename = decltype(std::declval<It>()--)>
-        iterator operator--(int) { return it_--; }
+        iterator & operator--()  requires requires (It it) { --it; } { --it_; return *this; }
+        iterator operator--(int) requires requires (It it) { it--; } { return it_--; }
 
-        template<typename = decltype(std::declval<It>() += int())>
-        iterator & operator+=(int offset) { it_ += offset; return *this; }
-        template<typename = decltype(std::declval<It>() -= int())>
-        iterator & operator-=(int offset) { it_ -= offset; return *this; }
+        iterator & operator+=(int offset) requires requires (It it) { it += offset; } { it_ += offset; return *this; }
+        iterator & operator-=(int offset) requires requires (It it) { it -= offset; } { it_ -= offset; return *this; }
 
-        template<typename = decltype(std::declval<It>() - std::declval<It>())>
-        difference_type operator-(iterator other) const { return this->it_ - other.it_; }
+        difference_type operator-(iterator other) const
+        requires requires (It it) { { it - it } -> std::convertible_to<difference_type>; } {
+            return this->it_ - other.it_;
+        }
 
-        template<typename = decltype(std::declval<projection_type>()(std::declval<It>()))>
-        reference operator*() const { return project_(it_); }
-        template<typename = decltype(std::declval<projection_type>()(std::declval<It>()))>
-        reference operator->() const { return project_(it_); }
+        reference operator*()  const requires requires (projection_type p, It it) { p(it); } { return project_(it_); }
+        reference operator->() const requires requires (projection_type p, It it) { p(it); } { return project_(it_); }
     };
 
     public:
-    view(range<It> range, projection_type project) : range_(range), project_(project) { }
-    view(It begin, It end, projection_type project) : range_(begin, end), project_(project) { }
+    view(range<It> range, projection_type project) : range_(range), project_(std::move(project)) { }
+    view(It begin, It end, projection_type project) : range_(begin, end), project_(std::move(project)) { }
     template<typename Fn>
     view(range<It> range, Fn &&fn) : range_(range), project_(std::forward<Fn>(fn)) { }
     template<typename Fn>

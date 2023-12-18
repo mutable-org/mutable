@@ -23,14 +23,26 @@
 
 namespace m {
 
+// forward declarations
+template<typename> struct PlanTableBase;
+template<typename Actual> requires requires { typename PlanTableBase<Actual>; } struct PlanTableDecorator;
+
 using Subproblem = SmallBitset;
+
+/** This interface allows for attaching arbitrary data to `PlanTableEntry` instances. */
+struct M_EXPORT PlanTableEntryData
+{
+    virtual ~PlanTableEntryData() { }
+};
 
 struct M_EXPORT PlanTableEntry
 {
     Subproblem left; ///< the left subproblem
     Subproblem right; ///< the right subproblem
-    std::unique_ptr<DataModel> model; ///< the model this subplan's result
+    std::unique_ptr<DataModel> model; ///< the model of this subplan's result
     double cost = std::numeric_limits<double>::infinity(); ///< the cost of the subproblem
+    ///> additional data associated to this `PlanTableEntry`; used for holistic optimization
+    std::unique_ptr<PlanTableEntryData> data;
 
     /* Returns all subproblems. */
     std::vector<Subproblem> get_subproblems() const {
@@ -42,7 +54,7 @@ struct M_EXPORT PlanTableEntry
 
     /** Returns true iff two entries are equal. */
     bool operator==(const PlanTableEntry &other) const {
-        return (cost == other.cost) and (left == other.left) and (right == other.right);
+        return (this->cost == other.cost) and (this->left == other.left) and (this->right == other.right);
     }
 
     /** Returns true iff two entries are not equal. */
@@ -147,6 +159,7 @@ struct M_EXPORT PlanTableBase : crtp<Actual, PlanTableBase>
     void reset_costs() { actual().reset_costs(); }
 
 M_LCOV_EXCL_START
+    public:
     friend std::ostream & M_EXPORT operator<<(std::ostream &out, const PlanTableBase &PT);
 
     friend std::string to_string(const PlanTableBase &PT) {
@@ -165,6 +178,8 @@ M_LCOV_EXCL_STOP
  * dense query graph. */
 struct M_EXPORT PlanTableSmallOrDense : PlanTableBase<PlanTableSmallOrDense>
 {
+    friend struct PlanTableDecorator<PlanTableSmallOrDense>;
+
     using allocator_type = malloc_allocator;
 
     private:
@@ -246,6 +261,11 @@ struct M_EXPORT PlanTableSmallOrDense : PlanTableBase<PlanTableSmallOrDense>
         }
     }
 
+    private:
+    auto begin() { return &table_[0]; }
+    auto end()   { return &table_[size()]; }
+
+    public:
     friend std::ostream & M_EXPORT operator<<(std::ostream &out, const PlanTableSmallOrDense &PT);
 
     void dump(std::ostream &out) const;
@@ -257,6 +277,8 @@ struct M_EXPORT PlanTableSmallOrDense : PlanTableBase<PlanTableSmallOrDense>
  * sparse query graph. */
 struct M_EXPORT PlanTableLargeAndSparse : PlanTableBase<PlanTableLargeAndSparse>
 {
+    friend struct PlanTableDecorator<PlanTableLargeAndSparse>;
+
     private:
     ///> the number of `DataSource`s in the query
     size_type num_sources_;
@@ -327,6 +349,11 @@ struct M_EXPORT PlanTableLargeAndSparse : PlanTableBase<PlanTableLargeAndSparse>
         }
     }
 
+    private:
+    auto begin() { return projecting_iterator(table_.begin(), [](auto it) -> auto& { return it->second; }); }
+    auto end()   { return projecting_iterator(table_.end(),   [](auto it) -> auto& { return it->second; }); }
+
+    public:
     friend std::ostream & M_EXPORT operator<<(std::ostream &out, const PlanTableLargeAndSparse &PT);
 
     void dump(std::ostream &out) const;
@@ -335,6 +362,22 @@ struct M_EXPORT PlanTableLargeAndSparse : PlanTableBase<PlanTableLargeAndSparse>
     private:
     /** Computes the number of connected subgraphs (CSGs) of a query graph with `N` relations and *cycle* topology. */
     static size_type OnoLohmannCycle(size_type N) { return N*N - N + 1; }
+};
+
+template<typename Actual>
+requires requires { typename PlanTableBase<Actual>; }
+struct M_EXPORT PlanTableDecorator
+{
+    protected:
+    Actual table_;
+
+    public:
+    PlanTableDecorator() = default;
+    explicit PlanTableDecorator(Actual &&table) : table_(std::move(table)) { }
+
+    protected:
+    auto begin() { return table_.begin(); }
+    auto end()   { return table_.end(); }
 };
 
 

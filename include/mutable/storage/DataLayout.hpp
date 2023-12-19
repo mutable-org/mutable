@@ -243,8 +243,8 @@ M_LCOV_EXCL_STOP
     X(DataLayout::INode) \
     X(DataLayout::Leaf) \
     X(DataLayout)
-M_DECLARE_VISITOR(ConstDataLayoutVisitor, const DataLayout::Node, M_DATA_LAYOUT_CLASSES)
 
+M_DECLARE_VISITOR(ConstDataLayoutVisitor, const storage::DataLayout::Node, M_DATA_LAYOUT_CLASSES)
 
 /*======================================================================================================================
  * Helper functions for SIMD support

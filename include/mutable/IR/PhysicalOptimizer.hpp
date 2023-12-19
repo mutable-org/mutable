@@ -214,9 +214,13 @@ struct pattern_matcher_base
  * PhysicalOptimizer
  *====================================================================================================================*/
 
-/** A `PhysicalOptimizer` stores available `PhysicalOperator`s covering possibly multiple logical `Operator`s.  It
- * is able to find an optimal physical operator covering (similar to instruction selection used in compilers) using
- * dynamic programming. */
+/** The physical optimizer interface.
+ *
+ * The `PhysicalOptimizer` applies a tree covering algorithm (similar to instruction selection used in compilers) using
+ * dynamic programming to a logical plan to compute a physical operator covering that minimizes the costs under a
+ * given set of physical cost functions.  Therefore, the optimizer stores available `PhysicalOperator`s covering
+ * possibly multiple logical `Operator`s.
+ */
 struct PhysicalOptimizer
 {
     protected:

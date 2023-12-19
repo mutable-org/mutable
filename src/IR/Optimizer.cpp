@@ -3,10 +3,8 @@
 #include <algorithm>
 #include <mutable/catalog/Catalog.hpp>
 #include <mutable/IR/Operator.hpp>
-#include <mutable/IR/Operator.hpp>
 #include <mutable/Options.hpp>
 #include <mutable/parse/AST.hpp>
-#include <mutable/storage/Store.hpp>
 #include <mutable/storage/Store.hpp>
 #include <numeric>
 #include <vector>

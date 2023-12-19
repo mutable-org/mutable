@@ -113,14 +113,7 @@ std::vector<cnf::CNF> optimize_filter(cnf::CNF filter)
  * Optimizer
  *====================================================================================================================*/
 
-std::pair<std::unique_ptr<Producer>, PlanTableEntry>
-Optimizer::optimize(QueryGraph &G) const
-{
-    return optimize_recursive(G);
-}
-
-std::pair<std::unique_ptr<Producer>, PlanTableEntry>
-Optimizer::optimize_recursive(QueryGraph &G) const
+std::pair<std::unique_ptr<Producer>, PlanTableEntry> Optimizer::optimize(QueryGraph &G) const
 {
     switch (Options::Get().plan_table_type)
     {
@@ -150,33 +143,54 @@ Optimizer::optimize_recursive(QueryGraph &G) const
 }
 
 template<typename PlanTable>
-std::pair<std::unique_ptr<Producer>, PlanTable>
-Optimizer::optimize_with_plantable(QueryGraph &G) const
+std::pair<std::unique_ptr<Producer>, PlanTable> Optimizer::optimize_with_plantable(QueryGraph &G) const
 {
-    PlanTable plan_table(G);
+    PlanTable PT(G);
     const auto num_sources = G.sources().size();
     auto &C = Catalog::Get();
-    auto &DB = C.get_database_in_use();
-    auto &CE = DB.cardinality_estimator();
+    auto &CE = C.get_database_in_use().cardinality_estimator();
 
     if (num_sources == 0) {
-        plan_table.get_final().cost = 0; // no sources → no cost
-        plan_table.get_final().model = CE.empty_model(); // XXX: should rather be 1 (single tuple) than empty
-        return { std::make_unique<ProjectionOperator>(G.projections()), std::move(plan_table) };
+        PT.get_final().cost = 0; // no sources → no cost
+        PT.get_final().model = CE.empty_model(); // XXX: should rather be 1 (single tuple) than empty
+        return { std::make_unique<ProjectionOperator>(G.projections()), std::move(PT) };
     }
 
-    /*----- Perform pre-optimizations on the QueryGraph. -------------------------------------------------------------*/
+    /*----- Perform pre-optimizations on the query graph. -----*/
     for (auto &pre_opt : C.pre_optimizations())
         (*pre_opt.second).operator()(G);
 
-    /*----- Initialize plan table and compute plans for data sources. ------------------------------------------------*/
-    Producer **source_plans = new Producer*[num_sources];
+    /*----- Initialize plan table and compute plans for data sources. -----*/
+    auto source_plans = optimize_source_plans(G, PT);
+
+    /*----- Compute join order and construct plan containing all joins. -----*/
+    optimize_join_order(G, PT);
+    std::unique_ptr<Producer> plan = construct_join_order(G, PT, source_plans);
+    auto &entry = PT.get_final();
+
+    /*----- Construct plan for remaining operations. -----*/
+    plan = optimize_plan(G, std::move(plan), entry);
+
+    /*----- Perform post-optimizations on the operator tree. -----*/
+    for (auto &post_opt : C.post_optimizations())
+        plan = (*post_opt.second).operator()(std::move(plan)); // TODO add PT to post-optimizations
+
+    return { std::move(plan), std::move(PT) };
+}
+
+template<typename PlanTable>
+std::unique_ptr<Producer*[]> Optimizer::optimize_source_plans(const QueryGraph &G, PlanTable &PT) const
+{
+    const auto num_sources = G.sources().size();
+    auto &CE = Catalog::Get().get_database_in_use().cardinality_estimator();
+
+    auto source_plans = std::make_unique<Producer*[]>(num_sources);
     for (auto &ds : G.sources()) {
         Subproblem s = Subproblem::Singleton(ds->id());
         if (auto bt = cast<const BaseTable>(ds.get())) {
             /* Produce a scan for base tables. */
-            plan_table[s].cost = 0;
-            plan_table[s].model = CE.estimate_scan(G, s);
+            PT[s].cost = 0;
+            PT[s].model = CE.estimate_scan(G, s);
             auto &store = bt->table().store();
             auto source = new ScanOperator(store, bt->name().assert_not_none());
             source_plans[ds->id()] = source;
@@ -184,7 +198,7 @@ Optimizer::optimize_with_plantable(QueryGraph &G) const
             /* Set operator information. */
             auto source_info = std::make_unique<OperatorInformation>();
             source_info->subproblem = s;
-            source_info->estimated_cardinality = CE.predict_cardinality(*plan_table[s].model);
+            source_info->estimated_cardinality = CE.predict_cardinality(*PT[s].model);
             source->info(std::move(source_info));
         } else {
             /* Recursively solve nested queries. */
@@ -204,17 +218,17 @@ Optimizer::optimize_with_plantable(QueryGraph &G) const
 
             /* Update the plan table with the `DataModel` and cost of the nested query and save the plan in the array of
              * source plans. */
-            plan_table[s].cost = sub.cost;
+            PT[s].cost = sub.cost;
             sub.model->assign_to(s); // adapt model s.t. it describes the result of the current subproblem
-            plan_table[s].model = std::move(sub.model);
+            PT[s].model = std::move(sub.model);
             source_plans[ds->id()] = sub_plan.release();
         }
 
         /* Apply filter, if any. */
         if (ds->filter().size()) {
             /* Update data model with filter. */
-            auto new_model = CE.estimate_filter(G, *plan_table[s].model, ds->filter());
-            plan_table[s].model = std::move(new_model);
+            auto new_model = CE.estimate_filter(G, *PT[s].model, ds->filter());
+            PT[s].model = std::move(new_model);
 
             /* Optimize the filter by splitting into smaller filters and ordering them. */
             std::vector<cnf::CNF> filters = optimize_filter(ds->filter());
@@ -240,13 +254,99 @@ Optimizer::optimize_with_plantable(QueryGraph &G) const
         auto source = source_plans[ds->id()];
         auto source_info = std::make_unique<OperatorInformation>();
         source_info->subproblem = s;
-        source_info->estimated_cardinality = CE.predict_cardinality(*plan_table[s].model); // includes filters, if any
+        source_info->estimated_cardinality = CE.predict_cardinality(*PT[s].model); // includes filters, if any
         source->info(std::move(source_info));
     }
+    return source_plans;
+}
 
-    optimize_locally(G, plan_table);
-    std::unique_ptr<Producer> plan = construct_plan(G, plan_table, source_plans);
-    auto &entry = plan_table.get_final();
+template<typename PlanTable>
+void Optimizer::optimize_join_order(const QueryGraph &G, PlanTable &PT) const
+{
+    Catalog &C = Catalog::Get();
+    auto &CE = C.get_database_in_use().cardinality_estimator();
+
+#ifndef NDEBUG
+    if (Options::Get().statistics) {
+        std::size_t num_CSGs = 0, num_CCPs = 0;
+        const SmallBitset All = SmallBitset::All(G.num_sources());
+        auto inc_CSGs = [&num_CSGs](SmallBitset) { ++num_CSGs; };
+        auto inc_CCPs = [&num_CCPs](SmallBitset, SmallBitset) { ++num_CCPs; };
+        G.adjacency_matrix().for_each_CSG_undirected(All, inc_CSGs);
+        G.adjacency_matrix().for_each_CSG_pair_undirected(All, inc_CCPs);
+        std::cout << num_CSGs << " CSGs, " << num_CCPs << " CCPs" << std::endl;
+    }
+#endif
+
+    M_TIME_EXPR(plan_enumerator()(G, cost_function(), PT), "Plan enumeration", C.timer());
+
+    if (Options::Get().statistics) {
+        std::cout << "Est. total cost: " << PT.get_final().cost
+                  << "\nEst. result set size: " << CE.predict_cardinality(*PT.get_final().model)
+                  << "\nPlan cost: " << PT[PT.get_final().left].cost + PT[PT.get_final().right].cost
+                  << std::endl;
+    }
+}
+
+template<typename PlanTable>
+std::unique_ptr<Producer> Optimizer::construct_join_order(const QueryGraph &G, const PlanTable &PT,
+                                                          const std::unique_ptr<Producer*[]> &source_plans) const
+{
+    auto &CE = Catalog::Get().get_database_in_use().cardinality_estimator();
+
+    std::vector<std::reference_wrapper<Join>> joins;
+    for (auto &J : G.joins()) joins.emplace_back(*J);
+
+    /* Use nested lambdas to implement recursive lambda using CPS. */
+    const auto construct_recursive = [&](Subproblem s) -> Producer* {
+        auto construct_plan_impl = [&](Subproblem s, auto &construct_plan_rec) -> Producer* {
+            auto subproblems = PT[s].get_subproblems();
+            if (subproblems.empty()) {
+                M_insist(s.size() == 1);
+                return source_plans[*s.begin()];
+            } else {
+                /* Compute plan for each sub problem.  Must happen *before* calculating the join predicate. */
+                std::vector<Producer*> sub_plans;
+                for (auto sub : subproblems)
+                    sub_plans.push_back(construct_plan_rec(sub, construct_plan_rec));
+
+                /* Calculate the join predicate. */
+                cnf::CNF join_condition;
+                for (auto it = joins.begin(); it != joins.end(); ) {
+                    Subproblem join_sources;
+                    /* Compute subproblem of sources to join. */
+                    for (auto ds : it->get().sources())
+                        join_sources(ds.get().id()) = true;
+
+                    if (join_sources.is_subset(s)) { // possible join
+                        join_condition = join_condition and it->get().condition();
+                        it = joins.erase(it);
+                    } else {
+                        ++it;
+                    }
+                }
+
+                /* Construct the join. */
+                auto join = new JoinOperator(join_condition);
+                for (auto sub_plan : sub_plans)
+                    join->add_child(sub_plan);
+                auto join_info = std::make_unique<OperatorInformation>();
+                join_info->subproblem = s;
+                join_info->estimated_cardinality = CE.predict_cardinality(*PT[s].model);
+                join->info(std::move(join_info));
+                return join;
+            }
+        };
+        return construct_plan_impl(s, construct_plan_impl);
+    };
+
+    return std::unique_ptr<Producer>(construct_recursive(Subproblem::All(G.sources().size())));
+}
+
+std::unique_ptr<Producer> Optimizer::optimize_plan(const QueryGraph &G, std::unique_ptr<Producer> plan,
+                                                   PlanTableEntry &entry) const
+{
+    auto &CE = Catalog::Get().get_database_in_use().cardinality_estimator();
 
     /* Perform grouping. */
     if (not G.group_by().empty()) {
@@ -360,99 +460,7 @@ Optimizer::optimize_with_plantable(QueryGraph &G) const
         projection->info(std::move(info));
         plan = std::move(projection);
     }
-
-    /*----- Perform post-optimizations on the Operator tree. ---------------------------------------------------------*/
-    for (auto &post_opt : C.post_optimizations())
-        plan = (*post_opt.second).operator()(std::move(plan)); // TODO add plan_table to post-optimizations
-
-    delete[] source_plans;
-    return { std::move(plan), std::move(plan_table) };
-}
-
-template<typename PlanTable>
-void Optimizer::optimize_locally(const QueryGraph &G, PlanTable &PT) const
-{
-    Catalog &C = Catalog::Get();
-    auto &DB = C.get_database_in_use();
-    auto &CE = DB.cardinality_estimator();
-
-#ifndef NDEBUG
-    if (Options::Get().statistics) {
-        std::size_t num_CSGs = 0, num_CCPs = 0;
-        const SmallBitset All = SmallBitset::All(G.num_sources());
-        auto inc_CSGs = [&num_CSGs](SmallBitset) { ++num_CSGs; };
-        auto inc_CCPs = [&num_CCPs](SmallBitset, SmallBitset) { ++num_CCPs; };
-        G.adjacency_matrix().for_each_CSG_undirected(All, inc_CSGs);
-        G.adjacency_matrix().for_each_CSG_pair_undirected(All, inc_CCPs);
-        std::cout << num_CSGs << " CSGs, " << num_CCPs << " CCPs" << std::endl;
-    }
-#endif
-
-    M_TIME_EXPR(plan_enumerator()(G, cost_function(), PT), "Plan enumeration", C.timer());
-
-    if (Options::Get().statistics) {
-        std::cout << "Est. total cost: " << PT.get_final().cost
-                  << "\nEst. result set size: " << CE.predict_cardinality(*PT.get_final().model)
-                  << "\nPlan cost: " << PT[PT.get_final().left].cost + PT[PT.get_final().right].cost
-                  << std::endl;
-    }
-}
-
-template<typename PlanTable>
-std::unique_ptr<Producer>
-Optimizer::construct_plan(const QueryGraph &G, const PlanTable &plan_table, Producer * const *source_plans) const
-{
-    auto &C = Catalog::Get();
-    auto &DB = C.get_database_in_use();
-    auto &CE = DB.cardinality_estimator();
-
-    std::vector<std::reference_wrapper<Join>> joins;
-    for (auto &J : G.joins()) joins.emplace_back(*J);
-
-    /* Use nested lambdas to implement recursive lambda using CPS. */
-    const auto construct_recursive = [&](Subproblem s) -> Producer* {
-        auto construct_plan_impl = [&](Subproblem s, auto &construct_plan_rec) -> Producer* {
-            auto subproblems = plan_table[s].get_subproblems();
-            if (subproblems.empty()) {
-                M_insist(s.size() == 1);
-                return source_plans[*s.begin()];
-            } else {
-                /* Compute plan for each sub problem.  Must happen *before* calculating the join predicate. */
-                std::vector<Producer*> sub_plans;
-                for (auto sub : subproblems)
-                    sub_plans.push_back(construct_plan_rec(sub, construct_plan_rec));
-
-                /* Calculate the join predicate. */
-                cnf::CNF join_condition;
-                for (auto it = joins.begin(); it != joins.end(); ) {
-                    Subproblem join_sources;
-                    /* Compute subproblem of sources to join. */
-                    for (auto ds : it->get().sources())
-                        join_sources(ds.get().id()) = true;
-
-                    if (join_sources.is_subset(s)) { // possible join
-                        join_condition = join_condition and it->get().condition();
-                        it = joins.erase(it);
-                    } else {
-                        ++it;
-                    }
-                }
-
-                /* Construct the join. */
-                auto join = new JoinOperator(join_condition);
-                for (auto sub_plan : sub_plans)
-                    join->add_child(sub_plan);
-                auto join_info = std::make_unique<OperatorInformation>();
-                join_info->subproblem = s;
-                join_info->estimated_cardinality = CE.predict_cardinality(*plan_table[s].model);
-                join->info(std::move(join_info));
-                return join;
-            }
-        };
-        return construct_plan_impl(s, construct_plan_impl);
-    };
-
-    return std::unique_ptr<Producer>(construct_recursive(Subproblem::All(G.sources().size())));
+    return plan;
 }
 
 std::vector<Optimizer::projection_type>
@@ -499,13 +507,16 @@ Optimizer::compute_projections_required_for_order_by(const std::vector<projectio
 #define DEFINE(PLANTABLE) \
 template \
 std::pair<std::unique_ptr<Producer>, PLANTABLE> \
-Optimizer::optimize_with_plantable(QueryGraph &G) const; \
+Optimizer::optimize_with_plantable(QueryGraph&) const; \
+template \
+std::unique_ptr<Producer*[]> \
+Optimizer::optimize_source_plans(const QueryGraph&, PLANTABLE&) const; \
 template \
 void \
-Optimizer::optimize_locally(const QueryGraph &G, PLANTABLE &plan_table) const; \
+Optimizer::optimize_join_order(const QueryGraph&, PLANTABLE&) const; \
 template \
 std::unique_ptr<Producer> \
-Optimizer::construct_plan(const QueryGraph &G, const PLANTABLE &plan_table, Producer * const *source_plans) const
+Optimizer::construct_join_order(const QueryGraph&, const PLANTABLE&, const std::unique_ptr<Producer*[]>&) const
 DEFINE(PlanTableSmallOrDense);
 DEFINE(PlanTableLargeAndSparse);
 #undef DEFINE

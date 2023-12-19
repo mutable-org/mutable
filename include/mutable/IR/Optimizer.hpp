@@ -10,8 +10,8 @@ namespace m {
 
 /** The optimizer interface.
  *
- * The optimizer applies a join ordering algorithm to a query graph to compute a join order that minimizes the costs
- * under a given cost function.
+ * The `Optimizer` applies a join ordering algorithm to a query graph to compute a join order that minimizes the costs
+ * under a given logical cost function.
  * Additionally, the optimizer may apply several semantics preserving transformations to improve performance.  Such
  * transformations include query unnesting and predicate inference.
  */
@@ -33,34 +33,39 @@ struct M_EXPORT Optimizer
     auto & plan_enumerator() const { return pe_; }
     auto & cost_function() const { return cf_; }
 
-    /** Apply this optimizer to the given query graph to compute an operator tree. */
+    /** Applies this optimizer to the given query graph \p G to compute an optimal logical operator tree. */
     std::unique_ptr<Producer> operator()(QueryGraph &G) const { return optimize(G).first; }
 
-    /** Computes and constructs an optimal plan for the given query graph.  Delegates to `optimize_recursive()`, then
-     * assigns IDs to the optimal plan in post-order. */
-    std::pair<std::unique_ptr<Producer>, PlanTableEntry>
-    optimize(QueryGraph &G) const;
+    /** Computes and constructs an optimal logical plan for the given query graph \p G.  Selects a `PlanTableBase`
+     * type to represent the internal state of planning progress, then delegates to `optimize_with_plantable<>()`. */
+    std::pair<std::unique_ptr<Producer>, PlanTableEntry> optimize(QueryGraph &G) const;
 
-    /** Recursively computes and constructs an optimal plan for the given query graph.  Selects a `PlanTable*` type to
-     * represent the internal state of planning progress, then delegates to `optimize_with_plantable<>()`. */
-    std::pair<std::unique_ptr<Producer>, PlanTableEntry>
-    optimize_recursive(QueryGraph &G) const;
-
-    /** Recursively computes and constructs an optimal plan for the given query graph, using the given `PlanTable` type
-     * to represent the state of planning progress. */
+    /** Recursively computes and constructs an optimal logical plan for the given query graph \p G, using the given
+     * \tparam PlanTable type to represent the state of planning progress. */
     template<typename PlanTable>
-    std::pair<std::unique_ptr<Producer>, PlanTable>
-    optimize_with_plantable(QueryGraph &G) const;
+    std::pair<std::unique_ptr<Producer>, PlanTable> optimize_with_plantable(QueryGraph &G) const;
 
     private:
-    /** Optimizes a plan table after initialization of the data source entries. */
+    /** Initializes the plan table \p PT with the data source entries contained in \p G.  Returns the
+     * (potentially recursively optimized) logical plan for each data source. */
     template<typename PlanTable>
-    void optimize_locally(const QueryGraph &G, PlanTable &plan_table) const;
+    std::unique_ptr<Producer*[]> optimize_source_plans(const QueryGraph &G, PlanTable &PT) const;
 
-    /** Constructs an operator tree given a solved plan table and the plans to compute the data sources of the query. */
+    /** Optimizes the join order using the plan table \p PT which already contains entries for all data sources of
+     * the query graph \p G. */
     template<typename PlanTable>
-    std::unique_ptr<Producer> construct_plan(const QueryGraph &G, const PlanTable &plan_table,
-                                             Producer * const *source_plans) const;
+    void optimize_join_order(const QueryGraph &G, PlanTable &PT) const;
+
+    /** Constructs a join operator tree given a solved plan table \p PT and the plans to compute the data sources
+     * \p source_plans of the query graph \p G. */
+    template<typename PlanTable>
+    std::unique_ptr<Producer> construct_join_order(const QueryGraph &G, const PlanTable &PT,
+                                                   const std::unique_ptr<Producer*[]> &source_plans) const;
+
+    /** Optimizes and constructs an operator tree given a join operator tree \p plan and the final plan table entry
+     * \p entry for the query graph \p G. */
+    std::unique_ptr<Producer> optimize_plan(const QueryGraph &G, std::unique_ptr<Producer> plan,
+                                            PlanTableEntry &entry) const;
 
     /** Computes and returns a `std::vector` of additional projections required *before* evaluating the ORDER BY clause.
      * The returned `std::vector` may be empty, in which case *no* additional projection is required. */

@@ -318,7 +318,8 @@ void m::execute_instruction(Diagnostic &diag, const Instruction &instruction)
     }
 }
 
-void m::execute_query(Diagnostic&, const SelectStmt &stmt, std::unique_ptr<Consumer> consumer)
+std::unique_ptr<Consumer> m::logical_plan_from_statement(Diagnostic&, const SelectStmt &stmt,
+                                                         std::unique_ptr<Consumer> consumer)
 {
     Catalog &C = Catalog::Get();
     auto query_graph = M_TIME_EXPR(QueryGraph::Build(stmt), "Construct the query graph", C.timer());
@@ -328,16 +329,50 @@ void m::execute_query(Diagnostic&, const SelectStmt &stmt, std::unique_ptr<Consu
 
     consumer->add_child(optree.release());
 
+    return consumer;
+}
+
+std::unique_ptr<MatchBase> m::physical_plan_from_logical_plan(Diagnostic &diag, const Consumer &logical_plan)
+{
+    auto &C = Catalog::Get();
     static thread_local std::unique_ptr<Backend> backend;
     if (not backend)
         backend = M_TIME_EXPR(C.create_backend(), "Create backend", C.timer());
+    return physical_plan_from_logical_plan(diag, logical_plan, *backend);
+}
 
+std::unique_ptr<MatchBase> m::physical_plan_from_logical_plan(Diagnostic&, const Consumer &logical_plan,
+                                                              const Backend &backend)
+{
     PhysicalOptimizerImpl<ConcretePhysicalPlanTable> PhysOpt;
-    backend->register_operators(PhysOpt);
-    M_TIME_EXPR(PhysOpt.cover(*consumer), "Compute the physical query plan", C.timer());
+    backend.register_operators(PhysOpt);
+    M_TIME_EXPR(PhysOpt.cover(logical_plan), "Compute the physical query plan", Catalog::Get().timer());
+    return PhysOpt.extract_plan();
+}
 
-    auto physical_plan = PhysOpt.extract_plan();
-    M_TIME_EXPR(backend->execute(*physical_plan), "Execute query", C.timer());
+void m::execute_physical_plan(Diagnostic &diag, const MatchBase &physical_plan)
+{
+    auto &C = Catalog::Get();
+    static thread_local std::unique_ptr<Backend> backend;
+    if (not backend)
+        backend = M_TIME_EXPR(C.create_backend(), "Create backend", C.timer());
+    execute_physical_plan(diag, physical_plan, *backend);
+}
+
+void m::execute_physical_plan(Diagnostic&, const MatchBase &physical_plan, const Backend &backend)
+{
+    M_TIME_EXPR(backend.execute(physical_plan), "Execute query", Catalog::Get().timer());
+}
+
+void m::execute_query(Diagnostic &diag, const SelectStmt &stmt, std::unique_ptr<Consumer> consumer)
+{
+    auto &C = Catalog::Get();
+    static thread_local std::unique_ptr<Backend> backend;
+    if (not backend)
+        backend = M_TIME_EXPR(C.create_backend(), "Create backend", C.timer());
+    auto logical_plan = logical_plan_from_statement(diag, stmt, std::move(consumer));
+    auto physical_plan = physical_plan_from_logical_plan(diag, *logical_plan, *backend);
+    execute_physical_plan(diag, *physical_plan, *backend);
 }
 
 void m::load_from_CSV(Diagnostic &diag, Table &table, const std::filesystem::path &path, std::size_t num_rows,

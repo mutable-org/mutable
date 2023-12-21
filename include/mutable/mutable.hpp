@@ -63,7 +63,23 @@ void M_EXPORT process_stream(std::istream &in, const char *filename, Diagnostic 
 /** Executes the given `Instruction`. */
 void M_EXPORT execute_instruction(Diagnostic &diag, const ast::Instruction &instruction);
 
-/** Optimizes and executes the given `SelectStmt`.  Result tuples are passed to the given `consumer`. */
+/** Optimizes the given `SelectStmt`.  Result tuples are passed to the given \p consumer.  Returns the logical plan. */
+std::unique_ptr<Consumer> M_EXPORT logical_plan_from_statement(Diagnostic &diag, const ast::SelectStmt &stmt,
+                                                               std::unique_ptr<Consumer> consumer);
+/** Computes a physical plan from the given \p logical plan.  The `Backend` is automatically created. */
+std::unique_ptr<MatchBase> M_EXPORT physical_plan_from_logical_plan(Diagnostic &diag, const Consumer &logical_plan);
+/** Computes a physical plan from the given \p logical_plan.*/
+std::unique_ptr<MatchBase> M_EXPORT physical_plan_from_logical_plan(Diagnostic &diag, const Consumer &logical_plan,
+                                                                    const Backend &backend);
+
+/** Executes the given physical plan.  The `Backend` is automatically created. */
+void M_EXPORT execute_physical_plan(Diagnostic &diag, const MatchBase &physical_plan);
+/** Executes the given physical plan on \p backend. */
+void M_EXPORT execute_physical_plan(Diagnostic &diag, const MatchBase &physical_plan, const Backend &backend);
+
+/** Optimizes and executes the given `SelectStmt`.  Result tuples are passed to the given \p consumer.  The `Backend` is
+ * automatically created. */
+[[deprecated("Use command_from_string() instead.")]]
 void M_EXPORT execute_query(Diagnostic &diag, const ast::SelectStmt &stmt, std::unique_ptr<Consumer> consumer);
 
 /**

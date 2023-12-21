@@ -209,9 +209,10 @@ concept streamable = requires (Stream &out, const T &t) {
     { out << t } -> std::same_as<Stream&>;
 };
 
-}
-
+/** Check whether \tparam Callback can be invoked by given parameter \tparam T. */
 template<typename Callback, typename T>
 concept is_invocable = requires (Callback &&callback, T value) {
     std::invoke(std::forward<Callback>(callback), value);
 };
+
+}

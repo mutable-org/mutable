@@ -902,7 +902,7 @@ void NoOp::execute(const Match<NoOp> &M, setup_t, pipeline_t, teardown_t)
 {
     std::optional<Var<U32x1>> num_tuples; ///< variable to *locally* count additional result tuples
 
-    M.child.execute(
+    M.child->execute(
         /* setup=    */ setup_t::Make_Without_Parent([&](){ num_tuples.emplace(CodeGenContext::Get().num_tuples()); }),
         /* pipeline= */ [&](){
             M_insist(bool(num_tuples));
@@ -960,7 +960,7 @@ void Callback<SIMDfied>::execute(const Match<Callback> &M, setup_t, pipeline_t, 
     M_insist(bool(M.result_set_factory), "`wasm::Callback` must have a factory for the result set");
 
     auto result_set_schema = M.callback.schema().drop_constants().deduplicate();
-    write_result_set(result_set_schema, *M.result_set_factory, M.result_set_window_size, M.child);
+    write_result_set(result_set_schema, *M.result_set_factory, M.result_set_window_size, *M.child);
 }
 
 
@@ -992,7 +992,7 @@ void Print<SIMDfied>::execute(const Match<Print> &M, setup_t, pipeline_t, teardo
     M_insist(bool(M.result_set_factory), "`wasm::Print` must have a factory for the result set");
 
     auto result_set_schema = M.print_op.schema().drop_constants().deduplicate();
-    write_result_set(result_set_schema, *M.result_set_factory, M.result_set_window_size, M.child);
+    write_result_set(result_set_schema, *M.result_set_factory, M.result_set_window_size, *M.child);
 }
 
 
@@ -1172,7 +1172,7 @@ void Filter<Predicated>::execute(const Match<Filter> &M, setup_t setup, pipeline
     CodeGenContext::Get().update_num_simd_lanes_preferred(16); // set own preference
 
     /*----- Execute filter. -----*/
-    M.child.execute(
+    M.child->execute(
         /* setup=    */ std::move(setup),
         /* pipeline= */ [&, pipeline=std::move(pipeline)](){
             if constexpr (Predicated) {
@@ -1218,7 +1218,7 @@ void LazyDisjunctiveFilter::execute(const Match<LazyDisjunctiveFilter> &M, setup
 {
     const cnf::Clause &clause = M.filter.filter()[0];
 
-    M.child.execute(
+    M.child->execute(
         /* setup=    */ std::move(setup),
         /* pipeline= */ [&, pipeline=std::move(pipeline)](){
             M_insist(CodeGenContext::Get().num_simd_lanes() == 1, "invalid number of SIMD lanes");
@@ -1399,7 +1399,7 @@ void Projection::execute(const Match<Projection> &M, setup_t setup, pipeline_t p
         CodeGenContext::Get().update_num_simd_lanes_preferred(16 / min_size_in_bytes); // set own preference
 
         /*----- Execute projection. -----*/
-        M.child->get().execute(std::move(setup), std::move(execute_projection), std::move(teardown));
+        M.child->get()->execute(std::move(setup), std::move(execute_projection), std::move(teardown));
     } else {
         /*----- Execute projection. -----*/
         setup();
@@ -1503,7 +1503,7 @@ void HashBasedGrouping::execute(const Match<HashBasedGrouping> &M, setup_t setup
 
         std::optional<HashTable::entry_t> dummy; ///< *local* dummy slot
 
-        M.child.execute(
+        M.child->execute(
             /* setup=    */ setup_t::Make_Without_Parent([&](){
                 ht->setup();
                 ht->set_high_watermark(M.load_factor);
@@ -2111,7 +2111,7 @@ void OrderedGrouping::execute(const Match<OrderedGrouping> &M, setup_t setup, pi
         }
     };
 
-    M.child.execute(
+    M.child->execute(
         /* setup=    */ setup_t::Make_Without_Parent([&](){
             first_iteration.emplace(first_iteration_backup);
 
@@ -2872,7 +2872,7 @@ void Aggregation::execute(const Match<Aggregation> &M, setup_t setup, pipeline_t
         void *_agg_values; ///< *local* values of the computed aggregates
         void *_agg_value_backups; ///< *global* value backups of the computed aggregates
 
-        M.child.execute(
+        M.child->execute(
             /* setup=    */ setup_t::Make_Without_Parent([&]() {
                 auto execute_setup = [&]<std::size_t L>() {
 #ifndef NDEBUG
@@ -3672,7 +3672,7 @@ void Quicksort<CmpPredicated>::execute(const Match<Quicksort> &M, setup_t setup,
     {
         auto S = CodeGenContext::Get().scoped_environment(); // create scoped environment for this function
 
-        M.child.execute(
+        M.child->execute(
             /* setup=    */ setup_t::Make_Without_Parent([&](){ buffer.setup(); }),
             /* pipeline= */ [&](){ buffer.consume(); },
             /* teardown= */ teardown_t::Make_Without_Parent([&](){ buffer.teardown(); })
@@ -3708,7 +3708,7 @@ ConditionSet NoOpSorting::pre_condition(std::size_t child_idx,
 
 void NoOpSorting::execute(const Match<NoOpSorting> &M, setup_t setup, pipeline_t pipeline, teardown_t teardown)
 {
-    M.child.execute(std::move(setup), std::move(pipeline), std::move(teardown));
+    M.child->execute(std::move(setup), std::move(pipeline), std::move(teardown));
 }
 
 
@@ -3817,7 +3817,7 @@ void NestedLoopsJoin<Predicated>::execute(const Match<NestedLoopsJoin> &M, setup
             }
 
             /*----- Materialize the current result tuple in pipeline. -----*/
-            M.children[i].get().execute(
+            M.children[i]->execute(
                 /* setup=    */ setup_t::Make_Without_Parent([&](){ buffers.back().setup(); }),
                 /* pipeline= */ [&](){ buffers.back().consume(); },
                 /* teardown= */ teardown_t::Make_Without_Parent([&](){ buffers.back().teardown(); })
@@ -3827,7 +3827,7 @@ void NestedLoopsJoin<Predicated>::execute(const Match<NestedLoopsJoin> &M, setup
     }
 
     /*----- Process right-most child. -----*/
-    M.children.back().get().execute(
+    M.children.back()->execute(
         /* setup=    */ std::move(setup),
         /* pipeline= */ [&](){ buffers.back().resume_pipeline_inline(); },
         /* teardown= */ std::move(teardown)
@@ -3974,7 +3974,7 @@ void SimpleHashJoin<UniqueBuild, Predicated>::execute(const Match<SimpleHashJoin
     {
         auto S = CodeGenContext::Get().scoped_environment(); // create scoped environment for this function
 
-        M.children[0].get().execute(
+        M.children[0]->execute(
             /* setup=    */ setup_t::Make_Without_Parent([&](){
                 ht->setup();
                 ht->set_high_watermark(M.load_factor);
@@ -4012,7 +4012,7 @@ void SimpleHashJoin<UniqueBuild, Predicated>::execute(const Match<SimpleHashJoin
     }
     simple_hash_join_child_pipeline(); // call child function
 
-    M.children[1].get().execute(
+    M.children[1]->execute(
         /* setup=    */ setup_t(std::move(setup), [&](){ ht->setup(); }),
         /* pipeline= */ [&, pipeline=std::move(pipeline)](){
             auto &env = CodeGenContext::Get().env();
@@ -4240,7 +4240,7 @@ void SortMergeJoin<SortLeft, SortRight, Predicated, CmpPredicated>::execute(
     FUNCTION(sort_merge_join_parent_pipeline, void(void)) // create function for parent pipeline
     {
         auto S = CodeGenContext::Get().scoped_environment(); // create scoped environment for this function
-        M.children[0].get().execute(
+        M.children[0]->execute(
             /* setup=    */ setup_t::Make_Without_Parent([&](){ buffer_parent.setup(); }),
             /* pipeline= */ [&](){ buffer_parent.consume(); },
             /* teardown= */ teardown_t::Make_Without_Parent([&](){ buffer_parent.teardown(); })
@@ -4249,7 +4249,7 @@ void SortMergeJoin<SortLeft, SortRight, Predicated, CmpPredicated>::execute(
     FUNCTION(sort_merge_join_child_pipeline, void(void)) // create function for child pipeline
     {
         auto S = CodeGenContext::Get().scoped_environment(); // create scoped environment for this function
-        M.children[1].get().execute(
+        M.children[1]->execute(
             /* setup=    */ setup_t::Make_Without_Parent([&](){ buffer_child.setup(); }),
             /* pipeline= */ [&](){ buffer_child.consume(); },
             /* teardown= */ teardown_t::Make_Without_Parent([&](){ buffer_child.teardown(); })
@@ -4368,7 +4368,7 @@ void Limit::execute(const Match<Limit> &M, setup_t setup, pipeline_t pipeline, t
     /* default initialized to 0 */
     Global<U32x1> counter_backup; ///< *global* counter backup since the following code may be called multiple times
 
-    M.child.execute(
+    M.child->execute(
         /* setup=    */ setup_t(std::move(setup), [&](){
             counter.emplace(counter_backup);
             teardown_block.emplace("limit.teardown", true); // create block
@@ -4890,7 +4890,7 @@ void HashBasedGroupJoin::execute(const Match<HashBasedGroupJoin> &M, setup_t set
     {
         auto S = CodeGenContext::Get().scoped_environment(); // create scoped environment for this function
 
-        M.children[0].get().execute(
+        M.children[0]->execute(
             /* setup=    */ setup_t::Make_Without_Parent([&](){
                 ht->setup();
                 ht->set_high_watermark(M.load_factor);
@@ -4960,7 +4960,7 @@ void HashBasedGroupJoin::execute(const Match<HashBasedGroupJoin> &M, setup_t set
     {
         auto S = CodeGenContext::Get().scoped_environment(); // create scoped environment for this function
 
-        M.children[1].get().execute(
+        M.children[1]->execute(
             /* setup=    */ setup_t::Make_Without_Parent([&](){
                 ht->setup();
                 dummy.emplace(ht->dummy_entry()); // create dummy slot to ignore NULL values in aggregate computations
@@ -5163,7 +5163,7 @@ void HashBasedGroupJoin::execute(const Match<HashBasedGroupJoin> &M, setup_t set
 void Match<m::wasm::NoOp>::print(std::ostream &out, unsigned level) const
 {
     indent(out, level) << "wasm::NoOp (cumulative cost " << cost() << ')';
-    this->child.print(out, level + 1);
+    this->child->print(out, level + 1);
 }
 
 template<bool SIMDfied>
@@ -5171,7 +5171,7 @@ void Match<m::wasm::Callback<SIMDfied>>::print(std::ostream &out, unsigned level
 {
     indent(out, level) << "wasm::Callback with " << this->result_set_window_size << " tuples result set "
                        << this->callback.schema() << "(cumulative cost " << cost() << ')';
-    this->child.print(out, level + 1);
+    this->child->print(out, level + 1);
 }
 
 template<bool SIMDfied>
@@ -5179,7 +5179,7 @@ void Match<m::wasm::Print<SIMDfied>>::print(std::ostream &out, unsigned level) c
 {
     indent(out, level) << "wasm::Print with " << this->result_set_window_size << " tuples result set "
                        << this->print_op.schema() << "(cumulative cost " << cost() << ')';
-    this->child.print(out, level + 1);
+    this->child->print(out, level + 1);
 }
 
 template<bool SIMDfied>
@@ -5198,7 +5198,7 @@ void Match<m::wasm::Filter<Predicated>>::print(std::ostream &out, unsigned level
     if (this->buffer_factory_ and this->filter.schema().drop_constants().deduplicate().num_entries())
         out << "with " << this->buffer_num_tuples_ << " tuples output buffer ";
     out << this->filter.schema() << " (cumulative cost " << cost() << ')';
-    this->child.print(out, level + 1);
+    this->child->print(out, level + 1);
 }
 
 void Match<m::wasm::LazyDisjunctiveFilter>::print(std::ostream &out, unsigned level) const
@@ -5212,7 +5212,7 @@ void Match<m::wasm::LazyDisjunctiveFilter>::print(std::ostream &out, unsigned le
         out << *it;
     }
     out << ' ' << this->filter.schema() << " (cumulative cost " << cost() << ')';
-    this->child.print(out, level + 1);
+    this->child->print(out, level + 1);
 }
 
 void Match<m::wasm::Projection>::print(std::ostream &out, unsigned level) const
@@ -5222,26 +5222,26 @@ void Match<m::wasm::Projection>::print(std::ostream &out, unsigned level) const
         out << "with " << this->buffer_num_tuples_ << " tuples output buffer ";
     out << this->projection.schema() << " (cumulative cost " << cost() << ')';
     if (this->child)
-        this->child->get().print(out, level + 1);
+        this->child->get()->print(out, level + 1);
 }
 
 void Match<m::wasm::HashBasedGrouping>::print(std::ostream &out, unsigned level) const
 {
     indent(out, level) << "wasm::HashBasedGrouping " << this->grouping.schema() << " (cumulative cost " << cost()
                        << ')';
-    this->child.print(out, level + 1);
+    this->child->print(out, level + 1);
 }
 
 void Match<m::wasm::OrderedGrouping>::print(std::ostream &out, unsigned level) const
 {
     indent(out, level) << "wasm::OrderedGrouping " << this->grouping.schema() << " (cumulative cost " << cost() << ')';
-    this->child.print(out, level + 1);
+    this->child->print(out, level + 1);
 }
 
 void Match<m::wasm::Aggregation>::print(std::ostream &out, unsigned level) const
 {
     indent(out, level) << "wasm::Aggregation " << this->aggregation.schema() << " (cumulative cost " << cost() << ')';
-    this->child.print(out, level + 1);
+    this->child->print(out, level + 1);
 }
 
 template<bool CmpPredicated>
@@ -5249,13 +5249,13 @@ void Match<m::wasm::Quicksort<CmpPredicated>>::print(std::ostream &out, unsigned
 {
     indent(out, level) << "wasm::" << (CmpPredicated ? "Predicated" : "") << "Quicksort " << this->sorting.schema()
                        << " (cumulative cost " << cost() << ')';
-    this->child.print(out, level + 1);
+    this->child->print(out, level + 1);
 }
 
 void Match<m::wasm::NoOpSorting>::print(std::ostream &out, unsigned level) const
 {
     indent(out, level) << "wasm::NoOpSorting (cumulative cost " << cost() << ')';
-    this->child.print(out, level + 1);
+    this->child->print(out, level + 1);
 }
 
 template<bool Predicated>
@@ -5269,7 +5269,7 @@ void Match<m::wasm::NestedLoopsJoin<Predicated>>::print(std::ostream &out, unsig
     ++level;
     std::size_t i = this->children.size();
     while (i--) {
-        const MatchBase &child = this->children[i].get();
+        const MatchBase &child = *this->children[i];
         indent(out, level) << i << ". input";
         child.print(out, level + 1);
     }
@@ -5285,8 +5285,8 @@ void Match<m::wasm::SimpleHashJoin<Unique, Predicated>>::print(std::ostream &out
     out << this->join.schema() << " (cumulative cost " << cost() << ')';
 
     ++level;
-    const MatchBase &build = this->children[0].get();
-    const MatchBase &probe = this->children[1].get();
+    const MatchBase &build = *this->children[0];
+    const MatchBase &probe = *this->children[1];
     indent(out, level) << "probe input";
     probe.print(out, level + 1);
     indent(out, level) << "build input";
@@ -5314,8 +5314,8 @@ void Match<m::wasm::SortMergeJoin<SortLeft, SortRight, Predicated, CmpPredicated
     out << this->join.schema() << " (cumulative cost " << cost() << ')';
 
     ++level;
-    const MatchBase &left = this->children[0].get();
-    const MatchBase &right = this->children[1].get();
+    const MatchBase &left  = *this->children[0];
+    const MatchBase &right = *this->children[1];
     indent(out, level) << "right input";
     right.print(out, level + 1);
     indent(out, level) << "left input";
@@ -5325,7 +5325,7 @@ void Match<m::wasm::SortMergeJoin<SortLeft, SortRight, Predicated, CmpPredicated
 void Match<m::wasm::Limit>::print(std::ostream &out, unsigned level) const
 {
     indent(out, level) << "wasm::Limit " << this->limit.schema() << " (cumulative cost " << cost() << ')';
-    this->child.print(out, level + 1);
+    this->child->print(out, level + 1);
 }
 
 void Match<m::wasm::HashBasedGroupJoin>::print(std::ostream &out, unsigned level) const
@@ -5336,8 +5336,8 @@ void Match<m::wasm::HashBasedGroupJoin>::print(std::ostream &out, unsigned level
     out << this->grouping.schema() << " (cumulative cost " << cost() << ')';
 
     ++level;
-    const MatchBase &build = this->children[0].get();
-    const MatchBase &probe = this->children[1].get();
+    const MatchBase &build = *this->children[0];
+    const MatchBase &probe = *this->children[1];
     indent(out, level) << "probe input";
     probe.print(out, level + 1);
     indent(out, level) << "build input";

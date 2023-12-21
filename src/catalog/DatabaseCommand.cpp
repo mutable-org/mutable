@@ -4,7 +4,6 @@
 #include <mutable/catalog/Catalog.hpp>
 #include <mutable/catalog/Schema.hpp>
 #include <mutable/IR/Optimizer.hpp>
-#include <mutable/IR/PhysicalOptimizer.hpp>
 #include <mutable/mutable.hpp>
 #include <mutable/Options.hpp>
 #include <mutable/storage/Index.hpp>
@@ -114,10 +113,9 @@ void QueryDatabase::execute(Diagnostic &diag)
         dot.show("physical_plan", false, "dot");
     }
 
-    if (Options::Get().dryrun)
-        return;
-
-    M_TIME_EXPR(backend->execute(PhysOpt.get_plan()), "Execute query", C.timer());
+    physical_plan_ = PhysOpt.extract_plan();
+    if (not Options::Get().dryrun)
+        M_TIME_EXPR(backend->execute(*physical_plan_), "Execute query", C.timer());
 }
 
 void InsertRecords::execute(Diagnostic&)

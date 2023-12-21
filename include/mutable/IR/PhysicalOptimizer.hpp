@@ -235,8 +235,8 @@ struct PhysicalOptimizer
 
     /** Returns true iff a physical operator covering is found. */
     virtual bool has_plan() const = 0;
-    /** Returns the found physical operator covering. */
-    virtual const MatchBase & get_plan() const = 0;
+    /** Extracts the found physical operator covering by moving it out of the underlying physical plan table. */
+    virtual std::unique_ptr<MatchBase> extract_plan() = 0;
 
     virtual void accept(PhysOptVisitor &v) = 0;
     virtual void accept(ConstPhysOptVisitor &v) const = 0;
@@ -280,11 +280,11 @@ struct PhysicalOptimizerImpl : PhysicalOptimizer, ConstPostOrderOperatorVisitor
     bool has_plan() const override { return not table().back().empty(); }
     private:
     /** Returns the entry for the found physical operator covering. */
-    const entry_type & get_plan_entry() const {
+    entry_type & get_plan_entry() {
         M_insist(has_plan(), "no physical operator covering found");
-        typename PhysicalPlanTable::condition2entry_map_type::const_iterator it_best;
+        typename PhysicalPlanTable::condition2entry_map_type::iterator it_best;
         double min_cost = std::numeric_limits<double>::infinity();
-        for (auto it = table().back().cbegin(); it != table().back().cend(); ++it) {
+        for (auto it = table().back().begin(); it != table().back().end(); ++it) {
             if (auto cost = it->entry.cost(); cost < min_cost) {
                 it_best = it;
                 min_cost = cost;
@@ -292,8 +292,13 @@ struct PhysicalOptimizerImpl : PhysicalOptimizer, ConstPostOrderOperatorVisitor
         }
         return it_best->entry;
     }
+    const entry_type & get_plan_entry() const { return const_cast<PhysicalOptimizerImpl*>(this)->get_plan_entry(); }
     public:
-    const MatchBase & get_plan() const override { return get_plan_entry().match(); }
+    std::unique_ptr<MatchBase> extract_plan() override {
+        auto plan = get_plan_entry().extract_match();
+        table().clear(); // to make retrieved plan exclusive
+        return M_nothrow(plan.exclusive_shared_to_unique());
+    }
 
     private:
     /** Handles the found match \p match with children entries \p children for the logical plan rooted in \p op. */
@@ -453,10 +458,10 @@ struct PhysicalOperator : crtp<Actual, PhysicalOperator, Pattern>
     template<typename It>
     static std::unique_ptr<Match<Actual>>
     instantiate(get_nodes_t<Pattern> inner_nodes, const std::vector<It> &children) {
-        std::vector<std::reference_wrapper<const MatchBase>> children_matches;
+        std::vector<unsharable_shared_ptr<const MatchBase>> children_matches;
         children_matches.reserve(children.size());
         for (const auto &child : children)
-            children_matches.emplace_back(child->entry.match());
+            children_matches.push_back(child->entry.share_match());
         return std::apply([children_matches=std::move(children_matches)](auto... args) mutable {
             return std::make_unique<Match<Actual>>(args..., std::move(children_matches));
         }, inner_nodes);

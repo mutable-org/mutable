@@ -104,7 +104,9 @@ struct ConcretePhysicalPlanTableEntry
 
     private:
     using entry_type = ConcretePhysicalPlanTableEntry;
-    std::unique_ptr<MatchBase> match_; ///< the found match
+    ///> the found match; as unsharable shared pointer to share sub-matches between entries while being able to
+    ///> transform exclusive matches into unique pointer
+    unsharable_shared_ptr<MatchBase> match_;
     ///> all children, i.e. condition and entry per child
     std::vector<std::reference_wrapper<const detail::condition_entry_t<entry_type>>> children_;
     cost_type cost_; ///< cumulative cost, i.e. cost of the physical operator itself plus costs of its children
@@ -113,7 +115,7 @@ struct ConcretePhysicalPlanTableEntry
     template<typename It>
     requires requires { typename detail::the_condition_entry_iterator<It, true, entry_type>; }
     ConcretePhysicalPlanTableEntry(std::unique_ptr<MatchBase> &&match, const std::vector<It> &children, cost_type cost)
-        : match_(std::move(match))
+        : match_(match.release()) // convert to unsharable shared pointer
         , cost_(cost)
     {
         children_.reserve(children.size());
@@ -132,6 +134,9 @@ struct ConcretePhysicalPlanTableEntry
     }
 
     const MatchBase & match() const { return *match_; }
+    unsharable_shared_ptr<MatchBase> share_match() const { return match_; /* copy */ }
+    unsharable_shared_ptr<MatchBase> extract_match() { return std::move(match_); }
+
     cost_type cost() const { return cost_; }
 
     const_child_iterator begin_children() const {

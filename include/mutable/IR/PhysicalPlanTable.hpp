@@ -3,6 +3,7 @@
 #include <memory>
 #include <mutable/util/concepts.hpp>
 #include <mutable/util/crtp.hpp>
+#include <mutable/util/unsharable_shared_ptr.hpp>
 #include <mutable/IR/Condition.hpp>
 #include <vector>
 
@@ -98,6 +99,11 @@ struct PhysicalPlanTableEntry : crtp_boolean_templated<Actual, PhysicalPlanTable
     }
 
     const MatchBase & match() const { return actual().match(); }
+    /** Shares the found match.  Only used by `PhysicalOptimizerImpl` to create new matches with this match as child. */
+    unsharable_shared_ptr<MatchBase> share_match() const { return actual().share_match(); }
+    /** Extracts the found match by *moving* it out of `this`. */
+    unsharable_shared_ptr<MatchBase> extract_match() { return actual().extract_match(); }
+
     cost_type cost() const { return actual.cost(); }
 
     const_child_iterator begin_children() const { return actual().begin_children(); }

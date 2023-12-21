@@ -56,7 +56,7 @@ void PhysicalOptimizerImpl<PhysicalPlanTable>::dot_plan(std::ostream &out) const
 template<typename PhysicalPlanTable>
 void PhysicalOptimizerImpl<PhysicalPlanTable>::dump_plan(std::ostream &out) const
 {
-    out << get_plan() << std::endl;
+    out << get_plan_entry().match() << std::endl;
 }
 template<typename PhysicalPlanTable>
 void PhysicalOptimizerImpl<PhysicalPlanTable>::dump_plan() const { dump_plan(std::cerr); }

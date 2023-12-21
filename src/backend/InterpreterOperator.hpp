@@ -29,9 +29,9 @@ template<> \
 struct Match<interpreter::CLASS> : MatchBase \
 { \
     const CLASS &op; \
-    std::vector<std::reference_wrapper<const MatchBase>> children; \
+    std::vector<unsharable_shared_ptr<const MatchBase>> children; \
 \
-    Match(const CLASS *op, std::vector<std::reference_wrapper<const MatchBase>> &&children) \
+    Match(const CLASS *op, std::vector<unsharable_shared_ptr<const MatchBase>> &&children) \
         : op(*op) \
         , children(std::move(children)) \
     { } \
@@ -47,7 +47,7 @@ struct Match<interpreter::CLASS> : MatchBase \
     void print(std::ostream &out, unsigned level) const override { \
         indent(out, level) << "interpreter::" << #CLASS << " (cumulative cost " << cost() << ')'; \
         for (auto &child : children) \
-            child.get().print(out, level + 1); \
+            child->print(out, level + 1); \
     } \
 };
 M_OPERATOR_LIST(DECLARE)

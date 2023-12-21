@@ -188,8 +188,10 @@ void m::execute_statement(Diagnostic &diag, const ast::Stmt &stmt, const bool is
             dot.show("physical_plan", false, "dot");
         }
 
-        if (not Options::Get().dryrun)
-            M_TIME_EXPR(backend->execute(PhysOpt.get_plan()), "Execute query", timer);
+        if (not Options::Get().dryrun) {
+            auto physical_plan = PhysOpt.extract_plan();
+            M_TIME_EXPR(backend->execute(*physical_plan), "Execute query", timer);
+        }
     } else if (auto I = cast<const ast::InsertStmt>(&stmt)) {
         auto &DB = C.get_database_in_use();
         auto &T = DB.get_table(I->table_name.text);
@@ -340,7 +342,8 @@ void m::execute_query(Diagnostic&, const SelectStmt &stmt, std::unique_ptr<Consu
     backend->register_operators(PhysOpt);
     M_TIME_EXPR(PhysOpt.cover(*consumer), "Compute the physical query plan", C.timer());
 
-    M_TIME_EXPR(backend->execute(PhysOpt.get_plan()), "Execute query", C.timer());
+    auto physical_plan = PhysOpt.extract_plan();
+    M_TIME_EXPR(backend->execute(*physical_plan), "Execute query", C.timer());
 }
 
 void m::load_from_CSV(Diagnostic &diag, Table &table, const std::filesystem::path &path, std::size_t num_rows,

@@ -3,6 +3,7 @@
 #include <concepts>
 #include <mutable/io/Reader.hpp>
 #include <mutable/IR/Operator.hpp>
+#include <mutable/IR/PhysicalOptimizer.hpp>
 #include <mutable/parse/AST.hpp>
 #include <mutable/util/Diagnostic.hpp>
 #include <vector>
@@ -116,6 +117,7 @@ struct QueryDatabase : DMLCommand
     private:
     std::unique_ptr<QueryGraph> graph_;
     std::unique_ptr<Consumer> logical_plan_;
+    std::unique_ptr<MatchBase> physical_plan_;
 
     public:
     void accept(DatabaseCommandVisitor &v) override;

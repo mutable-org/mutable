@@ -138,7 +138,12 @@ def run_stage(args, test_case, stage_name, command) -> Tuple[bool, list[str]]:
 
 
 def run_test_case(test_case, args, binaries):
-    # Set global binaries
+    # On MacOS, the behavior of global variables for spawned subprocesses is different than on
+    # linux: the value of a global variable "may not be the same as the value in the parent process".
+    # Therefore, we pass the binaries as parameter to this method. We then set the global BINARIES
+    # variable again so that we do not have to pass it on to the other methods.
+    # For more detailed information, see
+    # https://stackoverflow.com/questions/75066117/global-list-variable-in-multiprocessing-pool-is-returning-as-empty-in-python
     global BINARIES
     BINARIES = dict(binaries)
 

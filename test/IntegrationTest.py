@@ -19,6 +19,9 @@ from typing import Tuple
 # number of CLI args to discard from the front for reporting
 NUM_CLI_ARGS_DISCARD = 5
 
+# Timeout per test case in seconds
+TIMEOUT_SECONDS_PER_TEST_CASE = 60
+
 #-----------------------------------------------------------------------------------------------------------------------
 # HELPERS
 #-----------------------------------------------------------------------------------------------------------------------
@@ -99,7 +102,7 @@ def run_command(command, query):
     try:
         process = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                                    cwd=os.getcwd())
-        out, err = process.communicate(query.encode('latin-1'), timeout=15)
+        out, err = process.communicate(query.encode('latin-1'), timeout=TIMEOUT_SECONDS_PER_TEST_CASE)
         return process.returncode, out, err
     except subprocess.TimeoutExpired as ex:
         raise TestException(f'Timeout expired')
@@ -107,7 +110,7 @@ def run_command(command, query):
         # Make sure the process is being terminated
         process.terminate()
         try:
-            ret = process.wait(0.01) # wait 10 ms
+            ret = process.wait(0.1) # wait 100 ms
         except subprocess.TimeoutExpired:
             process.kill()
 

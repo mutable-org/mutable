@@ -415,7 +415,7 @@ static void add_wasm_operator_args()
         /* short=       */ nullptr,
         /* long=        */ "--no-exploit-unique-build",
         /* description= */ "disable potential exploitation of uniqueness of build key in hash joins",
-        /* callback=    */ [](bool){ options::exploit_unique_build = true; }
+        /* callback=    */ [](bool){ options::exploit_unique_build = false; }
     );
     C.arg_parser().add<bool>(
         /* group=       */ "Wasm",

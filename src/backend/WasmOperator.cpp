@@ -1024,14 +1024,12 @@ ConditionSet Scan<SIMDfied>::pre_condition(std::size_t child_idx,
         auto &table = scan.store().table();
 
         /*----- SIMDfied scan needs the data layout to support SIMD. -----*/
-        if (not supports_simd(table.layout(), table.schema(scan.alias()), scan.schema())) {
-            pre_cond.add_condition(Unsatisfiable());
-            return pre_cond;
-        }
+        if (not supports_simd(table.layout(), table.schema(scan.alias()), scan.schema()))
+            return ConditionSet::Make_Unsatisfiable();
 
         /*----- SIMDfied scan needs the number of rows to load be a whole multiple of the number of SIMD lanes used. -*/
         if (scan.store().num_rows() % get_num_simd_lanes(table.layout(), table.schema(scan.alias()), scan.schema()) != 0)
-            pre_cond.add_condition(Unsatisfiable());
+            return ConditionSet::Make_Unsatisfiable();
     }
 
     return pre_cond;
@@ -3854,10 +3852,8 @@ ConditionSet SimpleHashJoin<UniqueBuild, Predicated>::pre_condition(
 
     /*----- Simple hash join can only be used for binary joins on equi-predicates. -----*/
     auto &join = *std::get<0>(partial_inner_nodes);
-    if (not join.predicate().is_equi()) {
-        pre_cond.add_condition(Unsatisfiable());
-        return pre_cond;
-    }
+    if (not join.predicate().is_equi())
+        return ConditionSet::Make_Unsatisfiable();
 
     if constexpr (UniqueBuild) {
         /*----- Decompose each clause of the join predicate of the form `A.x = B.y` into parts `A.x` and `B.y`. -----*/
@@ -3875,10 +3871,8 @@ ConditionSet SimpleHashJoin<UniqueBuild, Predicated>::pre_condition(
                                                                    : build.schema()[id_second].second;
 
             /*----- Unique simple hash join can only be used on unique build key. -----*/
-            if (not entry_build.unique()) {
-                pre_cond.add_condition(Unsatisfiable());
-                return pre_cond;
-            }
+            if (not entry_build.unique())
+                return ConditionSet::Make_Unsatisfiable();
         }
     }
 
@@ -4108,10 +4102,8 @@ ConditionSet SortMergeJoin<SortLeft, SortRight, Predicated, CmpPredicated>::pre_
 
     /*----- Sort merge join can only be used for binary joins on conjunctions of equi-predicates. -----*/
     auto &join = *std::get<0>(partial_inner_nodes);
-    if (not join.predicate().is_equi()) {
-        pre_cond.add_condition(Unsatisfiable());
-        return pre_cond;
-    }
+    if (not join.predicate().is_equi())
+        return ConditionSet::Make_Unsatisfiable();
 
     /*----- Decompose each clause of the join predicate of the form `A.x = B.y` into parts `A.x` and `B.y`. -----*/
     auto parent = std::get<1>(partial_inner_nodes);
@@ -4136,10 +4128,8 @@ ConditionSet SortMergeJoin<SortLeft, SortRight, Predicated, CmpPredicated>::pre_
         keys_child.push_back(entry_child.id);
 
         /*----- Sort merge join can only be used on unique parent key. -----*/
-        if (not entry_parent.unique()) {
-            pre_cond.add_condition(Unsatisfiable());
-            return pre_cond;
-        }
+        if (not entry_parent.unique())
+            return ConditionSet::Make_Unsatisfiable();
     }
     M_insist(keys_parent.size() == keys_child.size(), "number of found IDs differ");
     M_insist(not keys_parent.empty(), "must find at least one ID");
@@ -4439,18 +4429,14 @@ ConditionSet HashBasedGroupJoin::pre_condition(
     auto &grouping = *std::get<0>(partial_inner_nodes);
     for (auto &fn_expr : grouping.aggregates()) {
         M_insist(fn_expr.get().args.size() <= 1);
-        if (fn_expr.get().args.size() == 1 and not is<const Designator>(fn_expr.get().args[0])) { // XXX: expression with only designators from either child also valid
-            pre_cond.add_condition(Unsatisfiable());
-            return pre_cond;
-        }
+        if (fn_expr.get().args.size() == 1 and not is<const Designator>(fn_expr.get().args[0])) // XXX: expression with only designators from either child also valid
+            return ConditionSet::Make_Unsatisfiable();
     }
 
     /*----- Hash-based group-join can only be used for binary joins on equi-predicates. -----*/
     auto &join = *std::get<1>(partial_inner_nodes);
-    if (not join.predicate().is_equi()) {
-        pre_cond.add_condition(Unsatisfiable());
-        return pre_cond;
-    }
+    if (not join.predicate().is_equi())
+        return ConditionSet::Make_Unsatisfiable();
 
     M_insist(child_idx < 2);
     if (child_idx == 0) {
@@ -4461,16 +4447,12 @@ ConditionSet HashBasedGroupJoin::pre_condition(
 
         /*----- Hash-based group-join can only be used if grouping and join (i.e. build) key match (ignoring order). -*/
         const auto num_grouping_keys = grouping.group_by().size();
-        if (num_grouping_keys != build_keys.size()) {
-            pre_cond.add_condition(Unsatisfiable());
-            return pre_cond;
-        }
+        if (num_grouping_keys != build_keys.size())
+            return ConditionSet::Make_Unsatisfiable();
         for (std::size_t i = 0; i < num_grouping_keys; ++i) {
             Schema::Identifier grouping_key(grouping.group_by()[i].first.get());
-            if (not contains(build_keys, grouping_key)) {
-                pre_cond.add_condition(Unsatisfiable());
-                return pre_cond;
-            }
+            if (not contains(build_keys, grouping_key))
+                return ConditionSet::Make_Unsatisfiable();
         }
     }
 

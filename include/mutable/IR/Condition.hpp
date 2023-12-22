@@ -317,6 +317,8 @@ struct ConditionSet
 
     bool operator==(const ConditionSet &other) const;
     bool operator!=(const ConditionSet &other) const { return not operator==(other); }
+
+    static ConditionSet Make_Unsatisfiable() { ConditionSet set; set.add_condition(Unsatisfiable()); return set; }
 };
 
 

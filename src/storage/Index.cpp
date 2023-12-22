@@ -1,10 +1,10 @@
 #include <mutable/storage/Index.hpp>
 
-#include <sstream>
 #include <mutable/catalog/Schema.hpp>
 #include <mutable/catalog/Type.hpp>
 #include <mutable/mutable.hpp>
 #include <mutable/Options.hpp>
+#include <sstream>
 
 
 using namespace m;
@@ -92,8 +92,16 @@ void ArrayIndex<Key>::bulkload(const Table &table, const Schema &key_schema)
     };
     auto consumer = std::make_unique<CallbackOperator>(fn_add);
 
-    /* Execute query to add tuples. */
-    m::execute_query(diag, as<m::ast::SelectStmt>(*stmt), std::move(consumer));
+    /* Create backend on which the query is exectued.  We are using the `Interpreter` as the `wasm::Scan` might have
+     * been deactivated via CLI which results in not finding a plan for the query.
+     * TODO: We plan on using the default `Backend` set in the `Catalog` with temporarily adjusting the options to make
+     * sure `wasm::Scan` is available. */
+    static thread_local std::unique_ptr<Backend> backend;
+    if (not backend)
+        backend = Catalog::Get().create_backend(Catalog::Get().pool("Interpreter"));
+
+    /* Execute query to insert tuples. */
+    m::execute_query(diag, as<ast::SelectStmt>(*stmt), std::move(consumer), *backend);
 
     /* Finalize index. */
     finalize();

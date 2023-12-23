@@ -50,6 +50,40 @@ struct Visitor : crtp<ConcreteVisitor, Visitor, Base>
     virtual void operator()(base_type &obj) { obj.accept(actual()); }
 };
 
+/**
+ * This helper class creates a single definition of `virtual void operator()(...)` for one subtype in a class hierarchy,
+ * and then recursively inherits from an instantiation of that same helper class for the next subtype in the hierarchy.
+ * Eventually, this class transitively inherits from \tparam ConcreteVisitor.
+ */
+template<typename ConcreteVisitor, typename Base, typename Class, typename... Classes>
+struct visitor_method_helper : visitor_method_helper<ConcreteVisitor, Base, Classes...>
+{
+    using super = visitor_method_helper<ConcreteVisitor, Base, Classes...>;
+    template<typename T> using Const = typename super::template Const<T>;
+    using super::operator();
+    virtual void operator()(Const<Class>&) { }
+};
+/** This specialization marks the end of the class hierarchy.  It inherits from \tparam ConcreteVisitor. */
+template<typename ConcreteVisitor, typename Base, typename Class>
+struct visitor_method_helper<ConcreteVisitor, Base, Class> : Visitor<ConcreteVisitor, Base>
+{
+    using super = Visitor<ConcreteVisitor, Base>;
+    template<typename T> using Const = typename super::template Const<T>;
+    using super::operator();
+    virtual void operator()(Const<Class>&) { }
+};
+
+/**
+ * A helper class to define `virtual` visit methods for all classes in \tparam Hierarchy.
+ */
+template<typename ConcreteVisitor, typename Base, typename... Hierarchy>
+struct VisitorImpl : visitor_method_helper<ConcreteVisitor, Base, Hierarchy...>
+{
+    using super = visitor_method_helper<ConcreteVisitor, Base, Hierarchy...>;
+    template<typename T> using Const = typename super::template Const<T>;
+    using super::operator();
+};
+
 /** This helper class creates a single override of `operator()` for one subtype in a class hierarchy, and then
  * recursively inherits from an instantiation of that same helper class for the next subtype in the hierarchy.  This
  * enables overriding all visit methods of \tparam Visitor. */
@@ -121,22 +155,32 @@ auto visit(Callable &&callable, Base &obj, m::tag<Callable>&& = m::tag<Callable>
 }
 
 
-/*----- Generate a function similar to `std::visit` to easily implement a visitor for the given base class. ----------*/
+/**
+ * \def M_MAKE_STL_VISITABLE(VISITOR, BASE_CLASS, CLASS_LIST)
+ * Defines a function `visit()` to make the class hierarchy STL-style visitable with `VISITOR`.
+ *
+ * All this must be done with a macro, such that the definition of the visitor class and the `visit()` function reside
+ * in the *current* namespace (as chosen by the user of this macro).  This enables [*argument-dependent lookup*
+ * (ADL)](https://en.cppreference.com/w/cpp/language/adl).
+ */
 #define M_MAKE_STL_VISITABLE(VISITOR, BASE_CLASS, CLASS_LIST) \
     template<typename Callable> \
     auto visit(Callable &&callable, BASE_CLASS &obj, m::tag<VISITOR>&& = m::tag<VISITOR>()) { \
         return m::visit<Callable, VISITOR, BASE_CLASS CLASS_LIST(M_COMMA_PRE)>(std::forward<Callable>(callable), obj); \
     }
 
-/*----- Declare a visitor to visit the class hierarchy with the given base class and list of subclasses. -------------*/
-#define M_DECLARE_VISIT_METHOD(CLASS) virtual void operator()(Const<CLASS>&) { };
+/**
+ * \def M_DECLARE_VISITOR(VISITOR_NAME, BASE_CLASS, CLASS_LIST)
+ * Defines a visitor `VISITOR_NAME` to visit the class hierarchy rooted in `BASE_CLASS` and with subclasses
+ * `CLASS_LIST`.  Also defines a function `visit()` to make the class hierarchy STL-style visitable with `VISITOR_NAME`.
+ *
+ * All this must be done with a macro, such that the definition of the visitor class and the `visit()` function reside
+ * in the *current* namespace (as chosen by the user of this macro).  This enables [*argument-dependent lookup*
+ * (ADL)](https://en.cppreference.com/w/cpp/language/adl).
+ */
 #define M_DECLARE_VISITOR(VISITOR_NAME, BASE_CLASS, CLASS_LIST) \
-    struct M_EXPORT VISITOR_NAME : m::detail::Visitor<VISITOR_NAME, BASE_CLASS> \
-    { \
-        using super = m::detail::Visitor<VISITOR_NAME, BASE_CLASS>; \
-        template<typename T> using Const = typename super::Const<T>; \
-        virtual ~VISITOR_NAME() {} \
-        void operator()(BASE_CLASS &obj) { obj.accept(*this); } \
-        CLASS_LIST(M_DECLARE_VISIT_METHOD) \
+    struct VISITOR_NAME : m::detail::VisitorImpl<VISITOR_NAME, BASE_CLASS CLASS_LIST(M_COMMA_PRE)> { \
+        using super = m::detail::VisitorImpl<VISITOR_NAME, BASE_CLASS CLASS_LIST(M_COMMA_PRE)>; \
+        using super::operator(); \
     }; \
     M_MAKE_STL_VISITABLE(VISITOR_NAME, BASE_CLASS, CLASS_LIST)

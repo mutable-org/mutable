@@ -20,6 +20,7 @@ namespace m {
 #define M_EMPTY()
 #define M_DEFER1(X) X M_EMPTY()
 #define M_COMMA(X) X,
+#define M_COMMA_PRE(X) ,X
 #define M_UNPACK(...) __VA_ARGS__
 
 #define M_EVAL(...)  M_EVAL1(M_EVAL1(M_EVAL1(__VA_ARGS__)))

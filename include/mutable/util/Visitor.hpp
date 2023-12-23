@@ -17,6 +17,8 @@ struct visit_stop_recursion { };
 /** Exception class which can be thrown to skip recursion of the subtree in pre-order visitors. */
 struct visit_skip_subtree { };
 
+namespace detail {
+
 /**
  * Visitor base class, using CRTP.
  *
@@ -49,11 +51,11 @@ struct Visitor : crtp<ConcreteVisitor, Visitor, Base>
  * recursively inherits from an instantiation of that same helper class for the next subtype in the hierarchy.  This
  * enables overriding all visit methods of \tparam Visitor. */
 template<typename Callable, typename ResultType, typename Visitor, typename Class, typename... Classes>
-struct visit_helper : visit_helper<Callable, ResultType, Visitor, Classes...>
+struct stl_visit_helper : stl_visit_helper<Callable, ResultType, Visitor, Classes...>
 {
-    using super = visit_helper<Callable, ResultType, Visitor, Classes...>;
+    using super = stl_visit_helper<Callable, ResultType, Visitor, Classes...>;
 
-    visit_helper(Callable &callable, std::optional<some<ResultType>> &result) : super(callable, result) { }
+    stl_visit_helper(Callable &callable, std::optional<some<ResultType>> &result) : super(callable, result) { }
 
     using super::operator();
     void operator()(typename Visitor::template Const<Class> &obj) override {
@@ -64,12 +66,12 @@ struct visit_helper : visit_helper<Callable, ResultType, Visitor, Classes...>
 /** This specialization marks the end of the class hierarchy.  It inherits from \tparam Visitor to override the visit
  * methods. */
 template<typename Callable, typename ResultType, typename Visitor, typename Class>
-struct visit_helper<Callable, ResultType, Visitor, Class> : Visitor
+struct stl_visit_helper<Callable, ResultType, Visitor, Class> : Visitor
 {
     Callable &callable;
     std::optional<some<ResultType>> &result;
 
-    visit_helper(Callable &callable, std::optional<some<ResultType>> &result) : callable(callable), result(result) { }
+    stl_visit_helper(Callable &callable, std::optional<some<ResultType>> &result) : callable(callable), result(result) { }
 
     using Visitor::operator();
     void operator()(typename Visitor::template Const<Class> &obj) override {
@@ -77,6 +79,8 @@ struct visit_helper<Callable, ResultType, Visitor, Class> : Visitor
         else { result = m::some<ResultType>(this->callable(obj)); }
     }
 };
+
+}
 
 /**
  * Generic implementation to visit a class hierarchy, with similar syntax as `std::visit`.  This generic implementation
@@ -102,7 +106,7 @@ auto visit(Callable &&callable, Base &obj, m::tag<Callable>&& = m::tag<Callable>
     std::optional<some<result_type>> result;
 
     /*----- Create a `visit_helper` and then invoke it on the `obj`. -----*/
-    visit_helper<Callable, result_type, Visitor, Hierarchy...> V(callable, result);
+    detail::stl_visit_helper<Callable, result_type, Visitor, Hierarchy...> V(callable, result);
     try { V(obj); } catch (visit_stop_recursion) { }
     if constexpr (not std::is_same_v<void, result_type>) {
         return std::move(V.result->value);
@@ -124,9 +128,9 @@ auto visit(Callable &&callable, Base &obj, m::tag<Callable>&& = m::tag<Callable>
 /*----- Declare a visitor to visit the class hierarchy with the given base class and list of subclasses. -------------*/
 #define M_DECLARE_VISIT_METHOD(CLASS) virtual void operator()(Const<CLASS>&) { };
 #define M_DECLARE_VISITOR(VISITOR_NAME, BASE_CLASS, CLASS_LIST) \
-    struct M_EXPORT VISITOR_NAME : m::Visitor<VISITOR_NAME, BASE_CLASS> \
+    struct M_EXPORT VISITOR_NAME : m::detail::Visitor<VISITOR_NAME, BASE_CLASS> \
     { \
-        using super = m::Visitor<VISITOR_NAME, BASE_CLASS>; \
+        using super = m::detail::Visitor<VISITOR_NAME, BASE_CLASS>; \
         template<typename T> using Const = typename super::Const<T>; \
         virtual ~VISITOR_NAME() {} \
         void operator()(BASE_CLASS &obj) { obj.accept(*this); } \

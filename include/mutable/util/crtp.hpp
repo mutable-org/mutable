@@ -5,49 +5,86 @@
 
 namespace m {
 
-/** A helper class to define CRTP class hierarchies.
+/**
+ * A helper class to define CRTP class hierarchies.
  *
  * Taken from [An Implementation Helper For The Curiously Recurring Template Pattern - Fluent
- * C++](https://www.fluentcpp.com/2017/05/19/crtp-helper/). */
-template<typename T, template<typename...> typename crtpType, typename... Others>
+ * C++](https://www.fluentcpp.com/2017/05/19/crtp-helper/).
+ *
+ * This CRTP helper ensures that the \tparam ConcreteType actually inherits from \tparam CRTPBaseType.  The helper
+ * defines a method `actual()` that allows for safely casting the CRTP base type \tparam CRTPBaseType to the \tparam
+ * ConcreteType, properly `const`-quanified.
+ *
+ * A class that wants to make use of CRTP should inherit from this helper.  The following example demonstrates this:
+ *
+ * \code{.cpp}
+ * template<typename ConcreteType>
+ * struct CRTPBase : crtp<ConcreteType, CRTPBase>
+ * {
+ *     using crtp<ConcreteType, CRTPBase>::actual;
+ * };
+ * \endcode
+ *
+ * It is also possible for the class implementing CRTP to take additional template parameters:
+ *
+ * \code{.cpp}
+ * template<typename ConcreteType, typename T1, typename T2>
+ * struct CRTPBase : crtp<ConcreteType, CRTPBase, T1, T2>
+ * {
+ *     using crtp<ConcreteType, CRTPBase, T1, T2>::actual;
+ * };
+ * \endcode
+ *
+ * This should also work with variadic templates:
+ *
+ * \code{.cpp}
+ * template<typename ConcreteType, typename... Args>
+ * struct CRTPBase : crtp<ConcreteType, CRTPBase, Args...>
+ * {
+ *     using crtp<ConcreteType, CRTPBase, Args...>::actual;
+ * };
+ * \endcode
+ */
+template<typename ConcreteType, template<typename...> typename CRTPBaseType, typename... TParams>
 struct crtp
 {
-    using actual_type = T;
+    using actual_type = ConcreteType;
     actual_type & actual() { return *static_cast<actual_type*>(this); }
     const actual_type & actual() const { return *static_cast<const actual_type*>(this); }
 
     private:
-    crtp() { }                                 // no one can construct this
-    friend crtpType<actual_type, Others...>;   // except classes that properly inherit from this class
+    crtp() { }                                     // no one can construct this
+    friend CRTPBaseType<actual_type, TParams...>;  // except classes that properly inherit from this class
 };
 
 /** A helper class to define CRTP class hierarchies with an additional boolean template parameter (this is often used
  * for iterators taking a boolean template parameter to decide on constness). */
-template<typename T, template<typename, bool, typename...> typename crtpType, bool B, typename... Others>
+template<typename ConcreteType, template<typename, bool, typename...> typename CRTPBaseType, bool B,
+         typename... TParams>
 struct crtp_boolean
 {
-    using actual_type = T;
+    using actual_type = ConcreteType;
     actual_type & actual() { return *static_cast<actual_type*>(this); }
     const actual_type & actual() const { return *static_cast<const actual_type*>(this); }
 
     private:
     crtp_boolean() { }                  // no one can construct this
-    friend crtpType<T, B, Others...>;   // except classes that properly inherit from this class
+    friend CRTPBaseType<ConcreteType, B, TParams...>;   // except classes that properly inherit from this class
 };
 
 /** A helper class to define CRTP class hierarchies with an additional boolean template template parameter (this is
  * often used for iterators taking a boolean template parameter to decide on constness). */
-template<typename T, template<typename, template<bool> typename, typename...> typename crtpType,
-         template<bool> typename It, typename... Others>
+template<typename ConcreteType, template<typename, template<bool> typename, typename...> typename CRTPBaseType,
+         template<bool> typename It, typename... TParams>
 struct crtp_boolean_templated
 {
-    using actual_type = T;
+    using actual_type = ConcreteType;
     actual_type & actual() { return *static_cast<actual_type*>(this); }
     const actual_type & actual() const { return *static_cast<const actual_type*>(this); }
 
     private:
     crtp_boolean_templated() { }                   // no one can construct this
-    friend crtpType<actual_type, It, Others...>;   // except classes that properly inherit from this class
+    friend CRTPBaseType<actual_type, It, TParams...>;   // except classes that properly inherit from this class
 };
 
 /** A helper class to introduce a virtual method overload per type to a class hierarchy. */

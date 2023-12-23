@@ -43,8 +43,11 @@ struct Visitor : crtp<ConcreteVisitor, Visitor, Base>
     template<typename T>
     using Const = std::conditional_t<is_const, const T, T>;
 
+    /** Make `Visitor` inheritable from. */
+    virtual ~Visitor() { }
+
     /** Visit the object `obj`. */
-    void operator()(base_type &obj) { actual()(obj); }
+    virtual void operator()(base_type &obj) { obj.accept(actual()); }
 };
 
 /** This helper class creates a single override of `operator()` for one subtype in a class hierarchy, and then

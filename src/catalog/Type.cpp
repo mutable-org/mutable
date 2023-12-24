@@ -23,7 +23,8 @@ M_LCOV_EXCL_STOP
 
 const Numeric * m::arithmetic_join(const Numeric *lhs, const Numeric *rhs)
 {
-    static constexpr double LOG_2_OF_10 = 3.321928094887362; ///> factor to convert count of decimal digits to binary digits
+    ///> factor to convert count of decimal digits to binary digits
+    static constexpr double LOG_2_OF_10 = 3.321928094887362;
 
     /* Combining a vector with a scalar yields a vector. */
     Type::category_t category = std::max(lhs->category, rhs->category);
@@ -60,77 +61,54 @@ const Numeric * m::arithmetic_join(const Numeric *lhs, const Numeric *rhs)
 
 /*===== Factory Methods ==============================================================================================*/
 
-Pooled<ErrorType> Type::Get_Error()
+Type::Pooled<ErrorType> Type::Get_Error() { return types_(ErrorType{}); }
+
+Type::Pooled<NoneType> Type::Get_None() { return types_(NoneType{}); }
+
+Type::Pooled<Boolean> Type::Get_Boolean(category_t category) { return types_(Boolean{category}); }
+
+Type::Pooled<Bitmap> Type::Get_Bitmap(category_t category, std::size_t length)
 {
-    static ErrorType err;
-    return err;
+    return types_(Bitmap{category, length});
 }
 
-Pooled<NoneType> Type::Get_None()
+Type::Pooled<CharacterSequence> Type::Get_Char(category_t category, std::size_t length)
 {
-    static NoneType none;
-    return none;
+    return types_(CharacterSequence{category, length, false});
 }
 
-Pooled<Boolean> Type::Get_Boolean(category_t category)
+Type::Pooled<CharacterSequence> Type::Get_Varchar(category_t category, std::size_t length)
 {
-    static Boolean b_scalar(Type::TY_Scalar);
-    static Boolean b_vector(Type::TY_Vector);
-    return category == TY_Scalar ? b_scalar : b_vector;
+    return types_(CharacterSequence{category, length, true});
 }
 
-Pooled<Bitmap> Type::Get_Bitmap(category_t category, std::size_t length)
+Type::Pooled<Date> Type::Get_Date(category_t category) { return types_(Date{category}); }
+
+Type::Pooled<DateTime> Type::Get_Datetime(category_t category) { return types_(DateTime{category}); }
+
+Type::Pooled<Numeric> Type::Get_Decimal(category_t category, unsigned digits, unsigned scale)
 {
-    return types_(Bitmap(category, length));
+    return types_(Numeric{category, Numeric::N_Decimal, digits, scale});
 }
 
-Pooled<CharacterSequence> Type::Get_Char(category_t category, std::size_t length)
+Type::Pooled<Numeric> Type::Get_Integer(category_t category, unsigned num_bytes)
 {
-    return types_(CharacterSequence(category, length, false));
+    return types_(Numeric{category, Numeric::N_Int, num_bytes, 0});
 }
 
-Pooled<CharacterSequence> Type::Get_Varchar(category_t category, std::size_t length)
+Type::Pooled<Numeric> Type::Get_Float(category_t category)
 {
-    return types_(CharacterSequence(category, length, true));
+    return types_(Numeric{category, Numeric::N_Float, 32, 0});
 }
 
-Pooled<Date> Type::Get_Date(category_t category)
+Type::Pooled<Numeric> Type::Get_Double(category_t category)
 {
-    static Date d_scalar(Type::TY_Scalar);
-    static Date d_vector(Type::TY_Vector);
-    return category == TY_Scalar ? d_scalar : d_vector;
+    return types_(Numeric{category, Numeric::N_Float, 64, 0});
 }
 
-Pooled<DateTime> Type::Get_Datetime(category_t category)
+Type::Pooled<FnType> Type::Get_Function(const Type *return_type, std::vector<const Type*> parameter_types)
 {
-    static DateTime dt_scalar(Type::TY_Scalar);
-    static DateTime dt_vector(Type::TY_Vector);
-    return category == TY_Scalar ? dt_scalar : dt_vector;
-}
-
-Pooled<Numeric> Type::Get_Decimal(category_t category, unsigned digits, unsigned scale)
-{
-    return types_(Numeric(category, Numeric::N_Decimal, digits, scale));
-}
-
-Pooled<Numeric> Type::Get_Integer(category_t category, unsigned num_bytes)
-{
-    return types_(Numeric(category, Numeric::N_Int, num_bytes, 0));
-}
-
-Pooled<Numeric> Type::Get_Float(category_t category)
-{
-    return types_(Numeric(category, Numeric::N_Float, 32, 0));
-}
-
-Pooled<Numeric> Type::Get_Double(category_t category)
-{
-    return types_(Numeric(category, Numeric::N_Float, 64, 0));
-}
-
-Pooled<FnType> Type::Get_Function(const Type *return_type, std::vector<const Type*> parameter_types)
-{
-    return types_(FnType(return_type, parameter_types));
+    return types_(FnType{return_type, parameter_types});
 }
 
 /*===== Type visitor =================================================================================================*/

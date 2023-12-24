@@ -54,6 +54,9 @@ struct M_EXPORT Type
     static Pool<Type> types_; ///< a pool of internalized, parameterized types
 
     public:
+    template<typename T>
+    using Pooled = m::Pooled<T, Pool<Type>>;
+
     Type() = default;
     Type(const Type&) = delete;
     Type(Type&&) = default;

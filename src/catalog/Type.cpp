@@ -13,6 +13,8 @@ constexpr const char * Numeric::KIND_TO_STR_[]; ///> declaration for constexpr s
 
 constexpr const char *Type::CATEGORY_TO_STR_[];
 
+uint64_t std::hash<m::Type>::operator()(const m::Type &type) const { return type.hash(); }
+
 Pool<Type> Type::types_;
 
 M_LCOV_EXCL_START

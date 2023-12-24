@@ -11,6 +11,7 @@
 
 namespace m {
 
+struct Type;
 struct ErrorType;
 struct NoneType;
 struct PrimitiveType;
@@ -25,6 +26,20 @@ struct FnType;
 // forward declare the Type visitor
 struct TypeVisitor;
 struct ConstTypeVisitor;
+
+}
+
+namespace std {
+
+template<>
+struct hash<m::Type>
+{
+    uint64_t operator()(const m::Type &type) const;
+};
+
+}
+
+namespace m {
 
 /** This class represents types in the SQL type system. */
 struct M_EXPORT Type
@@ -131,16 +146,6 @@ bool M_EXPORT is_comparable(const Type *first, const Type *second);
 
 template<typename T>
 const PrimitiveType * M_EXPORT get_runtime_type();
-
-}
-
-namespace std {
-
-    template<>
-    struct hash<m::Type>
-    {
-        uint64_t operator()(const m::Type &type) const { return type.hash(); }
-    };
 
 }
 

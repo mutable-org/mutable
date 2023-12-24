@@ -3,6 +3,7 @@
 #include <iostream>
 #include <mutable/mutable.hpp>
 #include <mutable/util/AdjacencyMatrix.hpp>
+#include <unordered_set>
 
 
 using namespace m;

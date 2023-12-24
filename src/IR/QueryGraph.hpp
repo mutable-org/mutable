@@ -3,6 +3,9 @@
 #include "util/hash.hpp"
 #include <mutable/IR/QueryGraph.hpp>
 #include <mutable/parse/AST.hpp>
+#include <unordered_map>
+#include <unordered_set>
+#include <utility>
 
 
 namespace m {

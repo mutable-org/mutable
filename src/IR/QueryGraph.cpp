@@ -6,10 +6,6 @@
 #include <mutable/IR/CNF.hpp>
 #include <mutable/parse/AST.hpp>
 #include <mutable/util/macro.hpp>
-#include <queue>
-#include <set>
-#include <unordered_map>
-#include <utility>
 
 
 using namespace m;

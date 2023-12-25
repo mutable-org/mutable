@@ -1,5 +1,6 @@
 [![pipeline status](https://gitlab.cs.uni-saarland.de/bigdata/mutable/mutable/badges/main/pipeline.svg)](https://gitlab.cs.uni-saarland.de/bigdata/mutable/mutable/-/commits/main)
 [![Release](https://gitlab.cs.uni-saarland.de/bigdata/mutable/mutable/-/badges/release.svg)](https://gitlab.cs.uni-saarland.de/bigdata/mutable/mutable/-/releases)
+[![License](https://img.shields.io/badge/License-AGPL_v3-purple)](https://gitlab.cs.uni-saarland.de/bigdata/mutable/mutable/-/blob/feature/readme-badges/LICENSE)
 [![coverage report](https://gitlab.cs.uni-saarland.de/bigdata/mutable/mutable/badges/main/coverage.svg)](http://deeprig02.cs.uni-saarland.de/mutable/coverage/)
 [![Discord](https://img.shields.io/discord/692292755422052372?label=Discord&logo=Discord&style=flat)](https://discord.gg/JHwTZ24)
 

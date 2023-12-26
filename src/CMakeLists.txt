@@ -41,7 +41,7 @@ if(${WITH_V8})
 endif()
 
 # others
-target_link_libraries(${PROJECT_NAME} PUBLIC ${Boost_LIBRARIES} dl)
+target_link_libraries(${PROJECT_NAME} PUBLIC ${BOOST_LINK_LIBRARIES} dl)
 
 if(${BUILD_SHARED_LIBS})
     # When creating a SHARED library ${PROJECT_NAME} (libmutable.so), it will be stripped of unused and non-exported
@@ -74,10 +74,10 @@ else()
             "${PROJECT_BINARY_DIR}/third-party/src/V8-build/out/obj/${CMAKE_STATIC_LIBRARY_PREFIX}v8_monolith${CMAKE_STATIC_LIBRARY_SUFFIX}"
         )
     endif()
-    foreach(lib_target ${Boost_LIBRARIES})
-        get_target_property(lib_location ${lib_target} LOCATION)
-        list(APPEND static_libs ${lib_location})
+    foreach(lib_path IN LISTS BOOST_STATIC_LIBRARY_PATHS)
+        list(APPEND static_libs "${lib_path}")
     endforeach()
+    message(STATUS "Bundling libraries ${static_libs}")
 
     # Detect the toolchain to use for bundling.
     if (CMAKE_CXX_COMPILER_ID MATCHES "^(Clang)$")
@@ -173,19 +173,3 @@ set_target_properties(cardinality_gen PROPERTIES EXCLUDE_FROM_ALL ON)
 add_executable(query_slicer query_slicer.cpp)
 target_link_libraries(query_slicer ${PROJECT_NAME})
 set_target_properties(query_slicer PROPERTIES EXCLUDE_FROM_ALL ON)
-
-
-########################################################################################################################
-### Copy used system libraries to project, to be self-contained
-########################################################################################################################
-
-# Copy required Boost libraries
-if(${BUILD_SHARED_LIBS})
-    foreach(lib_target ${Boost_LIBRARIES})
-        get_target_property(lib_location ${lib_target} LOCATION)
-        add_custom_command(
-            TARGET ${PROJECT_NAME} POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy_if_different ${lib_location} "${PROJECT_BINARY_DIR}/lib"
-        )
-    endforeach()
-endif()

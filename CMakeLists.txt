@@ -70,15 +70,6 @@ set(CMAKE_THREAD_PREFER_PTHREAD TRUE)
 set(THREADS_PREFER_PTHREAD_FLAG TRUE)
 find_package(Threads REQUIRED)
 
-# Boost
-if(${BUILD_SHARED_LIBS})
-    set(Boost_USE_STATIC_LIBS OFF)
-else()
-    set(Boost_USE_STATIC_LIBS ON)
-endif()
-set(Boost_USE_MULTITHREADED ON)
-find_package(Boost REQUIRED COMPONENTS system container)
-
 # Git
 find_package(Git REQUIRED)
 
@@ -221,6 +212,7 @@ set_source_files_properties(
 
 include("CMakeFiles/Catch2.cmake")
 include("CMakeFiles/Eigen.cmake")
+include("CMakeFiles/Boost.cmake")
 include("CMakeFiles/nlohmann_json.cmake")
 include("CMakeFiles/Replxx.cmake")
 include("CMakeFiles/Binaryen.cmake")

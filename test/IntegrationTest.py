@@ -391,15 +391,15 @@ if __name__ == '__main__':
     parser.add_argument('-d', '--debug', help='print debug commands for failed test cases', action='store_true')
     parser.add_argument('-j', '--jobs', help='Run N jobs in parallel. Defaults to number of CPU threads - 1.',
                         default=(os.cpu_count() - 1), metavar='N', type=int)
-    parser.add_argument('build_path', help='Path to the build directory.  Defaults to \'build/debug\'.',
-                        default=os.path.join('build', 'debug'), type=str, metavar='PATH', nargs='?')
+    parser.add_argument('-b', '--builddir', help='Path to the build directory.  Defaults to \'build/debug\'.',
+                        default=os.path.join('build', 'debug'), type=str, metavar='PATH')
     args = parser.parse_args()
 
     # Check if interactive terminal
     is_interactive = True if 'TERM' in os.environ else False
 
     # Locate build directory and binaries
-    binaries_dir = os.path.join(args.build_path, 'bin')
+    binaries_dir = os.path.join(args.builddir, 'bin')
     BINARIES['lex']   = os.path.join(binaries_dir, 'lex')
     BINARIES['parse'] = os.path.join(binaries_dir, 'parse')
     BINARIES['check'] = os.path.join(binaries_dir, 'check')

@@ -122,8 +122,10 @@ struct is_specialization<Template<Args...>, Template> : std::true_type {};
 
 }
 
+/** Check whether \tparam T is a specialization of \tparam Template.  Strips CV-qualifications of \tparam T for
+ * convenient use, e.g. in conjunction with `decltype`. */
 template<typename T, template <typename...> class Template>
-concept is_specialization = detail::is_specialization<T, Template>::value;
+concept is_specialization = detail::is_specialization<std::remove_cvref_t<T>, Template>::value;
 
 
 /** Helper struct for parameter packs.  Enables use of multiple parameter packs after another. */

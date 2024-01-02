@@ -109,7 +109,8 @@ concept is_reference_wrapper = std::same_as<std::decay_t<T>, std::reference_wrap
 
 
 template<template<typename...> class Template, typename... Args>
-concept is_template_instance = requires { typename Template<Args...>; };
+concept is_template_instantiable = requires { typename Template<Args...>; };
+
 
 namespace detail {
 

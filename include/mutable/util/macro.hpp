@@ -170,6 +170,30 @@ std::unique_ptr<T> _notnull(std::unique_ptr<T> arg, const char *filename, const 
 
 #endif
 
+/*======================================================================================================================
+ * M_nothrow(ARG)
+ *
+ * In debug build, checks whether ARG throws an exception.  If this is the case, prints an error message and aborts
+ * execution. Otherwise, the original value of ARG is returned.  In release build, evaluates to ARG.
+ *====================================================================================================================*/
+
+#ifndef NDEBUG
+#define M_nothrow(ARG) [&](){ \
+    try { \
+        return (ARG); \
+    } catch (const std::exception &e) { \
+        std::cout.flush(); \
+        std::cerr << __FILE__ << ':' << __LINE__ << ": " << #ARG << " has thrown exception '" << e.what() << "'" \
+                  << std::endl; \
+        abort(); \
+    } \
+}()
+
+#else
+#define M_nothrow(ARG) (ARG)
+
+#endif
+
 #define M_DISCARD (void)
 
 }

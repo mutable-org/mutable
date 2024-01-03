@@ -5,6 +5,7 @@
 #include <mutable/util/macro.hpp>
 #include <type_traits>
 #include <unordered_map>
+#include <utility>
 
 
 namespace m {
@@ -54,7 +55,8 @@ struct PODPool
     proxy_type operator()(U &&u);
 
     /** Returns a reference to the value referenced by \param pooled. */
-    static const T & Get(const proxy_type &pooled);
+    template<bool CanBeNone>
+    static const T & Get(const Pooled<T, PODPool, CanBeNone> &pooled);
 };
 
 /** A pool implements an implicitly garbage-collected set of instances of a class hierarchy. */
@@ -121,17 +123,16 @@ struct Pool
     Pooled<U, Pool> operator()(U &&u);
 
     /** Returns a reference to the value referenced by \param pooled. */
-    template<typename U>
+    template<typename U, bool CanBeNone>
     requires std::is_base_of_v<T, U>
-    static const U & Get(const Pooled<U, Pool> &pooled);
+    static const U & Get(const Pooled<U, Pool, CanBeNone> &pooled);
 };
 
 /**
  * A data type representing a *pooled* (or *internalized*) object.
  *
  * If \tparam CanBeNone, an instance of `Pooled` can *not* point to any object, and `Pooled` provides additional methods
- * to query whether it is pointing to an actual object and to safely get the object, if any, via
- * `std::optional<std::reference_wrapper<const T>>`.
+ * to query whether it is pointing to an actual object and to safely get the object, if any.
  */
 template<typename T, typename Pool, bool CanBeNone>
 struct Pooled
@@ -151,20 +152,61 @@ struct Pooled
     }
 
     private:
-    ///> The pool holding this value.  Can only be `nullptr` if `CanBeNone`
-    Pool *pool_;
-    ///> The pointer to the pooled object.  Can only become `nullptr` if the `Pooled` instance is moved.
+    ///> The pool holding this value. Can only be `nullptr` if `CanBeNone` or if the `Pooled` instance is moved.
+    Pool *pool_ = nullptr;
+    ///> The pointer to the pooled object. Can only be `nullptr` if `CanBeNone` or if the `Pooled` instance is moved.
     value_type *ref_ = nullptr;
 
     /** Constucts a fresh `Pooled` from a pooled \param value and its owning \param pool. */
-    Pooled(Pool &pool, value_type &value) : pool_(&pool), ref_(&value) { ++ref_->second; }  // increase reference count
+    Pooled(Pool *pool, value_type *value) : pool_(pool), ref_(value) {
+        M_insist(bool(pool_) == bool(ref_), "inconsistent pooled state");
+        if constexpr (CanBeNone) {
+            if (ref_) ++ref_->second;  // increase reference count
+        } else {
+            ++M_notnull(ref_)->second;  // increase reference count
+        }
+    }
 
     public:
-    Pooled() requires can_be_none : pool_(nullptr) { }
-    Pooled(const Pooled &other) : pool_(other.pool_), ref_(M_notnull(other.ref_)) { ++ref_->second; }  // increase reference count
+    Pooled() requires can_be_none = default;
+    Pooled(const Pooled &other) : Pooled(other.pool_, other.ref_) { }
     Pooled(Pooled &&other) { swap(*this, other); }
 
+    ///> Access privilege for conversion between optional and non-optional `Pooled` instances.
+    template<typename, typename, bool>
+    friend struct Pooled;
+
+    ///> Constructs an optional `Pooled` with a present value from a non-optional one.
+    /// Example usecase: Assigning newly created pooled object to an optional pooled member field.
+    Pooled(const Pooled<T, Pool, false> &other) requires can_be_none
+        : Pooled(M_notnull(other.pool_), M_notnull(other.ref_))
+    { }
+
+    ///> Move-constructs an optional `Pooled` with a present value from a non-optional one.
+    Pooled(Pooled<T, Pool, false> &&other) requires can_be_none
+        : pool_(std::exchange(other.pool_, nullptr))
+        , ref_(std::exchange(other.ref_, nullptr))
+    { }
+
+    ///> Constructs a non-optional `Pooled` from an optional one. Can only be used if value is present.
+    explicit Pooled(const Pooled<T, Pool, true> &other) requires (not can_be_none)
+        : Pooled(M_notnull(other.pool_), M_notnull(other.ref_))
+    { }
+
+    ///> Move-constructs a non-optional `Pooled` from an optional one. Can only be used if value is present.
+    explicit Pooled(Pooled<T, Pool, true> &&other) requires (not can_be_none)
+        : pool_(std::exchange(other.pool_, nullptr))
+        , ref_(std::exchange(other.ref_, nullptr))
+    { }
+
+    bool has_value() const requires can_be_none { return ref_ != nullptr; }
+
+    ///> Returns the number of references to the pooled object or 0 if
+    /// I) instance is optional and does not reference an object or II) instance is moved.
+    uint32_t count() const { return ref_ ? ref_->second : 0; }
+
     ~Pooled() {
+        M_insist(bool(pool_) == bool(ref_), "inconsistent pooled state");
         if (ref_) {
             M_insist(ref_->second > 0, "underflow reference count");
             if (--ref_->second == 0)
@@ -183,14 +225,14 @@ struct Pooled
     template<typename U>
     requires requires (const T &ref) { m::as<const U>(ref); }
     Pooled<U, Pool> as() const {
-        M_insist(pool_);
-        return Pooled<U, Pool>{*pool_, m::as<const U>(*ref_)};
+        M_insist(ref_, "cannot cast empty pooled object");
+        return Pooled<U, Pool>{pool_, m::as<const U>(ref_)};
     }
 
-    template<typename U>
-    bool operator==(Pooled<U, Pool> other) const { return this->ref_ == other.ref_; } // check referential equality
-    template<typename U>
-    bool operator!=(Pooled<U, Pool> other) const { return not operator==(other); }
+    template<typename U, bool Optional>
+    bool operator==(Pooled<U, Pool, Optional> other) const { return this->ref_ == other.ref_; } // check referential equality
+    template<typename U, bool Optional>
+    bool operator!=(Pooled<U, Pool, Optional> other) const { return not operator==(other); }
     template<typename U>
     bool operator==(const U *other) const { return &Pool::Get(*this) == other; } // check referential equality
     template<typename U>
@@ -206,7 +248,7 @@ struct Pooled
     void dump(std::ostream &out) const {
         out << *this
             << " (" << &Pool::Get(*this) << ")"
-            << " count: " << ref_->second << std::endl;
+            << " count: " << this->count() << std::endl;
     }
     void dump() const { dump(std::cerr); }
 };
@@ -218,11 +260,12 @@ PODPool<T, Hash, KeyEqual, Copy>::proxy_type PODPool<T, Hash, KeyEqual, Copy>::o
     auto it = table_.find(u);
     if (it == table_.end())
         it = table_.emplace_hint(it, Copy{}(std::forward<U>(u)), 0); // perfect forwarding
-    return proxy_type{*this, *it};
+    return proxy_type{this, &*it};
 }
 
 template<typename T, typename Hash, typename KeyEqual, typename Copy>
-const T & PODPool<T, Hash, KeyEqual, Copy>::Get(const Pooled<T, PODPool> &pooled)
+template<bool CanBeNone>
+const T & PODPool<T, Hash, KeyEqual, Copy>::Get(const Pooled<T, PODPool, CanBeNone> &pooled)
 {
     M_insist(pooled.ref_);
     return pooled.ref_->first;
@@ -236,13 +279,13 @@ Pooled<U, Pool<T, Hash, KeyEqual>> Pool<T, Hash, KeyEqual>::operator()(U &&u)
     auto it = table_.find(&u);
     if (it == table_.end())
         it = table_.emplace_hint(it, as<T>(std::make_unique<U>(std::forward<U>(u))), 0); // perfect forwarding
-    return Pooled<U, Pool>{*this, *it};
+    return Pooled<U, Pool>{this, &*it};
 }
 
 template<typename T, typename Hash, typename KeyEqual>
-template<typename U>
+template<typename U, bool CanBeNone>
 requires std::is_base_of_v<T, U>
-const U & Pool<T, Hash, KeyEqual>::Get(const Pooled<U, Pool> &pooled)
+const U & Pool<T, Hash, KeyEqual>::Get(const Pooled<U, Pool, CanBeNone> &pooled)
 {
     M_insist(pooled.ref_);
     return as<U>(*pooled.ref_->first);  // additional dereference because of `std::unique_ptr` indirection
@@ -271,15 +314,16 @@ struct StringPool : PODPool<const char*, StrHash, StrEqual, StrClone>
 };
 
 using PooledString = StringPool::proxy_type;
+using PooledOptionalString = StringPool::proxy_optional_type;
 
 }
 
 namespace std {
 
-template<typename T, typename Pool>
-struct std::hash<m::Pooled<T, Pool>>
+template<typename T, typename Pool, bool CanBeNone>
+struct std::hash<m::Pooled<T, Pool, CanBeNone>>
 {
-    uint64_t operator()(const m::Pooled<T, Pool> &pooled) const {
+    uint64_t operator()(const m::Pooled<T, Pool, CanBeNone> &pooled) const {
         return std::hash<const T*>{}(&*pooled); // hash of the address where the object is stored in the pool
     }
 };

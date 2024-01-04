@@ -323,7 +323,7 @@ void generate_uncorrelated_cardinalities(table_type &table, const m::QueryGraph 
         M_insist(M.is_connected(left, right));
 
         /* Compute total selectivity as product of selectivities of all edges between `left` and `right`. */
-        double total_selectivity = 1.;
+        double real_cardinality = table[left] * table[right];
         for (std::size_t j = 0; j != G.num_joins(); ++j) {
             auto &sources = G.joins()[j]->sources();
             if (sources.size() != 2)
@@ -333,12 +333,11 @@ void generate_uncorrelated_cardinalities(table_type &table, const m::QueryGraph 
                 (left[sources[1].get().id()] and right[sources[0].get().id()]))
             {
                 /* This join connects `left` and `right`. */
-                total_selectivity *= selectivities[j];
+                real_cardinality *= selectivities[j];
             }
         }
 
         /* Compute cardinality of CSG. */
-        const double real_cardinality = table[left] * table[right] * total_selectivity;
         table[left | right] = std::clamp<double>(real_cardinality, 1UL, args.max_cardinality * args.max_cardinality);
     };
 

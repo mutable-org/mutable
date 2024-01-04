@@ -331,4 +331,5 @@ if __name__ == '__main__':
         write_schema(schema, G)
 
     with open(filename_query, 'w') as query:
-        write_query(query, G)
+        for _ in range(args.count):
+            write_query(query, G)

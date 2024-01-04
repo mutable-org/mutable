@@ -67,7 +67,7 @@ struct
     double alpha;
 } args;
 
-using table_type = std::unordered_map<Subproblem, double, m::SubproblemHash>;
+using table_type = std::unordered_map<Subproblem, uint64_t, m::SubproblemHash>;
 
 template<typename Generator>
 void generate_correlated_cardinalities(table_type &table, const m::QueryGraph &G, Generator &&g);
@@ -222,12 +222,16 @@ void generate_correlated_cardinalities(table_type &table, const m::QueryGraph &G
     const m::AdjacencyMatrix &M = G.adjacency_matrix();
     std::unordered_map<Subproblem, double, m::SubproblemHash> max_cardinalities;
 
+    /** Get the cardinality of \param S. */
     auto cardinality = [&](const Subproblem S) -> double {
         auto table_it = table.find(S);
-        if (table_it != table.end()) [[likely]] { // we already know the cardinality of S
+        if (table_it != table.end()) [[likely]] {
+            // We already know the cardinality of S.
             M_insist(table_it->second <= args.max_cardinality * args.max_cardinality);
             return table_it->second;
         } else {
+            /* Randomly roll the cardinality for S, but within the bounds of `args.min_cardinality`,
+             * `args.max_cardinality`^2, and the computed maximum cardinality. */
             const auto it = max_cardinalities.find(S);
             M_insist(it != max_cardinalities.end());
             M_insist(it->second > args.min_cardinality);
@@ -236,10 +240,11 @@ void generate_correlated_cardinalities(table_type &table, const m::QueryGraph &G
             M_insist(max_cardinality >= args.min_cardinality);
             const double c = args.min_cardinality + (max_cardinality - args.min_cardinality) * selectivity_dist(g);
             M_insist(c != std::numeric_limits<double>::infinity());
-            M_insist(c <= double(args.max_cardinality) * args.max_cardinality);
+            M_insist(c <= max_cardinality, "cardinality out of bounds");
+            M_insist(c <= it->second, "inconsistent cardinality");
             max_cardinalities.erase(it);
             table_it = table.emplace_hint(table_it, S, c);
-            M_insist(table_it->second == c);
+            M_insist(table_it->second <= c);
             return c;
         }
     };
@@ -248,6 +253,8 @@ void generate_correlated_cardinalities(table_type &table, const m::QueryGraph &G
         const double cardinality_S1 = cardinality(S1);
         const double cardinality_S2 = cardinality(S2);
 
+        M_insist(table.count(S1|S2) == 0, "must not have a cardinality for S1|S2 yet");
+        /* Update the maximum cardinality of S1 υ S2. */
         if (auto it = max_cardinalities.find(S1|S2); it == max_cardinalities.end())
             max_cardinalities.emplace_hint(it, S1|S2, cardinality_S1 * cardinality_S2);
         else
@@ -332,12 +339,7 @@ void generate_uncorrelated_cardinalities(table_type &table, const m::QueryGraph 
 
         /* Compute cardinality of CSG. */
         const double real_cardinality = table[left] * table[right] * total_selectivity;
-        std::size_t clamped_cardinality;
-        if (real_cardinality > double(std::numeric_limits<std::size_t>::max()))
-            clamped_cardinality = std::numeric_limits<std::size_t>::max();
-        else
-            clamped_cardinality = real_cardinality;
-        table[left | right] = std::max<std::size_t>(1UL, clamped_cardinality);
+        table[left | right] = std::clamp<double>(real_cardinality, 1UL, args.max_cardinality * args.max_cardinality);
     };
 
     M.for_each_CSG_pair_undirected(All, update);

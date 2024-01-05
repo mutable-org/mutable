@@ -295,7 +295,7 @@ if(CMAKE_BUILD_TYPE MATCHES Debug)
         COMMAND echo "#########################"
         COMMAND echo "### Integration Tests ###"
         COMMAND echo "#########################"
-        COMMAND env ${env} pipenv run "${CMAKE_CURRENT_SOURCE_DIR}/test/IntegrationTest.py" -r "${PROJECT_BINARY_DIR}"
+        COMMAND env ${env} pipenv run "${CMAKE_CURRENT_SOURCE_DIR}/test/IntegrationTest.py" -r --builddir "${PROJECT_BINARY_DIR}"
     )
 
     # Target `check` runs unit and integration tests, in that order

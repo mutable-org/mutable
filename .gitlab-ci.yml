@@ -232,7 +232,7 @@ integrationtest:linux-amd64:
           artifacts: true
     script:
         - pipenv --python $PYTHON_VERSION sync
-        - env UBSAN_OPTIONS=print_stacktrace=1 ASAN_OPTIONS=detect_stack_use_after_return=1 --unset=TERM pipenv run test/IntegrationTest.py --required-only --debug build/debug
+        - env UBSAN_OPTIONS=print_stacktrace=1 ASAN_OPTIONS=detect_stack_use_after_return=1 --unset=TERM pipenv run test/IntegrationTest.py --required-only --debug --builddir build/debug
 
 integrationtest:macos-amd64:
     stage: test:debug
@@ -244,7 +244,7 @@ integrationtest:macos-amd64:
           artifacts: true
     script:
         - pipenv --python $PYTHON_VERSION sync
-        - env UBSAN_OPTIONS=print_stacktrace=1 ASAN_OPTIONS=detect_stack_use_after_return=1:detect_container_overflow=0 MallocNanoZone=0 --unset=TERM pipenv run test/IntegrationTest.py --required-only --debug build/debug
+        - env UBSAN_OPTIONS=print_stacktrace=1 ASAN_OPTIONS=detect_stack_use_after_return=1:detect_container_overflow=0 MallocNanoZone=0 --unset=TERM pipenv run test/IntegrationTest.py --required-only --debug --builddir build/debug
 
 ensure-exported-symbols:debug:linux:
     stage: test:debug

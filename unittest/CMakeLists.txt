@@ -20,6 +20,7 @@ set(
     util/PositionTest.cpp
     util/SpnTest.cpp
     util/TimerTest.cpp
+    util/unsharable_shared_ptr_test.cpp
 
     # util/container
     util/container/RefCountingHashMapTest.cpp

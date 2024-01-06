@@ -349,24 +349,14 @@ void emit_cardinalities(std::ostream &out, const m::QueryGraph &G, const table_t
     m::Catalog &C = m::Catalog::Get();
     m::Database &DB = C.get_database_in_use();
 
+    std::vector<std::pair<Subproblem, double>> cardinalities{table.cbegin(), table.cend()};
+    std::sort(cardinalities.begin(), cardinalities.end(), [](const auto &first, const auto &second) {
+        return uint64_t(first.first) < uint64_t(second.first);
+    });
+
     out << "{\n    \"" << DB.name << "\": [\n";
     bool first = true;
-    const Subproblem All = Subproblem::All(G.num_sources());
-
-    /*----- Print singletons aka base relations. -----*/
-    for (auto it = All.begin(); it != All.end(); ++it) {
-        if (first) first = false;
-        else       out << ",\n";
-        out << "        { \"relations\": [\"" << G.sources()[*it]->name() << "\"], "
-            << "\"size\": " << table.at(it.as_set()) << "}";
-    }
-
-    /*----- Print non-singletons. -----*/
-    for (auto entry : table) {
-        const Subproblem S = entry.first;
-        if (S.is_singleton()) continue; // skip singleton
-        const std::size_t size = entry.second;
-
+    for (auto [S, C] : cardinalities) {
         /*----- Emit relations. -----*/
         if (first) first = false;
         else       out << ",\n";
@@ -377,7 +367,7 @@ void emit_cardinalities(std::ostream &out, const m::QueryGraph &G, const table_t
             out << '"' << DS->name() << '"';
         }
         /*----- Emit size. -----*/
-        out << "], \"size\": " << size << "}";
+        out << "], \"size\": " << std::size_t(C) << "}";
     }
     out << "\n    ]\n}\n";
 }

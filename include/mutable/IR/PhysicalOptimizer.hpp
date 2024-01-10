@@ -240,14 +240,6 @@ struct PhysicalOptimizer
 
     virtual void accept(PhysOptVisitor &v) = 0;
     virtual void accept(ConstPhysOptVisitor &v) const = 0;
-
-    /** Prints a representation of the found physical operator covering in the dot language to \p out. */
-    virtual void dot_plan(std::ostream &out) const = 0;
-
-    /** Prints a representation of the found physical operator covering to \p out. */
-    virtual void dump_plan(std::ostream &out) const = 0;
-    /** Prints a representation of the found physical operator covering to `std::cout`. */
-    virtual void dump_plan() const = 0;
 };
 
 /** Concrete `PhysicalOptimizer` implementation using a concrete statically-typed \tparam PhysicalPlanTable
@@ -359,14 +351,6 @@ struct PhysicalOptimizerImpl : PhysicalOptimizer, ConstPostOrderOperatorVisitor
 
     void accept(PhysOptVisitor &v) override;
     void accept(ConstPhysOptVisitor &v) const override;
-
-    private:
-    void dot_plan_helper(const entry_type &e, std::ostream &out) const;
-    public:
-    void dot_plan(std::ostream &out) const override;
-
-    void dump_plan(std::ostream &out) const override;
-    void dump_plan() const override;
 };
 
 #define M_PHYS_OPT_LIST(X) \

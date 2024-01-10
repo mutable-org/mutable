@@ -46,7 +46,6 @@ struct M_EXPORT Options
     bool plan;
     bool plandot;
     bool physplan;
-    bool physplandot;
 
     /** If `true`, do not pass the query to the backend for execution. */
     bool dryrun;

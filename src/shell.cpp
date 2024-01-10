@@ -306,10 +306,6 @@ int main(int argc, const char **argv)
         nullptr, "--physplan",                              /* Short, Long      */
         "emit the chosen physical execution covering",      /* Description      */
         [&](bool) { Options::Get().physplan = true; });     /* Callback         */
-    ADD(bool, Options::Get().physplandot, false,            /* Type, Var, Init  */
-        nullptr, "--physplandot",                           /* Short, Long      */
-        "dot the chosen physical operator tree",            /* Description      */
-        [&](bool) { Options::Get().physplandot = true; });  /* Callback         */
     ADD(bool, Options::Get().dryrun, false,                 /* Type, Var, Init  */
         nullptr, "--dryrun",                                /* Short, Long      */
         "don't actually execute the query",                 /* Description      */

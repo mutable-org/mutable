@@ -179,19 +179,13 @@ void m::execute_statement(Diagnostic &diag, const ast::Stmt &stmt, const bool is
         PhysicalOptimizerImpl<ConcretePhysicalPlanTable> PhysOpt;
         backend->register_operators(PhysOpt);
         M_TIME_EXPR(PhysOpt.cover(*logical_plan), "Compute the physical query plan", timer);
+        auto physical_plan = PhysOpt.extract_plan();
 
         if (Options::Get().physplan)
-            PhysOpt.dump_plan(std::cout);
-        if (Options::Get().physplandot) {
-            DotTool dot(diag);
-            PhysOpt.dot_plan(dot.stream());
-            dot.show("physical_plan", false, "dot");
-        }
+            physical_plan->dump(std::cout);
 
-        if (not Options::Get().dryrun) {
-            auto physical_plan = PhysOpt.extract_plan();
+        if (not Options::Get().dryrun)
             M_TIME_EXPR(backend->execute(*physical_plan), "Execute query", timer);
-        }
     } else if (auto I = cast<const ast::InsertStmt>(&stmt)) {
         auto &DB = C.get_database_in_use();
         auto &T = DB.get_table(I->table_name.text);

@@ -104,16 +104,11 @@ void QueryDatabase::execute(Diagnostic &diag)
     PhysicalOptimizerImpl<ConcretePhysicalPlanTable> PhysOpt;
     backend->register_operators(PhysOpt);
     M_TIME_EXPR(PhysOpt.cover(*logical_plan_), "Compute the physical query plan", C.timer());
+    physical_plan_ = PhysOpt.extract_plan();
 
     if (Options::Get().physplan)
-        PhysOpt.dump_plan(std::cout);
-    if (Options::Get().physplandot) {
-        DotTool dot(diag);
-        PhysOpt.dot_plan(dot.stream());
-        dot.show("physical_plan", false, "dot");
-    }
+        physical_plan_->dump(std::cout);
 
-    physical_plan_ = PhysOpt.extract_plan();
     if (not Options::Get().dryrun)
         M_TIME_EXPR(backend->execute(*physical_plan_), "Execute query", C.timer());
 }

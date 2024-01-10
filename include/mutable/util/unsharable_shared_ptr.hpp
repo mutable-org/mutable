@@ -23,11 +23,17 @@ template<typename T>
 struct unsharable_shared_ptr : public std::shared_ptr<T>
 {
     using super = std::shared_ptr<T>;
+    /* Must not add `using super::super` or `super::operator=` since this would allow construction or assignment from
+     * a `std::shared_ptr` which we want to prevent because a custom deleter might not be set.  Instead, explicitly
+     * implement the desired methods by delegating to the superclass and delete the undesired methods. */
 
     private:
-    using deleter_func_type = void(*)(T*); // use function pointer instead of reference due to clang-17 issue
-    static void default_deleter(T *ptr) { delete ptr; }
-    static void noop_deleter(T*) { }
+    ///> custom deleter type; use function pointer instead of reference due to clang-17 issue and add `const` to enable
+    ///> accessing the custom deleter even if the `this` was constructed/assigned from another `unsharable_shared_ptr`
+    ///> of a *compatible* type, e.g. qualified without `const`
+    using deleter_func_type = void(*)(const T*);
+    static void default_deleter(const T *ptr) { delete ptr; }
+    static void noop_deleter(const T*) { }
 
     public:
     template<typename Y>
@@ -38,6 +44,29 @@ struct unsharable_shared_ptr : public std::shared_ptr<T>
 
     unsharable_shared_ptr(const unsharable_shared_ptr&) = default;
     unsharable_shared_ptr(unsharable_shared_ptr&&) = default;
+
+    template<typename Y>
+    unsharable_shared_ptr(const unsharable_shared_ptr<Y> &ptr) : super(ptr) { }
+    template<typename Y>
+    unsharable_shared_ptr(unsharable_shared_ptr<Y> &&ptr) : super(std::move(ptr)) { }
+
+    template<typename Y>
+    unsharable_shared_ptr(const std::shared_ptr<Y>&) = delete; // delete since custom deleter might not be set
+    template<typename Y>
+    unsharable_shared_ptr(std::shared_ptr<Y>&&) = delete; // delete since custom deleter might not be set
+
+    unsharable_shared_ptr & operator=(const unsharable_shared_ptr&) = default;
+    unsharable_shared_ptr & operator=(unsharable_shared_ptr&&) = default;
+
+    template<typename Y>
+    unsharable_shared_ptr & operator=(const unsharable_shared_ptr<Y> &ptr) { super::operator=(ptr); return *this; }
+    template<typename Y>
+    unsharable_shared_ptr & operator=(unsharable_shared_ptr<Y> &&ptr) { super::operator=(std::move(ptr)); return *this; }
+
+    template<typename Y>
+    unsharable_shared_ptr & operator=(const std::shared_ptr<Y>&) = delete; // delete since custom deleter might not be set
+    template<typename Y>
+    unsharable_shared_ptr & operator=(std::shared_ptr<Y>&&) = delete; // delete since custom deleter might not be set
 
     /**
      * Converts (and thereby moves) the exclusively held object from this `unsharable_shared_ptr` to a

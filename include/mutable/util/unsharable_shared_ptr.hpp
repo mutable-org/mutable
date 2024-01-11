@@ -2,6 +2,7 @@
 
 #include <memory>
 #include <mutable/util/exception.hpp>
+#include <mutable/util/fn.hpp>
 #include <mutable/util/macro.hpp>
 
 
@@ -24,13 +25,13 @@ struct unsharable_shared_ptr : public std::shared_ptr<T>
     using super = std::shared_ptr<T>;
 
     private:
-    using deleter_func_type = std::reference_wrapper<void(T*)>;
+    using deleter_func_type = void(*)(T*); // use function pointer instead of reference due to clang-17 issue
     static void default_deleter(T *ptr) { delete ptr; }
     static void noop_deleter(T*) { }
 
     public:
     template<typename Y>
-    explicit unsharable_shared_ptr(Y *ptr) : super(ptr, std::ref(unsharable_shared_ptr::default_deleter)) { }
+    explicit unsharable_shared_ptr(Y *ptr) : super(ptr, &unsharable_shared_ptr::default_deleter) { }
 
     unsharable_shared_ptr() : super(nullptr) { }
     explicit unsharable_shared_ptr(std::nullptr_t) : super(nullptr) { }
@@ -48,7 +49,7 @@ struct unsharable_shared_ptr : public std::shared_ptr<T>
     std::unique_ptr<T> exclusive_shared_to_unique() {
         if (super::use_count() == 0) return nullptr;  // nothing to unshare
         if (super::use_count() > 1) throw m::invalid_state{"not exclusive"};
-        *std::get_deleter<deleter_func_type>(*static_cast<super*>(this)) = std::ref(unsharable_shared_ptr::noop_deleter);
+        *std::get_deleter<deleter_func_type>(as<super>(*this)) = &unsharable_shared_ptr::noop_deleter;
         std::unique_ptr<T> uptr{super::get()};
         super::reset();  // this will *not* delete the referenced object
         M_insist(super::get() == nullptr);

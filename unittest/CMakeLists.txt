@@ -13,18 +13,19 @@ set(
     util/AllocatorTest.cpp
     util/ArgParserTest.cpp
     util/FnTest.cpp
+    util/GridSearchTest.cpp
     util/KmeansTest.cpp
     util/LinearModelTest.cpp
     util/MemoryTest.cpp
     util/PoolTest.cpp
     util/PositionTest.cpp
+    util/reader_writer_lock_test.cpp
     util/SpnTest.cpp
     util/TimerTest.cpp
     util/unsharable_shared_ptr_test.cpp
 
     # util/container
     util/container/RefCountingHashMapTest.cpp
-    util/GridSearchTest.cpp
 
     # lex
     lex/LexerTest.cpp

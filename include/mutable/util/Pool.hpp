@@ -195,6 +195,20 @@ struct Pooled
     bool operator==(const U *other) const { return &Pool::Get(*this) == other; } // check referential equality
     template<typename U>
     bool operator!=(const U *other) const { return not operator==(other); }
+
+    friend std::ostream & operator<<(std::ostream &out, const Pooled &pooled) {
+        if constexpr (streamable<std::ostream, T>)
+            return out << *pooled;
+        else
+            return out << "Pooled<" << typeid(T).name() << ">";
+    }
+
+    void dump(std::ostream &out) const {
+        out << *this
+            << " (" << &Pool::Get(*this) << ")"
+            << " count: " << ref_->second << std::endl;
+    }
+    void dump() const { dump(std::cerr); }
 };
 
 template<typename T, typename Hash, typename KeyEqual, typename Copy>

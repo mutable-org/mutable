@@ -198,6 +198,12 @@ concept typed_param_pack = requires {
 template<typename P>
 concept size_param_pack = typed_param_pack<P, std::size_t>;
 
+/** Check whether \tparam T is streamable via insertion operator of \tparam Stream. */
+template<typename Stream, typename T>
+concept streamable = requires (Stream &out, const T &t) {
+    { out << t } -> std::same_as<Stream&>;
+};
+
 }
 
 template<typename Callback, typename T>

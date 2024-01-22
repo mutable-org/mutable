@@ -82,9 +82,9 @@ This way, our hooks are properly installed and contained in version control.
 1. Run the following command to build `pygraphviz` with the additional include directory.
    ```plain
    $ pipenv run pip install --use-pep517 \
-                            --config-setting="--global-option=build_ext" \
-                            --config-setting="--build-option=-I$(brew --prefix graphviz)/include/" \
-                            --config-setting="--build-option=-L$(brew --prefix graphviz)/lib/" \
+                            --config-settings="--global-option=build_ext" \
+                            --config-settings="--global-option=-I$(brew --prefix graphviz)/include/" \
+                            --config-settings="--global-option=-L$(brew --prefix graphviz)/lib/" \
                             pygraphviz
    ```
 1. Run `pipenv sync` as usual.

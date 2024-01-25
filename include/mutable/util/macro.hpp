@@ -79,6 +79,9 @@ namespace m {
 #define M_LCOV_EXCL_STOP  /* Stop exclusion block */
 #define M_LCOV_EXCL_LINE  /* Exclude line */
 
+/*===== Prevent inlining of functions.  Useful for functions that should be callable from the debugger, e.g. dump() ==*/
+#define M_NOINLINE __attribute__((noinline))
+
 /*======================================================================================================================
  * M_insist(COND [, MSG])
  *

@@ -6452,6 +6452,9 @@ struct Allocator
     virtual ~Allocator() { }
 
     public:
+    /** Pre-allocates memory for \p bytes consecutive bytes with alignment requirement \p align and returns a raw
+     * pointer to the beginning of this memory. */
+    virtual void * raw_allocate(uint32_t bytes, uint32_t align = 1) = 0;
     /** Pre-allocates memory for \p bytes consecutive bytes with alignment requirement \p align and returns a pointer
      * to the beginning of this memory. */
     virtual Ptr<void> pre_allocate(uint32_t bytes, uint32_t align = 1) = 0;
@@ -6468,6 +6471,10 @@ struct Allocator
     Var<Ptr<void>> allocate(uint32_t bytes, uint32_t align = 1) { return allocate(U32x1(bytes), align); }
     void deallocate(Ptr<void> ptr, uint32_t bytes) { return deallocate(ptr, U32x1(bytes)); }
 
+
+    /** Pre-allocates memory for exactly one value of type \tparam T.  Returns a raw pointer to this memory. */
+    template<dsl_primitive T>
+    T * raw_malloc() { return raw_malloc<T>(1U); }
     /** Pre-allocates memory for exactly one value of type \tparam T and number of SIMD lanes \tparam L.  Returns a
      * pointer to this memory. */
     template<dsl_primitive T, std::size_t L = 1>
@@ -6477,6 +6484,10 @@ struct Allocator
     template<dsl_primitive T, std::size_t L = 1>
     Var<Ptr<PrimitiveExpr<T, L>>> malloc() { return malloc<T, L>(1U); }
 
+    /** Pre-allocates memory for an array of \p count consecutive values of type \tparam T.  Returns a raw pointer to
+     * this memory. */
+    template<dsl_primitive T>
+    T * raw_malloc(uint32_t count) { return static_cast<T*>(raw_allocate(sizeof(T) * count, alignof(T))); }
     /** Pre-allocates memory for an array of \p count consecutive values of type \tparam T and number of SIMD lanes
      * \tparam L.  Returns a pointer to this memory. */
     template<dsl_primitive T, std::size_t L = 1>

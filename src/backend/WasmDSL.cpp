@@ -247,6 +247,18 @@ struct LinearAllocator : Allocator
         M_insist(pre_allocations_performed_, "must call `perform_pre_allocations()` before destruction");
     }
 
+    void * raw_allocate(uint32_t bytes, uint32_t alignment) override {
+        M_insist(not pre_allocations_performed_,
+                 "must not request a pre-allocation after `perform_pre_allocations()` was already called");
+        M_insist(alignment);
+        M_insist(is_pow_2(alignment), "alignment must be a power of 2");
+        if (alignment != 1U)
+            align_pre_memory(alignment);
+        const auto &Ctx = WasmEngine::Get_Wasm_Context_By_ID(Module::ID());
+        void *ptr = static_cast<uint8_t*>(Ctx.vm.addr()) + pre_alloc_addr_;
+        pre_alloc_addr_ += bytes; // advance memory size by bytes
+        return ptr;
+    }
     Ptr<void> pre_allocate(uint32_t bytes, uint32_t alignment) override {
         M_insist(not pre_allocations_performed_,
                  "must not request a pre-allocation after `perform_pre_allocations()` was already called");

@@ -4164,6 +4164,15 @@ struct PrimitiveExpr<T, L>
     { }
 
     public:
+    PrimitiveExpr(T raw_ptr) requires (L == 1)
+        : addr_(0U)
+        , offset_([&raw_ptr](){
+            auto &Ctx = WasmEngine::Get_Wasm_Context_By_ID(Module::ID());
+            const auto offset = reinterpret_cast<uint8_t*>(raw_ptr) - static_cast<uint8_t*>(Ctx.vm.addr());
+            M_insist(offset >= 0 and offset < Ctx.vm.size(), "Invalid raw pointer");
+            return offset;
+        }())
+    { }
     PrimitiveExpr(const PrimitiveExpr&) = delete;
     /** Constructs a new `PrimitiveExpr` by **moving** the underlying `expr_`, `referenced_bits`, and `offset_`
      * of `other` to `this`. */

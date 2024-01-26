@@ -97,3 +97,128 @@ TEST_CASE("StringPool internalize", "[core][util][pool]")
     auto s4 = pool(std::string_view(""));
     REQUIRE(s3 == s4);
 }
+
+
+TEST_CASE("PooledOptionalString Utilization", "[core][util][pool]")
+{
+    StringPool pool;
+
+    SECTION("empty PooledOptionalString")
+    {
+        // default constructing an empty PooledOptionalString should not affect the pool
+        PooledOptionalString ps0;
+        REQUIRE(pool.size() == 0);
+        REQUIRE(ps0.has_value() == false);
+        REQUIRE(ps0.count() == 0);
+
+        // copy constructing an empty PooledOptionalString should not affect the pool
+        PooledOptionalString ps1{ ps0 };
+        REQUIRE(pool.size() == 0);
+        REQUIRE(ps1.has_value() == false);
+        REQUIRE(ps1.count() == 0);
+
+        // move constructing an empty PooledOptionalString should not affect the pool
+        PooledOptionalString ps2{ std::move(ps0) };
+        REQUIRE(pool.size() == 0);
+        REQUIRE(ps2.has_value() == false);
+        REQUIRE(ps2.count() == 0);
+        REQUIRE(ps0.count() == 0);
+    }
+
+    SECTION("PooledOptionalString with value")
+    {
+        // constructing a PooledOptionalString with a string should affect the pool
+        PooledOptionalString ps0{ pool("ps0") };
+        REQUIRE(pool.size() == 1);
+        REQUIRE(ps0.has_value());
+        REQUIRE(ps0.count() == 1);
+
+        // copy constructing a non-empty PooledOptionalString should not affect the pool
+        PooledOptionalString ps1{ ps0 };
+        REQUIRE(pool.size() == 1);
+        REQUIRE(ps0.has_value());
+        REQUIRE(ps1.has_value());
+        REQUIRE(ps0 == ps1);
+        REQUIRE(ps0.count() == 2);
+        REQUIRE(ps1.count() == 2);
+
+        // move constructing a non-empty PooledOptionalString should not affect the pool
+        PooledOptionalString ps2{ std::move(ps0) };
+        REQUIRE(pool.size() == 1);
+        REQUIRE(ps2.has_value());
+        REQUIRE(ps0.has_value() == false);
+        REQUIRE(ps0.count() == 0);
+
+        REQUIRE(ps1 == ps2);
+        REQUIRE(streq(*ps2, "ps0"));
+        REQUIRE(ps1.count() == 2);
+        REQUIRE(ps2.count() == 2);
+    }
+
+    SECTION("nested scope assignment and garbage collection")
+    {
+        REQUIRE(pool.size() == 0);
+        {
+            PooledOptionalString ps0;
+            {
+                ps0 = pool("ps0");
+            }
+            REQUIRE(pool.size() == 1);
+            REQUIRE(ps0.has_value());
+            REQUIRE(streq(*ps0, "ps0"));
+        }
+        REQUIRE(pool.size() == 1); // XXX: TODO: size() should return 0 after garbage collection is implemented
+    }
+}
+
+TEST_CASE("Interaction of optional & non-optional", "[core][util][pool]")
+{
+    StringPool pool;
+
+    REQUIRE(pool.size() == 0);
+    {
+        PooledOptionalString pos0{ pool("pos") };
+        PooledString ps0{ pool("ps") };
+        REQUIRE(pool.size() == 2);
+
+        SECTION("conversion c'tor: non-optional -> optional")
+        {
+            PooledOptionalString pos1{ ps0 };
+            REQUIRE(pool.size() == 2);
+            REQUIRE(pos1.has_value());
+            REQUIRE(pos1.count() == 2);
+            REQUIRE(streq(*pos1, "ps"));
+        }
+
+        SECTION("conversion c'tor: optional -> non-optional")
+        {
+            PooledString ps1{ PooledString(pos0) };
+            REQUIRE(pool.size() == 2);
+            REQUIRE(pos0.has_value());
+            REQUIRE(ps1.count() == 2);
+            REQUIRE(streq(*ps1, "pos"));
+        }
+
+        SECTION("conversion move c'tor: non-optional -> optional")
+        {
+            PooledOptionalString pos2 { std::move(ps0) };
+            REQUIRE(pool.size() == 2);
+            REQUIRE(pos2.has_value());
+            REQUIRE(pos2.count() == 1);
+            REQUIRE(ps0.count() == 0);
+            REQUIRE(streq(*pos2, "ps"));
+        }
+
+        SECTION("conversion move c'tor: optional -> non-optional")
+        {
+            PooledString ps2{ std::move(pos0) };
+            REQUIRE(pool.size() == 2);
+            REQUIRE(ps2.count() == 1);
+            REQUIRE(pos0.count() == 0);
+            REQUIRE(streq(*ps2, "pos"));
+        }
+    }
+
+    // Ensure no leftovers are left in the pool
+    REQUIRE(pool.size() == 2); // XXX: TODO: size() should return 0 after garbage collection is implemented
+}

@@ -240,12 +240,6 @@ class reader_writer_mutex
  */
 struct reader_writer_lock
 {
-    // friend void swap(reader_writer_lock &first, reader_writer_lock &second) {
-    //     using std::swap;
-    //     swap(first.rw_mutex_, second.rw_mutex_);
-    //     swap(first.state_,    second.state_);
-    // }
-
     private:
     std::reference_wrapper<reader_writer_mutex> rw_mutex_;
     enum {

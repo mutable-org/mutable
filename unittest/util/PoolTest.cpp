@@ -1,6 +1,10 @@
 #include "catch2/catch.hpp"
 
+#include <functional>
 #include <mutable/util/Pool.hpp>
+#include <numeric>
+#include <random>
+#include <thread>
 
 
 using namespace m;
@@ -32,40 +36,57 @@ TEST_CASE("Pool internalize simple", "[core][util][pool]")
 
 TEST_CASE("Pool internalize object", "[core][util][pool]")
 {
-    struct Object
+    struct Base
     {
         int *p = nullptr;
 
-        Object() : p(nullptr) { }
-        Object(int n) : p(new int(n)) { }
-        Object(const Object &other) = delete;
-        Object(Object &&other) : Object() { std::swap(this->p, other.p); }
-        ~Object() { delete p; }
+        Base() : p(nullptr) { }
+        Base(int n) : p(new int(n)) { }
+        Base(const Base &other) = delete;
+        Base(Base &&other) : Base() { std::swap(this->p, other.p); }
+        virtual ~Base() { delete p; }
 
-        bool operator==(const Object &other) const { return *this->p == *other.p; }
+        bool operator==(const Base &other) const { return *this->p == *other.p; }
     };
     struct hash
     {
-        auto operator()(const Object &o) const { return std::hash<int>{}(*o.p); }
+        auto operator()(const Base &o) const { return std::hash<int>{}(*o.p); }
     };
 
-    Object o42(42);
-    Object o13(13);
+    struct Derived : Base
+    {
+        std::string name;
+        Derived(std::string name, int value) : Base(value), name(name) { }
+    };
 
-    Pool<Object, hash> pool;
+    Pool<Base, hash> pool;
 
-    auto i0 = pool(Object(42));
+    auto i0 = pool(Base(42));
     REQUIRE(pool.size() == 1);
     REQUIRE(*i0->p == 42);
 
-    auto i1 = pool(Object(13));
+    auto i1 = pool(Base(13));
     REQUIRE(pool.size() == 2);
     REQUIRE(*i1->p == 13);
 
-    auto i2 = pool(Object(42));
+    auto i2 = pool(Base(42));
     REQUIRE(pool.size() == 2);
     REQUIRE(*i2->p == 42);
     REQUIRE(i0 == i2);
+
+    auto i3 = pool(Derived("a", 37));
+    REQUIRE(pool.size() == 3);
+    REQUIRE(*i3->p == 37);
+    REQUIRE(i3->name == "a");
+
+    auto derived = i3.as<Derived>();
+    REQUIRE(pool.size() == 3);
+    REQUIRE(*derived->p == 37);
+    REQUIRE(i3->name == "a");
+
+    auto base = derived.as<Base>();
+    REQUIRE(pool.size() == 3);
+    REQUIRE(*base->p == 37);
 }
 
 TEST_CASE("StringPool c'tor", "[core][util][pool]")
@@ -220,4 +241,117 @@ TEST_CASE("Interaction of optional & non-optional", "[core][util][pool]")
 
     // Ensure no leftovers are left in the pool
     REQUIRE(pool.size() == 2); // TODO: size() should return 0 after garbage collection is implemented
+}
+
+TEST_CASE("Thread-safe concurrent PODPool", "[core][util][pool]")
+{
+    ThreadSafePODPool<int> pool;
+
+    constexpr int NUM_VALUES = 1000;
+    std::vector<int> values(NUM_VALUES);
+    std::iota(values.begin(), values.end(), 0);
+    std::mt19937_64 gen{42};
+
+    std::shuffle(values.begin(), values.end(), gen);
+    const auto values_t1 = values;
+
+    std::shuffle(values.begin(), values.end(), gen);
+    const auto values_t2 = values;
+
+    std::shuffle(values.begin(), values.end(), gen);
+    const auto values_t3 = values;
+
+    using refs_vector_t = std::vector<decltype(pool)::proxy_type>;
+    refs_vector_t refs_t1, refs_t2, refs_t3;
+    refs_t1.reserve(NUM_VALUES);
+    refs_t2.reserve(NUM_VALUES);
+    refs_t3.reserve(NUM_VALUES);
+
+    auto internalize = [&pool](const std::vector<int> &values, refs_vector_t &refs) -> void {
+        for (auto v : values)
+            refs.emplace_back(pool(v));
+    };
+
+    std::thread t1(internalize, std::cref(values_t1), std::ref(refs_t1));
+    std::thread t2(internalize, std::cref(values_t2), std::ref(refs_t2));
+    std::thread t3(internalize, std::cref(values_t3), std::ref(refs_t3));
+
+    t1.join();
+    t2.join();
+    t3.join();
+
+    auto validate = [](const std::vector<int> &values, const refs_vector_t &refs) {
+        REQUIRE(values.size() == refs.size());
+        for (std::size_t idx = 0; idx != values.size(); ++idx)
+            CHECK(values[idx] == *refs[idx]);
+    };
+
+    validate(values_t1, refs_t1);
+    validate(values_t2, refs_t2);
+    validate(values_t3, refs_t3);
+}
+
+TEST_CASE("Thread-safe concurrent Pool", "[core][util][pool]")
+{
+    struct Object
+    {
+        int *p = nullptr;
+
+        Object() : p(nullptr) { }
+        Object(int n) : p(new int(n)) { }
+        Object(const Object &other) = delete;
+        Object(Object &&other) : Object() { std::swap(this->p, other.p); }
+        ~Object() { delete p; }
+
+        bool operator==(const Object &other) const { return *this->p == *other.p; }
+    };
+    struct hash
+    {
+        auto operator()(const Object &o) const { return std::hash<int>{}(*o.p); }
+    };
+
+    ThreadSafePool<Object, hash> pool;
+
+    constexpr int NUM_VALUES = 1000;
+    std::vector<int> values(NUM_VALUES);
+    std::iota(values.begin(), values.end(), 0);
+    std::mt19937_64 gen{42};
+
+    std::shuffle(values.begin(), values.end(), gen);
+    const auto values_t1 = values;
+
+    std::shuffle(values.begin(), values.end(), gen);
+    const auto values_t2 = values;
+
+    std::shuffle(values.begin(), values.end(), gen);
+    const auto values_t3 = values;
+
+    using refs_vector_t = std::vector<decltype(pool)::proxy_type<Object>>;
+    refs_vector_t refs_t1, refs_t2, refs_t3;
+    refs_t1.reserve(NUM_VALUES);
+    refs_t2.reserve(NUM_VALUES);
+    refs_t3.reserve(NUM_VALUES);
+
+    auto internalize = [&pool](const std::vector<int> &values, refs_vector_t &refs) -> void {
+        for (auto v : values)
+            refs.emplace_back(pool(Object{v}));
+    };
+
+    std::thread t1(internalize, std::cref(values_t1), std::ref(refs_t1));
+    std::thread t2(internalize, std::cref(values_t2), std::ref(refs_t2));
+    std::thread t3(internalize, std::cref(values_t3), std::ref(refs_t3));
+
+    t1.join();
+    t2.join();
+    t3.join();
+
+    auto validate = [](const std::vector<int> &values, const refs_vector_t &refs) {
+        REQUIRE(values.size() == refs.size());
+        for (std::size_t idx = 0; idx != values.size(); ++idx)
+            CHECK(values[idx] == *refs[idx]);
+    };
+
+    validate(values_t1, refs_t1);
+    validate(values_t2, refs_t2);
+    validate(values_t3, refs_t3);
 }

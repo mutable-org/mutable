@@ -3,6 +3,8 @@
 #include <functional>
 #include <mutable/util/fn.hpp>
 #include <mutable/util/macro.hpp>
+#include <mutable/util/OptField.hpp>
+#include <mutable/util/reader_writer_lock.hpp>
 #include <type_traits>
 #include <unordered_map>
 #include <utility>
@@ -15,10 +17,12 @@ template<typename T, typename Pool, bool CanBeNone = false>
 struct Pooled;
 
 /** The `PODPool` implements an implicitly garbage-collected set of *pooled* (or *internalized*) POD struct entities. */
-template<typename T, typename Hash = std::hash<T>, typename KeyEqual = std::equal_to<T>, typename Copy = std::identity>
+template<typename T, typename Hash = std::hash<T>, typename KeyEqual = std::equal_to<T>, typename Copy = std::identity,
+         bool ThreadSafe = false>
 struct PODPool
 {
-    using table_type = std::unordered_map<T, uint32_t, Hash, KeyEqual>;
+    using counter_type = std::conditional_t<ThreadSafe, std::atomic<uint32_t>, uint32_t>;
+    using table_type = std::unordered_map<T, counter_type, Hash, KeyEqual>;
     using pooled_type = T;
     using proxy_type = Pooled<T, PODPool, false>;
     using proxy_optional_type = Pooled<T, PODPool, true>;
@@ -26,8 +30,15 @@ struct PODPool
     using key_equal = KeyEqual;
     using copy = Copy;
 
+    template<typename, typename, bool>
+    friend struct Pooled;
+
+    static constexpr bool is_thread_safe = ThreadSafe;
+
     private:
     table_type table_;
+
+    alignas(64) mutable OptField<ThreadSafe, reader_writer_mutex> table_mutex_;
 
     public:
     using const_iterator = table_type::const_iterator;
@@ -54,13 +65,18 @@ struct PODPool
     template<typename U>
     proxy_type operator()(U &&u);
 
+    private:
     /** Returns a reference to the value referenced by \param pooled. */
     template<bool CanBeNone>
     static const T & Get(const Pooled<T, PODPool, CanBeNone> &pooled);
+
+    /** Erases the pooled entity from the pool.  Requires that the reference count is `0`. */
+    template<bool CanBeNone>
+    bool erase(const Pooled<T, PODPool, CanBeNone> &pooled);
 };
 
 /** A pool implements an implicitly garbage-collected set of instances of a class hierarchy. */
-template<typename T, typename Hash = std::hash<T>, typename KeyEqual = std::equal_to<T>>
+template<typename T, typename Hash = std::hash<T>, typename KeyEqual = std::equal_to<T>, bool ThreadSafe = false>
 struct Pool
 {
     struct dereference_hash
@@ -83,15 +99,23 @@ struct Pool
         auto operator()(U &&first, V &&second) const { return KeyEqual{}(*first, *second); }
     };
 
-    using table_type = std::unordered_map<std::unique_ptr<T>, uint32_t, dereference_hash, dereference_equal_to>;
+    using counter_type = std::conditional_t<ThreadSafe, std::atomic<uint32_t>, uint32_t>;
+    using table_type = std::unordered_map<std::unique_ptr<T>, counter_type, dereference_hash, dereference_equal_to>;
     using pooled_type = T;
-    using proxy_type = Pooled<T, Pool, false>;
-    using proxy_optional_type = Pooled<T, Pool, true>;
+    template<typename U> using proxy_type = Pooled<U, Pool, false>;
+    template<typename U> using proxy_optional_type = Pooled<U, Pool, true>;
     using hasher = Hash;
     using key_equal = KeyEqual;
 
+    template<typename, typename, bool>
+    friend struct Pooled;
+
+    static constexpr bool is_thread_safe = ThreadSafe;
+
     private:
     table_type table_;
+
+    alignas(64) mutable OptField<ThreadSafe, reader_writer_mutex> table_mutex_;
 
     public:
     using const_iterator = table_type::const_iterator;
@@ -119,13 +143,18 @@ struct Pool
 
     /** Returns the pooled \param u. */
     template<typename U>
-    requires std::is_base_of_v<T, U>
-    Pooled<U, Pool> operator()(U &&u);
+    requires std::derived_from<U, T>
+    Pooled<U, Pool, false> operator()(U &&u);
 
+    private:
     /** Returns a reference to the value referenced by \param pooled. */
     template<typename U, bool CanBeNone>
     requires std::is_base_of_v<T, U>
     static const U & Get(const Pooled<U, Pool, CanBeNone> &pooled);
+
+    /** Erases the pooled entity from the pool.  Requires that the reference count is `0`. */
+    template<typename U, bool CanBeNone>
+    bool erase(const Pooled<U, Pool, CanBeNone> &pooled);
 };
 
 /**
@@ -144,6 +173,10 @@ struct Pooled
 
     ///> \tparam Pool needs access to private c'tor
     friend Pool;
+
+    ///> Access privilege for conversion between optional and non-optional `Pooled` instances.
+    template<typename, typename, bool>
+    friend struct Pooled;
 
     friend void swap(Pooled &first, Pooled &second) {
         using std::swap;
@@ -172,12 +205,10 @@ struct Pooled
     Pooled(const Pooled &other) : Pooled(other.pool_, other.ref_) { }
     Pooled(Pooled &&other) { swap(*this, other); }
 
-    ///> Access privilege for conversion between optional and non-optional `Pooled` instances.
-    template<typename, typename, bool>
-    friend struct Pooled;
-
-    ///> Constructs an optional `Pooled` with a present value from a non-optional one.
-    /// Example usecase: Assigning newly created pooled object to an optional pooled member field.
+    /**
+     * Constructs an optional `Pooled` with a present value from a non-optional one. Example usecase: Assigning newly
+     * created pooled object to an optional pooled member field.
+     */
     Pooled(const Pooled<T, Pool, false> &other) requires can_be_none
         : Pooled(M_notnull(other.pool_), M_notnull(other.ref_))
     { }
@@ -210,7 +241,9 @@ struct Pooled
         if (ref_) {
             M_insist(ref_->second > 0, "underflow reference count");
             if (--ref_->second == 0)
-                /* TODO: free object in pool, as it is not referenced anymore */;
+                /* TODO: free object in pool, as it is not referenced anymore */
+                // pool_->erase(*this);
+                ;
         }
     }
 
@@ -223,10 +256,10 @@ struct Pooled
     const T * operator->() const { return &Pool::Get(*this); }
 
     template<typename U>
-    requires requires (const T &ref) { m::as<const U>(ref); }
-    Pooled<U, Pool> as() const {
+    requires std::is_polymorphic_v<typename Pool::pooled_type> and (std::derived_from<U, T> or std::derived_from<T, U>)
+    Pooled<U, Pool, false> as() const {
         M_insist(ref_, "cannot cast empty pooled object");
-        return Pooled<U, Pool>{pool_, m::as<const U>(ref_)};
+        return {pool_, ref_};
     }
 
     template<typename U, bool Optional>
@@ -253,43 +286,110 @@ struct Pooled
     void dump() const { dump(std::cerr); }
 };
 
-template<typename T, typename Hash, typename KeyEqual, typename Copy>
+template<typename T, typename Hash, typename KeyEqual, typename Copy, bool ThreadSafe>
 template<typename U>
-PODPool<T, Hash, KeyEqual, Copy>::proxy_type PODPool<T, Hash, KeyEqual, Copy>::operator()(U &&u)
+PODPool<T, Hash, KeyEqual, Copy, ThreadSafe>::proxy_type PODPool<T, Hash, KeyEqual, Copy, ThreadSafe>::operator()(U &&u)
 {
-    auto it = table_.find(u);
-    if (it == table_.end())
+    if constexpr (ThreadSafe) {
+        reader_writer_lock lock{table_mutex_};
+        typename table_type::iterator it;
+        do {
+            lock.lock_read();
+            it = table_.find(u);
+            if (it != table_.end())
+                return proxy_type{this, &*it};
+        } while (not lock.upgrade());
+        M_insist(lock.owns_write_lock());
         it = table_.emplace_hint(it, Copy{}(std::forward<U>(u)), 0); // perfect forwarding
-    return proxy_type{this, &*it};
+        return proxy_type{this, &*it};
+    } else {
+        auto it = table_.find(u);
+        if (it == table_.end())
+            it = table_.emplace_hint(it, Copy{}(std::forward<U>(u)), 0); // perfect forwarding
+        return proxy_type{this, &*it};
+    }
 }
 
-template<typename T, typename Hash, typename KeyEqual, typename Copy>
+template<typename T, typename Hash, typename KeyEqual, typename Copy, bool ThreadSafe>
 template<bool CanBeNone>
-const T & PODPool<T, Hash, KeyEqual, Copy>::Get(const Pooled<T, PODPool, CanBeNone> &pooled)
+bool PODPool<T, Hash, KeyEqual, Copy, ThreadSafe>::erase(const Pooled<T, PODPool, CanBeNone> &pooled)
+{
+    M_insist(pooled.ref_, "cannot erase w/o valid reference");
+    if constexpr (ThreadSafe) {
+        write_lock lock{table_mutex_};
+        if (pooled.ref_->second != 0) return false;  // entity was concurrently pooled
+        table_.erase(pooled.ref_->first);
+        return true;
+    } else {
+        M_insist(pooled.ref_->second == 0, "reference count must be 0 to erase");
+        table_.erase(pooled.ref_->first);
+        return true;
+    }
+}
+
+template<typename T, typename Hash, typename KeyEqual, typename Copy, bool ThreadSafe>
+template<bool CanBeNone>
+const T & PODPool<T, Hash, KeyEqual, Copy, ThreadSafe>::Get(const Pooled<T, PODPool, CanBeNone> &pooled)
 {
     M_insist(pooled.ref_);
     return pooled.ref_->first;
 }
 
-template<typename T, typename Hash, typename KeyEqual>
+template<typename T, typename Hash, typename KeyEqual, bool ThreadSafe>
 template<typename U>
-requires std::is_base_of_v<T, U>
-Pooled<U, Pool<T, Hash, KeyEqual>> Pool<T, Hash, KeyEqual>::operator()(U &&u)
+requires std::derived_from<U, T>
+Pool<T, Hash, KeyEqual, ThreadSafe>::proxy_type<U> Pool<T, Hash, KeyEqual, ThreadSafe>::operator()(U &&u)
 {
-    auto it = table_.find(&u);
-    if (it == table_.end())
+    if constexpr (ThreadSafe) {
+        reader_writer_lock lock{table_mutex_};
+        typename table_type::iterator it;
+        do {
+            lock.lock_read();
+            it = table_.find(&u);
+            if (it != table_.end())
+                return proxy_type<U>{this, &*it};
+        } while (not lock.upgrade());
+        M_insist(lock.owns_write_lock());
         it = table_.emplace_hint(it, as<T>(std::make_unique<U>(std::forward<U>(u))), 0); // perfect forwarding
-    return Pooled<U, Pool>{this, &*it};
+        return proxy_type<U>{this, &*it};
+    } else {
+        auto it = table_.find(&u);
+        if (it == table_.end())
+            it = table_.emplace_hint(it, as<T>(std::make_unique<U>(std::forward<U>(u))), 0); // perfect forwarding
+        return proxy_type<U>{this, &*it};
+    }
 }
 
-template<typename T, typename Hash, typename KeyEqual>
+template<typename T, typename Hash, typename KeyEqual, bool ThreadSafe>
+template<typename U, bool CanBeNone>
+bool Pool<T, Hash, KeyEqual, ThreadSafe>::erase(const Pooled<U, Pool, CanBeNone> &pooled)
+{
+    M_insist(pooled.ref_, "cannot erase w/o valid reference");
+    if constexpr (ThreadSafe) {
+        write_lock lock{table_mutex_};  // acquire write lock
+        if (pooled.ref_->second != 0) return false;  // entity was concurrently pooled
+        table_.erase(pooled.ref_->first);
+        return true;
+    } else {
+        M_insist(pooled.ref_->second == 0, "reference count must be 0 to erase");
+        table_.erase(pooled.ref_->first);
+        return true;
+    }
+}
+
+template<typename T, typename Hash, typename KeyEqual, bool ThreadSafe>
 template<typename U, bool CanBeNone>
 requires std::is_base_of_v<T, U>
-const U & Pool<T, Hash, KeyEqual>::Get(const Pooled<U, Pool, CanBeNone> &pooled)
+const U & Pool<T, Hash, KeyEqual, ThreadSafe>::Get(const Pooled<U, Pool, CanBeNone> &pooled)
 {
     M_insist(pooled.ref_);
     return as<U>(*pooled.ref_->first);  // additional dereference because of `std::unique_ptr` indirection
 }
+
+template<typename T, typename Hash = std::hash<T>, typename KeyEqual = std::equal_to<T>, typename Copy = std::identity>
+using ThreadSafePODPool = PODPool<T, Hash, KeyEqual, Copy, true>;
+template<typename T, typename Hash = std::hash<T>, typename KeyEqual = std::equal_to<T>>
+using ThreadSafePool = Pool<T, Hash, KeyEqual, true>;
 
 struct StrClone
 {
@@ -297,22 +397,31 @@ struct StrClone
     const char * operator()(std::string_view sv) const { return M_notnull(strndup(sv.data(), sv.size())); }
 };
 
+namespace detail {
+
 /** Explicit specialization of PODPool for strings (const char *). */
-struct StringPool : PODPool<const char*, StrHash, StrEqual, StrClone>
+template<bool ThreadSafe = false>
+struct _StringPool : PODPool<const char*, StrHash, StrEqual, StrClone, ThreadSafe>
 {
     private:
-    using super = PODPool<const char*, StrHash, StrEqual, StrClone>;
+    using super = PODPool<const char*, StrHash, StrEqual, StrClone, ThreadSafe>;
 
     public:
-    StringPool() = default;
-    StringPool(std::size_t initial_capacity) : super(initial_capacity) { }
+    _StringPool() = default;
+    _StringPool(std::size_t initial_capacity) : super(initial_capacity) { }
 
-    ~StringPool() {
+    ~_StringPool() {
         for (auto [str, _] : *this)
             free((void*) str);
     }
 };
 
+}
+
+using ThreadSafeStringPool = detail::_StringPool<true>;
+using ThreadSafePooledString = ThreadSafeStringPool::proxy_type;
+
+using StringPool = detail::_StringPool<false>;
 using PooledString = StringPool::proxy_type;
 using PooledOptionalString = StringPool::proxy_optional_type;
 

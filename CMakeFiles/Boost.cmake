@@ -5,10 +5,15 @@ set(Boost_LIBRARIES
 list(TRANSFORM Boost_LIBRARIES PREPEND "Boost::" OUTPUT_VARIABLE BOOST_LINK_LIBRARIES)
 set(Boost_BYPRODUCTS)
 foreach(lib IN LISTS Boost_LIBRARIES)
-    list(APPEND Boost_BYPRODUCTS
-        "${CMAKE_BINARY_DIR}/third-party/src/Boost/stage/lib/${CMAKE_STATIC_LIBRARY_PREFIX}boost_${lib}${CMAKE_STATIC_LIBRARY_SUFFIX}"
-        "${CMAKE_BINARY_DIR}/third-party/src/Boost/stage/lib/${CMAKE_SHARED_LIBRARY_PREFIX}boost_${lib}${CMAKE_SHARED_LIBRARY_SUFFIX}"
-    )
+    if (BUILD_SHARED_LIBS)
+        list(APPEND Boost_BYPRODUCTS
+            "${CMAKE_BINARY_DIR}/third-party/src/Boost/stage/lib/${CMAKE_SHARED_LIBRARY_PREFIX}boost_${lib}${CMAKE_SHARED_LIBRARY_SUFFIX}"
+        )
+    else()
+        list(APPEND Boost_BYPRODUCTS
+            "${CMAKE_BINARY_DIR}/third-party/src/Boost/stage/lib/${CMAKE_STATIC_LIBRARY_PREFIX}boost_${lib}${CMAKE_STATIC_LIBRARY_SUFFIX}"
+        )
+    endif()
 endforeach()
 
 if(is_release_build)
@@ -40,13 +45,13 @@ set(BOOST_STATIC_LIBRARY_PATHS)
 set(BOOST_SHARED_LIBRARY_PATHS)
 foreach(lib IN LISTS Boost_LIBRARIES)
     add_library("Boost::${lib}" ${LIB_TYPE} IMPORTED GLOBAL)
-    set(static_library_path "${BOOST_LIBRARY_DIR}/${CMAKE_STATIC_LIBRARY_PREFIX}boost_${lib}${CMAKE_STATIC_LIBRARY_SUFFIX}")
-    set(shared_library_path "${BOOST_LIBRARY_DIR}/${CMAKE_SHARED_LIBRARY_PREFIX}boost_${lib}${CMAKE_SHARED_LIBRARY_SUFFIX}")
-    list(APPEND BOOST_STATIC_LIBRARY_PATHS "${static_library_path}")
-    list(APPEND BOOST_SHARED_LIBRARY_PATHS "${shared_library_path}")
     if (BUILD_SHARED_LIBS)
+        set(shared_library_path "${BOOST_LIBRARY_DIR}/${CMAKE_SHARED_LIBRARY_PREFIX}boost_${lib}${CMAKE_SHARED_LIBRARY_SUFFIX}")
+        list(APPEND BOOST_SHARED_LIBRARY_PATHS "${shared_library_path}")
         set_target_properties("Boost::${lib}" PROPERTIES IMPORTED_LOCATION "${shared_library_path}")
     else()
+        set(static_library_path "${BOOST_LIBRARY_DIR}/${CMAKE_STATIC_LIBRARY_PREFIX}boost_${lib}${CMAKE_STATIC_LIBRARY_SUFFIX}")
+        list(APPEND BOOST_STATIC_LIBRARY_PATHS "${static_library_path}")
         set_target_properties("Boost::${lib}" PROPERTIES IMPORTED_LOCATION "${static_library_path}")
     endif()
 endforeach()

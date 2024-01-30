@@ -98,7 +98,6 @@ TEST_CASE("StringPool internalize", "[core][util][pool]")
     REQUIRE(s3 == s4);
 }
 
-
 TEST_CASE("PooledOptionalString Utilization", "[core][util][pool]")
 {
     StringPool pool;
@@ -167,7 +166,7 @@ TEST_CASE("PooledOptionalString Utilization", "[core][util][pool]")
             REQUIRE(ps0.has_value());
             REQUIRE(streq(*ps0, "ps0"));
         }
-        REQUIRE(pool.size() == 1); // XXX: TODO: size() should return 0 after garbage collection is implemented
+        REQUIRE(pool.size() == 1); // TODO: size() should return 0 after garbage collection is implemented
     }
 }
 
@@ -220,5 +219,5 @@ TEST_CASE("Interaction of optional & non-optional", "[core][util][pool]")
     }
 
     // Ensure no leftovers are left in the pool
-    REQUIRE(pool.size() == 2); // XXX: TODO: size() should return 0 after garbage collection is implemented
+    REQUIRE(pool.size() == 2); // TODO: size() should return 0 after garbage collection is implemented
 }

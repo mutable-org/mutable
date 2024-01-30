@@ -1,10 +1,9 @@
 #include "util/WebSocketServer.hpp"
 
-#include <iostream>
-
 
 namespace ip = boost::asio::ip;
 namespace ws = boost::beast::websocket;
+
 
 using namespace m;
 using namespace std::chrono_literals;

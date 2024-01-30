@@ -4,9 +4,7 @@
 #include <boost/beast/core.hpp>
 #include <boost/beast/websocket.hpp>
 #include <functional>
-#include <future>
 #include <string>
-#include <thread>
 
 
 namespace m {

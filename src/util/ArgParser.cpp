@@ -158,11 +158,10 @@ M_LCOV_EXCL_START
 void ArgParser::print_args(std::ostream &out) const
 {
     auto print = [this, &out](const char *Short, const char *Long, const char *Descr) {
-        using std::setw, std::left, std::right;
         out << "    "
-            << left << setw(short_len_) << Short << right
+            << Short << std::setw(short_len_ - strlen(Short)) << ""
             << "  "
-            << left << setw(long_len_) << Long << right
+            << Long << std::setw(long_len_ - strlen(Long)) << ""
             << "    -    "
             << Descr
             << '\n';

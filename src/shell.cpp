@@ -6,7 +6,6 @@
 #include <fstream>
 #include <functional>
 #include <iomanip>
-#include <ios>
 #include <iostream>
 #include <mutable/catalog/CostModel.hpp>
 #include <mutable/mutable.hpp>
@@ -437,7 +436,7 @@ Immanuel Haffner\
         std::size_t max_len = 0;
         for (auto &layout : layouts) max_len = std::max(max_len, strlen(layout.first));
         for (auto &layout : layouts) {
-            std::cout << "\n    " << std::setw(max_len) << std::left << layout.first;
+            std::cout << "\n    " << layout.first << std::setw(max_len - strlen(layout.first)) << "";
             if (layout.second.description())
                 std::cout << "    -    " << layout.second.description();
         }
@@ -450,7 +449,7 @@ Immanuel Haffner\
         std::size_t max_len = 0;
         for (auto &ce : cardinality_estimators) max_len = std::max(max_len, strlen(ce.first));
         for (auto &ce : cardinality_estimators) {
-            std::cout << "\n    " << std::setw(max_len) << std::left << ce.first;
+            std::cout << "\n    " << ce.first << std::setw(max_len - strlen(ce.first)) << "";;
             if (ce.second.description())
                 std::cout << "    -    " << ce.second.description();
         }
@@ -463,7 +462,7 @@ Immanuel Haffner\
         std::size_t max_len = 0;
         for (auto &pe : plan_enumerators) max_len = std::max(max_len, strlen(pe.first));
         for (auto &pe : plan_enumerators) {
-            std::cout << "\n    " << std::setw(max_len) << std::left << pe.first;
+            std::cout << "\n    " << pe.first << std::setw(max_len - strlen(pe.first)) << "";;
             if (pe.second.description())
                 std::cout << "    -    " << pe.second.description();
         }
@@ -476,7 +475,7 @@ Immanuel Haffner\
         range backends(C.backends_cbegin(), C.backends_cend());
         for (auto &backend : backends) max_len = std::max(max_len, strlen(backend.first));
         for (auto &backend : backends) {
-            std::cout << "\n    " << std::setw(max_len) << std::left << backend.first;
+            std::cout << "\n    " << backend.first << std::setw(max_len - strlen(backend.first)) << "";;
             if (backend.second.description())
                 std::cout << "    -    " << backend.second.description();
         }
@@ -487,11 +486,11 @@ Immanuel Haffner\
         std::cout << "List of available cost functions:";
         std::size_t max_len = 0;
         range cost_functions(C.cost_functions_cbegin(), C.cost_functions_cend());
-        for (auto &cost_function : cost_functions) max_len = std::max(max_len, strlen(cost_function.first));
-        for (auto &cost_function : cost_functions) {
-            std::cout << "\n    " << std::setw(max_len) << std::left << cost_function.first;
-            if (cost_function.second.description())
-                std::cout << "    -    " << cost_function.second.description();
+        for (auto &cf : cost_functions) max_len = std::max(max_len, strlen(cf.first));
+        for (auto &cf : cost_functions) {
+            std::cout << "\n    " << cf.first << std::setw(max_len - strlen(cf.first)) << "";;
+            if (cf.second.description())
+                std::cout << "    -    " << cf.second.description();
         }
         std::cout << "\n    (Use --train-cost-models to train a cost function on your specific hardware)";
         std::cout << std::endl;
@@ -503,7 +502,7 @@ Immanuel Haffner\
         range schedulers(C.schedulers_cbegin(), C.schedulers_cend());
         for (auto &scheduler : schedulers) max_len = std::max(max_len, strlen(scheduler.first));
         for (auto &scheduler : schedulers) {
-            std::cout << "\n    " << std::setw(max_len) << std::left << scheduler.first;
+            std::cout << "\n    " << scheduler.first << std::setw(max_len - strlen(scheduler.first)) << "";;
             if (scheduler.second.description())
                 std::cout << "    -    " << scheduler.second.description();
         }
@@ -516,7 +515,7 @@ Immanuel Haffner\
         range table_factories(C.table_properties_cbegin(), C.table_properties_cend());
         for (auto &table_factory : table_factories) max_len = std::max(max_len, strlen(table_factory.first));
         for (auto &table_factory : table_factories) {
-            std::cout << "\n    " << std::setw(max_len) << std::left << table_factory.first;
+            std::cout << "\n    " << table_factory.first << std::setw(max_len - strlen(table_factory.first)) << "";;
             if (table_factory.second.description())
                 std::cout << "    -    " << table_factory.second.description();
         }

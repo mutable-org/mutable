@@ -371,9 +371,15 @@ void m::execute_query(Diagnostic &diag, const SelectStmt &stmt, std::unique_ptr<
     static thread_local std::unique_ptr<Backend> backend;
     if (not backend)
         backend = M_TIME_EXPR(C.create_backend(), "Create backend", C.timer());
+    execute_query(diag, stmt, std::move(consumer), *backend);
+}
+
+void m::execute_query(Diagnostic &diag, const SelectStmt &stmt, std::unique_ptr<Consumer> consumer,
+                      const Backend &backend)
+{
     auto logical_plan = logical_plan_from_statement(diag, stmt, std::move(consumer));
-    auto physical_plan = physical_plan_from_logical_plan(diag, *logical_plan, *backend);
-    execute_physical_plan(diag, *physical_plan, *backend);
+    auto physical_plan = physical_plan_from_logical_plan(diag, *logical_plan, backend);
+    execute_physical_plan(diag, *physical_plan, backend);
 }
 
 void m::load_from_CSV(Diagnostic &diag, Table &table, const std::filesystem::path &path, std::size_t num_rows,

@@ -81,6 +81,10 @@ void M_EXPORT execute_physical_plan(Diagnostic &diag, const MatchBase &physical_
  * automatically created. */
 [[deprecated("Use command_from_string() instead.")]]
 void M_EXPORT execute_query(Diagnostic &diag, const ast::SelectStmt &stmt, std::unique_ptr<Consumer> consumer);
+/** Optimizes and executes the given `SelectStmt` on \p backend.  Result tuples are passed to the given \p consumer. */
+[[deprecated("Use command_from_string() instead.")]]
+void M_EXPORT execute_query(Diagnostic &diag, const ast::SelectStmt &stmt, std::unique_ptr<Consumer> consumer,
+                            const Backend &backend);
 
 /**
  * Loads a CSV file into a `Table`.

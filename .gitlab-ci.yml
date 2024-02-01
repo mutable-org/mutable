@@ -143,6 +143,7 @@ build:debug:linux-amd64:
           -DWITH_V8=ON
           -DENABLE_SANITIZERS=ON
           -DENABLE_SANITY_FIELDS=ON
+        - cmake --build build/${BUILD_TYPE} --target Boost
         - cmake --build build/${BUILD_TYPE} --target gitversion all unittest
         - find build/${BUILD_TYPE}/third-party -name '*.so' -exec cp {} build/${BUILD_TYPE}/lib \; # collect shared libraries
         - find build/${BUILD_TYPE}/third-party -name '*.so.*' -exec cp {} build/${BUILD_TYPE}/lib \; # collect shared libraries
@@ -172,6 +173,7 @@ build:debug:macos-amd64:
           -DWITH_V8=ON
           -DENABLE_SANITIZERS=ON
           -DENABLE_SANITY_FIELDS=ON
+        - cmake --build build/${BUILD_TYPE} --target Boost
         - cmake --build build/${BUILD_TYPE} --target gitversion all unittest
         - find build/${BUILD_TYPE}/third-party -name '*.dylib' -exec cp {} build/${BUILD_TYPE}/lib \; # collect shared libraries
         - find build/${BUILD_TYPE}/third-party -name '*.dylib.*' -exec cp {} build/${BUILD_TYPE}/lib \; # collect shared libraries
@@ -297,6 +299,7 @@ build:release:linux-amd64:
           -DWITH_V8=ON
           -DENABLE_SANITIZERS=OFF
           -DENABLE_SANITY_FIELDS=OFF
+        - cmake --build build/${BUILD_TYPE} --target Boost
         - cmake --build build/${BUILD_TYPE} --target gitversion shell cardinality_gen
         - mkdir -p mutable/lib mutable/bin
         - cp -R include mutable
@@ -328,6 +331,7 @@ build:release:macos-amd64:
           -DWITH_V8=ON
           -DENABLE_SANITIZERS=OFF
           -DENABLE_SANITY_FIELDS=OFF
+        - cmake --build build/${BUILD_TYPE} --target Boost
         - cmake --build build/${BUILD_TYPE} --target gitversion shell cardinality_gen
         - mkdir -p mutable/lib mutable/bin
         - cp -R include mutable

@@ -746,7 +746,7 @@ struct view<It, ReturnType&(It)>
         }
 
         reference operator*()  const requires requires (projection_type p, It it) { p(it); } { return project_(it_); }
-        reference operator->() const requires requires (projection_type p, It it) { p(it); } { return project_(it_); }
+        pointer operator->() const requires requires (projection_type p, It it) { p(it); } { return &project_(it_); }
     };
 
     public:

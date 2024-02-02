@@ -60,7 +60,7 @@ struct WeighExpr
     }
 };
 
-std::vector<cnf::CNF> optimize_filter(cnf::CNF filter)
+std::vector<cnf::CNF> Optimizer::optimize_filter(cnf::CNF filter)
 {
     constexpr unsigned MAX_WEIGHT = 12; // equals to 4 comparisons of fixed-length values
     M_insist(not filter.empty());
@@ -104,6 +104,47 @@ std::vector<cnf::CNF> optimize_filter(cnf::CNF filter)
 
     M_insist(not optimized_filters.empty());
     return optimized_filters;
+}
+
+std::vector<Optimizer::projection_type>
+Optimizer::compute_projections_required_for_order_by(const std::vector<projection_type> &projections,
+                                                     const std::vector<order_type> &order_by)
+{
+    std::vector<Optimizer::projection_type> required_projections;
+
+    /* Collect all required `Designator`s which are not included in the projection. */
+    auto get_required_designator = overloaded {
+        [&](const ast::Designator &d) -> void {
+            if (auto t = std::get_if<const Expr*>(&d.target())) { // refers to another expression?
+                /*----- Find `t` in projections. -----*/
+                for (auto &[expr, _] : projections) {
+                    if (*t == &expr.get())
+                        return; // found
+                }
+            }
+            /*----- Find `d` in projections. -----*/
+            for (auto &[expr, alias] : projections) {
+                if (not alias.has_value() and d == expr.get())
+                    return; // found
+            }
+            required_projections.emplace_back(d, ThreadSafePooledOptionalString{});
+        },
+        [&](const ast::FnApplicationExpr &fn) -> void {
+            /*----- Find `fn` in projections. -----*/
+            for (auto &[expr, alias] : projections) {
+                if (not alias.has_value() and fn == expr.get())
+                    throw visit_skip_subtree(); // found
+            }
+            required_projections.emplace_back(fn, ThreadSafePooledOptionalString{});
+            throw visit_skip_subtree();
+        },
+        [](auto&&) -> void { /* nothing to be done */ },
+    };
+    /* Process the ORDER BY clause. */
+    for (auto [expr, _] : order_by)
+        visit(get_required_designator, expr.get(), m::tag<m::ast::ConstPreOrderExprVisitor>());
+
+    return required_projections;
 }
 
 
@@ -229,7 +270,7 @@ std::unique_ptr<Producer*[]> Optimizer::optimize_source_plans(const QueryGraph &
             PT[s].model = std::move(new_model);
 
             /* Optimize the filter by splitting into smaller filters and ordering them. */
-            std::vector<cnf::CNF> filters = optimize_filter(ds->filter());
+            std::vector<cnf::CNF> filters = Optimizer::optimize_filter(ds->filter());
             Producer *filtered_ds = source_plans[ds->id()];
 
             /* Construct a plan as a sequence of filters. */
@@ -378,7 +419,7 @@ std::unique_ptr<Producer> Optimizer::optimize_plan(const QueryGraph &G, std::uni
         plan = std::move(agg);
     }
 
-    auto additional_projections = compute_projections_required_for_order_by(G.projections(), G.order_by());
+    auto additional_projections = Optimizer::compute_projections_required_for_order_by(G.projections(), G.order_by());
     const bool requires_post_projection = not additional_projections.empty();
 
     /* Perform projection. */
@@ -459,47 +500,6 @@ std::unique_ptr<Producer> Optimizer::optimize_plan(const QueryGraph &G, std::uni
         plan = std::move(projection);
     }
     return plan;
-}
-
-std::vector<Optimizer::projection_type>
-Optimizer::compute_projections_required_for_order_by(const std::vector<projection_type> &projections,
-                                                     const std::vector<order_type> &order_by) const
-{
-    std::vector<Optimizer::projection_type> required_projections;
-
-    /* Collect all required `Designator`s which are not included in the projection. */
-    auto get_required_designator = overloaded {
-        [&](const ast::Designator &d) -> void {
-            if (auto t = std::get_if<const Expr*>(&d.target())) { // refers to another expression?
-                /*----- Find `t` in projections. -----*/
-                for (auto &[expr, _] : projections) {
-                    if (*t == &expr.get())
-                        return; // found
-                }
-            }
-            /*----- Find `d` in projections. -----*/
-            for (auto &[expr, alias] : projections) {
-                if (not alias.has_value() and d == expr.get())
-                    return; // found
-            }
-            required_projections.emplace_back(d, ThreadSafePooledOptionalString{});
-        },
-        [&](const ast::FnApplicationExpr &fn) -> void {
-            /*----- Find `fn` in projections. -----*/
-            for (auto &[expr, alias] : projections) {
-                if (not alias.has_value() and fn == expr.get())
-                    throw visit_skip_subtree(); // found
-            }
-            required_projections.emplace_back(fn, ThreadSafePooledOptionalString{});
-            throw visit_skip_subtree();
-        },
-        [](auto&&) -> void { /* nothing to be done */ },
-    };
-    /* Process the ORDER BY clause. */
-    for (auto [expr, _] : order_by)
-        visit(get_required_designator, expr.get(), m::tag<m::ast::ConstPreOrderExprVisitor>());
-
-    return required_projections;
 }
 
 #define DEFINE(PLANTABLE) \

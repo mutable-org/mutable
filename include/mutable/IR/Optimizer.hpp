@@ -67,11 +67,14 @@ struct M_EXPORT Optimizer
     std::unique_ptr<Producer> optimize_plan(const QueryGraph &G, std::unique_ptr<Producer> plan,
                                             PlanTableEntry &entry) const;
 
+    /** Optimizes the filter \p filter by splitting it into smaller filters and ordering them. */
+    static std::vector<cnf::CNF> optimize_filter(cnf::CNF filter);
+
     /** Computes and returns a `std::vector` of additional projections required *before* evaluating the ORDER BY clause.
      * The returned `std::vector` may be empty, in which case *no* additional projection is required. */
-    std::vector<projection_type>
+    static std::vector<projection_type>
     compute_projections_required_for_order_by(const std::vector<projection_type> &projections,
-                                              const std::vector<order_type> &order_by) const;
+                                              const std::vector<order_type> &order_by);
 };
 
 }

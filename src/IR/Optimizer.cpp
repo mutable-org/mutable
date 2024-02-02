@@ -266,16 +266,16 @@ std::unique_ptr<Producer*[]> Optimizer::optimize_source_plans(const QueryGraph &
 
         /* Apply filter, if any. */
         if (ds->filter().size()) {
-            /* Update data model with filter. */
-            auto new_model = CE.estimate_filter(G, *PT[s].model, ds->filter());
-            PT[s].model = std::move(new_model);
-
             /* Optimize the filter by splitting into smaller filters and ordering them. */
             std::vector<cnf::CNF> filters = Optimizer::optimize_filter(ds->filter());
             Producer *filtered_ds = source_plans[ds->id()];
 
             /* Construct a plan as a sequence of filters. */
             for (auto &&filter : filters) {
+                /* Update data model with filter. */
+                auto new_model = CE.estimate_filter(G, *PT[s].model, filter);
+                PT[s].model = std::move(new_model);
+
                 if (filter.size() == 1 and filter[0].size() > 1) { // disjunctive filter
                     auto tmp = std::make_unique<DisjunctiveFilterOperator>(std::move(filter));
                     tmp->add_child(filtered_ds);
@@ -285,17 +285,16 @@ std::unique_ptr<Producer*[]> Optimizer::optimize_source_plans(const QueryGraph &
                     tmp->add_child(filtered_ds);
                     filtered_ds = tmp.release();
                 }
+
+                /* Set operator information. */
+                auto source_info = std::make_unique<OperatorInformation>();
+                source_info->subproblem = s;
+                source_info->estimated_cardinality = CE.predict_cardinality(*PT[s].model); // includes filters, if any
+                filtered_ds->info(std::move(source_info));
             }
 
             source_plans[ds->id()] = filtered_ds;
         }
-
-        /* Set operator information. */
-        auto source = source_plans[ds->id()];
-        auto source_info = std::make_unique<OperatorInformation>();
-        source_info->subproblem = s;
-        source_info->estimated_cardinality = CE.predict_cardinality(*PT[s].model); // includes filters, if any
-        source->info(std::move(source_info));
     }
     return source_plans;
 }

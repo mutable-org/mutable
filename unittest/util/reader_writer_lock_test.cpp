@@ -41,7 +41,7 @@ TEST_CASE("reader_writer_mutex/reader_writer_lock/3_readers_2_writers", "[core][
         lock.lock_write();
         M_insist(lock.owns_write_lock());
         shared_value += delta;
-        std::this_thread::sleep_for(5ms);
+        std::this_thread::sleep_for(50ms);
     };
 
     auto read = [&mutex, &shared_value](int &dest) {
@@ -49,29 +49,29 @@ TEST_CASE("reader_writer_mutex/reader_writer_lock/3_readers_2_writers", "[core][
         lock.lock_read();
         M_insist(lock.owns_read_lock());
         dest = shared_value;
-        std::this_thread::sleep_for(5ms);
+        std::this_thread::sleep_for(50ms);
     };
 
-    /* Spawn first reader, taking 5ms. */
+    /* Spawn first reader, taking 50ms. */
     std::thread tr1{read, std::ref(r1)};
-    std::this_thread::sleep_for(1ms);
+    std::this_thread::sleep_for(10ms);
 
-    /* Spawn first writer, taking 5ms.  It is blocked by the first reader. */
+    /* Spawn first writer, taking 50ms.  It is blocked by the first reader. */
     std::thread tw1{write, 1};
-    std::this_thread::sleep_for(1ms);
+    std::this_thread::sleep_for(10ms);
 
     /* Spawn second reader.  The first reader should still be active while the first writer is still blocked.
      * Therefore, the newly spawned second reader should wait for the writer to finish. */
     std::thread tr2{read, std::ref(r2)};
-    std::this_thread::sleep_for(1ms);
+    std::this_thread::sleep_for(10ms);
 
     /* Spawn second writer. */
     std::thread tw2{write, 2};
-    std::this_thread::sleep_for(1ms);
+    std::this_thread::sleep_for(10ms);
 
     /* Spawn third reader. */
     std::thread tr3{read, std::ref(r3)};
-    std::this_thread::sleep_for(1ms);
+    std::this_thread::sleep_for(10ms);
 
     tr1.join();
     tr2.join();
@@ -93,36 +93,36 @@ TEST_CASE("reader_writer_mutex/read_lock_write_lock/3_readers_2_writers", "[core
         write_lock lock{mutex};
         M_insist(lock.owns_lock());
         shared_value += delta;
-        std::this_thread::sleep_for(5ms);
+        std::this_thread::sleep_for(50ms);
     };
 
     auto read = [&mutex, &shared_value](int &dest) {
         read_lock lock{mutex};
         M_insist(lock.owns_lock());
         dest = shared_value;
-        std::this_thread::sleep_for(5ms);
+        std::this_thread::sleep_for(50ms);
     };
 
-    /* Spawn first reader, taking 5ms. */
+    /* Spawn first reader, taking 50ms. */
     std::thread tr1{read, std::ref(r1)};
-    std::this_thread::sleep_for(1ms);
+    std::this_thread::sleep_for(10ms);
 
-    /* Spawn first writer, taking 5ms.  It is blocked by the first reader. */
+    /* Spawn first writer, taking 50ms.  It is blocked by the first reader. */
     std::thread tw1{write, 1};
-    std::this_thread::sleep_for(1ms);
+    std::this_thread::sleep_for(10ms);
 
     /* Spawn second reader.  The first reader should still be active while the first writer is still blocked.
      * Therefore, the newly spawned second reader should wait for the writer to finish. */
     std::thread tr2{read, std::ref(r2)};
-    std::this_thread::sleep_for(1ms);
+    std::this_thread::sleep_for(10ms);
 
     /* Spawn second writer. */
     std::thread tw2{write, 2};
-    std::this_thread::sleep_for(1ms);
+    std::this_thread::sleep_for(10ms);
 
     /* Spawn third reader. */
     std::thread tr3{read, std::ref(r3)};
-    std::this_thread::sleep_for(1ms);
+    std::this_thread::sleep_for(10ms);
 
     tr1.join();
     tr2.join();

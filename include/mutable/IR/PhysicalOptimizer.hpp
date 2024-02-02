@@ -291,7 +291,6 @@ struct PhysicalOptimizerImpl : PhysicalOptimizer, ConstPostOrderOperatorVisitor
     public:
     std::unique_ptr<MatchBase> extract_plan() override {
         auto plan = get_plan_entry().extract_match();
-        table().clear(); // to make retrieved plan exclusive
         return M_nothrow(plan.exclusive_shared_to_unique());
     }
 

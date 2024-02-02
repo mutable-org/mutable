@@ -75,6 +75,9 @@ struct M_EXPORT Operator
         M_insist(id_ != -1UL, "id must be first set by calling `assign_post_order_ids()`");
         return id_;
     }
+    private:
+    /** Sets the ID of `this`. */
+    void id(std::size_t id) const { id_ = id; }
 
     public:
     /** Attached `OperatorData` `data` to this `Operator`.  Returns the previously attached `OperatorData`.  May return

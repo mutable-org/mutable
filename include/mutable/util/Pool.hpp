@@ -261,7 +261,7 @@ struct Pooled
 
     Pooled & operator=(Pooled other) { swap(*this, other); return *this; }
 
-    operator const T & () const { return Pool::Get(*this); }
+    explicit operator const T & () const { return Pool::Get(*this); }
     operator const T * () const { return &Pool::Get(*this); }
 
     const T & operator*() const { return Pool::Get(*this); }

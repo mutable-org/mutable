@@ -50,7 +50,8 @@ env CFLAGS=--coverage CXXFLAGS=--coverage \
     -DENABLE_SANITY_FIELDS=OFF \
     -DUSE_LLD=ON
 
-cmake --build build/coverage -t clean
+cmake --build build/coverage --target clean
+cmake --build build/coverage --target Boost
 cmake --build build/coverage
 
 cd build/coverage

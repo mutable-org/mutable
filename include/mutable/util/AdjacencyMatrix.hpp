@@ -127,6 +127,17 @@ exit:
         return neighbors - S;
     }
 
+    /** Compute the node with the highest degree, i.e. the node with the most edges, given the nodes in `S`. */
+    std::size_t highest_degree_node(SmallBitset S) const {
+        if (S.is_singleton())
+            return (uint64_t) S;
+        std::size_t highest_degree_id = *S.begin();
+        for (auto it = ++S.begin(); it != S.end(); ++it)
+            if (m_[*it].size() > m_[highest_degree_id].size())
+                highest_degree_id = *it;
+        return highest_degree_id;
+    }
+
     /** Returns `true` iff the subproblem `S` is connected.
      * `S` is connected iff any node in `S` can reach all other nodes of `S` using only nodes in `S`.
      *  Assumes `AdjacencyMatrix` is symmetric, i.e. edges are undirected.  */

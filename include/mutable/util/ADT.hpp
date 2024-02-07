@@ -222,6 +222,11 @@ struct SmallBitset
     /** Returns the set where the elements of `right` have been subtracted from `left`, i.e.\ `left` - `right`. */
     friend SmallBitset operator-(SmallBitset left, SmallBitset right) { return subtract(left, right); }
 
+    /** Returns the set where the elements of `left` are shifted by `n` positions to the left. */
+    friend SmallBitset operator<<(SmallBitset left, uint64_t n) { return SmallBitset(left.bits_ << n); }
+    /** Returns the set where the elements of `left` are shifted by `n` positions to the right. */
+    friend SmallBitset operator>>(SmallBitset left, uint64_t n) { return SmallBitset(left.bits_ >> n); }
+
     SmallBitset & operator|=(SmallBitset other) { return *this = *this | other; }
     SmallBitset & operator&=(SmallBitset other) { return *this = *this & other; }
     SmallBitset & operator-=(SmallBitset other) { return *this = *this - other; }

@@ -218,6 +218,11 @@ exit:
      * i.e.\ connected and acyclic. */
     AdjacencyMatrix tree_directed_away_from(SmallBitset root);
 
+    /** Computes an `AdjacencyMatrix` that has the two nodes at index `i` and `j` merged, i.e. all edges previously
+     * pointing to either node `i` or `j` now point to the merged node. The size of the adjacency matrix is reduced by
+     * one. */
+    AdjacencyMatrix merge_nodes(const std::size_t i, const std::size_t j) const;
+
     /** Compares two `AdjacencyMatrix`s element-wise. */
     bool operator==(const AdjacencyMatrix &other) const {
         if (this->num_vertices_ != other.num_vertices_) return false;

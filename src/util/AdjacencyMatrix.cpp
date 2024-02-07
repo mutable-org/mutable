@@ -135,6 +135,88 @@ AdjacencyMatrix AdjacencyMatrix::tree_directed_away_from(SmallBitset root)
     return directed_tree;
 }
 
+AdjacencyMatrix AdjacencyMatrix::merge_nodes(const std::size_t i, const std::size_t j) const
+{
+    M_insist(num_vertices_ > 1);
+    M_insist(i < j);
+    M_insist(i < num_vertices_);
+    M_insist(j < num_vertices_);
+
+    AdjacencyMatrix m_merged(num_vertices_ - 1);
+
+    std::size_t row_new_idx = 0;
+    for (std::size_t row_idx = 0; row_idx < num_vertices_; ++row_idx) {
+        SmallBitset S = m_[row_idx];
+        //std::cout << "Current row: ";
+        //S.print_fixed_length(std::cout, num_vertices_);
+        //std::cout << std::endl;
+
+        if (row_idx == i) {
+            // merge both nodes ``vertically''
+            S |= m_[j];
+            // set both `i` and `j` bit to zero to avoid self-edge in horizontal merge later
+            S.at(i) = S.at(j) = false;
+            //std::cout << "\tmerge vertically: ";
+            //S.print_fixed_length(std::cout, num_vertices_);
+            //std::cout << std::endl;
+        } else if (row_idx == j) {
+            // skip this row
+            continue;
+        }
+        // merge both nodes ``horizontally''
+        /* 1. set bit at pos `i` to S[i] | S[j]
+         *      - isolate bit as pos `j` from `S` (mask_j)
+         *      - shift this bit by (j - i) to the right
+         *      - compute S | mask_j
+         */
+        SmallBitset mask_j = S & SmallBitset::Singleton(j);
+        mask_j = mask_j >> (j - i);
+        //std::cout << "\tmask_j: ";
+        //mask_j.print_fixed_length(std::cout, num_vertices_);
+        //std::cout << std::endl;
+        S |= mask_j;
+        //std::cout << "\tS after mask_j: ";
+        //S.print_fixed_length(std::cout, num_vertices_);
+        //std::cout << std::endl;
+        /* 2. shift all bits left from `j` one position to the right
+         *      - isolate all bits left from the bit at pos `j`
+         *      - shift those bits one to the right (mask)
+         *      - clear (set to 0) all bits left from the bit at pos `j` in `S` (including `j`)
+         *      - compute S & mask
+         */
+        SmallBitset mask(~0 << (j + 1));
+        //std::cout << "\tmask: ";
+        //mask.print_fixed_length(std::cout, num_vertices_);
+        //std::cout << std::endl;
+        SmallBitset left = S & mask;
+        left = left >> 1;
+        //std::cout << "\tleft: ";
+        //left.print_fixed_length(std::cout, num_vertices_);
+        //std::cout << std::endl;
+
+
+        mask = SmallBitset((1UL << j) - 1);
+        //std::cout << "\tmask: ";
+        //mask.print_fixed_length(std::cout, num_vertices_);
+        //std::cout << std::endl;
+        S &= mask;
+        //std::cout << "\tS after mask: ";
+        //S.print_fixed_length(std::cout, num_vertices_);
+        //std::cout << std::endl;
+
+        S |= left;
+        //std::cout << "\tS after left: ";
+        //S.print_fixed_length(std::cout, num_vertices_);
+        //std::cout << std::endl;
+
+        /* Set `merged_row` = `S`. */
+        m_merged.m_[row_new_idx] = std::move(S);
+
+        ++row_new_idx;
+    }
+    return m_merged;
+}
+
 M_LCOV_EXCL_START
 void AdjacencyMatrix::dump(std::ostream &out) const { out << *this << std::endl; }
 void AdjacencyMatrix::dump() const { dump(std::cerr); }

@@ -342,7 +342,7 @@ def run_benchmarks(args: argparse.Namespace) -> None:
             if os.path.isfile(path):  # path is an experiment file
                 benchmark_files.append(path)
             else:  # path is a directory containing multiple experiment files
-                benchmark_files.extend(glob.glob(os.path.join('benchmark', path, '**', '[!_]*.yml'), recursive=True))
+                benchmark_files.extend(glob.glob(os.path.join(path, '**', '[!_]*.yml'), recursive=True))
 
     benchmark_files: list[str] = sorted(list(set(benchmark_files)))
 

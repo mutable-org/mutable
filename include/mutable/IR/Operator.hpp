@@ -43,6 +43,14 @@ struct M_EXPORT OperatorData
  * can be evaluated to a sequence of tuples and have a `Schema`. */
 struct M_EXPORT Operator
 {
+    friend void swap(Operator &first, Operator &second) {
+        using std::swap;
+        swap(first.schema_, second.schema_);
+        swap(first.info_,   second.info_);
+        swap(first.data_,   second.data_);
+        swap(first.id_,     second.id_);
+    }
+
     private:
     Schema schema_; ///< the schema of this `Operator`
     std::unique_ptr<OperatorInformation> info_; ///< additional information about this `Operator`
@@ -51,6 +59,8 @@ struct M_EXPORT Operator
     mutable std::size_t id_ = -1UL; ///< the ID of this `Operator`; used as index in the DP table of `PhysicalOperator`
 
     public:
+    Operator() = default;
+    Operator(Operator &&other) : Operator() { swap(*this, other); }
     virtual ~Operator() { delete data_; }
 
     /** Returns the `Schema` of this `Operator`. */
@@ -111,8 +121,6 @@ struct M_EXPORT Producer : virtual Operator
     Consumer *parent_; ///< the parent of this `Producer`
 
     public:
-    virtual ~Producer() { }
-
     /** Returns the parent of this `Producer`. */
     Consumer * parent() const { return parent_; }
     /** Sets the parent of this `Producer`.  Returns the previous parent.  May return `nullptr`. */
@@ -126,6 +134,8 @@ struct M_EXPORT Consumer : virtual Operator
     std::vector<Producer*> children_; ///< the children of this `Consumer`
 
     public:
+    Consumer() = default;
+    Consumer(Consumer&&) = default;
     virtual ~Consumer() {
         for (auto c : children_)
             delete c;

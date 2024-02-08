@@ -893,6 +893,17 @@ decompose_equi_predicate(const cnf::CNF &cnf, const Schema &schema_left)
     return { std::move(ids_left), std::move(ids_right) };
 }
 
+/** Returns a deduplicated version of \p v, i.e. duplicate identifiers are only contained once.  */
+std::vector<Schema::Identifier> deduplicate(const std::vector<Schema::Identifier> &v)
+{
+    std::vector<Schema::Identifier> res;
+    for (auto &id : v) {
+        if (not contains(res, id))
+            res.push_back(id);
+    }
+    return res;
+}
+
 
 /*======================================================================================================================
  * NoOp
@@ -3922,8 +3933,8 @@ void SimpleHashJoin<UniqueBuild, Predicated>::execute(const Match<SimpleHashJoin
     const auto ht_schema = M.build.schema().deduplicate();
 
     /*----- Decompose each clause of the join predicate of the form `A.x = B.y` into parts `A.x` and `B.y`. -----*/
-    auto p = decompose_equi_predicate(M.join.predicate(), ht_schema);
-    const std::vector<Schema::Identifier> &build_keys = p.first, &probe_keys = p.second;
+    const auto decomposed_ids = decompose_equi_predicate(M.join.predicate(), ht_schema);
+    const auto build_keys = deduplicate(decomposed_ids.first), probe_keys = deduplicate(decomposed_ids.second);
 
     /*----- Compute payload IDs and its total size in bits (ignoring padding). -----*/
     std::vector<Schema::Identifier> payload_ids;
@@ -4059,10 +4070,11 @@ void SimpleHashJoin<UniqueBuild, Predicated>::execute(const Match<SimpleHashJoin
                 key.emplace_back(env.get(probe_key));
             if constexpr (UniqueBuild) {
                 /*----- Add build key to current environment since `ht->find()` will only return the payload values. -----*/
-                for (auto build_it = build_keys.cbegin(), probe_it = probe_keys.cbegin(); build_it != build_keys.cend();
-                     ++build_it, ++probe_it)
+                for (auto build_it = decomposed_ids.first.cbegin(), probe_it = decomposed_ids.second.cbegin();
+                     build_it != decomposed_ids.first.cend();
+                     ++build_it, ++probe_it) // use build and probe keys *with* duplicates to ensure correct indices
                 {
-                    M_insist(probe_it != probe_keys.cend());
+                    M_insist(probe_it != decomposed_ids.second.cend());
                     env.add(*build_it, env.get(*probe_it)); // since build and probe keys match for join partners
                 }
 
@@ -4444,11 +4456,12 @@ ConditionSet HashBasedGroupJoin::pre_condition(
     if (child_idx == 0) {
         /*----- Decompose each clause of the join predicate of the form `A.x = B.y` into parts `A.x` and `B.y`. -----*/
         auto &build = *std::get<2>(partial_inner_nodes);
-        auto build_keys = decompose_equi_predicate(join.predicate(), build.schema()).first;
+        const auto decomposed_ids = decompose_equi_predicate(join.predicate(), build.schema());
+        const auto build_keys = deduplicate(decomposed_ids.first);
 
         /*----- Hash-based group-join can only be used if grouping and join (i.e. build) key match (ignoring order). -*/
         const auto num_grouping_keys = grouping.group_by().size();
-        if (num_grouping_keys != build_keys.size()) { // XXX: duplicated IDs are still a match but rejected here
+        if (num_grouping_keys != build_keys.size()) {
             pre_cond.add_condition(Unsatisfiable());
             return pre_cond;
         }
@@ -4526,9 +4539,8 @@ void HashBasedGroupJoin::execute(const Match<HashBasedGroupJoin> &M, setup_t set
     aggregates_size_in_bits += 64;
 
     /*----- Decompose each clause of the join predicate of the form `A.x = B.y` into parts `A.x` and `B.y`. -----*/
-    auto decomposed_ids = decompose_equi_predicate(M.join.predicate(), M.build.schema());
-    const auto &build_keys = decomposed_ids.first;
-    const auto &probe_keys = decomposed_ids.second;
+    const auto decomposed_ids = decompose_equi_predicate(M.join.predicate(), M.build.schema());
+    const auto build_keys = deduplicate(decomposed_ids.first), probe_keys = deduplicate(decomposed_ids.second);
     M_insist(build_keys.size() == num_keys);
 
     /*----- Compute initial capacity of hash table. -----*/

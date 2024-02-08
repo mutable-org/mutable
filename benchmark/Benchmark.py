@@ -50,7 +50,9 @@ def validate_schema(path_to_file: str, path_to_schema: str) -> bool:
     data = yamale.make_data(path_to_file)
     try:
         yamale.validate(schema, data)
-    except ValueError:
+    except ValueError as e:
+        errors = '\n'.join([f'  - {err.strip()}' for err in str(e).split('\n')[1:]])
+        tqdm_print(f'Benchmark file "{path_to_file}" violates schema:\n{errors}')
         return False
     return True
 
@@ -397,7 +399,6 @@ def run_benchmarks(args: argparse.Namespace) -> None:
 
         # Validate schema
         if not validate_schema(path_to_file, YML_SCHEMA):
-            tqdm_print(f'Benchmark file "{path_to_file}" violates schema.')
             continue
 
         with open(path_to_file, 'r') as yml_file:

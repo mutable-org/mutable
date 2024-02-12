@@ -1,12 +1,14 @@
 #pragma once
 
 #include <algorithm>
+#include <cmath>
 #include <cstring>
 #include <iostream>
-#include <utility>
-#include <vector>
+#include <mutable/util/concepts.hpp>
 #include <mutable/util/exception.hpp>
 #include <mutable/util/macro.hpp>
+#include <utility>
+#include <vector>
 
 
 namespace m {
@@ -18,7 +20,7 @@ struct Schema;
 namespace idx {
 
 /** An enum class that lists all supported index methods. */
-enum class IndexMethod { Array };
+enum class IndexMethod { Array, Rmi };
 
 /** The base class for indexes. */
 struct IndexBase
@@ -127,7 +129,235 @@ struct ArrayIndex : IndexBase
 
     void dump(std::ostream &out) const override { out << "ArrayIndex<" << typeid(key_type).name() << '>' << std::endl; }
     void dump() const override { dump(std::cerr); }
+};
 
+/** A recursive model index with two layers consiting only of linear monels that maps keys to their `tuple_id`. */
+template<arithmetic Key>
+struct RecursiveModelIndex : ArrayIndex<Key>
+{
+    using base_type = ArrayIndex<Key>;
+    using key_type = base_type::key_type;
+    using value_type = base_type::value_type;
+    using entry_type = base_type::entry_type;
+    using container_type = base_type::container_type;
+    using const_iterator = base_type::const_iterator;
+
+    struct LinearModel
+    {
+        double slope;
+        double intercept;
+
+        LinearModel(double slope, double intercept) : slope(slope), intercept(intercept) { }
+
+        double operator()(const key_type x) const { return std::fma(slope, static_cast<double>(x), intercept); }
+
+        /** Builds a linear spline model between the \p first and \p last data point.  \p offset defines the first
+         * y-value.  All y-values are scaled by \p compression_factor. */
+        static LinearModel train_linear_spline(const_iterator first, const_iterator last,
+                                               const std::size_t offset = 0, const double compression_factor = 1.0)
+        {
+            std::size_t n = std::distance(first, last);
+            if (n == 0) return { 0.0, 0.0 };
+            if (n == 1) return { 0.0, static_cast<double>(offset) * compression_factor };
+            double numerator = static_cast<double>(n); // (offset + n) - offset
+            double denominator = static_cast<double>((*(last - 1)).first - (*first).first);
+            double slope = denominator != 0 ? numerator/denominator * compression_factor : 0.0;
+            double intercept = offset * compression_factor - slope * (*first).first;
+            return { slope, intercept };
+        }
+
+        /** Builds a linear regression model from all data points between the \p first and \p last .  \p offset defines
+         * the first y-value.  All y-values are scaled by \p compression_factor. */
+        static LinearModel train_linear_regression(const_iterator first, const_iterator last,
+                                                   const std::size_t offset = 0, const double compression_factor = 1.0)
+        {
+            std::size_t n = std::distance(first, last);
+            if (n == 0) return { 0.0, 0.0 };
+            if (n == 1) return { 0.0, static_cast<double>(offset) * compression_factor };
+
+            double mean_x = 0.0;
+            double mean_y = 0.0;
+            double c = 0.0;
+            double m2 = 0.0;
+
+            for (std::size_t i = 0; i != n; ++i) {
+                auto x = (*(first + i)).first;
+                std::size_t y = offset + i;
+
+                double dx = x - mean_x;
+                mean_x += dx /  (i + 1);
+                mean_y += (y - mean_y) / (i + 1);
+                c += dx * (y - mean_y);
+
+                double dx2 = x - mean_x;
+                m2 += dx * dx2;
+            }
+
+            double cov = c / (n - 1);
+            double var = m2 / (n - 1);
+
+            if (var == 0.f) return { 0.0, mean_y };
+
+            double slope = cov / var * compression_factor;
+            double intercept = mean_y * compression_factor - slope * mean_x;
+            return { slope, intercept };
+        }
+    };
+
+    protected:
+    std::vector<LinearModel> models_; ///< A vector of linear models to index the underlying data.
+
+    public:
+    RecursiveModelIndex() : base_type() { }
+
+    /** Returns the `IndexMethod` of the index. */
+    IndexMethod method() const override { return IndexMethod::Rmi; }
+
+    /** Sorts the underlying vector, builds the linear models, and flags the index as finalized. */
+    void finalize() override {
+        /* Sort data. */
+        std::sort(base_type::data_.begin(), base_type::data_.end(), base_type::cmp);
+
+        /* Compute number of models. */
+        auto begin = base_type::begin();
+        auto end = base_type::end();
+        std::size_t n_keys = std::distance(begin, end);
+        std::size_t n_models = std::max<std::size_t>(1, n_keys * 0.1);
+        models_.reserve(n_models + 1);
+
+        /* Train first layer. */
+        models_.emplace_back(
+            LinearModel::train_linear_spline(
+                /* begin=              */ begin,
+                /* end=                */ end,
+                /* offset=             */ 0,
+                /* compression_factor= */ static_cast<double>(n_models) / n_keys
+            )
+        );
+
+        /* Train second layer. */
+        auto get_segment_id = [&](entry_type e) { return std::clamp<double>(models_[0](e.first), 0, n_models - 1);  };
+        std::size_t segment_start = 0;
+        std::size_t segment_id = 0;
+        for (std::size_t i = 0; i != n_keys; ++i) {
+            auto pos = begin + i;
+            std::size_t pred_segment_id = get_segment_id(*pos);
+            if (pred_segment_id > segment_id) {
+                models_.emplace_back(
+                    LinearModel::train_linear_regression(
+                        /* begin=  */ begin + segment_start,
+                        /* end=    */ pos,
+                        /* offset= */ segment_start
+                    )
+                );
+                for (std::size_t j = segment_id + 1; j < pred_segment_id; ++j) {
+                    models_.emplace_back(
+                        LinearModel::train_linear_regression(
+                            /* begin=  */ pos - 1,
+                            /* end=    */ pos,
+                            /* offset= */ i - 1
+                        )
+                    );
+                }
+                segment_id = pred_segment_id;
+                segment_start = i;
+
+            }
+        }
+        models_.emplace_back(
+            LinearModel::train_linear_regression(
+                /* begin=  */ begin + segment_start,
+                /* end=    */ end,
+                /* offset= */ segment_start
+            )
+        );
+        for (std::size_t j = segment_id + 1; j < n_models; ++j) {
+            models_.emplace_back(
+                LinearModel::train_linear_regression(
+                    /* begin=  */ end - 1,
+                    /* end=    */ end,
+                    /* offset= */ n_keys - 1
+                )
+            );
+        }
+
+        /* Mark index as finalized. */
+        base_type::finalized_ = true;
+    };
+
+    /** Returns an iterator pointing to the first entry of the vector such that `entry.key` < \p key is `false`, i.e.
+     * that is greater than or equal to \p key, or `end()` if no such element is found.  Throws `m::exception` if the
+     * index is not finalized. */
+    const_iterator lower_bound(const key_type key) const override {
+        if (not base_type::finalized()) throw m::exception("Index is not finalized.");
+        return lower_bound_exponential_search(base_type::begin() + predict(key), key);
+    }
+
+    /** Returns an iterator pointing to the first entry of the vector such that `entry.key` < \p key is `true`, i.e.
+     * that is strictly greater than \p key, or `end()` if no such element is found.  Throws `m::exception` if the index
+     * is not finalized. */
+    const_iterator upper_bound(const key_type key) const override {
+        if (not base_type::finalized()) throw m::exception("Index is not finalized.");
+        return upper_bound_exponential_search(base_type::begin() + predict(key), key);
+    }
+
+    void dump(std::ostream &out) const override { out << "RecursiveModelIndex<" << typeid(key_type).name() << '>' << std::endl; }
+    void dump() const override { dump(std::cerr); }
+
+    private:
+    std::size_t predict(const key_type key) const {
+        auto segment_id = std::clamp<double>(models_[0](key), 0, models_.size() - 2);
+        auto pred = std::clamp<double>(models_[segment_id + 1](key), 0, base_type::data_.size());
+        return static_cast<std::size_t>(pred);
+    }
+    const_iterator lower_bound_exponential_search(const_iterator pred, const key_type value) const {
+        auto begin = base_type::begin();
+        auto end = base_type::end();
+        std::size_t bound = 1;
+        if (base_type::cmp(*pred, value)) { // search right side
+            auto prev = pred;
+            auto curr = prev + bound;
+            while (curr < end and base_type::cmp(*curr, value)) {
+                bound *= 2;
+                prev = curr;
+                curr += bound;
+            }
+            return std::lower_bound(prev, std::min(curr + 1, end), value, base_type::cmp);
+        } else { // search left side
+            auto prev = pred;
+            auto curr = prev - bound;
+            while (curr > begin and not base_type::cmp(*curr, value)) {
+                bound *= 2;
+                prev = curr;
+                curr -= bound;
+            }
+            return std::lower_bound(std::max(begin, curr), prev, value, base_type::cmp);
+        }
+    }
+    const_iterator upper_bound_exponential_search(const_iterator pred, const key_type value) const {
+        auto begin = base_type::begin();
+        auto end = base_type::end();
+        std::size_t bound = 1;
+        if (not base_type::cmp(value, *pred)) { // search right side
+            auto prev = pred;
+            auto curr = prev + bound;
+            while (curr < end and not base_type::cmp(value, *curr)) {
+                bound *= 2;
+                prev = curr;
+                curr += bound;
+            }
+            return std::upper_bound(prev, std::min(curr + 1, end), value, base_type::cmp);
+        } else { // search left side
+            auto prev = pred;
+            auto curr = prev - bound;
+            while (curr > begin and base_type::cmp(value, *curr)) {
+                bound *= 2;
+                prev = curr;
+                curr -= bound;
+            }
+            return std::upper_bound(std::max(begin, curr), prev, value, base_type::cmp);
+        }
+    }
 };
 
 #define M_INDEX_LIST_TEMPLATED(X) \
@@ -138,7 +368,13 @@ struct ArrayIndex : IndexBase
     X(m::idx::ArrayIndex<int64_t>) \
     X(m::idx::ArrayIndex<float>) \
     X(m::idx::ArrayIndex<double>) \
-    X(m::idx::ArrayIndex<const char*>)
+    X(m::idx::ArrayIndex<const char*>) \
+    X(m::idx::RecursiveModelIndex<int8_t>) \
+    X(m::idx::RecursiveModelIndex<int16_t>) \
+    X(m::idx::RecursiveModelIndex<int32_t>) \
+    X(m::idx::RecursiveModelIndex<int64_t>) \
+    X(m::idx::RecursiveModelIndex<float>) \
+    X(m::idx::RecursiveModelIndex<double>)
 
 }
 

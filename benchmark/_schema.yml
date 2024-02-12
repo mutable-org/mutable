@@ -39,8 +39,18 @@ table:
     scale_factors: any(include('sf'), map(include('sf')), required=False)
     # Number of lines in the file. Is counted and added by the benchmark script
     lines_in_file: int(required=False)
+    # Map from index name to 'index', ignored by dbms not supporting indexes
+    indexes: map(include('index'), required=False)
 ---
 sf: num(min=0, max=1)
+---
+index:
+    attributes: any(str(), list(), required=True)     # single attribute or list of attributes
+    # Indexing method, one of
+    #   - array     an index base on a sorted array
+    #   - rmi       a recursive model index
+    # Currently ignored by all dbms but mutable
+    method: str(required=False)
 ---
 config:
     args: str(required=False)

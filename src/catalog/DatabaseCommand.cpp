@@ -170,6 +170,8 @@ void InsertRecords::execute(Diagnostic&)
 
         W.append(tup);
     }
+    /* Invalidate all indexes on the table. */
+    DB.invalidate_indexes(T.name());
 }
 
 void UpdateRecords::execute(Diagnostic&)

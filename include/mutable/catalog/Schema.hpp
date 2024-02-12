@@ -873,6 +873,7 @@ struct M_EXPORT Database
         const Table &table; ///< the table of the index
         const Attribute &attribute; ///< the indexed attribute
         std::unique_ptr<idx::IndexBase> index; ///< the actual index
+        bool is_valid; ///< indicates if the index should be used to answer queries
 
         index_entry_type(const char *name, const Table &table, const Attribute &attribute,
                          std::unique_ptr<idx::IndexBase> index)
@@ -880,6 +881,7 @@ struct M_EXPORT Database
             , table(table)
             , attribute(attribute)
             , index(std::move(index))
+            , is_valid(true)
         { }
     };
 
@@ -986,7 +988,7 @@ struct M_EXPORT Database
             if (it->name == index_name) return true;
         return false;
     }
-    /** Returns `true` iff there is an index using \p method on \p attribute_name of \p table_name.  Throws
+    /** Returns `true` iff there is a valid index using \p method on \p attribute_name of \p table_name.  Throws
      * `m::invalid_argument` if a `Table` with the given \p table_name does not exist.  Throws `m::invalid_argument` if
      * an `Attribute` with \p attribute_name does not exist in `Table` \p table_name. */
     bool has_index(const char *table_name, const char *attribute_name, idx::IndexMethod method) const {
@@ -997,7 +999,7 @@ struct M_EXPORT Database
         if (not table->has_attribute(attribute_name))
             throw m::invalid_argument("Attribute with that name does not exist.");
         for (auto &entry : indexes_) {
-            if (entry.table.name() == table_name and entry.attribute.name == attribute_name and
+            if (entry.is_valid and entry.table.name() == table_name and entry.attribute.name == attribute_name and
                 entry.index->method() == method)
             {
                 return true;
@@ -1014,7 +1016,7 @@ struct M_EXPORT Database
         }
         throw m::invalid_argument("Index of that name does not exist.");
     }
-    /** Returns an index using \p method on \p attribute_name of \p table_name iff one exists.  Throws
+    /** Returns a valid index using \p method on \p attribute_name of \p table_name iff one exists.  Throws
      * `m::invalid_argument` if such an index does not exist.  Throws `m::invalid_argument` if a `Table` with the given
      * \p table_name does not exist. Throws `m::invalid_argument` if an `Attribute` with \p attribute_name does not
      * exist in `Table` \p table_name. */
@@ -1026,7 +1028,7 @@ struct M_EXPORT Database
         if (not table->has_attribute(attribute_name))
             throw m::invalid_argument("Attribute with that name does not exist.");
         for (auto &entry : indexes_) {
-            if (entry.table.name() == table_name and entry.attribute.name == attribute_name and
+            if (entry.is_valid and entry.table.name() == table_name and entry.attribute.name == attribute_name and
                 entry.index->method() == method)
             {
                 return *entry.index;
@@ -1034,7 +1036,16 @@ struct M_EXPORT Database
         }
         throw m::invalid_argument("Index of that method on that attribute of that table does not exist.");
     }
-
+    /** Invalidates all indexes on attributes of `Table` \p table_name s.t. they are no longer used to answer queries.
+     * Throws `m_invalid_argument` if a `Table` with the given \p table_name does not exist. */
+    void invalidate_indexes(const char *table_name) {
+        if (not has_table(table_name))
+            throw m::invalid_argument("Table with that name does not exist.");
+        for (auto &entry : indexes_) {
+            if (entry.table.name() == table_name)
+                entry.is_valid = false;
+        }
+    }
 };
 
 }

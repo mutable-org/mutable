@@ -1,8 +1,11 @@
 #include "backend/WasmOperator.hpp"
 
+#include "backend/Interpreter.hpp"
 #include "backend/WasmAlgo.hpp"
 #include "backend/WasmMacro.hpp"
 #include <mutable/catalog/Catalog.hpp>
+#include <mutable/parse/AST.hpp>
+#include <mutable/util/fn.hpp>
 #include <numeric>
 
 
@@ -24,6 +27,23 @@ static void add_wasm_operator_args()
     Catalog &C = Catalog::Get();
 
     /*----- Command-line arguments -----*/
+    C.arg_parser().add<std::vector<std::string_view>>(
+        /* group=       */ "Wasm",
+        /* short=       */ nullptr,
+        /* long=        */ "--scan-implementations",
+        /* description= */ "a comma seperated list of physical scan implementations to consider (`Scan` or `IndexScan`)",
+        /* callback=    */ [](std::vector<std::string_view> impls){
+            options::scan_implementations = option_configs::ScanImplementation(0UL);
+            for (const auto &elem : impls) {
+                if (strneq(elem.data(), "Scan", elem.size()))
+                    options::scan_implementations |= option_configs::ScanImplementation::SCAN;
+                else if (strneq(elem.data(), "IndexScan", elem.size()))
+                    options::scan_implementations |= option_configs::ScanImplementation::INDEX_SCAN;
+                else
+                    std::cerr << "warning: ignore invalid physical scan implementation " << elem << std::endl;
+            }
+        }
+    );
     C.arg_parser().add<std::vector<std::string_view>>(
         /* group=       */ "Wasm",
         /* short=       */ nullptr,
@@ -78,6 +98,50 @@ static void add_wasm_operator_args()
                 else
                     std::cerr << "warning: ignore invalid physical join implementation " << elem << std::endl;
             }
+        }
+    );
+    C.arg_parser().add<const char*>(
+        /* group=       */ "Wasm",
+        /* short=       */ nullptr,
+        /* long=        */ "--index-scan-strategy",
+        /* description= */ "specify the index scan strategy (`Compilation`, `Interpretation`, or `Hybrid`)",
+        /* callback=    */ [](const char *strategy){
+            if (streq(strategy, "Compilation"))
+                options::index_scan_strategy = option_configs::IndexScanStrategy::COMPILATION;
+            else if (streq(strategy, "Interpretation"))
+                options::index_scan_strategy = option_configs::IndexScanStrategy::INTERPRETATION;
+            else if (streq(strategy, "Hybrid"))
+                options::index_scan_strategy = option_configs::IndexScanStrategy::HYBRID;
+            else
+                std::cerr << "warning: ignore invalid index scan strategy " << strategy << std::endl;
+        }
+    );
+    C.arg_parser().add<const char*>(
+        /* group=       */ "Wasm",
+        /* short=       */ nullptr,
+        /* long=        */ "--index-scan-compilation-strategy",
+        /* description= */ "specify the materialization strategy for index scans (`Callback` or `ExposedMemory`)",
+        /* callback=    */ [](const char *strategy){
+            if (streq(strategy, "Callback"))
+                options::index_scan_compilation_strategy = option_configs::IndexScanCompilationStrategy::CALLBACK;
+            else if (streq(strategy, "ExposedMemory"))
+                options::index_scan_compilation_strategy = option_configs::IndexScanCompilationStrategy::EXPOSED_MEMORY;
+            else
+                std::cerr << "warning: ignore invalid index scan strategy " << strategy << std::endl;
+        }
+    );
+    C.arg_parser().add<const char*>(
+        /* group=       */ "Wasm",
+        /* short=       */ nullptr,
+        /* long=        */ "--index-scan-materialization-strategy",
+        /* description= */ "specify the materialization strategy for index scans (`Inline` or `Memory`)",
+        /* callback=    */ [](const char *strategy){
+            if (streq(strategy, "Inline"))
+                options::index_scan_materialization_strategy = option_configs::IndexScanMaterializationStrategy::INLINE;
+            else if (streq(strategy, "Memory"))
+                options::index_scan_materialization_strategy = option_configs::IndexScanMaterializationStrategy::MEMORY;
+            else
+                std::cerr << "warning: ignore invalid index scan strategy " << strategy << std::endl;
         }
     );
     C.arg_parser().add<const char*>(
@@ -371,6 +435,15 @@ static void add_wasm_operator_args()
     C.arg_parser().add<std::size_t>(
         /* group=       */ "Wasm",
         /* short=       */ nullptr,
+        /* long=        */ "--index-sequential-scan-batch-size",
+        /* description= */ "set the number of tuples ids communicated between host and V8 per batch during index "
+                           "sequential scan"
+                           "(0 means infinite), ignored in case of --isam-compile-qualifying",
+        /* callback=    */ [](std::size_t size){ options::index_sequential_scan_batch_size = size; }
+    );
+    C.arg_parser().add<std::size_t>(
+        /* group=       */ "Wasm",
+        /* short=       */ nullptr,
         /* long=        */ "--result-set-window-size",
         /* description= */ "set the window size in tuples for the result set (0 means infinite)",
         /* callback=    */ [](std::size_t size){ options::result_set_window_size = size; }
@@ -453,9 +526,13 @@ void m::register_wasm_operators(PhysicalOptimizer &phys_opt)
     phys_opt.register_operator<Callback<true>>();
     phys_opt.register_operator<Print<false>>();
     phys_opt.register_operator<Print<true>>();
-    phys_opt.register_operator<Scan<false>>();
-    if (options::simd)
-        phys_opt.register_operator<Scan<true>>();
+    if (bool(options::scan_implementations bitand option_configs::ScanImplementation::SCAN)) {
+        phys_opt.register_operator<Scan<false>>();
+        if (options::simd)
+            phys_opt.register_operator<Scan<true>>();
+    }
+    if (bool(options::scan_implementations bitand option_configs::ScanImplementation::INDEX_SCAN))
+        phys_opt.register_operator<IndexScan<idx::IndexMethod::Array>>();
     if (bool(options::filter_selection_strategy bitand option_configs::SelectionStrategy::BRANCHING))
         phys_opt.register_operator<Filter<false>>();
     if (bool(options::filter_selection_strategy bitand option_configs::SelectionStrategy::PREDICATED))
@@ -891,6 +968,116 @@ uint32_t compute_initial_ht_capacity(const Operator &op, double load_factor) {
     return std::in_range<uint32_t>(initial_capacity) ? initial_capacity : std::numeric_limits<uint32_t>::max();
 }
 
+///> helper struct holding the bounds for index scan
+struct index_scan_bounds_t
+{
+    Schema::entry_type attribute = Schema::entry_type::CreateArtificial(); ///< Attribute for which bounds should hold
+    std::optional<std::reference_wrapper<const ast::Expr>> lo, hi; ///< lo and hi bounds
+    bool is_inclusive_lo, is_inclusive_hi; ///< flag to indicate if bounds are inclusive
+};
+
+/** Returns `true` iff \p expr is a valid bound. */
+bool is_valid_bound(const ast::Expr &expr) {
+    if (is<const Constant>(expr))
+        return true;
+    if (auto u = cast<const UnaryExpr>(&expr)) {
+        /* `UnaryExpr` must be followed by `Constant`. */
+        if ((u->op().type == TK_MINUS or u->op().type == TK_PLUS) and is<const Constant>(*u->expr))
+            return true;
+    }
+    return false;
+}
+
+/** Given an `Expr` \p expr representing a valid bound, returns a pair consiting of a constant and a boolean flag
+ * indicating whether the constant is negative. */
+std::pair<const Constant&, bool> get_valid_bound(const ast::Expr &expr) {
+    M_insist(is_valid_bound(expr), "bound must be valid");
+    if (auto c = cast<const Constant>(&expr))
+        return { *c, false };
+    auto &u = as<const UnaryExpr>(expr);
+    return { as<const Constant>(*u.expr), u.op().type == TK_MINUS };
+}
+
+/** Extracts the bounds for performing index scan from CNF \p cnf.  CNFs must either consist of
+ * 1. a single equality predicate, e.g. "x = 42" or
+ * 2. one or two predicates defining a (closed or open) range, e.g. "x > 42 AND x < 109" or "x < 42". */
+index_scan_bounds_t extract_index_scan_bounds(const cnf::CNF &cnf)
+{
+    index_scan_bounds_t bounds;
+
+    M_insist(not cnf.empty(), "filter condition must not be empty");
+    auto designators = cnf.get_required();
+    M_insist(designators.num_entries() == 1, "filter condition must contain exactly one designator");
+    bounds.attribute = designators[0];
+
+    for (auto &clause : cnf) {
+        M_insist(clause.size() == 1, "invalid predicate");
+        auto &literal = clause[0];
+        auto &binary = as<const BinaryExpr>(literal.expr());
+        M_insist((is<const Designator>(binary.lhs) and is_valid_bound(*binary.rhs)) or
+                 (is<const Designator>(binary.rhs) and is_valid_bound(*binary.lhs)), "invalid predicate");
+        bool has_attribute_left = is<const Designator>(binary.lhs);
+        auto &bound = has_attribute_left ? *binary.rhs : *binary.lhs;
+
+        switch(binary.tok.type) {
+            default:
+                M_unreachable("unsupported token type");
+            case TK_EQUAL:
+                M_insist(not bool(bounds.lo) and not bool(bounds.hi), "bound already set");
+                bounds.lo = bounds.hi = std::cref(bound);
+                bounds.is_inclusive_lo = bounds.is_inclusive_hi = true;
+                break;
+            case TK_GREATER:
+                if (has_attribute_left) {
+                    M_insist(not bool(bounds.lo), "lo bound already set");
+                    bounds.lo = std::cref(bound);
+                    bounds.is_inclusive_lo = false;
+                } else {
+                    M_insist(not bool(bounds.hi), "hi bound already set");
+                    bounds.hi = std::cref(bound);
+                    bounds.is_inclusive_hi = false;
+                }
+                break;
+            case TK_GREATER_EQUAL:
+                if (has_attribute_left) {
+                    M_insist(not bool(bounds.lo), "lo bound already set");
+                    bounds.lo = std::cref(bound);
+                    bounds.is_inclusive_lo = true;
+                } else {
+                    M_insist(not bool(bounds.hi), "hi bound already set");
+                    bounds.hi = std::cref(bound);
+                    bounds.is_inclusive_hi = true;
+                }
+                break;
+            case TK_LESS:
+                if (has_attribute_left) {
+                    M_insist(not bool(bounds.hi), "hi bound already set");
+                    bounds.hi = std::cref(bound);
+                    bounds.is_inclusive_hi = false;
+                } else {
+                    M_insist(not bool(bounds.lo), "lo bound already set");
+                    bounds.lo = std::cref(bound);
+                    bounds.is_inclusive_lo = false;
+                }
+                break;
+            case TK_LESS_EQUAL:
+                if (has_attribute_left) {
+                    M_insist(not bool(bounds.hi), "hi bound already set");
+                    bounds.hi = std::cref(bound);
+                    bounds.is_inclusive_hi = true;
+                } else {
+                    M_insist(not bool(bounds.lo), "lo bound already set");
+                    bounds.lo = std::cref(bound);
+                    bounds.is_inclusive_lo = true;
+                }
+                break;
+        }
+    }
+    M_insist(bool(bounds.lo) or bool(bounds.hi), "either bound must be set");
+    return bounds;
+}
+
+
 /*======================================================================================================================
  * NoOp
  *====================================================================================================================*/
@@ -1112,6 +1299,649 @@ void Scan<SIMDfied>::execute(const Match<Scan> &M, setup_t setup, pipeline_t pip
 
     /*----- Emit teardown code. -----*/
     teardown();
+}
+
+/*======================================================================================================================
+ * Index Scan
+ *====================================================================================================================*/
+
+template<idx::IndexMethod IndexMethod>
+ConditionSet IndexScan<IndexMethod>::pre_condition(std::size_t child_idx,
+                                                   const std::tuple<const FilterOperator*,
+                                                   const ScanOperator*> &partial_inner_nodes)
+{
+    M_insist(child_idx == 0);
+
+    /*----- Check if index on one of the attributes in filter condition exists. -----*/
+    auto &filter = *std::get<0>(partial_inner_nodes);
+    auto &cnf = filter.filter();
+
+    M_insist(not cnf.empty(), "Filter condition must not be empty");
+
+    auto &scan = *std::get<1>(partial_inner_nodes);
+    auto &table = scan.store().table();
+
+    Catalog &C = Catalog::Get();
+    auto &DB = C.get_database_in_use();
+
+    /* Extract attributes from filter condition. */
+    std::vector<Schema::Identifier> ids;
+    for (auto &entry : cnf.get_required()) {
+        Schema::Identifier &id = entry.id;
+        M_insist(table.name() == id.prefix, "Table name should match designator table name");
+
+        /* Keep attributes for which an index exists. */
+        if (DB.has_index(table.name(), id.name, IndexMethod))
+            ids.push_back(id);
+    }
+    if (ids.empty()) // no usable index found
+        return ConditionSet::Make_Unsatisfiable();
+
+    /*----- Check if filter condition is supported. -----*/
+    /* We currently only support filter conditions of the following form.
+     * 1. Point: condition with a single equality predicate, e.g.
+     *    x = 42.
+     * 2. One-sided range: condition with a single greater/greater-or-equal/less/less-or-equal predicate, e.g.
+     *    x > 42.
+     * 3. Two-sided range: condition with a greater/greater-or-equal predicate and a less/less-or-equal predicate, e.g.
+     *    x > 42 AND x <= 89.
+     * Attributes may appear on either side.  The other side is required to be a `Constant`. */
+    if (ids.size() > 1) // conditions with more than one attribute currently not supported
+        return ConditionSet::Make_Unsatisfiable();
+
+    bool has_lo_bound = false;
+    bool has_hi_bound = false;
+    for (auto &clause : cnf) {
+        if (clause.size() != 1) // disjunctions not supported
+            return ConditionSet::Make_Unsatisfiable();
+
+        auto &predicate = clause[0];
+        if (predicate.negative()) // negated predicates not supported
+            return ConditionSet::Make_Unsatisfiable();
+
+        auto expr = cast<const BinaryExpr>(&predicate.expr());
+        if (not expr) // not a binary expression
+            return ConditionSet::Make_Unsatisfiable();
+
+        bool has_attribute_left = is<const Designator>(expr->lhs);
+        auto &attribute = has_attribute_left ? *expr->lhs : *expr->rhs;
+        auto &constant = has_attribute_left ? *expr->rhs : *expr->lhs;
+        if (not is<const Designator>(attribute)) // attribute must be on lhs
+            return ConditionSet::Make_Unsatisfiable();
+        if (not is_valid_bound(constant))
+            return ConditionSet::Make_Unsatisfiable();
+
+        switch(expr->tok.type) {
+            default:
+                return ConditionSet::Make_Unsatisfiable();
+            case TK_EQUAL:
+                if (not has_lo_bound and not has_hi_bound) { // lo and hi bound not yet set
+                    has_lo_bound = has_hi_bound = true;
+                } else {
+                    return ConditionSet::Make_Unsatisfiable();
+                }
+                break;
+            case TK_GREATER:
+            case TK_GREATER_EQUAL:
+                if (has_attribute_left and not has_lo_bound) { // attribute on lhs, lo bound not yet set
+                    has_lo_bound = true;
+                } else if (not has_attribute_left and not has_hi_bound) { // attribute on rhs, hi bound not yet set
+                    has_hi_bound = true;
+                } else {
+                    return ConditionSet::Make_Unsatisfiable();
+                }
+                break;
+            case TK_LESS:
+            case TK_LESS_EQUAL:
+                if (has_attribute_left and not has_hi_bound) { // attribute on lhs, hi bound not yet set
+                    has_hi_bound = true;
+                } else if (not has_attribute_left and not has_lo_bound) { // attribute on rhs, lo bound not yet set
+                    has_lo_bound = true;
+                } else {
+                    return ConditionSet::Make_Unsatisfiable();
+                }
+                break;
+        }
+    }
+    return ConditionSet();
+}
+
+template<idx::IndexMethod IndexMethod>
+ConditionSet IndexScan<IndexMethod>::post_condition(const Match<IndexScan<IndexMethod>> &M)
+{
+    ConditionSet post_cond;
+
+    /*----- Index scan does not introduce predication. -----*/
+    post_cond.add_condition(Predicated(false));
+
+    /*----- Non-SIMDfied index scan does not introduce SIMD. -----*/
+    post_cond.add_condition(NoSIMD());
+
+    /*----- Index scan introduces sortedness on indexed attribute. -----*/
+    /* Extract identifier from cnf. */
+    auto &cnf = M.filter.filter();
+    Schema designators = cnf.get_required();
+    M_insist(designators.num_entries() == 1, "filter condition must contain exactly one designator");
+    Schema::Identifier &id = designators[0].id;
+
+    /* Add sortedness post condition. */
+    Sortedness::order_t orders;
+    orders.add(id, Sortedness::O_ASC);
+    post_cond.add_condition(Sortedness(std::move(orders)));
+
+    return post_cond;
+}
+
+template<idx::IndexMethod IndexMethod>
+double IndexScan<IndexMethod>::cost(const Match<IndexScan<IndexMethod>>&)
+{
+    /* TODO: add meaningful cost function. */
+    return 0.0;
+}
+
+template<idx::IndexMethod IndexMethod, typename Index, sql_type SqlT>
+void index_scan_codegen_compilation(const Index &index, const index_scan_bounds_t &bounds,
+                                    const Match<IndexScan<IndexMethod>> &M,
+                                    setup_t setup, pipeline_t pipeline, teardown_t teardown) {
+    using sql_type = SqlT;
+
+    if (options::index_scan_compilation_strategy == option_configs::IndexScanCompilationStrategy::CALLBACK) {
+        /*----- Resolve callback function names. -----*/
+        const char *scan_fn, *lower_bound_fn, *upper_bound_fn;
+#define SET_CALLBACK_FNS(INDEX, KEY) \
+        scan_fn        = M_STR(idx_scan_##INDEX##_##KEY); \
+        lower_bound_fn = M_STR(idx_lower_bound_##INDEX##_##KEY); \
+        upper_bound_fn = M_STR(idx_upper_bound_##INDEX##_##KEY)
+
+#define RESOLVE_KEYTYPE(INDEX) \
+        if constexpr(std::same_as<SqlT, _Boolx1>) { \
+            SET_CALLBACK_FNS(INDEX, b); \
+        } else if constexpr(std::same_as<sql_type, _I8x1>) { \
+            SET_CALLBACK_FNS(INDEX, i1); \
+        } else if constexpr(std::same_as<sql_type, _I16x1>) { \
+            SET_CALLBACK_FNS(INDEX, i2); \
+        } else if constexpr(std::same_as<sql_type, _I32x1>) { \
+            SET_CALLBACK_FNS(INDEX, i4); \
+        } else if constexpr(std::same_as<sql_type, _I64x1>) { \
+            SET_CALLBACK_FNS(INDEX, i8); \
+        } else if constexpr(std::same_as<sql_type, _Floatx1>) { \
+            SET_CALLBACK_FNS(INDEX, f); \
+        } else if constexpr(std::same_as<sql_type, _Doublex1>) { \
+            SET_CALLBACK_FNS(INDEX, d); \
+        } else if constexpr(std::same_as<sql_type, NChar>) { \
+            SET_CALLBACK_FNS(IDNEX, p); \
+        } else { \
+            M_unreachable("incompatible SQL type"); \
+        }
+        if constexpr(is_specialization<Index, idx::ArrayIndex>) {
+            RESOLVE_KEYTYPE(array)
+        } else {
+            M_unreachable("unknown index type");
+        }
+#undef RESOLVE_KEYTYPE
+#undef SET_CALLBACK_FNS
+
+        /*----- Add index to context. -----*/
+        auto &context = WasmEngine::Get_Wasm_Context_By_ID(Module::ID());
+        U64x1 index_id(context.add_index(index));
+
+        /*----- Emit host calls to query the index for lo and hi bounds. -----*/
+        auto compile_bound_lookup = [&](const ast::Expr &bound, bool is_lower_bound) {
+            auto key = CodeGenContext::Get().env().compile(bound);
+            return Module::Get().emit_call<uint32_t>(
+                /* fn=       */ is_lower_bound ? lower_bound_fn : upper_bound_fn,
+                /* index_id= */ index_id.clone(),
+                /* key=      */ convert<sql_type>(key).insist_not_null()
+            );
+        };
+        Var<U32x1> lo(bool(bounds.lo) ? compile_bound_lookup(bounds.lo->get(), bounds.is_inclusive_lo)
+                                      : U32x1(0));
+        const Var<U32x1> hi(bool(bounds.hi) ? compile_bound_lookup(bounds.hi->get(), not bounds.is_inclusive_hi)
+                                      : U32x1(index.num_entries()));
+        Wasm_insist(lo <= hi, "bounds need to be valid");
+
+        /*----- Allocate memory for communication to host. -----*/
+        M_insist(std::in_range<uint32_t>(M.batch_size), "should fit in uint32_t");
+
+        /* Determine alloc size as minimum of number of results and command-line parameter batch size, where 0 is
+         * interpreted as infinity. */
+        const Var<U32x1> alloc_size([&](){
+            U32x1 num_results = hi - lo;
+            U32x1 num_results_cpy = num_results.clone();
+            U32x1 batch_size = M.batch_size == 0 ? num_results.clone() : U32x1(M.batch_size);
+            U32x1 batch_size_cpy = batch_size.clone();
+            return Select(batch_size < num_results, batch_size_cpy, num_results_cpy);
+        }());
+        Ptr<U32x1> buffer_address = Module::Allocator().malloc<uint32_t>(alloc_size);
+
+        /*----- Emit setup code *after* allocating memory to guarantee sequential memory allocation for pipeline. -----*/
+        setup();
+
+        /*----- Emit loop code. -----*/
+        Var<U32x1> num_tuples_in_batch;
+        Var<Ptr<U32x1>> ptr;
+        WHILE (lo < hi) {
+            num_tuples_in_batch = Select(hi - lo > alloc_size, alloc_size, hi - lo);
+            /* Call host to fill buffer memory with next batch of tuple ids. */
+            Module::Get().emit_call<void>(
+                /* fn=           */ scan_fn,
+                /* index_id=     */ index_id,
+                /* entry_offset= */ lo.val(),
+                /* address=      */ buffer_address.clone(),
+                /* batch_size=   */ num_tuples_in_batch.val()
+            );
+            lo += num_tuples_in_batch;
+            ptr = buffer_address.clone();
+            WHILE(num_tuples_in_batch > 0U) {
+                static Schema empty_schema;
+                compile_load_point_access(
+                    /* tuple_value_schema=   */ M.scan.schema(),
+                    /* tuple_address_schema= */ empty_schema,
+                    /* base_address=         */ get_base_address(M.scan.store().table().name()),
+                    /* layout=               */ M.scan.store().table().layout(),
+                    /* layout_schema=        */ M.scan.store().table().schema(M.scan.alias()),
+                    /* tuple_id=             */ *ptr
+                );
+                pipeline();
+                num_tuples_in_batch -= 1U;
+                ptr += 1;
+            }
+        }
+
+        /*----- Emit teardown code. -----*/
+        teardown();
+
+        /*----- Free buffer memory. -----*/
+        IF (alloc_size > U32x1(0)) { // only free if actually allocated
+            Module::Allocator().free(buffer_address, alloc_size);
+        };
+    } else if (options::index_scan_compilation_strategy == option_configs::IndexScanCompilationStrategy::EXPOSED_MEMORY) {
+        M_unreachable("not implemented yet");
+    } else {
+        M_unreachable("unknown compilation stategy");
+    }
+}
+
+template<idx::IndexMethod IndexMethod, typename Index>
+void index_scan_codegen_interpretation(const Index &index, const index_scan_bounds_t &bounds,
+                                       const Match<IndexScan<IndexMethod>> &M,
+                                       setup_t setup, pipeline_t pipeline, teardown_t teardown)
+{
+    using key_type = Index::key_type;
+
+    static Schema empty_schema;
+
+    /*----- Interpret lo and hi bounds to retrieve index scan range -----*/
+    auto interpret_and_lookup_bound = [&](const ast::Expr &bound, bool is_lower_bound) -> std::size_t {
+        auto [constant, is_negative] = get_valid_bound(bound);
+        auto c = Interpreter::eval(constant);
+        key_type key;
+        if constexpr(m::boolean<key_type>) {
+            key = bool(c);
+            M_insist(not is_negative, "boolean cannot be negative");
+        } else if constexpr(m::integral<key_type>) {
+            auto i64 = int64_t(c);
+            M_insist(std::in_range<key_type>(i64), "integeral constant must be in range");
+            key = key_type(i64);
+            key = is_negative ? -key : key;
+        } else if constexpr(std::same_as<float, key_type>) {
+            auto d = double(c);
+            key = key_type(d);
+            M_insist(key == d, "downcasting should not impact precision");
+            key = is_negative ? -key : key;
+        } else if constexpr(std::same_as<double, key_type>) {
+            key = double(c);
+            key = is_negative ? -key : key;
+        } else if constexpr(std::same_as<const char*, key_type>) {
+            key = reinterpret_cast<const char*>(c.as_p());
+            M_insist(not is_negative, "string cannot be negative");
+        }
+        return std::distance(index.begin(), is_lower_bound ? index.lower_bound(key)
+                                                           : index.upper_bound(key));
+    };
+    std::size_t lo = bool(bounds.lo) ? interpret_and_lookup_bound(bounds.lo->get(), bounds.is_inclusive_lo)
+                                     : 0UL;
+    std::size_t hi = bool(bounds.hi) ? interpret_and_lookup_bound(bounds.hi->get(), not bounds.is_inclusive_hi)
+                                     : index.num_entries();
+    M_insist(lo <= hi, "bounds need to be valid");
+
+    if (options::index_scan_materialization_strategy == option_configs::IndexScanMaterializationStrategy::MEMORY) {
+        /*----- Allocate sufficient memory for results. -----*/
+        uint32_t num_results = hi - lo;
+        uint32_t *buffer_address = Module::Allocator().raw_malloc<uint32_t>(num_results);
+
+        /*----- Perform index scan and fill memory with results. -----*/
+        uint32_t *buffer_ptr = buffer_address;
+        for (auto it = index.begin() + lo; it != index.begin() + hi; ++it) {
+            M_insist(std::in_range<uint32_t>(it->second), "tuple id must fit in uint32_t");
+            *buffer_ptr = it->second;
+            ++buffer_ptr;
+        }
+
+        /*----- Emit setup code *after* allocating memory to guarantee sequential memory allocation for pipeline. -----*/
+        setup();
+
+        /*----- Emit loop code. -----*/
+        Var<Ptr<U32x1>> ptr(buffer_address);
+        Ptr<U32x1> end(buffer_address + num_results);
+        WHILE(ptr < end) {
+            compile_load_point_access(
+                /* tuple_value_schema=   */ M.scan.schema(),
+                /* tuple_address_schema= */ empty_schema,
+                /* base_address=         */ get_base_address(M.scan.store().table().name()),
+                /* layout=               */ M.scan.store().table().layout(),
+                /* layout_schema=        */ M.scan.store().table().schema(M.scan.alias()),
+                /* tuple_id=             */ *ptr
+            );
+            pipeline();
+            ptr += 1;
+        }
+
+        /*----- Emit teardown code. -----*/
+        teardown();
+    } else if (options::index_scan_materialization_strategy == option_configs::IndexScanMaterializationStrategy::INLINE) {
+        /*----- Define function that emits code for loading and executing pipeline for a single tuple. -----*/
+        FUNCTION(index_scan_parent_pipeline, void(uint32_t))
+        {
+            auto S = CodeGenContext::Get().scoped_environment(); // create scoped environment for this function
+
+            /*----- Emit setup code. -----*/
+            setup();
+
+            /*----- Load tuple. ----- */
+            compile_load_point_access(
+                /* tuple_value_schema=   */ M.scan.schema(),
+                /* tuple_address_schema= */ empty_schema,
+                /* base_address=         */ get_base_address(M.scan.store().table().name()),
+                /* layout=               */ M.scan.store().table().layout(),
+                /* layout_schema=        */ M.scan.store().table().schema(M.scan.alias()),
+                /* tuple_id=             */ PARAMETER(0)
+            );
+
+            /*----- Emit pipeline code. -----*/
+            pipeline();
+
+            /*----- Emit teardown code. -----*/
+            teardown();
+        }
+
+        /*----- Perform index sequential scan, emit code to execute pipeline for each tuple. -----*/
+        for (auto it = index.begin() + lo; it != index.begin() + hi; ++it) {
+            M_insist(std::in_range<uint32_t>(it->second), "tuple id must fit in uint32_t");
+            index_scan_parent_pipeline(uint32_t(it->second));
+        }
+    } else {
+        M_unreachable("unknown materialization strategy");
+    }
+}
+
+template<idx::IndexMethod IndexMethod, typename Index, sql_type SqlT>
+void index_scan_codegen_hybrid(const Index &index, const index_scan_bounds_t &bounds,
+                               const Match<IndexScan<IndexMethod>> &M,
+                               setup_t setup, pipeline_t pipeline, teardown_t teardown)
+{
+    using key_type = Index::key_type;
+    using sql_type = SqlT;
+
+    /*----- Resolve callback function name. -----*/
+    const char *scan_fn;
+#define SET_CALLBACK_FNS(INDEX, KEY) \
+    scan_fn = M_STR(idx_scan_##INDEX##_##KEY)
+
+#define RESOLVE_KEYTYPE(INDEX) \
+    if constexpr(std::same_as<SqlT, _Boolx1>) { \
+        SET_CALLBACK_FNS(INDEX, b); \
+    } else if constexpr(std::same_as<sql_type, _I8x1>) { \
+        SET_CALLBACK_FNS(INDEX, i1); \
+    } else if constexpr(std::same_as<sql_type, _I16x1>) { \
+        SET_CALLBACK_FNS(INDEX, i2); \
+    } else if constexpr(std::same_as<sql_type, _I32x1>) { \
+        SET_CALLBACK_FNS(INDEX, i4); \
+    } else if constexpr(std::same_as<sql_type, _I64x1>) { \
+        SET_CALLBACK_FNS(INDEX, i8); \
+    } else if constexpr(std::same_as<sql_type, _Floatx1>) { \
+        SET_CALLBACK_FNS(INDEX, f); \
+    } else if constexpr(std::same_as<sql_type, _Doublex1>) { \
+        SET_CALLBACK_FNS(INDEX, d); \
+    } else if constexpr(std::same_as<sql_type, NChar>) { \
+        SET_CALLBACK_FNS(IDNEX, p); \
+    } else { \
+        M_unreachable("incompatible SQL type"); \
+    }
+    if constexpr(is_specialization<Index, idx::ArrayIndex>) {
+        RESOLVE_KEYTYPE(array)
+    } else {
+        M_unreachable("unknown index type");
+    }
+#undef RESOLVE_KEYTYPE
+#undef SET_CALLBACK_FNS
+
+    /*----- Add index to context. -----*/
+    auto &context = WasmEngine::Get_Wasm_Context_By_ID(Module::ID());
+    U64x1 index_id(context.add_index(index)); ///< id of index in context
+
+    /*----- Interpret lo and hi bounds to retrieve index scan range -----*/
+    auto interpret_and_lookup_bound = [&](const ast::Expr &bound, bool is_lower_bound) -> std::size_t {
+        auto [constant, is_negative] = get_valid_bound(bound);
+        auto c = Interpreter::eval(constant);
+        key_type key;
+        if constexpr(m::boolean<key_type>) {
+            key = bool(c);
+            M_insist(not is_negative, "boolean cannot be negative");
+        } else if constexpr(m::integral<key_type>) {
+            auto i64 = int64_t(c);
+            M_insist(std::in_range<key_type>(i64), "integeral constant must be in range");
+            key = key_type(i64);
+            key = is_negative ? -key : key;
+        } else if constexpr(std::same_as<float, key_type>) {
+            auto d = double(c);
+            key = key_type(d);
+            M_insist(key == d, "downcasting should not impact precision");
+            key = is_negative ? -key : key;
+        } else if constexpr(std::same_as<double, key_type>) {
+            key = double(c);
+            key = is_negative ? -key : key;
+        } else if constexpr(std::same_as<const char*, key_type>) {
+            key = reinterpret_cast<const char*>(c.as_p());
+            M_insist(not is_negative, "string cannot be negative");
+        }
+        return std::distance(index.begin(), is_lower_bound ? index.lower_bound(key)
+                                                           : index.upper_bound(key));
+    };
+    std::size_t lo = bool(bounds.lo) ? interpret_and_lookup_bound(bounds.lo->get(), bounds.is_inclusive_lo)
+                                     : 0UL;
+    std::size_t hi = bool(bounds.hi) ? interpret_and_lookup_bound(bounds.hi->get(), not bounds.is_inclusive_hi)
+                                     : index.num_entries();
+    M_insist(lo <= hi, "bounds need to be valid");
+    M_insist(std::in_range<uint32_t>(lo), "should fit in uint32_t");
+    M_insist(std::in_range<uint32_t>(hi), "should fit in uint32_t");
+
+    /*----- Materialize offsets hi and lo. -----*/
+    Var<U32x1> begin;
+    std::optional<U32x1> end;
+    if (options::index_scan_materialization_strategy == option_configs::IndexScanMaterializationStrategy::INLINE) {
+        begin = U32x1(lo);
+        end.emplace(hi);
+    } else if (options::index_scan_materialization_strategy == option_configs::IndexScanMaterializationStrategy::MEMORY) {
+        /* If we materialize before allocating buffer memory, the addresses are independent of the buffer size.  As a
+         * result, queries that only differ in the filter predicate are compiled to the exact same WebAssembly code,
+         * enabling caching of compiled plans in V8. */
+        uint32_t *offset_address = Module::Allocator().raw_malloc<uint32_t>(2);
+        offset_address[0] = uint32_t(lo);
+        offset_address[1] = uint32_t(hi);
+
+        Ptr<U32x1> offset_ptr(offset_address);
+        begin = *offset_ptr.clone();
+        end.emplace(*(offset_ptr + 1));
+    } else {
+        M_unreachable("unknown materialization strategy");
+    }
+    M_insist(bool(end), "end must be set");
+
+    if (options::index_scan_compilation_strategy == option_configs::IndexScanCompilationStrategy::CALLBACK) {
+        /*----- Allocate buffer memory for communication to host. -----*/
+        M_insist(std::in_range<uint32_t>(M.batch_size), "should fit in uint32_t");
+
+        /* Determine alloc size as minimum of number of results and command-line parameter batch size, where 0 is
+         * interpreted as infinity. */
+        const Var<U32x1> alloc_size([&](){
+            U32x1 num_results = end->clone() - begin;
+            U32x1 num_results_cpy = num_results.clone();
+            U32x1 batch_size = M.batch_size == 0 ? num_results.clone() : U32x1(M.batch_size);
+            U32x1 batch_size_cpy = batch_size.clone();
+            return Select(batch_size < num_results, batch_size_cpy, num_results_cpy);
+        }());
+        Ptr<U32x1> buffer_address = Module::Allocator().malloc<uint32_t>(alloc_size);
+
+        /*----- Emit setup code *after* allocating memory to guarantee sequential memory allocation for pipeline. -----*/
+        setup();
+
+        /*----- Emit loop code. -----*/
+        Var<U32x1> num_tuples_in_batch;
+        Var<Ptr<U32x1>> ptr;
+        WHILE (begin < end->clone()) {
+            auto end_cpy = end->clone();
+            num_tuples_in_batch = Select(*end - begin > alloc_size, alloc_size, end_cpy - begin);
+            /* Call host to fill buffer memory with next batch of tuple ids. */
+            Module::Get().emit_call<void>(
+                /* fn=           */ scan_fn,
+                /* index_id=     */ index_id,
+                /* entry_offset= */ begin.val(),
+                /* address=      */ buffer_address.clone(),
+                /* batch_size=   */ num_tuples_in_batch.val()
+            );
+            begin += num_tuples_in_batch;
+            ptr = buffer_address.clone();
+            WHILE(num_tuples_in_batch > 0U) {
+                static Schema empty_schema;
+                compile_load_point_access(
+                    /* tuple_value_schema=   */ M.scan.schema(),
+                    /* tuple_address_schema= */ empty_schema,
+                    /* base_address=         */ get_base_address(M.scan.store().table().name()),
+                    /* layout=               */ M.scan.store().table().layout(),
+                    /* layout_schema=        */ M.scan.store().table().schema(M.scan.alias()),
+                    /* tuple_id=             */ *ptr
+                );
+                pipeline();
+                num_tuples_in_batch -= 1U;
+                ptr += 1;
+            }
+        }
+
+        /*----- Emit teardown code. -----*/
+        teardown();
+
+        /*----- Free buffer memory. -----*/
+        IF (alloc_size > U32x1(0)) { // only free if actually allocated
+            Module::Allocator().free(buffer_address, alloc_size);
+        };
+    } else if (options::index_scan_compilation_strategy == option_configs::IndexScanCompilationStrategy::EXPOSED_MEMORY) {
+        M_unreachable("not implemented yet");
+    } else {
+        M_unreachable("unknwon compilation strategy");
+    }
+}
+
+/** Resolves the index scan strategy and calls the appropriate codegen function. */
+template<idx::IndexMethod IndexMethod, typename Index, sql_type SqlT>
+void index_scan_resolve_strategy(const Index &index, const index_scan_bounds_t &bounds, const Match<IndexScan<IndexMethod>> &M, setup_t setup, pipeline_t pipeline, teardown_t teardown)
+{
+    if (options::index_scan_strategy == option_configs::IndexScanStrategy::COMPILATION) {
+        index_scan_codegen_compilation<IndexMethod, Index, SqlT>(index, bounds, M, std::move(setup), std::move(pipeline), std::move(teardown));
+    } else if (options::index_scan_strategy == option_configs::IndexScanStrategy::INTERPRETATION) {
+        index_scan_codegen_interpretation<IndexMethod, Index>(index, bounds, M, std::move(setup), std::move(pipeline), std::move(teardown));
+    } else if (options::index_scan_strategy == option_configs::IndexScanStrategy::HYBRID) {
+        index_scan_codegen_hybrid<IndexMethod, Index, SqlT>(index, bounds, M, std::move(setup), std::move(pipeline), std::move(teardown));
+    } else {
+        M_unreachable("invalid index access strategy");
+    }
+}
+
+/** Resolves the index method and calls the appropriate codegen function. */
+template<idx::IndexMethod IndexMethod, typename AttrT, sql_type SqlT>
+void index_scan_resolve_index_method(const index_scan_bounds_t &bounds, const Match<IndexScan<IndexMethod>> &M,
+                                     setup_t setup, pipeline_t pipeline, teardown_t teardown)
+{
+    /*----- Lookup index. -----*/
+    Catalog &C = Catalog::Get();
+    auto &DB = C.get_database_in_use();
+    auto &table_name = M.scan.store().table().name();
+    auto &attribute_name = bounds.attribute.id.name;
+    auto &index_base = DB.get_index(table_name, attribute_name, IndexMethod);
+
+    /*----- Resolve index type. -----*/
+    if constexpr(IndexMethod == idx::IndexMethod::Array and requires { typename idx::ArrayIndex<AttrT>; }) {
+        auto &index = as<const idx::ArrayIndex<AttrT>>(index_base);
+        index_scan_resolve_strategy<IndexMethod, const idx::ArrayIndex<AttrT>, SqlT>(
+            index, bounds, M, std::move(setup), std::move(pipeline), std::move(teardown)
+        );
+    } else {
+        M_unreachable("invalid index method");
+    }
+}
+
+/** Resolves the attribute type and calls the appropriate codegen function. */
+template<idx::IndexMethod IndexMethod>
+void index_scan_resolve_attribute_type(const Match<IndexScan<IndexMethod>> &M,
+                                       setup_t setup, pipeline_t pipeline, teardown_t teardown)
+{
+    /*----- Extract bounds from CNF. -----*/
+    auto &cnf = M.filter.filter();
+    auto bounds = extract_index_scan_bounds(cnf);
+
+    /*----- Resolve attribute type. -----*/
+#define RESOLVE_INDEX_METHOD(ATTRTYPE, SQLTYPE) \
+    index_scan_resolve_index_method<IndexMethod, ATTRTYPE, SQLTYPE>(bounds, M, std::move(setup), std::move(pipeline), std::move(teardown))
+
+    visit(overloaded {
+        [&](const Boolean&) { RESOLVE_INDEX_METHOD(bool, _Boolx1); },
+        [&](const Numeric &n) {
+            switch (n.kind) {
+                case Numeric::N_Int:
+                case Numeric::N_Decimal:
+                    switch (n.size()) {
+                        default: M_unreachable("invalid size");
+                        case  8: RESOLVE_INDEX_METHOD(int8_t,   _I8x1); break;
+                        case 16: RESOLVE_INDEX_METHOD(int16_t, _I16x1); break;
+                        case 32: RESOLVE_INDEX_METHOD(int32_t, _I32x1); break;
+                        case 64: RESOLVE_INDEX_METHOD(int64_t, _I64x1); break;
+                    }
+                    break;
+                case Numeric::N_Float:
+                    switch (n.size()) {
+                        default: M_unreachable("invalid size");
+                        case 32: RESOLVE_INDEX_METHOD(float,   _Floatx1); break;
+                        case 64: RESOLVE_INDEX_METHOD(double, _Doublex1); break;
+                    }
+                    break;
+            }
+        },
+        [&](const CharacterSequence&) { RESOLVE_INDEX_METHOD(const char*, NChar); },
+        [&](const Date&) { RESOLVE_INDEX_METHOD(int32_t, _I32x1); },
+        [&](const DateTime&) { RESOLVE_INDEX_METHOD(int64_t, _I64x1); },
+        [](auto&&) { M_unreachable("invalid type"); },
+    }, *bounds.attribute.type);
+
+#undef RESOLVE_INDEX_METHOD
+}
+
+template<idx::IndexMethod IndexMethod>
+void IndexScan<IndexMethod>::execute(const Match<IndexScan<IndexMethod>> &M,
+                                     setup_t setup, pipeline_t pipeline, teardown_t teardown)
+{
+    auto &schema = M.scan.schema();
+    M_insist(schema == schema.drop_constants().deduplicate(), "Schema of `ScanOperator` must neither contain NULL nor duplicates");
+
+    auto &table = M.scan.store().table();
+    M_insist(not table.layout().is_finite(), "layout for `wasm::IndexScan` must be infinite");
+
+    /** Generating code for an index scan requires resolving the following:
+     * 1. attribute type of the indexed attribute,
+     * 2. index method of the index used by the operator,
+     * 3. strategy used for performing the index scan.
+     * We avoid code duplication by handling each step in a separate function and forwarding the result via template
+     * arguments to the next function. */
+    index_scan_resolve_attribute_type(M, std::move(setup), std::move(pipeline), std::move(teardown));
 }
 
 
@@ -5207,6 +6037,52 @@ void Match<m::wasm::Scan<SIMDfied>>::print(std::ostream &out, unsigned level) co
     if (this->buffer_factory_ and this->scan.schema().drop_constants().deduplicate().num_entries())
         out << "with " << this->buffer_num_tuples_ << " tuples output buffer ";
     out << this->scan.schema() << print_info(this->scan) << " (cumulative cost " << cost() << ')';
+}
+
+template<idx::IndexMethod IndexMethod>
+void Match<m::wasm::IndexScan<IndexMethod>>::print(std::ostream &out, unsigned level) const
+{
+    if (IndexMethod == idx::IndexMethod::Array)
+        indent(out, level) << "wasm::ArrayIndexScan(";
+    else
+        M_unreachable("unknown index");
+
+    if (options::index_scan_strategy == option_configs::IndexScanStrategy::COMPILATION) {
+        out << "Compilation[";
+        if (options::index_scan_compilation_strategy == option_configs::IndexScanCompilationStrategy::CALLBACK)
+            out << "Callback";
+        else if (options::index_scan_compilation_strategy == option_configs::IndexScanCompilationStrategy::EXPOSED_MEMORY)
+            out << "ExposedMemory";
+        else
+            M_unreachable("unknown compilation strategy");
+    } else if (options::index_scan_strategy == option_configs::IndexScanStrategy::INTERPRETATION) {
+        out << "Interpretation[";
+        if (options::index_scan_materialization_strategy == option_configs::IndexScanMaterializationStrategy::INLINE)
+            out << "Inline";
+        else if (options::index_scan_materialization_strategy == option_configs::IndexScanMaterializationStrategy::MEMORY)
+            out << "Memory";
+        else
+            M_unreachable("unknown materialization strategy");
+    } else if (options::index_scan_strategy == option_configs::IndexScanStrategy::HYBRID) {
+        out << "Hybrid[";
+        if (options::index_scan_materialization_strategy == option_configs::IndexScanMaterializationStrategy::INLINE)
+            out << "Inline,";
+        else if (options::index_scan_materialization_strategy == option_configs::IndexScanMaterializationStrategy::MEMORY)
+            out << "Memory,";
+        else
+            M_unreachable("unknown materialization strategy");
+        if (options::index_scan_compilation_strategy == option_configs::IndexScanCompilationStrategy::CALLBACK)
+            out << "Callback";
+        else if (options::index_scan_compilation_strategy == option_configs::IndexScanCompilationStrategy::EXPOSED_MEMORY)
+            out << "ExposedMemory";
+        else
+            M_unreachable("unknown compilation strategy");
+    } else {
+        M_unreachable("unknown strategy");
+    }
+
+    out << "], " << this->scan.alias() << ", " << this->filter.filter() << ") "
+        << this->scan.schema() << print_info(this->scan) << " (cumulative cost " << cost() << ')';
 }
 
 template<bool Predicated>

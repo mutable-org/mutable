@@ -19,10 +19,16 @@ struct ConstMatchBaseVisitor;
 namespace option_configs {
 
 /*----- algorithmic decisions ----------------------------------------------------------------------------------------*/
+enum class ScanImplementation : uint64_t {
+    ALL        = 0b11,
+    SCAN       = 0b01,
+    INDEX_SCAN = 0b10,
+};
+
 enum class GroupingImplementation : uint64_t {
-    ALL         = 0b11,
-    HASH_BASED  = 0b01,
-    ORDERED     = 0b10,
+    ALL        = 0b11,
+    HASH_BASED = 0b01,
+    ORDERED    = 0b10,
 };
 
 enum class SortingImplementation : uint64_t {
@@ -50,6 +56,22 @@ enum class SoftPipelineBreakerStrategy : uint64_t {
 };
 
 /*----- implementation decisions -------------------------------------------------------------------------------------*/
+enum class IndexScanStrategy : uint64_t {
+    COMPILATION    = 0b001,
+    INTERPRETATION = 0b010,
+    HYBRID         = 0b100,
+};
+
+enum class IndexScanCompilationStrategy : uint64_t {
+    CALLBACK       = 0b01,
+    EXPOSED_MEMORY = 0b10,
+};
+
+enum class IndexScanMaterializationStrategy : uint64_t {
+    INLINE = 0b01,
+    MEMORY = 0b10,
+};
+
 enum class SelectionStrategy : uint64_t {
     AUTO       = 0b11,
     BRANCHING  = 0b01,
@@ -85,6 +107,9 @@ enum class OrderingStrategy : uint64_t {
 namespace options {
 
 /*----- options ------------------------------------------------------------------------------------------------------*/
+/** Which implementations should be considered for a `ScanOperator`. */
+inline option_configs::ScanImplementation scan_implementations = option_configs::ScanImplementation::ALL;
+
 /** Which implementations should be considered for a `GroupingOperator`. */
 inline option_configs::GroupingImplementation grouping_implementations = option_configs::GroupingImplementation::ALL;
 
@@ -93,6 +118,17 @@ inline option_configs::SortingImplementation sorting_implementations = option_co
 
 /** Which implementations should be considered for a `JoinOperator`. */
 inline option_configs::JoinImplementation join_implementations = option_configs::JoinImplementation::ALL;
+
+/** Which index scan strategy should be used for `wasm::IndexScan`. */
+inline option_configs::IndexScanStrategy index_scan_strategy = option_configs::IndexScanStrategy::INTERPRETATION;
+
+/** Which compilation strategy should be used for `wasm::IndexScan`. */
+inline option_configs::IndexScanCompilationStrategy index_scan_compilation_strategy =
+    option_configs::IndexScanCompilationStrategy::CALLBACK;
+
+/** Which materialization strategy should be used for `wasm::IndexScan`. */
+inline option_configs::IndexScanMaterializationStrategy index_scan_materialization_strategy =
+    option_configs::IndexScanMaterializationStrategy::MEMORY;
 
 /** Which selection strategy should be used for `wasm::Filter`. */
 inline option_configs::SelectionStrategy filter_selection_strategy = option_configs::SelectionStrategy::AUTO;
@@ -156,6 +192,10 @@ inline std::unique_ptr<const m::storage::DataLayoutFactory> soft_pipeline_breake
 /** Which size in tuples should be used for soft pipeline breakers. */
 inline std::size_t soft_pipeline_breaker_num_tuples = 0;
 
+/** The number of results from index sequential scan to be communicated between host and v8 per batch.  0 means that
+ * all results are communicated in a single batch. */
+inline std::size_t index_sequential_scan_batch_size = 1;
+
 /** Which window size should be used for the result set. */
 inline std::size_t result_set_window_size = 0;
 
@@ -198,6 +238,7 @@ namespace m {
     X(Print<true>) \
     X(Scan<false>) \
     X(Scan<true>) \
+    X(IndexScan<m::idx::IndexMethod::Array>) \
     X(Filter<false>) \
     X(Filter<true>) \
     X(Quicksort<false>) \
@@ -238,6 +279,7 @@ namespace m {
     X(m::Match<m::wasm::Print<true>>) \
     X(m::Match<m::wasm::Scan<false>>) \
     X(m::Match<m::wasm::Scan<true>>) \
+    X(m::Match<m::wasm::IndexScan<m::idx::IndexMethod::Array>>) \
     X(m::Match<m::wasm::Filter<false>>) \
     X(m::Match<m::wasm::Filter<true>>) \
     X(m::Match<m::wasm::Quicksort<false>>) \
@@ -283,6 +325,9 @@ template<bool SIMDfied> struct Match<wasm::Print<SIMDfied>>;
 
 namespace wasm { template<bool SIMDfied> struct Scan; }
 template<bool SIMDfied> struct Match<wasm::Scan<SIMDfied>>;
+
+namespace wasm { template<idx::IndexMethod IndexMethod> struct IndexScan; }
+template<idx::IndexMethod IndexMethod> struct Match<wasm::IndexScan<IndexMethod>>;
 
 namespace wasm { template<bool Predicated> struct Filter; }
 template<bool Predicated> struct Match<wasm::Filter<Predicated>>;
@@ -335,6 +380,16 @@ struct Scan : PhysicalOperator<Scan<SIMDfied>, ScanOperator>
     static ConditionSet pre_condition(std::size_t child_idx,
                                       const std::tuple<const ScanOperator*> &partial_inner_nodes);
     static ConditionSet post_condition(const Match<Scan> &M);
+};
+
+template<idx::IndexMethod IndexMethod>
+struct IndexScan : PhysicalOperator<IndexScan<IndexMethod>, pattern_t<FilterOperator, ScanOperator>>
+{
+    static void execute(const Match<IndexScan> &M, setup_t setup, pipeline_t pipeline, teardown_t teardown);
+    static double cost(const Match<IndexScan> &M);
+    static ConditionSet pre_condition(std::size_t child_idx,
+                                      const std::tuple<const FilterOperator*, const ScanOperator*> &partial_inner_nodes);
+    static ConditionSet post_condition(const Match<IndexScan> &M);
 };
 
 template<bool Predicated>
@@ -700,6 +755,35 @@ struct Match<wasm::Scan<SIMDfied>> : wasm::MatchLeaf
     }
 
     const Operator & get_matched_root() const override { return scan; }
+
+    void accept(wasm::MatchBaseVisitor &v) override;
+    void accept(wasm::ConstMatchBaseVisitor &v) const override;
+
+    protected:
+    void print(std::ostream &out, unsigned level) const override;
+};
+
+template<idx::IndexMethod IndexMethod>
+struct Match<wasm::IndexScan<IndexMethod>> : wasm::MatchLeaf
+{
+    const ScanOperator &scan;
+    const FilterOperator &filter;
+    std::size_t batch_size = options::index_sequential_scan_batch_size;
+
+    public:
+    Match(const FilterOperator *filter, const ScanOperator *scan,
+          std::vector<unsharable_shared_ptr<const m::MatchBase>> &&children)
+        : scan(*scan)
+        , filter(*filter)
+    {
+        M_insist(children.empty());
+    }
+
+    void execute(setup_t setup, pipeline_t pipeline, teardown_t teardown) const override {
+        wasm::IndexScan<IndexMethod>::execute(*this, std::move(setup), std::move(pipeline), std::move(teardown));
+    }
+
+    const Operator & get_matched_root() const override { return filter; }
 
     void accept(wasm::MatchBaseVisitor &v) override;
     void accept(wasm::ConstMatchBaseVisitor &v) const override;

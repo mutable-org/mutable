@@ -904,6 +904,14 @@ std::vector<Schema::Identifier> deduplicate(const std::vector<Schema::Identifier
     return res;
 }
 
+/** Returns a pointer to the beginning of table \p table_name in the WebAssembly linear memory. */
+Ptr<void> get_base_address(const char *table_name) {
+    std::ostringstream oss;
+    oss.str("");
+    oss << table_name << "_mem";
+    return Module::Get().get_global<void*>(oss.str().c_str());
+}
+
 
 /*======================================================================================================================
  * NoOp
@@ -1108,9 +1116,7 @@ void Scan<SIMDfied>::execute(const Match<Scan> &M, setup_t setup, pipeline_t pip
     }
 
     /*----- Import the base address of the mapped memory. -----*/
-    oss.str("");
-    oss << table.name() << "_mem";
-    Ptr<void> base_address = Module::Get().get_global<void*>(oss.str().c_str());
+    Ptr<void> base_address = get_base_address(table.name());
 
     /*----- Emit setup code *before* compiling data layout to not overwrite its temporary boolean variables. -----*/
     setup();

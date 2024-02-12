@@ -29,6 +29,11 @@ struct ConstIndexVisitor;
 /** The base class for indexes. */
 struct IndexBase
 {
+    protected:
+    IndexBase() = default;
+
+    public:
+    IndexBase(IndexBase&&) = default;
     virtual ~IndexBase() { }
 
     /** Bulkloads the index by executing a query on \p table using \p key_schema. */

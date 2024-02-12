@@ -255,11 +255,41 @@ struct Pooled
     const T & operator*() const { return Pool::Get(*this); }
     const T * operator->() const { return &Pool::Get(*this); }
 
+    /**
+     * Explicitly casts this `Pooled<T>` to `Pooled<U>`. Supports both up-casting and down-casting.
+     * Requires that the underlying type is polymorphic and `T` can be dynamically casted to \tparam U.
+     */
     template<typename U>
     requires std::is_polymorphic_v<typename Pool::pooled_type> and (std::derived_from<U, T> or std::derived_from<T, U>)
     Pooled<U, Pool, false> as() const {
         M_insist(ref_, "cannot cast empty pooled object");
+        M_insist(m::is<U>(ref_->first)); // check if the cast is valid
         return {pool_, ref_};
+    }
+
+    /**
+     * Implicitly casts this `Pooled<T>` to `Pooled<U>`. Only supports up-casting.
+     * Requires that the underlying type is polymorphic and `T` is derived from type \tparam U.
+     */
+    template<typename U>
+    requires std::is_polymorphic_v<typename Pool::pooled_type> and std::derived_from<T, U>
+    operator Pooled<U, Pool, false> () {
+        return as<U>();
+    }
+
+    /**
+     * Assigns a `Pooled<U>` to this `Pooled<T>`. Only supports up-casting.
+     * Requires that the underlying type is polymorphic and rhs type( \tparam U ) is derived from lhs type (`T`).
+     * The rhs can be optional or non-optional `Pooled`, in either case it can *not* be empty.
+     */
+    template<typename U, bool Optional>
+    requires std::is_polymorphic_v<typename Pool::pooled_type> and std::derived_from<U, T>
+    Pooled & operator=(Pooled<U, Pool, Optional> other) {
+        M_insist(other.ref_, "rhs can not be empty");
+        using std::swap;
+        swap(this->pool_, other.pool_);
+        swap(this->ref_ , other.ref_);
+        return *this;
     }
 
     template<typename U, bool Optional>

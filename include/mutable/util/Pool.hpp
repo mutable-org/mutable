@@ -232,8 +232,10 @@ struct Pooled
 
     bool has_value() const requires can_be_none { return ref_ != nullptr; }
 
-    ///> Returns the number of references to the pooled object or 0 if
-    /// I) instance is optional and does not reference an object or II) instance is moved.
+    /**
+     * Returns the number of references to the pooled object or 0 if
+     * this `Pooled` CanBeNone and does *not* hold a reference to an object.
+     */
     uint32_t count() const { return ref_ ? ref_->second : 0; }
 
     ~Pooled() {

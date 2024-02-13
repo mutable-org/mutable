@@ -196,12 +196,16 @@ struct M_EXPORT QueryGraph
     public:
     friend void swap(QueryGraph &first, QueryGraph &second) {
         using std::swap;
-        swap(first.sources_,        second.sources_);
-        swap(first.joins_,          second.joins_);
-        swap(first.group_by_,       second.group_by_);
-        swap(first.projections_,    second.projections_);
-        swap(first.order_by_,       second.order_by_);
-        swap(first.limit_,          second.limit_);
+        swap(first.sources_,                second.sources_);
+        swap(first.joins_,                  second.joins_);
+        swap(first.group_by_,               second.group_by_);
+        swap(first.aggregates_,             second.aggregates_);
+        swap(first.projections_,            second.projections_);
+        swap(first.order_by_,               second.order_by_);
+        swap(first.limit_,                  second.limit_);
+        swap(first.adjacency_matrix_,       second.adjacency_matrix_);
+        swap(first.t_,                      second.t_);
+        swap(first.custom_filter_exprs_,    second.custom_filter_exprs_);
     }
 
     QueryGraph();

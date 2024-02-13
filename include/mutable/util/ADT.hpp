@@ -696,6 +696,56 @@ struct range
     }
 };
 
+template<typename It, typename Fn, bool OwnsProjection = true>
+struct projecting_iterator;
+
+template<typename It, typename ReturnType, bool OwnsProjection>
+struct projecting_iterator<It, ReturnType&(It), OwnsProjection>
+{
+    using difference_type = typename It::difference_type;
+    using value_type = ReturnType;
+    using pointer = value_type*;
+    using reference = value_type&;
+    using iterator_category = std::random_access_iterator_tag;
+    using projection_type = std::function<ReturnType&(It)>;
+
+    private:
+    It it_;
+    std::conditional_t<OwnsProjection, projection_type, const projection_type&> project_;
+
+    public:
+    projecting_iterator(It it, projection_type project) requires OwnsProjection : it_(it), project_(std::move(project)) { }
+    projecting_iterator(It it, const projection_type &project) requires (not OwnsProjection) : it_(it), project_(project) { }
+
+    bool operator==(projecting_iterator other) const requires requires (It it) { { it == it } -> std::same_as<bool>; } {
+        return this->it_ == other.it_;
+    }
+    bool operator!=(projecting_iterator other) const requires requires (It it) { { it != it } -> std::same_as<bool>; } {
+        return this->it_ != other.it_;
+    }
+
+    projecting_iterator & operator++()  requires requires (It it) { ++it; } { ++it_; return *this; }
+    projecting_iterator operator++(int) requires requires (It it) { it++; } { return it_++; }
+
+    projecting_iterator & operator--()  requires requires (It it) { --it; } { --it_; return *this; }
+    projecting_iterator operator--(int) requires requires (It it) { it--; } { return it_--; }
+
+    projecting_iterator & operator+=(int offset) requires requires (It it) { it += offset; } { it_ += offset; return *this; }
+    projecting_iterator & operator-=(int offset) requires requires (It it) { it -= offset; } { it_ -= offset; return *this; }
+
+    difference_type operator-(projecting_iterator other) const
+    requires requires (It it) { { it - it } -> std::convertible_to<difference_type>; } {
+        return this->it_ - other.it_;
+    }
+
+    reference operator*()  const requires requires (projection_type p, It it) { p(it); } { return project_(it_); }
+    pointer operator->() const requires requires (projection_type p, It it) { p(it); } { return &project_(it_); }
+};
+
+// class template argument deduction guides
+template<typename It, typename Fn>
+projecting_iterator(It, Fn&&) -> projecting_iterator<It, std::invoke_result_t<Fn&&, It>(It)>;
+
 template<typename It, typename Fn>
 struct view;
 
@@ -704,50 +754,11 @@ struct view<It, ReturnType&(It)>
 {
     using iterator_type = It;
     using projection_type = std::function<ReturnType&(It)>;
+    using projecting_iterator_type = projecting_iterator<It, ReturnType&(It), false>; // share projection by reference
 
     private:
     range<It> range_;
     projection_type project_;
-
-    struct iterator
-    {
-        using difference_type = typename It::difference_type;
-        using value_type = ReturnType;
-        using pointer = value_type*;
-        using reference = value_type&;
-        using iterator_category = std::random_access_iterator_tag;
-
-        private:
-        It it_;
-        const projection_type &project_;
-
-        public:
-        iterator(It it, const projection_type &project) : it_(it), project_(project) { }
-
-        bool operator==(iterator other) const requires requires (It it) { { it == it } -> std::same_as<bool>; } {
-            return this->it_ == other.it_;
-        }
-        bool operator!=(iterator other) const requires requires (It it) { { it != it } -> std::same_as<bool>; } {
-            return this->it_ != other.it_;
-        }
-
-        iterator & operator++()  requires requires (It it) { ++it; } { ++it_; return *this; }
-        iterator operator++(int) requires requires (It it) { it++; } { return it_++; }
-
-        iterator & operator--()  requires requires (It it) { --it; } { --it_; return *this; }
-        iterator operator--(int) requires requires (It it) { it--; } { return it_--; }
-
-        iterator & operator+=(int offset) requires requires (It it) { it += offset; } { it_ += offset; return *this; }
-        iterator & operator-=(int offset) requires requires (It it) { it -= offset; } { it_ -= offset; return *this; }
-
-        difference_type operator-(iterator other) const
-        requires requires (It it) { { it - it } -> std::convertible_to<difference_type>; } {
-            return this->it_ - other.it_;
-        }
-
-        reference operator*()  const requires requires (projection_type p, It it) { p(it); } { return project_(it_); }
-        pointer operator->() const requires requires (projection_type p, It it) { p(it); } { return &project_(it_); }
-    };
 
     public:
     view(range<It> range, projection_type project) : range_(range), project_(std::move(project)) { }
@@ -757,8 +768,8 @@ struct view<It, ReturnType&(It)>
     template<typename Fn>
     view(It begin, It end, Fn &&fn) : range_(begin, end), project_(std::forward<Fn>(fn)) { }
 
-    iterator begin() const { return iterator(range_.begin(), project_); }
-    iterator end() const { return iterator(range_.end(), project_); }
+    projecting_iterator_type begin() const { return projecting_iterator_type(range_.begin(), project_); }
+    projecting_iterator_type end() const { return projecting_iterator_type(range_.end(), project_); }
 };
 
 // class template argument deduction guides

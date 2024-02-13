@@ -2076,12 +2076,12 @@ void QueryGraph::dump(std::ostream &out) const
             auto &srcs = j->sources();
             for (auto it = srcs.begin(), end = srcs.end(); it != end; ++it) {
                 if (it != srcs.begin()) out << ' ';
-                if (it->get().alias()) {
+                if (it->get().alias())
                     out << it->get().alias();
-                } else {
-                    auto bt = as<const BaseTable>(it->get());
-                    out << bt.name();
-                }
+                else if (auto bt = cast<const BaseTable>(&it->get()))
+                    out << bt->name();
+                else
+                    out << "(...)";
             }
             out << "}  " << j->condition();
         }

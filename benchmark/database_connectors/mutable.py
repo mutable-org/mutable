@@ -257,6 +257,10 @@ class Mutable(Connector):
                 import_str += ' HAS HEADER SKIP HEADER'
             statements.append(import_str + ';')
 
+            # Create CREATE INDEX statements for current table
+            create_indexes: list[str] = self.generate_create_index_stmts(table_name, table.get('indexes', dict()))
+            statements.extend(create_indexes)
+
         return statements
 
 
@@ -281,6 +285,23 @@ class Mutable(Connector):
                         continue
 
         return durations
+
+
+    # Overrides `generate_create_index_stmts` from Connector ABC
+    @staticmethod
+    def generate_create_index_stmts(table_name: str, indexes: dict[str, dict[str, Any]]) -> list[str]:
+        create_indexes: list[str] = list()
+        for index_name, index in indexes.items():
+            method: str | None = index.get('method')
+            attributes: str | list[str] = index['attributes']
+            if isinstance(attributes, list):
+                attributes = ', '.join(attributes)
+            index_str: str = f'CREATE INDEX {index_name} ON {table_name}'
+            if method:
+                index_str += f' USING {method}'
+            index_str += f' ({attributes});'
+            create_indexes.append(index_str)
+        return create_indexes
 
 
     # Overrides `print_command` from Connector ABC

@@ -111,6 +111,28 @@ class Connector(ABC):
         return False
 
 
+    # Generates statements for creating indexes.
+    @staticmethod
+    def generate_create_index_stmts(table_name: str, indexes: dict[str, dict[str, Any]]) -> list[str]:
+        create_indexes: list[str] = list()
+        for index_name, index in indexes.items():
+            method: str | None = index.get('method') # ignored
+            attributes: str | list[str] = index['attributes']
+            if isinstance(attributes, list):
+                attributes = ', '.join(attributes)
+            create_indexes.append(f'CREATE INDEX {index_name} ON "{table_name}" ({attributes});')
+        return create_indexes
+
+
+    # Generates statements for dropping indexes.
+    @staticmethod
+    def generate_drop_index_stmts(indexes: dict[str, dict[str, Any]]) -> list[str]:
+        drop_indexes: list[str] = list()
+        for index_name, _ in indexes.items():
+            drop_indexes.append(f'DROP INDEX IF EXISTS {index_name};')
+        return drop_indexes
+
+
     #===================================================================================================================
     # Start the shell with `command` and pass `query` to its stdin.  If the process does not respond after `timeout`
     # milliseconds, raise a ExperimentTimeoutExpired().  Return the stdout of the process containing the

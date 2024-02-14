@@ -92,6 +92,10 @@ sys.stdout.flush()
                             # Set up tables
                             for table_name, table in params['data'].items():
                                 connection.execute_command(f'DELETE FROM "{table_name}";')  # Empty table first
+                                # Index support is currently disabled in tableauhyperapi
+                                # drop_indexes: list[str] = HyPer.generate_drop_index_stmts(table.get('indexes', dict()))
+                                # for stmt in drop_indexes:
+                                #     connection.execute_command(stmt)  # Drop indexes
 
                                 sf: float | int
                                 if table.get('scale_factors') is not None:
@@ -107,6 +111,10 @@ sys.stdout.flush()
                                 header: int = int(table.get('header', 0))
                                 num_rows: int = round((table['lines_in_file'] - header) * sf)
                                 connection.execute_command(f'INSERT INTO "{table_name}" SELECT * FROM "{table_name}_tmp" LIMIT {num_rows};')
+                                # Index support is currently disabled in tableauhyperapi
+                                # create_indexes: list[str] = HyPer.generate_create_index_stmts(table_name, table.get('indexes', dict()))
+                                # for stmt in create_indexes:
+                                #     connection.execute_command(stmt)  # Create indexes
 
                             # Execute query
                             with connection.execute_query(query) as result:

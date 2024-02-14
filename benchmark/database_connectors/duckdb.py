@@ -82,6 +82,8 @@ class DuckDB(Connector):
                         # Create tables from tmp tables with scale factor
                         for table_name, table in params['data'].items():
                             statements.append(f'DELETE FROM "{table_name}";')     # empty existing table
+                            drop_indexes: list[str] = self.generate_drop_index_stmts(table.get('indexes', dict()))
+                            statements.extend(drop_indexes)                       # drop indexes
                             sf: float | int
                             if table.get('scale_factors') is not None:
                                 scale_factors = table['scale_factors']
@@ -96,6 +98,8 @@ class DuckDB(Connector):
                             header: int = int(table.get('header', 0))
                             num_rows: int = round((table['lines_in_file'] - header) * sf)
                             statements.append(f'INSERT INTO "{table_name}" SELECT * FROM "{table_name}{COMPLETE_TABLE_SUFFIX}" LIMIT {num_rows};')
+                            create_indexes: list[str] = self.generate_create_index_stmts(table_name, table.get('indexes', dict()))
+                            statements.extend(create_indexes)                     # create indexes
 
                         statements.append(".timer on")
                         statements.append(query_stmt)   # Actual query from this case
@@ -130,13 +134,16 @@ class DuckDB(Connector):
                 statements.extend(complete_tables)
                 statements.extend(actual_tables)
 
-                # Dropping and recreating tables in between runs removes any cache influences
+                # Dropping and recreating tables and indexes in between runs removes any cache influences
                 refill_stmts: list[str] = list()
                 for name, table in params['data'].items():
                     refill_stmts.append(f'DROP TABLE "{name}";')
+                    # Dropping a table also drops its indexes
                 refill_stmts.extend(actual_tables)
                 for name, table in params['data'].items():
                     refill_stmts.append(f'INSERT INTO "{name}" (SELECT * FROM "{name}{COMPLETE_TABLE_SUFFIX}");')
+                    create_indexes: list[str] = self.generate_create_index_stmts(name, table.get('indexes', dict()))
+                    refill_stmts.extend(create_indexes)
 
                 for _ in range(n_runs):
                     statements.extend(refill_stmts)

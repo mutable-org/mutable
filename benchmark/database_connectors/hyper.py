@@ -80,7 +80,7 @@ sys.stdout.flush()
                                 table_name=f"{table_name}_tmp",
                                 columns=columns
                             )
-                            hyperconf.load_table(connection, table_tmp, table['file'], FORMAT=table.get('format', 'csv'), DELIMITER=f"\'{table['delimiter']}\'", HEADER=table['header'])
+                            hyperconf.load_table(connection, table_tmp, table['file'], FORMAT=table.get('format', 'csv'), DELIMITER=f"\'{table['delimiter']}\'", HEADER=table.get('header', 0))
 
                             table_def: TableDefinition = TableDefinition(
                                 table_name=table_name,

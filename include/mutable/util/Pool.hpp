@@ -284,9 +284,9 @@ struct Pooled
      * Requires that the underlying type is polymorphic and rhs type( \tparam U ) is derived from lhs type (`T`).
      * The rhs can be optional or non-optional `Pooled`, in either case it can *not* be empty.
      */
-    template<typename U, bool Optional>
+    template<typename U, bool _CanBeNone>
     requires std::is_polymorphic_v<typename Pool::pooled_type> and std::derived_from<U, T>
-    Pooled & operator=(Pooled<U, Pool, Optional> other) {
+    Pooled & operator=(Pooled<U, Pool, _CanBeNone> other) {
         M_insist(other.ref_, "rhs can not be empty");
         using std::swap;
         swap(this->pool_, other.pool_);
@@ -294,10 +294,10 @@ struct Pooled
         return *this;
     }
 
-    template<typename U, bool Optional>
-    bool operator==(Pooled<U, Pool, Optional> other) const { return this->ref_ == other.ref_; } // check referential equality
-    template<typename U, bool Optional>
-    bool operator!=(Pooled<U, Pool, Optional> other) const { return not operator==(other); }
+    template<typename U, bool _CanBeNone>
+    bool operator==(Pooled<U, Pool, _CanBeNone> other) const { return this->ref_ == other.ref_; } // check referential equality
+    template<typename U, bool _CanBeNone>
+    bool operator!=(Pooled<U, Pool, _CanBeNone> other) const { return not operator==(other); }
     template<typename U>
     bool operator==(const U *other) const { return &Pool::Get(*this) == other; } // check referential equality
     template<typename U>

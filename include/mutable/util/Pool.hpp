@@ -149,7 +149,7 @@ struct Pool
     private:
     /** Returns a reference to the value referenced by \param pooled. */
     template<typename U, bool CanBeNone>
-    requires std::is_base_of_v<T, U>
+    requires std::derived_from<U, T>
     static const U & Get(const Pooled<U, Pool, CanBeNone> &pooled);
 
     /** Erases the pooled entity from the pool.  Requires that the reference count is `0`. */
@@ -411,7 +411,7 @@ bool Pool<T, Hash, KeyEqual, ThreadSafe>::erase(const Pooled<U, Pool, CanBeNone>
 
 template<typename T, typename Hash, typename KeyEqual, bool ThreadSafe>
 template<typename U, bool CanBeNone>
-requires std::is_base_of_v<T, U>
+requires std::derived_from<U, T>
 const U & Pool<T, Hash, KeyEqual, ThreadSafe>::Get(const Pooled<U, Pool, CanBeNone> &pooled)
 {
     M_insist(pooled.ref_);

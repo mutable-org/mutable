@@ -236,7 +236,7 @@ struct Pooled
      * Returns the number of references to the pooled object or 0 if
      * this `Pooled` CanBeNone and does *not* hold a reference to an object.
      */
-    uint32_t count() const { return ref_ ? ref_->second : 0; }
+    uint32_t count() const { return ref_ ? uint32_t(ref_->second) : 0; }
 
     ~Pooled() {
         M_insist(bool(pool_) == bool(ref_), "inconsistent pooled state");

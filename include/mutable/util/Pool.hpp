@@ -443,7 +443,7 @@ struct _StringPool : PODPool<const char*, StrHash, StrEqual, StrClone, ThreadSaf
     _StringPool(std::size_t initial_capacity) : super(initial_capacity) { }
 
     ~_StringPool() {
-        for (auto [str, _] : *this)
+        for (const auto& [str, _] : *this)
             free((void*) str);
     }
 };

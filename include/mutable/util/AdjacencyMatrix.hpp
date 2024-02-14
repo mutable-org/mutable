@@ -127,7 +127,18 @@ exit:
         return neighbors - S;
     }
 
-    /** Compute the node with the highest degree, i.e. the node with the most edges, given the nodes in `S`. */
+    /** Returns `true` iff the represented join graph is cyclic.
+     * An `AdjacencyMatrix` is cyclic iff the number of joins is equal to or higher than the number of data sources. */
+    bool is_cyclic() const {
+        /* Compute number of edges. */
+        std::size_t num_joins = 0;
+        for (std::size_t i = 0; i < num_vertices_ - 1; ++i)
+            for (std::size_t j = i + 1; j < num_vertices_; ++j)
+                num_joins += m_[i][j];
+        return num_joins >= num_vertices_;
+    }
+
+    /** Computes the node with the highest degree, i.e. the node with the most edges, given the nodes in `S`. */
     std::size_t highest_degree_node(SmallBitset S) const {
         if (S.is_singleton())
             return (uint64_t) S;

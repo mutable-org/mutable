@@ -1540,10 +1540,10 @@ struct PrimitiveExpr<T, L>
     { }
 
     private:
-    /** Move assigns `this` to `other`.  Only necessary to assign vectors array for double pumping. XXX: use vector instead of array? */
-    PrimitiveExpr & operator=(PrimitiveExpr &&other) {
+    /** Assigns `other` to `this`.  Only necessary to assign vectors array for double pumping. XXX: use vector instead of array? */
+    PrimitiveExpr & operator=(PrimitiveExpr other) {
         using std::swap;
-        swap(this->expr_, other.expr_);
+        swap(this->expr_,            other.expr_);
         swap(this->referenced_bits_, other.referenced_bits_);
         return *this;
     }
@@ -3092,7 +3092,13 @@ struct PrimitiveExpr<T, L>
 
     private:
     ///> Constructs an empty `PrimitiveExpr`, for which `operator bool()` returns `false`.
-    explicit PrimitiveExpr() { vectors_.fill(vector_type()); }
+    explicit PrimitiveExpr() {
+        /* Do not use `vectors_.fill()` since it internally delegates to `std::fill_n()` which tries to copy-assign the
+         * given value to each slot, however, the assignment operator of `vector_type` is private and thus not
+         * accessible. Therefore, implement this logic by ourselves as we are befriended with `vector_type`.  */
+        for (auto it = vectors_.begin(); it != vectors_.end(); ++it)
+            *it = vector_type();
+    }
 
     ///> Constructs a `PrimitiveExpr` from an array of fully utilized `PrimitiveExpr`s \p vectors.
     explicit PrimitiveExpr(std::array<vector_type, num_vectors> vectors) : vectors_(std::move(vectors)) { }

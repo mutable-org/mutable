@@ -4,6 +4,7 @@
 #include <mutable/catalog/Type.hpp>
 #include <mutable/mutable.hpp>
 #include <mutable/Options.hpp>
+#include <mutable/util/Timer.hpp>
 #include <sstream>
 
 
@@ -27,6 +28,9 @@ std::string IndexBase::build_query(const Table &table, const Schema &schema)
 template<typename Key>
 void ArrayIndex<Key>::bulkload(const Table &table, const Schema &key_schema)
 {
+    /* XXX: Disable timer during execution to not print times for query that is performed as part of bulkloading. */
+    const auto &old_timer = std::exchange(Catalog::Get().timer(), Timer());
+
     /* Check that key schema contains a single entry. */
     if (key_schema.num_entries() != 1)
         throw invalid_argument("Key schema should contain exactly one entry.");
@@ -105,6 +109,9 @@ void ArrayIndex<Key>::bulkload(const Table &table, const Schema &key_schema)
 
     /* Finalize index. */
     finalize();
+
+    /* XXX: Reenable timer. */
+    std::exchange(Catalog::Get().timer(), std::move(old_timer));
 }
 
 template<typename Key>

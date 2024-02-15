@@ -1559,7 +1559,9 @@ struct PrimitiveExpr<T, L>
     }
     /** **Moves** the referenced bits out of `this`. */
     std::list<std::shared_ptr<Bit>> referenced_bits() { return std::move(referenced_bits_); }
-    /** **Moves** the underlying Binaryen `::wasm::Expression` and the referenced bits out of `this`. */
+    /** **Moves** the underlying Binaryen `::wasm::Expression` and the referenced bits out of `this`.
+     * Must be templated to match `move()` of specialization of double pumped `PrimitiveExpr`s. */
+    template<dsl_primitive U = T, std::size_t M = L>
     std::pair<::wasm::Expression*, std::list<std::shared_ptr<Bit>>> move() {
         return { expr(), referenced_bits() };
     }
@@ -6793,7 +6795,7 @@ PrimitiveExpr<T, L> Module::emit_select(PrimitiveExpr<bool, L> cond, PrimitiveEx
 {
     using To = int_t<sizeof(T)>;
 
-    PrimitiveExpr<int8_t, L> mask_i8(cond.move()); // convert without transforming `true`, i.e. 0xff, to 1
+    PrimitiveExpr<int8_t, L> mask_i8(cond.template move<int8_t, L>()); // convert without transforming `true`, i.e. 0xff, to 1
     PrimitiveExpr<To, L> mask = mask_i8.template to<To, L>(); // convert (w/ sign extension!) to same bit width as values
 
     if constexpr (L * sizeof(T) <= 16) {

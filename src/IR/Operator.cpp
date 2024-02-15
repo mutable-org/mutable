@@ -360,6 +360,9 @@ struct SchemaMinimizer : OperatorVisitor
 
 void SchemaMinimizer::operator()(ScanOperator &op)
 {
+    if (is_top_of_plan_) // scan is top of plan and leaf at the same time
+        return; // still provide all entries of the table
+
     required = required & op.schema(); // intersect with scan operator schema to add constraints to the required schema
     op.schema() = required; // the scan operator produces exactly those attributes required by the ancestors
 }
@@ -384,21 +387,35 @@ void SchemaMinimizer::operator()(NoOpOperator &op)
 
 void SchemaMinimizer::operator()(FilterOperator &op)
 {
-    op.schema() = required;
-    auto required_by_op = op.filter().get_required(); // add what's required to evaluate the filter predicate
-    required |= required_by_op; // add what's required to evaluate the filter predicate
+    if (is_top_of_plan_) {
+        required = op.schema(); // require everything
+        is_top_of_plan_ = false;
+    } else {
+        auto required_by_op = op.filter().get_required(); // add what's required to evaluate the filter predicate
+        M_insist(required == (required & op.schema()), "required must be subset of operator schema");
+        op.schema() = required; // set schema to what is required above
+        required |= required_by_op; // add what's required to evaluate the filter predicate
+    }
     (*this)(*op.child(0));
     add_constraints(op.schema(), op.child(0)->schema()); // add constraints from child
 }
 
-void SchemaMinimizer::operator()(DisjunctiveFilterOperator &op) {
+void SchemaMinimizer::operator()(DisjunctiveFilterOperator &op)
+{
     (*this)(as<FilterOperator>(op)); // delegate to FilterOperator
 }
 
 void SchemaMinimizer::operator()(JoinOperator &op)
 {
-    op.schema() = required;
-    auto required_from_below = required | op.predicate().get_required(); // what we need and all operators above us
+    Schema required_from_below;
+    if (is_top_of_plan_) {
+        required_from_below = op.schema(); // require everything
+        is_top_of_plan_ = false;
+    } else {
+        required_from_below = required | op.predicate().get_required(); // what we need and all operators above us
+        M_insist(required == (required & op.schema()), "required must be subset of operator schema");
+        op.schema() = required;
+    }
     for (auto c : const_cast<const JoinOperator&>(op).children()) {
         required = required_from_below & c->schema(); // what we need from this child
         (*this)(*c);

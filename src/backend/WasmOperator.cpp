@@ -3172,6 +3172,7 @@ void Aggregation::execute(const Match<Aggregation> &M, setup_t setup, pipeline_t
                     case  4: execute_setup.operator()<4>();  break;
                     case  8: execute_setup.operator()<8>();  break;
                     case 16: execute_setup.operator()<16>(); break;
+                    case 32: execute_setup.operator()<32>(); break;
                 }
             }),
             /* pipeline= */ [&](){
@@ -3451,6 +3452,7 @@ void Aggregation::execute(const Match<Aggregation> &M, setup_t setup, pipeline_t
                     case  4: execute_pipeline.operator()<4>();  break;
                     case  8: execute_pipeline.operator()<8>();  break;
                     case 16: execute_pipeline.operator()<16>(); break;
+                    case 32: execute_pipeline.operator()<32>(); break;
                 }
             },
             /* teardown= */ teardown_t::Make_Without_Parent([&](){
@@ -3577,6 +3579,7 @@ void Aggregation::execute(const Match<Aggregation> &M, setup_t setup, pipeline_t
                     case  4: execute_teardown.operator()<4>();  break;
                     case  8: execute_teardown.operator()<8>();  break;
                     case 16: execute_teardown.operator()<16>(); break;
+                    case 32: execute_teardown.operator()<32>(); break;
                 }
             })
         );

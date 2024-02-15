@@ -305,23 +305,30 @@ struct is_sql_type;
 #define SQL_TYPES(X) \
     SQL_TYPES_SCALAR(X) \
     X(_Boolx16) \
+    X(_Boolx32) \
     X(_I8x16) \
+    X(_I8x32) \
     X(_I16x8) \
     X(_I16x16) \
+    X(_I16x32) \
     X(_I32x4) \
     X(_I32x8) \
     X(_I32x16) \
+    X(_I32x32) \
     X(_I64x2) \
     X(_I64x4) \
     X(_I64x8) \
     X(_I64x16) \
+    X(_I64x32) \
     X(_Floatx4) \
     X(_Floatx8) \
     X(_Floatx16) \
+    X(_Floatx32) \
     X(_Doublex2) \
     X(_Doublex4) \
     X(_Doublex8) \
-    X(_Doublex16)
+    X(_Doublex16) \
+    X(_Doublex32)
 
 #define ADD_EXPR_SQL_TYPE(TYPE) template<> struct is_sql_type<TYPE>{};
 SQL_TYPES(ADD_EXPR_SQL_TYPE)
@@ -341,7 +348,7 @@ using SQL_t = std::variant<
 template<typename T>
 concept sql_boolean_type = sql_type<T> and boolean<typename T::type>;
 
-using SQL_boolean_t = std::variant<std::monostate, _Boolx1, _Boolx16>;
+using SQL_boolean_t = std::variant<std::monostate, _Boolx1, _Boolx16, _Boolx32>;
 
 
 /*======================================================================================================================
@@ -1204,10 +1211,13 @@ I32x1 compare(const Environment &env_left, const Environment &env_right,
 
 template void Environment::add_predicate(_Boolx1 &&);
 template void Environment::add_predicate(_Boolx16&&);
+template void Environment::add_predicate(_Boolx32&&);
 template _Boolx1  Environment::extract_predicate();
 template _Boolx16 Environment::extract_predicate();
+template _Boolx32 Environment::extract_predicate();
 template _Boolx1  Environment::get_predicate() const;
 template _Boolx16 Environment::get_predicate() const;
+template _Boolx32 Environment::get_predicate() const;
 extern template std::tuple<Block, Block, Block> compile_store_sequential(
     const Schema&, Ptr<void>, const storage::DataLayout&, std::size_t, const Schema&, Var<U32x1>&
 );

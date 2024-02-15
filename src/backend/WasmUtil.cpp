@@ -157,6 +157,7 @@ void ExprCompiler::operator()(const ast::Designator &e)
             case  4: set(_I32x4::Null());  break;
             case  8: set(_I32x8::Null());  break;
             case 16: set(_I32x16::Null()); break;
+            case 32: set(_I32x32::Null()); break;
         }
         return;
     }
@@ -176,6 +177,7 @@ void ExprCompiler::operator()(const ast::Constant &e)
             case  4: set(_I32x4::Null());  break;
             case  8: set(_I32x8::Null());  break;
             case 16: set(_I32x16::Null()); break;
+            case 32: set(_I32x32::Null()); break;
         }
         return;
     }
@@ -236,6 +238,7 @@ void ExprCompiler::operator()(const ast::Constant &e)
         case  4: set_constant.operator()<4>();  break;
         case  8: set_constant.operator()<8>();  break;
         case 16: set_constant.operator()<16>(); break;
+        case 32: set_constant.operator()<32>(); break;
     }
 }
 
@@ -482,6 +485,7 @@ SQL_boolean_t ExprCompiler::compile(const cnf::CNF &cnf)
         default: M_unreachable("invalid number of SIMD lanes");
         case  1: return cnf.can_be_null() ? compile_cnf<true,  1>(*this, cnf) : compile_cnf<false,  1>(*this, cnf);
         case 16: return cnf.can_be_null() ? compile_cnf<true, 16>(*this, cnf) : compile_cnf<false, 16>(*this, cnf);
+        case 32: return cnf.can_be_null() ? compile_cnf<true, 32>(*this, cnf) : compile_cnf<false, 32>(*this, cnf);
     }
 }
 

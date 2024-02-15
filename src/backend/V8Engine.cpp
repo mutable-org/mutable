@@ -311,13 +311,11 @@ void m::wasm::detail::read_result_set(const v8::FunctionCallbackInfo<v8::Value> 
     auto result_set = context.vm.as<uint8_t*>() + result_set_offset;
 
     /* Find the projection nearest to the plan's root since it will determine the constants omitted in the result set. */
-    auto find_projection = [](const Operator &op) -> const ProjectionOperator & {
-        auto find_projection_impl = [](const Operator &op, auto &find_projection_ref) -> const ProjectionOperator & {
+    auto find_projection = [](const Operator &op) -> const ProjectionOperator * {
+        auto find_projection_impl = [](const Operator &op, auto &find_projection_ref) -> const ProjectionOperator * {
             if (auto projection_op = cast<const ProjectionOperator>(&op)) {
-                return *projection_op;
-            } else {
-                auto c = cast<const Consumer>(&op);
-                M_insist(bool(c), "at least one projection must be contained");
+                return projection_op;
+            } else if (auto c = cast<const Consumer>(&op)) {
                 M_insist(c->children().size() == 1,
                          "at least one projection without siblings in the operator tree must be contained");
                 M_insist(c->schema().num_entries() == c->child(0)->schema().num_entries(),
@@ -328,11 +326,13 @@ void m::wasm::detail::read_result_set(const v8::FunctionCallbackInfo<v8::Value> 
                              "at least one projection with the same schema as the plan's root must be contained");
 #endif
                 return find_projection_ref(*c->child(0), find_projection_ref);
+            } else {
+                return nullptr; // no projection found
             }
         };
         return find_projection_impl(op, find_projection_impl);
     };
-    auto &projections = find_projection(root_op).projections();
+    auto projection = find_projection(root_op);
 
     ///> helper function to print given `ast::Constant` \p c of `Type` \p type to \p out
     auto print_constant = [](std::ostringstream &out, const ast::Constant &c, const Type *type){
@@ -389,6 +389,8 @@ void m::wasm::detail::read_result_set(const v8::FunctionCallbackInfo<v8::Value> 
 
     if (deduplicated_schema_without_constants.num_entries() == 0) {
         /* Schema contains only constants. Create simple loop to generate `num_tuples` constant result tuples. */
+        M_insist(bool(projection), "projection must be found");
+        auto &projections = projection->projections();
         if (auto callback_op = cast<const CallbackOperator>(&root_op)) {
             Tuple tup(schema); // tuple entries which are not set are implicitly NULL
             for (std::size_t i = 0; i < schema.num_entries(); ++i) {
@@ -429,8 +431,10 @@ void m::wasm::detail::read_result_set(const v8::FunctionCallbackInfo<v8::Value> 
             for (std::size_t i = 0; i < schema.num_entries(); ++i) {
                 auto &e = schema[i];
                 if (e.type->is_none()) continue; // NULL constant
-                if (e.id.is_constant()) // other constant
-                    tup.set(i, Interpreter::eval(as<const ast::Constant>(projections[i].first)));
+                if (e.id.is_constant()) { // other constant
+                    M_insist(bool(projection), "projection must be found");
+                    tup.set(i, Interpreter::eval(as<const ast::Constant>(projection->projections()[i].first)));
+                }
             }
             Tuple *args[] = { &tup };
             for (std::size_t i = 0; i != num_tuples; ++i) {
@@ -445,8 +449,10 @@ void m::wasm::detail::read_result_set(const v8::FunctionCallbackInfo<v8::Value> 
             for (std::size_t i = 0; i < schema.num_entries(); ++i) {
                 auto &e = schema[i];
                 if (e.type->is_none()) continue; // NULL constant
-                if (e.id.is_constant()) // other constant
-                    tup_dupl.set(i, Interpreter::eval(as<const ast::Constant>(projections[i].first)));
+                if (e.id.is_constant()) { // other constant
+                    M_insist(bool(projection), "projection must be found");
+                    tup_dupl.set(i, Interpreter::eval(as<const ast::Constant>(projection->projections()[i].first)));
+                }
             }
             Tuple *args[] = { &tup_dedupl, &tup_dupl };
             for (std::size_t i = 0; i != deduplicated_schema_without_constants.num_entries(); ++i) {
@@ -483,7 +489,8 @@ void m::wasm::detail::read_result_set(const v8::FunctionCallbackInfo<v8::Value> 
             auto &e = schema[i];
             if (not e.type->is_none()) {
                 if (e.id.is_constant()) { // constant except NULL
-                    printer.add_and_emit_load(Interpreter::eval(as<const ast::Constant>(projections[i].first)));
+                    M_insist(bool(projection), "projection must be found");
+                    printer.add_and_emit_load(Interpreter::eval(as<const ast::Constant>(projection->projections()[i].first)));
                     constant_emitted = true;
                 } else { // actual value
                     auto idx = deduplicated_schema_without_constants[e.id].first;

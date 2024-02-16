@@ -70,6 +70,27 @@ SCHEMA = {
         ( 'a3',        'i32', ['NOT NULL'] ),
     ],
 
+    'Selectivity_i32': [
+        ( 'id',         'i32', ['NOT NULL'] ),
+        ( 'i32',        'i32', ['NOT NULL'] ),
+        ( 'i32_sorted', 'i32', ['NOT NULL'] ),
+        ( 'payload',    'i32', ['NOT NULL'] ),
+    ],
+
+    'Selectivity_i64': [
+        ( 'id',         'i32', ['NOT NULL'] ),
+        ( 'i64',        'i64', ['NOT NULL'] ),
+        ( 'i64_sorted', 'i64', ['NOT NULL'] ),
+        ( 'payload',    'i32', ['NOT NULL'] ),
+    ],
+
+    'Selectivity_f': [
+        ( 'id',       'i32', ['NOT NULL'] ),
+        ( 'f',        'f',   ['NOT NULL'] ),
+        ( 'f_sorted', 'f',   ['NOT NULL'] ),
+        ( 'payload',  'i32', ['NOT NULL'] ),
+    ],
+
     'Selectivity_d': [
         ( 'id',       'i32', ['NOT NULL'] ),
         ( 'd',        'd',   ['NOT NULL'] ),

@@ -2492,12 +2492,12 @@ void Buffer<IsGlobal>::teardown()
 }
 
 template<bool IsGlobal>
-void Buffer<IsGlobal>::resume_pipeline(param_t tuple_schema_)
+void Buffer<IsGlobal>::resume_pipeline(param_t _tuple_schema) const
 {
     if (not pipeline_)
         return;
 
-    const auto &tuple_schema = tuple_schema_ ? *tuple_schema_ : schema_;
+    const auto &tuple_schema = _tuple_schema ? *_tuple_schema : schema_;
 
 #ifndef NDEBUG
     for (auto &e : tuple_schema.get())
@@ -2561,12 +2561,84 @@ void Buffer<IsGlobal>::resume_pipeline(param_t tuple_schema_)
 }
 
 template<bool IsGlobal>
-void Buffer<IsGlobal>::resume_pipeline_inline(param_t tuple_schema_) const
+void Buffer<IsGlobal>::resume_pipeline_inline(param_t tuple_schema) const
 {
-    if (not pipeline_)
+    execute_pipeline_inline(setup_, pipeline_, teardown_, std::move(tuple_schema));
+}
+
+template<bool IsGlobal>
+void Buffer<IsGlobal>::execute_pipeline(setup_t setup, pipeline_t pipeline, teardown_t teardown,
+                                        param_t _tuple_schema) const
+{
+    if (not pipeline)
         return;
 
-    const auto &tuple_schema = tuple_schema_ ? *tuple_schema_ : schema_;
+    const auto &tuple_schema = _tuple_schema ? *_tuple_schema : schema_;
+
+#ifndef NDEBUG
+    for (auto &e : tuple_schema.get())
+        M_insist(schema_.get().find(e.id) != schema_.get().cend(), "tuple schema entry not found");
+#endif
+
+    /*----- Create function to resume the pipeline for each tuple contained in the buffer. -----*/
+    FUNCTION(resume_pipeline, void(void*, uint32_t))
+    {
+        auto S = CodeGenContext::Get().scoped_environment(); // create scoped environment for this function
+
+        /*----- Access base address and size parameters. -----*/
+        Ptr<void> base_address = PARAMETER(0);
+        U32x1 size = PARAMETER(1);
+
+        /*----- Compute poss. number of SIMD lanes and decide which to use with regard to other ops. preferences. */
+        const auto num_simd_lanes_preferred =
+            CodeGenContext::Get().num_simd_lanes_preferred(); // get other operators preferences
+        const std::size_t num_simd_lanes =
+            load_simdfied_ ? std::max(num_simd_lanes_preferred, get_num_simd_lanes(layout_, schema_, tuple_schema))
+                           : 1;
+        CodeGenContext::Get().set_num_simd_lanes(num_simd_lanes);
+
+        /*----- Emit setup code *before* compiling data layout to not overwrite its temporary boolean variables. -*/
+        setup();
+
+        Var<U32x1> load_tuple_id; // default initialized to 0
+
+        if (tuple_schema.get().num_entries() == 0) {
+            /*----- If no attributes must be loaded, generate a loop just executing the pipeline `size`-times. -----*/
+            WHILE (load_tuple_id < size) {
+                load_tuple_id += uint32_t(num_simd_lanes);
+                pipeline();
+            }
+            base_address.discard(); // since it is not needed
+        } else {
+            /*----- Compile data layout to generate sequential load from buffer. -----*/
+            auto [load_inits, loads, load_jumps] =
+                compile_load_sequential(tuple_schema, base_address, layout_, num_simd_lanes, schema_, load_tuple_id);
+
+            /*----- Generate loop for loading entire buffer, with the pipeline emitted into the loop body. -----*/
+            load_inits.attach_to_current();
+            WHILE (load_tuple_id < size) {
+                loads.attach_to_current();
+                pipeline();
+                load_jumps.attach_to_current();
+            }
+        }
+
+        /*----- Emit teardown code. -----*/
+        teardown();
+    }
+
+    /*----- Call created function. -----*/
+    resume_pipeline(base_address(), size()); // base address and size as arguments
+}
+
+template<bool IsGlobal>
+void Buffer<IsGlobal>::execute_pipeline_inline(setup_t setup, pipeline_t pipeline, teardown_t teardown,
+                                               param_t _tuple_schema) const
+{
+    if (not pipeline)
+        return;
+
+    const auto &tuple_schema = _tuple_schema ? *_tuple_schema : schema_;
 
 #ifndef NDEBUG
     for (auto &e : tuple_schema.get())
@@ -2599,7 +2671,7 @@ void Buffer<IsGlobal>::resume_pipeline_inline(param_t tuple_schema_) const
     CodeGenContext::Get().set_num_simd_lanes(num_simd_lanes);
 
     /*----- Emit setup code *before* compiling data layout to not overwrite its temporary boolean variables. -----*/
-    setup_();
+    setup();
 
     Var<U32x1> load_tuple_id(0); // explicitly (re-)set tuple ID to 0
 
@@ -2607,7 +2679,7 @@ void Buffer<IsGlobal>::resume_pipeline_inline(param_t tuple_schema_) const
         /*----- If no attributes must be loaded, generate a loop just executing the pipeline `size`-times. -----*/
         WHILE (load_tuple_id < num_tuples) {
             load_tuple_id += uint32_t(num_simd_lanes);
-            pipeline_();
+            pipeline();
         }
         base_address.discard(); // since it is not needed
     } else {
@@ -2619,13 +2691,13 @@ void Buffer<IsGlobal>::resume_pipeline_inline(param_t tuple_schema_) const
         load_inits.attach_to_current();
         WHILE (load_tuple_id < num_tuples) {
             loads.attach_to_current();
-            pipeline_();
+            pipeline();
             load_jumps.attach_to_current();
         }
     }
 
     /*----- Emit teardown code. -----*/
-    teardown_();
+    teardown();
 }
 
 template<bool IsGlobal>

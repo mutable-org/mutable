@@ -917,7 +917,7 @@ struct Buffer
     pipeline_t pipeline_; ///< remaining actual pipeline
     teardown_t teardown_; ///< remaining pipeline post-processing
     ///> function to resume pipeline for entire buffer; expects base address and size of buffer as parameters
-    std::optional<FunctionProxy<void(void*, uint32_t)>> resume_pipeline_;
+    mutable std::optional<FunctionProxy<void(void*, uint32_t)>> resume_pipeline_;
 
     public:
     /** Creates a buffer for \p num_tuples tuples (0 means infinite) of schema \p schema using the data layout
@@ -992,14 +992,26 @@ struct Buffer
     }
 
     /** Emits code into a separate function to resume the pipeline for each tuple of schema \p tuple_schema (default:
-     * entire tuples) in the  buffer.  Used to explicitly resume pipeline for infinite or partially filled buffers. */
-    void resume_pipeline(param_t tuple_schema = param_t());
+     * entire tuples) in the buffer.  Used to explicitly resume pipeline for infinite or partially filled buffers. */
+    void resume_pipeline(param_t tuple_schema = param_t()) const;
     /** Emits code inline to resume the pipeline for each tuple of schema \p tuple_schema (default: entire tuples) in
      * the buffer.  Due to inlining the current `Environment` must not be cleared and this method should be used for
      * n-ary operators.  Used to explicitly resume pipeline for infinite or partially filled buffers.  Predication is
      * supported, i.e. if the predication predicate is not fulfilled, no tuples will be loaded and thus the pipeline
      * will not be resumed. */
     void resume_pipeline_inline(param_t tuple_schema = param_t()) const;
+
+    /** Emits code into a separate function to execute the give pipeline \p pipeline for each tuple of schema \p
+     * tuple_schema (default: entire tuples) in the buffer.  Used to explicitly execute a given pipeline. */
+    void execute_pipeline(setup_t setup, pipeline_t pipeline, teardown_t teardown,
+                          param_t tuple_schema = param_t()) const;
+    /** Emits code inline to execute the given pipeline \p pipeline for each tuple of schema \p tuple_schema (default:
+     * entire tuples) in the buffer.  Due to inlining the current `Environment` must not be cleared and this method
+     * should be used for n-ary operators.  Used to explicitly execute a given pipeline. Predication is supported, i.e.
+     * if the predication predicate is not fulfilled, no tuples will be loaded and thus the pipeline will not be
+     * executed. */
+    void execute_pipeline_inline(setup_t setup, pipeline_t pipeline, teardown_t teardown,
+                                 param_t tuple_schema = param_t()) const;
 
     /** Emits code to store the current tuple into the buffer.  The behaviour depends on whether the buffer is finite:
      * - **finite:** If the buffer is full, resumes the pipeline for each tuple in the buffer and clears the buffer

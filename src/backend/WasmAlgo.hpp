@@ -2,6 +2,7 @@
 
 #include "backend/WasmUtil.hpp"
 #include <mutable/parse/AST.hpp>
+#include <optional>
 
 // must be included after Binaryen due to conflicts, e.g. with `::wasm::Throw`
 #include "backend/WasmMacro.hpp"
@@ -483,6 +484,7 @@ struct HashTable
     using const_entry_t = the_entry<true>;
 
     using callback_t = std::function<void(const_entry_t)>;
+    using hint_t = std::optional<Ptr<void>>;
 
     protected:
     ///> Copies the vector of `SQL_t`s \p values.
@@ -540,6 +542,9 @@ struct HashTable
     /** Clears the hash table. */
     virtual void clear() = 0;
 
+    /** Computes the bucket for key \p key.  Often used as hint for `find()` and `for_each_in_equal_range()`. */
+    virtual Ptr<void> compute_bucket(std::vector<SQL_t> key) const = 0;
+
     /** Inserts an entry into the hash table with key \p key regardless whether it already exists, i.e. duplicates
      * are allowed.  Returns a handle to the newly inserted entry which may be used to write the values for this
      * entry.  Rehashing of the hash table may be performed.  Predication is supported, i.e. an entry is always
@@ -552,28 +557,31 @@ struct HashTable
      * predication predicate is fulfilled. */
     virtual std::pair<entry_t, Boolx1> try_emplace(std::vector<SQL_t> key) = 0;
 
-    /** Tries to find an entry with key \p key in the hash table.  Returns a pair of a handle to the found entry which
-     * may be used to both read and write the values of this entry (if none is found this handle points to an
-     * arbitrary entry and should be ignored) and a boolean flag to indicate whether an element with the specified
-     * key was found.  Predication is supported, i.e. if the predication predicate is not fulfilled, no entry will be
-     * found. */
-    virtual std::pair<entry_t, Boolx1> find(std::vector<SQL_t> key) = 0;
-    /** Tries to find an entry with key \p key in the hash table.  Returns a pair of a handle to the found entry which
-     * may be used to only read the values of this entry (if none is found this handle points to an arbitrary entry
-     * and should be ignored) and a boolean flag to indicate whether an element with the specified key was found.
-     * Predication is supported, i.e. if the predication predicate is not fulfilled, no entry will be found. */
-    std::pair<const_entry_t, Boolx1> find(std::vector<SQL_t> key) const {
-        return const_cast<HashTable*>(this)->find(std::move(key));
+    /** Tries to find an entry with key \p key in the hash table.  Uses \p bucket_hint as hint to the bucket address.
+     * Returns a pair of a handle to the found entry which may be used to both read and write the values of this entry
+     * (if none is found this handle points to an arbitrary entry and should be ignored) and a boolean flag to indicate
+     * whether an element with the specified key was found.  Predication is supported, i.e. if the predication predicate
+     * is not fulfilled, no entry will be found. */
+    virtual std::pair<entry_t, Boolx1> find(std::vector<SQL_t> key, hint_t bucket_hint = hint_t()) = 0;
+    /** Tries to find an entry with key \p key in the hash table.  Uses \p bucket_hint as hint to the bucket address.
+     * Returns a pair of a handle to the found entry which may be used to only read the values of this entry (if none is
+     * found this handle points to an arbitrary entry and should be ignored) and a boolean flag to indicate whether an
+     * element with the specified key was found. Predication is supported, i.e. if the predication predicate is not
+     * fulfilled, no entry will be found. */
+    std::pair<const_entry_t, Boolx1> find(std::vector<SQL_t> key, hint_t bucket_hint = hint_t()) const {
+        return const_cast<HashTable*>(this)->find(std::move(key), std::move(bucket_hint));
     }
 
     /** Calls \p Pipeline for each entry contained in the hash table.  At each call the argument is a handle to the
      * respective entry which may be used to read both the keys and the values of this entry. */
     virtual void for_each(callback_t Pipeline) const = 0;
     /** Calls \p Pipeline for each entry with key \p key in the hash table, where the key comparison is performed
-     * predicated iff \p predicated is set.  At each call the argument is a handle to the respective entry which may be
-     * used to read both the keys and the values of this entry.  Predication is supported, i.e. if the predication
-     * predicate is not fulfilled, the range of entries with an equal key will be empty. */
-    virtual void for_each_in_equal_range(std::vector<SQL_t> key, callback_t Pipeline, bool predicated = false) const = 0;
+     * predicated iff \p predicated is set.  Uses \p bucket_hint as hint to the bucket address.  At each call the
+     * argument is a handle to the respective entry which may be used to read both the keys and the values of this
+     * entry.  Predication is supported, i.e. if the predication predicate is not fulfilled, the range of entries with
+     * an equal key will be empty. */
+    virtual void for_each_in_equal_range(std::vector<SQL_t> key, callback_t Pipeline, bool predicated = false,
+                                         hint_t bucket_hint = hint_t()) const = 0;
 
     /** Returns a handle to a newly created dummy entry which may be used to write the values for this entry.
      * Note that even if the hash table is globally visible, this entry can only be used *locally*, i.e. within the
@@ -706,13 +714,16 @@ struct ChainedHashTable : HashTable
     public:
     void clear() override;
 
+    Ptr<void> compute_bucket(std::vector<SQL_t> key) const override;
+
     entry_t emplace(std::vector<SQL_t> key) override;
     std::pair<entry_t, Boolx1> try_emplace(std::vector<SQL_t> key) override;
 
-    std::pair<entry_t, Boolx1> find(std::vector<SQL_t> key) override;
+    std::pair<entry_t, Boolx1> find(std::vector<SQL_t> key, hint_t bucket_hint) override;
 
     void for_each(callback_t Pipeline) const override;
-    void for_each_in_equal_range(std::vector<SQL_t> key, callback_t Pipeline, bool predicated) const override;
+    void for_each_in_equal_range(std::vector<SQL_t> key, callback_t Pipeline, bool predicated,
+                                 hint_t bucket_hint) const override;
 
     entry_t dummy_entry() override;
 
@@ -952,13 +963,16 @@ struct OpenAddressingHashTable : OpenAddressingHashTableBase
     }
 
     public:
+    Ptr<void> compute_bucket(std::vector<SQL_t> key) const override;
+
     entry_t emplace(std::vector<SQL_t> key) override;
     std::pair<entry_t, Boolx1> try_emplace(std::vector<SQL_t> key) override;
 
-    std::pair<entry_t, Boolx1> find(std::vector<SQL_t> key) override;
+    std::pair<entry_t, Boolx1> find(std::vector<SQL_t> key, hint_t bucket_hint) override;
 
     void for_each(callback_t Pipeline) const override;
-    void for_each_in_equal_range(std::vector<SQL_t> key, callback_t Pipeline, bool predicated) const override;
+    void for_each_in_equal_range(std::vector<SQL_t> key, callback_t Pipeline, bool predicated,
+                                 hint_t bucket_hint) const override;
 
     entry_t dummy_entry() override;
 

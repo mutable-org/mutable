@@ -718,6 +718,28 @@ Ptr<void> ChainedHashTable<IsGlobal>::hash_to_bucket(std::vector<SQL_t> key) con
 }
 
 template<bool IsGlobal>
+Ptr<void> ChainedHashTable<IsGlobal>::compute_bucket(std::vector<SQL_t> key) const
+{
+    /*----- If predication is used, introduce predication variable and update it before inserting a key. -----*/
+    std::optional<Boolx1> pred;
+    if (auto &env = CodeGenContext::Get().env(); env.predicated()) {
+        M_insist(CodeGenContext::Get().num_simd_lanes() == 1, "invalid number of SIMD lanes");
+        pred.emplace(env.extract_predicate<_Boolx1>().is_true_and_not_null());
+        if (not predication_dummy_)
+            const_cast<ChainedHashTable<IsGlobal>*>(this)->create_predication_dummy();
+    }
+    M_insist(not pred or predication_dummy_);
+
+    /*----- Compute bucket address by hashing the key. Create constant variable to do not recompute the hash. -----*/
+    const Var<Ptr<void>> bucket(
+        pred ? Select(*pred, hash_to_bucket(std::move(key)), *predication_dummy_) // use dummy if predicate is not fulfilled
+             : hash_to_bucket(std::move(key))
+    );
+
+    return bucket;
+}
+
+template<bool IsGlobal>
 HashTable::entry_t ChainedHashTable<IsGlobal>::emplace(std::vector<SQL_t> key)
 {
     M_insist(bool(num_entries_), "must call `setup()` before");
@@ -852,22 +874,10 @@ std::pair<HashTable::entry_t, Boolx1> ChainedHashTable<IsGlobal>::try_emplace(st
 }
 
 template<bool IsGlobal>
-std::pair<HashTable::entry_t, Boolx1> ChainedHashTable<IsGlobal>::find(std::vector<SQL_t> key)
+std::pair<HashTable::entry_t, Boolx1> ChainedHashTable<IsGlobal>::find(std::vector<SQL_t> key, hint_t bucket_hint)
 {
-    /*----- If predication is used, introduce predication temporal and set it before looking-up a key. -----*/
-    std::optional<Boolx1> pred;
-    if (auto &env = CodeGenContext::Get().env(); env.predicated()) {
-        M_insist(CodeGenContext::Get().num_simd_lanes() == 1, "invalid number of SIMD lanes");
-        pred.emplace(env.extract_predicate<_Boolx1>().is_true_and_not_null());
-        if (not predication_dummy_)
-            create_predication_dummy();
-    }
-    M_insist(not pred or predication_dummy_);
-
-    /*----- Compute bucket address by hashing the key. -----*/
     Ptr<void> bucket =
-        pred ? Select(*pred, hash_to_bucket(clone(key)), *predication_dummy_) // use dummy if predicate is not fulfilled
-             : hash_to_bucket(clone(key)); // clone key since we need it again for comparison
+        bucket_hint ? *bucket_hint : compute_bucket(clone(key)); // clone key since we need it again for comparison
 
     /*----- Probe collision list, abort if key already exists. -----*/
     Var<Ptr<void>> bucket_it(Ptr<void>(*bucket.to<uint32_t*>()));
@@ -901,22 +911,10 @@ void ChainedHashTable<IsGlobal>::for_each(callback_t Pipeline) const
 
 template<bool IsGlobal>
 void ChainedHashTable<IsGlobal>::for_each_in_equal_range(std::vector<SQL_t> key, callback_t Pipeline,
-                                                         bool predicated) const
+                                                         bool predicated, hint_t bucket_hint) const
 {
-    /*----- If predication is used, introduce predication temporal and set it before looking-up a key. -----*/
-    std::optional<Boolx1> pred;
-    if (auto &env = CodeGenContext::Get().env(); env.predicated()) {
-        M_insist(CodeGenContext::Get().num_simd_lanes() == 1, "invalid number of SIMD lanes");
-        pred.emplace(env.extract_predicate<_Boolx1>().is_true_and_not_null());
-        if (not predication_dummy_)
-            const_cast<ChainedHashTable<IsGlobal>*>(this)->create_predication_dummy();
-    }
-    M_insist(not pred or predication_dummy_);
-
-    /*----- Compute bucket address by hashing the key. -----*/
     Ptr<void> bucket =
-        pred ? Select(*pred, hash_to_bucket(clone(key)), *predication_dummy_) // use dummy if predicate is not fulfilled
-             : hash_to_bucket(clone(key)); // clone key since we need it again for comparison
+        bucket_hint ? *bucket_hint : compute_bucket(clone(key)); // clone key since we need it again for comparison
 
     /*----- Iterate over collision list entries and call pipeline (with entry handle argument) on matches. -----*/
     Var<Ptr<void>> bucket_it(Ptr<void>(*bucket.to<uint32_t*>()));
@@ -1573,6 +1571,28 @@ void OpenAddressingHashTable<IsGlobal, ValueInPlace>::teardown()
 }
 
 template<bool IsGlobal, bool ValueInPlace>
+Ptr<void> OpenAddressingHashTable<IsGlobal, ValueInPlace>::compute_bucket(std::vector<SQL_t> key) const
+{
+    /*----- If predication is used, introduce predication variable and update it before inserting a key. -----*/
+    std::optional<Boolx1> pred;
+    if (auto &env = CodeGenContext::Get().env(); env.predicated()) {
+        M_insist(CodeGenContext::Get().num_simd_lanes() == 1, "invalid number of SIMD lanes");
+        pred.emplace(env.extract_predicate<_Boolx1>().is_true_and_not_null());
+        if (not predication_dummy_)
+            const_cast<OpenAddressingHashTable<IsGlobal, ValueInPlace>*>(this)->create_predication_dummy();
+    }
+    M_insist(not pred or predication_dummy_);
+
+    /*----- Compute bucket address by hashing the key. Create constant variable to do not recompute the hash. -----*/
+    const Var<Ptr<void>> bucket(
+        pred ? Select(*pred, hash_to_bucket(std::move(key)), *predication_dummy_) // use dummy if predicate is not fulfilled
+             : hash_to_bucket(std::move(key))
+    );
+
+    return bucket;
+}
+
+template<bool IsGlobal, bool ValueInPlace>
 HashTable::entry_t OpenAddressingHashTable<IsGlobal, ValueInPlace>::emplace(std::vector<SQL_t> key)
 {
     M_insist(bool(num_entries_), "must call `setup()` before");
@@ -1750,31 +1770,19 @@ OpenAddressingHashTable<IsGlobal, ValueInPlace>::try_emplace(std::vector<SQL_t> 
 }
 
 template<bool IsGlobal, bool ValueInPlace>
-std::pair<HashTable::entry_t, Boolx1> OpenAddressingHashTable<IsGlobal, ValueInPlace>::find(std::vector<SQL_t> key)
+std::pair<HashTable::entry_t, Boolx1> OpenAddressingHashTable<IsGlobal, ValueInPlace>::find(std::vector<SQL_t> key,
+                                                                                            hint_t bucket_hint)
 {
     M_insist(bool(num_entries_), "must call `setup()` before");
 
-    /*----- If predication is used, introduce predication temporal and set it before looking-up a key. -----*/
-    std::optional<Boolx1> pred;
-    if (auto &env = CodeGenContext::Get().env(); env.predicated()) {
-        M_insist(CodeGenContext::Get().num_simd_lanes() == 1, "invalid number of SIMD lanes");
-        pred.emplace(env.extract_predicate<_Boolx1>().is_true_and_not_null());
-        if (not predication_dummy_)
-            create_predication_dummy();
-    }
-    M_insist(not pred or predication_dummy_);
-
-    /*----- Compute bucket address by hashing the key. Create constant variable to do not recompute the hash. -----*/
-    const Var<Ptr<void>> bucket(
-        pred ? Select(*pred, hash_to_bucket(clone(key)), *predication_dummy_) // use dummy if predicate is not fulfilled
-             : hash_to_bucket(clone(key))
-    ); // clone key since we need it again for comparison
+    Ptr<void> bucket =
+        bucket_hint ? *bucket_hint : compute_bucket(clone(key)); // clone key since we need it again for comparison
 
     /*----- Get reference count, i.e. occupied slots, of this bucket. -----*/
-    const Var<PrimitiveExpr<ref_t>> refs(reference_count(bucket));
+    const Var<PrimitiveExpr<ref_t>> refs(reference_count(bucket.clone()));
 
     /*----- Probe slots, abort if end of bucket is reached or key already exists. -----*/
-    Var<Ptr<void>> slot(bucket.val());
+    Var<Ptr<void>> slot(bucket);
     Var<PrimitiveExpr<ref_t>> steps(0);
     WHILE (steps != refs and reference_count(slot) != ref_t(0)) {
         BREAK(equal_key(slot, std::move(key))); // move key at last use
@@ -1813,31 +1821,19 @@ void OpenAddressingHashTable<IsGlobal, ValueInPlace>::for_each(callback_t Pipeli
 template<bool IsGlobal, bool ValueInPlace>
 void OpenAddressingHashTable<IsGlobal, ValueInPlace>::for_each_in_equal_range(std::vector<SQL_t> key,
                                                                               callback_t Pipeline,
-                                                                              bool predicated) const
+                                                                              bool predicated,
+                                                                              hint_t bucket_hint) const
 {
     M_insist(bool(num_entries_), "must call `setup()` before");
 
-    /*----- If predication is used, introduce predication temporal and set it before looking-up a key. -----*/
-    std::optional<Boolx1> pred;
-    if (auto &env = CodeGenContext::Get().env(); env.predicated()) {
-        M_insist(CodeGenContext::Get().num_simd_lanes() == 1, "invalid number of SIMD lanes");
-        pred.emplace(env.extract_predicate<_Boolx1>().is_true_and_not_null());
-        if (not predication_dummy_)
-            const_cast<OpenAddressingHashTable<IsGlobal, ValueInPlace>*>(this)->create_predication_dummy();
-    }
-    M_insist(not pred or predication_dummy_);
-
-    /*----- Compute bucket address by hashing the key. Create constant variable to do not recompute the hash. -----*/
-    const Var<Ptr<void>> bucket(
-        pred ? Select(*pred, hash_to_bucket(clone(key)), *predication_dummy_) // use dummy if predicate is not fulfilled
-             : hash_to_bucket(clone(key))
-    ); // clone key since we need it again for comparison
+    Ptr<void> bucket =
+        bucket_hint ? *bucket_hint : compute_bucket(clone(key)); // clone key since we need it again for comparison
 
     /*----- Get reference count, i.e. occupied slots, of this bucket. -----*/
-    const Var<PrimitiveExpr<ref_t>> refs(reference_count(bucket));
+    const Var<PrimitiveExpr<ref_t>> refs(reference_count(bucket.clone()));
 
     /*----- Iterate over slots and call pipeline (with entry handle argument) on matches with the given key. -----*/
-    Var<Ptr<void>> slot(bucket.val());
+    Var<Ptr<void>> slot(bucket);
     Var<PrimitiveExpr<ref_t>> steps(0);
     WHILE (steps != refs and reference_count(slot) != ref_t(0)) { // end of bucket not reached and slot occupied
         if (predicated) {

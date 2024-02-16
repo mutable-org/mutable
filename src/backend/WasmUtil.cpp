@@ -2,6 +2,7 @@
 
 #include "backend/Interpreter.hpp"
 #include "backend/WasmMacro.hpp"
+#include "mutable/util/macro.hpp"
 #include <mutable/util/concepts.hpp>
 #include <optional>
 #include <tuple>
@@ -504,6 +505,13 @@ void Environment::dump(std::ostream &out) const
         out << it->first;
     }
     out << " }" << std::endl;
+
+    out << "WasmEnvironment\n` address entries: { ";
+    for (auto it = expr_addrs_.begin(), end = expr_addrs_.end(); it != end; ++it) {
+        if (it != expr_addrs_.begin()) out << ", ";
+        out << it->first;
+    }
+    out << " }" << std::endl;
 }
 
 void Environment::dump() const { dump(std::cerr); }
@@ -526,7 +534,7 @@ namespace m {
 namespace wasm {
 
 /** Compiles the data layout \p layout containing tuples of schema \p layout_schema such that it sequentially
- * stores/loads (depending on \tparam IsStore) tuples of schema \p tuple_schema starting at memory address \p
+ * stores/loads (depending on \tparam IsStore) tuples of schema \p _tuple_value_schema starting at memory address \p
  * base_address and tuple ID \p tuple_id.  If \tparam SinglePass, the store has to be done in a single pass, i.e. the
  * execution of the returned code must *not* be split among multiple function calls.  Otherwise, the store does *not*
  * have to be done in a single pass, i.e. the returned code may be emitted into a function which can be called
@@ -536,28 +544,46 @@ namespace wasm {
  * for storing tuples.  SIMDfication is supported and will be emitted iff \tparam L is greater than 1.
  *
  * Does not emit any code but returns three `wasm::Block`s containing code: the first one initializes all needed
- * variables, the second one stores/loads one tuple, and the third one advances to the next tuple. */
+ * variables, the second one stores/loads one tuple, and the third one advances to the next tuple.  Additionally, if not
+ * \tparam IsStore, adds the addresses of the values of tuples with schema \p _tuple_addr_schema into the current
+ * environment. */
 template<bool IsStore, std::size_t L, bool SinglePass, bool PointerSharing, VariableKind Kind>
 requires (L > 0) and (is_pow_2(L))
 std::tuple<Block, Block, Block>
-compile_data_layout_sequential(const Schema &tuple_schema, Ptr<void> base_address, const storage::DataLayout &layout,
-                               const Schema &layout_schema, Variable<uint32_t, Kind, false> &tuple_id)
+compile_data_layout_sequential(const Schema &_tuple_value_schema, const Schema &_tuple_addr_schema,
+                               Ptr<void> base_address, const storage::DataLayout &layout, const Schema &layout_schema,
+                               Variable<uint32_t, Kind, false> &tuple_id)
 {
-    M_insist(tuple_schema.num_entries() != 0, "sequential access must access at least one tuple schema entry");
+    const auto tuple_value_schema = _tuple_value_schema.deduplicate().drop_constants();
+    const auto tuple_addr_schema = _tuple_addr_schema.deduplicate().drop_constants();
+
+    M_insist(tuple_value_schema.num_entries() != 0, "sequential access must access at least one tuple schema entry");
+    M_insist(not IsStore or tuple_addr_schema.num_entries() == 0, "addresses are only computed for loads");
 #ifndef NDEBUG
-    for (auto &e : tuple_schema)
-        M_insist(layout_schema.find(e.id) != layout_schema.cend(), "tuple schema entry not found");
+    for (auto &e : tuple_value_schema)
+        M_insist(layout_schema.find(e.id) != layout_schema.cend(), "tuple value schema entry not found");
+    for (auto &e : tuple_addr_schema) {
+        auto it = layout_schema.find(e.id);
+        M_insist(it != layout_schema.cend(), "tuple address schema entry not found");
+        M_insist(not it->nullable(), "nullable tuple address schema entry not yet supported");
+        M_insist(not it->type->is_boolean(), "boolean tuple address schema entry not yet supported");
+        M_insist(not it->type->is_character_sequence(), "character sequence tuple address schema entry omitted");
+    }
 #endif
 
     /** code blocks for pointer/mask initialization, stores/loads of values, and stride jumps for pointers / updates
      * of masks */
     Block inits("inits", false), stores("stores", false), loads("loads", false), jumps("jumps", false);
-    ///> the values loaded for the entries in `tuple_schema`
-    SQL_t values[tuple_schema.num_entries()];
-    ///> the NULL information loaded for the entries in `tuple_schema`
+    ///> the values loaded for the entries in `tuple_value_schema`
+    SQL_t values[tuple_value_schema.num_entries()];
+    ///> the addresses for the entries in `tuple_addr_schema`
+    SQL_addr_t *addrs;
+    if (not tuple_addr_schema.empty())
+        addrs = static_cast<SQL_addr_t*>(alloca(sizeof(SQL_addr_t) * tuple_addr_schema.num_entries()));
+    ///> the NULL information loaded for the entries in `tuple_value_schema`
     Bool<L> *null_bits;
     if constexpr (not IsStore)
-        null_bits = static_cast<Bool<L>*>(alloca(sizeof(Bool<L>) * tuple_schema.num_entries()));
+        null_bits = static_cast<Bool<L>*>(alloca(sizeof(Bool<L>) * tuple_value_schema.num_entries()));
 
     using key_t = std::pair<uint8_t, uint64_t>;
     ///> variable type for pointers dependent on whether access should be done using a single pass
@@ -584,13 +610,13 @@ compile_data_layout_sequential(const Schema &tuple_schema, Ptr<void> base_addres
         }
     }
 
-    /*----- Check whether any of the entries in `tuple_schema` can be NULL, so that we need the NULL bitmap. -----*/
+    /*----- Check whether any of the entries in `tuple_value_schema` can be NULL, so that we need the NULL bitmap. -----*/
     const bool needs_null_bitmap = [&]() {
-        for (auto &tuple_entry : tuple_schema) {
+        for (auto &tuple_entry : tuple_value_schema) {
             if (layout_schema[tuple_entry.id].second.nullable())
-                return true; // found an entry in `tuple_schema` that can be NULL according to `layout_schema`
+                return true; // found an entry in `tuple_value_schema` that can be NULL according to `layout_schema`
         }
-        return false; // no attribute in `tuple_schema` can be NULL according to `layout_schema`
+        return false; // no attribute in `tuple_value_schema` can be NULL according to `layout_schema`
     }();
     bool has_null_bitmap = false; // indicates whether the data layout specifies a NULL bitmap
 
@@ -715,8 +741,8 @@ compile_data_layout_sequential(const Schema &tuple_schema, Ptr<void> base_addres
                     for (std::size_t layout_idx = 0; layout_idx < layout_schema.num_entries(); ++layout_idx) {
                         auto &layout_entry = layout_schema[layout_idx];
                         if (layout_entry.nullable()) { // layout entry may be NULL
-                            auto tuple_it = tuple_schema.find(layout_entry.id);
-                            if (tuple_it == tuple_schema.end())
+                            auto tuple_it = tuple_value_schema.find(layout_entry.id);
+                            if (tuple_it == tuple_value_schema.end())
                                 continue; // entry not contained in tuple schema
                             M_insist(prev_layout_idx == 0 or layout_idx > prev_layout_idx,
                                      "layout entries not processed in ascending order");
@@ -798,7 +824,7 @@ compile_data_layout_sequential(const Schema &tuple_schema, Ptr<void> base_addres
                                     [](auto&&) { M_unreachable("invalid type"); },
                                 }, *tuple_it->type);
                             } else {
-                                const auto tuple_idx = std::distance(tuple_schema.begin(), tuple_it);
+                                const auto tuple_idx = std::distance(tuple_value_schema.begin(), tuple_it);
                                 BLOCK_OPEN(loads) {
                                     advance_to_next_bit();
 
@@ -807,6 +833,7 @@ compile_data_layout_sequential(const Schema &tuple_schema, Ptr<void> base_addres
                                         (byte bitand *null_bitmap_mask).template to<bool>()
                                     ); // mask bit with dynamic mask
                                     new (&null_bits[tuple_idx]) Boolx1(value);
+                                    /* Address for NULL bits not yet supported. */
                                 }
                             }
 
@@ -891,10 +918,10 @@ compile_data_layout_sequential(const Schema &tuple_schema, Ptr<void> base_addres
                 } else { // NULL bitmap without bit stride can benefit from static masking of NULL bits
                     M_insist(L == 1 or L >= 16,
                              "NULL bits must fill at least an entire SIMD vector when loading SIMDfied");
-                    M_insist(L == 1 or tuple_schema.num_entries() <= 64,
+                    M_insist(L == 1 or tuple_value_schema.num_entries() <= 64,
                              "bytes containing a NULL bitmap must fit into scalar value when loading SIMDfied");
                     M_insist(L == 1 or
-                             std::max(ceil_to_pow_2(tuple_schema.num_entries()), 8UL) == leaf_info.stride_in_bits,
+                             std::max(ceil_to_pow_2(tuple_value_schema.num_entries()), 8UL) == leaf_info.stride_in_bits,
                              "NULL bitmaps must be packed s.t. the distance between two NULL bits of a single "
                              "attribute is a power of 2 when loading SIMDfied");
                     M_insist(L == 1 or leaf_info.offset_in_bits % 8 == 0,
@@ -947,7 +974,7 @@ compile_data_layout_sequential(const Schema &tuple_schema, Ptr<void> base_addres
                                 );
                             }
                         };
-                        switch (ceil_to_pow_2(tuple_schema.num_entries())) {
+                        switch (ceil_to_pow_2(tuple_value_schema.num_entries())) {
                             default: emplace.template operator()<U8 <L>>(); break; // <= 8
                             case 16: emplace.template operator()<U16<L>>(); break;
                             case 32: emplace.template operator()<U32<L>>(); break;
@@ -956,8 +983,8 @@ compile_data_layout_sequential(const Schema &tuple_schema, Ptr<void> base_addres
                     }
 
                     /*----- For each tuple entry that can be NULL, create a store/load with static offset and mask. --*/
-                    for (std::size_t tuple_idx = 0; tuple_idx != tuple_schema.num_entries(); ++tuple_idx) {
-                        auto &tuple_entry = tuple_schema[tuple_idx];
+                    for (std::size_t tuple_idx = 0; tuple_idx != tuple_value_schema.num_entries(); ++tuple_idx) {
+                        auto &tuple_entry = tuple_value_schema[tuple_idx];
                         const auto &[layout_idx, layout_entry] = layout_schema[tuple_entry.id];
                         M_insist(*tuple_entry.type == *layout_entry.type);
                         if (layout_entry.nullable()) { // layout entry may be NULL
@@ -982,7 +1009,7 @@ compile_data_layout_sequential(const Schema &tuple_schema, Ptr<void> base_addres
                                                         (ptr + leaf_info.offset_in_bits / 8).template to<type*, lanes>(); // compute bytes address
                                                     setbit<U>(bytes_ptr, is_null, layout_idx); // update bits
                                                 };
-                                                switch (ceil_to_pow_2(tuple_schema.num_entries())) {
+                                                switch (ceil_to_pow_2(tuple_value_schema.num_entries())) {
                                                     default: store.template operator()<U8 <L>>(); break; // <= 8
                                                     case 16: store.template operator()<U16<L>>(); break;
                                                     case 32: store.template operator()<U32<L>>(); break;
@@ -1040,6 +1067,7 @@ compile_data_layout_sequential(const Schema &tuple_schema, Ptr<void> base_addres
                                         const uint8_t static_mask = 1U << static_bit_offset;
                                         Var<Boolx1> value((byte bitand static_mask).to<bool>()); // mask bit with static mask
                                         new (&null_bits[tuple_idx]) Boolx1(value);
+                                        /* Address for NULL bits not yet supported. */
                                     } else {
                                         std::visit(overloaded{
                                             [&, layout_idx]<typename T> // copy due to structured binding
@@ -1050,6 +1078,7 @@ compile_data_layout_sequential(const Schema &tuple_schema, Ptr<void> base_addres
                                                     (_bytes bitand static_mask).template to<bool>() // mask bits with static mask
                                                 );
                                                 new (&null_bits[tuple_idx]) Bool<L>(value);
+                                                /* Address for NULL bits not yet supported. */
                                             },
                                             [](auto&) { M_unreachable("invalid number of SIMD lanes"); },
                                             [](std::monostate&) { M_unreachable("invalid variant"); },
@@ -1106,11 +1135,14 @@ compile_data_layout_sequential(const Schema &tuple_schema, Ptr<void> base_addres
             } else { // regular entry
                 auto &layout_entry = layout_schema[leaf_info.leaf.index()];
                 M_insist(*layout_entry.type == *leaf_info.leaf.type());
-                auto tuple_it = tuple_schema.find(layout_entry.id);
-                if (tuple_it == tuple_schema.end())
-                    continue; // entry not contained in tuple schema
+                auto tuple_value_it = tuple_value_schema.find(layout_entry.id);
+                auto tuple_addr_it = tuple_addr_schema.find(layout_entry.id);
+                if (tuple_value_it == tuple_value_schema.end() and tuple_addr_it == tuple_addr_schema.end())
+                    continue; // entry not contained in both tuple schemas
+                auto tuple_it = tuple_value_it != tuple_value_schema.end() ? tuple_value_it : tuple_addr_it;
                 M_insist(*tuple_it->type == *layout_entry.type);
-                const auto tuple_idx = std::distance(tuple_schema.begin(), tuple_it);
+                const auto tuple_value_idx = std::distance(tuple_value_schema.begin(), tuple_value_it);
+                const auto tuple_addr_idx = std::distance(tuple_addr_schema.begin(), tuple_addr_it);
 
                 if (bit_stride) { // entry with bit stride requires dynamic masking (for scalar loading)
                     M_insist(tuple_it->type->is_boolean(),
@@ -1181,10 +1213,14 @@ compile_data_layout_sequential(const Schema &tuple_schema, Ptr<void> base_addres
                                 if constexpr (L == 1) {
                                     U8x1 byte = *(ptr + leaf_byte_offset).template to<uint8_t*>(); // load byte
                                     const auto &mask = *it->second.mask;
-                                    Var<Boolx1> value(
-                                        (byte bitand mask.template to<uint8_t>()).template to<bool>() // mask bit with dynamic mask
-                                    );
-                                    new (&values[tuple_idx]) SQL_t(_Boolx1(value));
+                                    if (tuple_value_it != tuple_value_schema.end()) {
+                                        Var<Boolx1> value(
+                                            (byte.clone() bitand mask.template to<uint8_t>()).template to<bool>() // mask bit with dynamic mask
+                                        );
+                                        new (&values[tuple_value_idx]) SQL_t(_Boolx1(value));
+                                    }
+                                    /* Address for booleans not yet supported. */
+                                    byte.discard();
                                 } else {
                                     using bytes_t = uint_t<L / 8>;
                                     const Var<PrimitiveExpr<bytes_t>> bytes(
@@ -1194,10 +1230,15 @@ compile_data_layout_sequential(const Schema &tuple_schema, Ptr<void> base_addres
                                         return PrimitiveExpr<bytes_t, L>(bytes_t(1UL << Is)...);
                                     };
                                     auto static_mask = create_mask(std::make_index_sequence<L>());
-                                    Var<Bool<L>> value(
-                                        (bytes.template broadcast<L>() bitand static_mask).template to<bool>() // mask bits with static mask
-                                    );
-                                    new (&values[tuple_idx]) SQL_t(_Bool<L>(value));
+                                    if (tuple_value_it != tuple_value_schema.end()) {
+                                        Var<Bool<L>> value(
+                                            (bytes.template broadcast<L>() bitand static_mask).template to<bool>() // mask bits with static mask
+                                        );
+                                        new (&values[tuple_value_idx]) SQL_t(_Bool<L>(value));
+                                    } else {
+                                        bytes.val().discard(); // XXX: remove once address for booleans are supported
+                                    }
+                                    /* Address for booleans not yet supported. */
                                 }
                             }
                         } else {
@@ -1264,10 +1305,16 @@ compile_data_layout_sequential(const Schema &tuple_schema, Ptr<void> base_addres
                             M_insist(static_bit_offset == 0,
                                      "leaf offset of `Numeric`, `Date`, or `DateTime` must be byte aligned");
                             BLOCK_OPEN(loads) {
-                                Var<PrimitiveExpr<type, lanes>> value(
-                                    *(ptr + static_byte_offset).template to<type*, lanes>()
-                                );
-                                new (&values[tuple_idx]) SQL_t(T(value));
+                                if (tuple_value_it != tuple_value_schema.end()) {
+                                    Var<PrimitiveExpr<type, lanes>> value(
+                                        *(ptr + static_byte_offset).template to<type*, lanes>()
+                                    );
+                                    new (&values[tuple_value_idx]) SQL_t(T(value));
+                                }
+                                if (tuple_addr_it != tuple_addr_schema.end())
+                                    new (&addrs[tuple_addr_idx]) SQL_addr_t(
+                                        (ptr + static_byte_offset).template to<type*, lanes>()
+                                    );
                             }
                         },
                         []<typename>() {
@@ -1296,10 +1343,16 @@ compile_data_layout_sequential(const Schema &tuple_schema, Ptr<void> base_addres
                                         U8<L> byte =
                                             *(ptr + static_byte_offset).template to<uint8_t*, L>(); // load byte
                                         U8<L> static_mask(1U << static_bit_offset);
-                                        Var<Bool<L>> value(
-                                            (byte bitand static_mask).template to<bool>() // mask bit with static mask
-                                        );
-                                        new (&values[tuple_idx]) SQL_t(_Bool<L>(value));
+
+                                        if (tuple_value_it != tuple_value_schema.end()) {
+                                            Var<Bool<L>> value(
+                                                (byte.clone() bitand static_mask.clone()).template to<bool>() // mask bit with static mask
+                                            );
+                                            new (&values[tuple_value_idx]) SQL_t(_Bool<L>(value));
+                                        }
+                                        /* Address for booleans not yet supported. */
+                                        byte.discard();
+                                        static_mask.discard();
                                     }
                                 }
                             } else {
@@ -1341,9 +1394,10 @@ compile_data_layout_sequential(const Schema &tuple_schema, Ptr<void> base_addres
                                 /*----- Load value. -----*/
                                 BLOCK_OPEN(loads) {
                                     Ptr<Charx1> address((ptr + static_byte_offset).template to<char*>());
-                                    new (&values[tuple_idx]) SQL_t(
+                                    new (&values[tuple_value_idx]) SQL_t(
                                         NChar(address, layout_entry.nullable(), cs.length, cs.is_varying)
                                     );
+                                    /* Omit addresses for character sequences. */
                                 }
                             }
                         },
@@ -1588,8 +1642,8 @@ compile_data_layout_sequential(const Schema &tuple_schema, Ptr<void> base_addres
 
     if constexpr (not IsStore) {
         /*----- Combine actual values and possible NULL bits to a new `SQL_t` and add this to the environment. -----*/
-        for (std::size_t idx = 0; idx != tuple_schema.num_entries(); ++idx) {
-            auto &tuple_entry = tuple_schema[idx];
+        for (std::size_t idx = 0; idx != tuple_value_schema.num_entries(); ++idx) {
+            auto &tuple_entry = tuple_value_schema[idx];
             std::visit(overloaded{
                 [&]<typename T>(Expr<T, L> value) {
                     BLOCK_OPEN(loads) {
@@ -1623,15 +1677,25 @@ compile_data_layout_sequential(const Schema &tuple_schema, Ptr<void> base_addres
                 [](std::monostate) { M_unreachable("invalid variant"); },
             }, values[idx]);
         }
+
+        /*----- Add addresses to the environment. -----*/
+        for (std::size_t idx = 0; idx != tuple_addr_schema.num_entries(); ++idx) {
+            BLOCK_OPEN(loads) {
+                auto &tuple_entry = tuple_addr_schema[idx];
+                env.add_addr(tuple_entry.id, std::move(addrs[idx]));
+            }
+        }
     }
 
     /*----- Destroy created values. -----*/
-    for (std::size_t idx = 0; idx < tuple_schema.num_entries(); ++idx)
+    for (std::size_t idx = 0; idx < tuple_value_schema.num_entries(); ++idx)
         values[idx].~SQL_t();
+    for (std::size_t idx = 0; idx < tuple_addr_schema.num_entries(); ++idx)
+        addrs[idx].~SQL_addr_t();
     if constexpr (not IsStore) {
         /*----- Destroy created NULL bits. -----*/
-        for (std::size_t idx = 0; idx != tuple_schema.num_entries(); ++idx) {
-            if (has_null_bitmap and layout_schema[tuple_schema[idx].id].second.nullable())
+        for (std::size_t idx = 0; idx != tuple_value_schema.num_entries(); ++idx) {
+            if (has_null_bitmap and layout_schema[tuple_value_schema[idx].id].second.nullable())
                 null_bits[idx].~Bool<L>();
         }
     }
@@ -1656,157 +1720,194 @@ compile_data_layout_sequential(const Schema &tuple_schema, Ptr<void> base_addres
 
 template<VariableKind Kind>
 std::tuple<m::wasm::Block, m::wasm::Block, m::wasm::Block>
-m::wasm::compile_store_sequential(const Schema &tuple_schema, Ptr<void> base_address, const storage::DataLayout &layout,
-                                  std::size_t num_simd_lanes, const Schema &layout_schema,
-                                  Variable<uint32_t, Kind, false> &tuple_id)
+m::wasm::compile_store_sequential(const Schema &tuple_value_schema, const Schema &tuple_addr_schema,
+                                  Ptr<void> base_address, const storage::DataLayout &layout, std::size_t num_simd_lanes,
+                                  const Schema &layout_schema, Variable<uint32_t, Kind, false> &tuple_id)
 {
     if (options::pointer_sharing) {
         switch (num_simd_lanes) {
             default: M_unreachable("unsupported number of SIMD lanes");
-            case  1: return compile_data_layout_sequential<true,  1, false, true>(tuple_schema, base_address, layout,
-                                                                                  layout_schema, tuple_id);
-            case  2: return compile_data_layout_sequential<true,  2, false, true>(tuple_schema, base_address, layout,
-                                                                                  layout_schema, tuple_id);
-            case  4: return compile_data_layout_sequential<true,  4, false, true>(tuple_schema, base_address, layout,
-                                                                                  layout_schema, tuple_id);
-            case  8: return compile_data_layout_sequential<true,  8, false, true>(tuple_schema, base_address, layout,
-                                                                                  layout_schema, tuple_id);
-            case 16: return compile_data_layout_sequential<true, 16, false, true>(tuple_schema, base_address, layout,
-                                                                                  layout_schema, tuple_id);
-            case 32: return compile_data_layout_sequential<true, 32, false, true>(tuple_schema, base_address, layout,
-                                                                                  layout_schema, tuple_id);
+            case  1: return compile_data_layout_sequential<true,  1, false, true>(tuple_value_schema, tuple_addr_schema,
+                                                                                  base_address, layout, layout_schema,
+                                                                                  tuple_id);
+            case  2: return compile_data_layout_sequential<true,  2, false, true>(tuple_value_schema, tuple_addr_schema,
+                                                                                  base_address, layout, layout_schema,
+                                                                                  tuple_id);
+            case  4: return compile_data_layout_sequential<true,  4, false, true>(tuple_value_schema, tuple_addr_schema,
+                                                                                  base_address, layout, layout_schema,
+                                                                                  tuple_id);
+            case  8: return compile_data_layout_sequential<true,  8, false, true>(tuple_value_schema, tuple_addr_schema,
+                                                                                  base_address, layout, layout_schema,
+                                                                                  tuple_id);
+            case 16: return compile_data_layout_sequential<true, 16, false, true>(tuple_value_schema, tuple_addr_schema,
+                                                                                  base_address, layout, layout_schema,
+                                                                                  tuple_id);
+            case 32: return compile_data_layout_sequential<true, 32, false, true>(tuple_value_schema, tuple_addr_schema,
+                                                                                  base_address, layout, layout_schema,
+                                                                                  tuple_id);
         }
     } else {
         switch (num_simd_lanes) {
             default: M_unreachable("unsupported number of SIMD lanes");
-            case  1: return compile_data_layout_sequential<true,  1, false, false>(tuple_schema, base_address, layout,
-                                                                                   layout_schema, tuple_id);
-            case  2: return compile_data_layout_sequential<true,  2, false, false>(tuple_schema, base_address, layout,
-                                                                                   layout_schema, tuple_id);
-            case  4: return compile_data_layout_sequential<true,  4, false, false>(tuple_schema, base_address, layout,
-                                                                                   layout_schema, tuple_id);
-            case  8: return compile_data_layout_sequential<true,  8, false, false>(tuple_schema, base_address, layout,
-                                                                                   layout_schema, tuple_id);
-            case 16: return compile_data_layout_sequential<true, 16, false, false>(tuple_schema, base_address, layout,
-                                                                                   layout_schema, tuple_id);
-            case 32: return compile_data_layout_sequential<true, 32, false, false>(tuple_schema, base_address, layout,
-                                                                                   layout_schema, tuple_id);
+            case  1: return compile_data_layout_sequential<true,  1, false, false>(tuple_value_schema,
+                                                                                   tuple_addr_schema, base_address,
+                                                                                   layout, layout_schema, tuple_id);
+            case  2: return compile_data_layout_sequential<true,  2, false, false>(tuple_value_schema,
+                                                                                   tuple_addr_schema, base_address,
+                                                                                   layout, layout_schema, tuple_id);
+            case  4: return compile_data_layout_sequential<true,  4, false, false>(tuple_value_schema,
+                                                                                   tuple_addr_schema, base_address,
+                                                                                   layout, layout_schema, tuple_id);
+            case  8: return compile_data_layout_sequential<true,  8, false, false>(tuple_value_schema,
+                                                                                   tuple_addr_schema, base_address,
+                                                                                   layout, layout_schema, tuple_id);
+            case 16: return compile_data_layout_sequential<true, 16, false, false>(tuple_value_schema,
+                                                                                   tuple_addr_schema, base_address,
+                                                                                   layout, layout_schema, tuple_id);
+            case 32: return compile_data_layout_sequential<true, 32, false, false>(tuple_value_schema,
+                                                                                   tuple_addr_schema, base_address,
+                                                                                   layout, layout_schema, tuple_id);
         }
     }
 }
 
 template<VariableKind Kind>
 std::tuple<m::wasm::Block, m::wasm::Block, m::wasm::Block>
-m::wasm::compile_store_sequential_single_pass(const Schema &tuple_schema, Ptr<void> base_address,
-                                              const storage::DataLayout &layout, std::size_t num_simd_lanes,
-                                              const Schema &layout_schema, Variable<uint32_t, Kind, false> &tuple_id)
+m::wasm::compile_store_sequential_single_pass(const Schema &tuple_value_schema, const Schema &tuple_addr_schema,
+                                              Ptr<void> base_address, const storage::DataLayout &layout,
+                                              std::size_t num_simd_lanes, const Schema &layout_schema,
+                                              Variable<uint32_t, Kind, false> &tuple_id)
 {
     if (options::pointer_sharing) {
         switch (num_simd_lanes) {
             default: M_unreachable("unsupported number of SIMD lanes");
-            case  1: return compile_data_layout_sequential<true,  1, true, true>(tuple_schema, base_address, layout,
-                                                                                 layout_schema, tuple_id);
-            case  2: return compile_data_layout_sequential<true,  2, true, true>(tuple_schema, base_address, layout,
-                                                                                 layout_schema, tuple_id);
-            case  4: return compile_data_layout_sequential<true,  4, true, true>(tuple_schema, base_address, layout,
-                                                                                 layout_schema, tuple_id);
-            case  8: return compile_data_layout_sequential<true,  8, true, true>(tuple_schema, base_address, layout,
-                                                                                 layout_schema, tuple_id);
-            case 16: return compile_data_layout_sequential<true, 16, true, true>(tuple_schema, base_address, layout,
-                                                                                 layout_schema, tuple_id);
-            case 32: return compile_data_layout_sequential<true, 32, true, true>(tuple_schema, base_address, layout,
-                                                                                 layout_schema, tuple_id);
+            case  1: return compile_data_layout_sequential<true,  1, true, true>(tuple_value_schema, tuple_addr_schema,
+                                                                                 base_address, layout, layout_schema,
+                                                                                 tuple_id);
+            case  2: return compile_data_layout_sequential<true,  2, true, true>(tuple_value_schema, tuple_addr_schema,
+                                                                                 base_address, layout, layout_schema,
+                                                                                 tuple_id);
+            case  4: return compile_data_layout_sequential<true,  4, true, true>(tuple_value_schema, tuple_addr_schema,
+                                                                                 base_address, layout, layout_schema,
+                                                                                 tuple_id);
+            case  8: return compile_data_layout_sequential<true,  8, true, true>(tuple_value_schema, tuple_addr_schema,
+                                                                                 base_address, layout, layout_schema,
+                                                                                 tuple_id);
+            case 16: return compile_data_layout_sequential<true, 16, true, true>(tuple_value_schema, tuple_addr_schema,
+                                                                                 base_address, layout, layout_schema,
+                                                                                 tuple_id);
+            case 32: return compile_data_layout_sequential<true, 32, true, true>(tuple_value_schema, tuple_addr_schema,
+                                                                                 base_address, layout, layout_schema,
+                                                                                 tuple_id);
         }
     } else {
         switch (num_simd_lanes) {
             default: M_unreachable("unsupported number of SIMD lanes");
-            case  1: return compile_data_layout_sequential<true,  1, true, false>(tuple_schema, base_address, layout,
-                                                                                  layout_schema, tuple_id);
-            case  2: return compile_data_layout_sequential<true,  2, true, false>(tuple_schema, base_address, layout,
-                                                                                  layout_schema, tuple_id);
-            case  4: return compile_data_layout_sequential<true,  4, true, false>(tuple_schema, base_address, layout,
-                                                                                  layout_schema, tuple_id);
-            case  8: return compile_data_layout_sequential<true,  8, true, false>(tuple_schema, base_address, layout,
-                                                                                  layout_schema, tuple_id);
-            case 16: return compile_data_layout_sequential<true, 16, true, false>(tuple_schema, base_address, layout,
-                                                                                  layout_schema, tuple_id);
-            case 32: return compile_data_layout_sequential<true, 32, true, false>(tuple_schema, base_address, layout,
-                                                                                  layout_schema, tuple_id);
+            case  1: return compile_data_layout_sequential<true,  1, true, false>(tuple_value_schema,
+                                                                                  tuple_addr_schema, base_address,
+                                                                                  layout, layout_schema, tuple_id);
+            case  2: return compile_data_layout_sequential<true,  2, true, false>(tuple_value_schema,
+                                                                                  tuple_addr_schema, base_address,
+                                                                                  layout, layout_schema, tuple_id);
+            case  4: return compile_data_layout_sequential<true,  4, true, false>(tuple_value_schema,
+                                                                                  tuple_addr_schema, base_address,
+                                                                                  layout, layout_schema, tuple_id);
+            case  8: return compile_data_layout_sequential<true,  8, true, false>(tuple_value_schema,
+                                                                                  tuple_addr_schema, base_address,
+                                                                                  layout, layout_schema, tuple_id);
+            case 16: return compile_data_layout_sequential<true, 16, true, false>(tuple_value_schema,
+                                                                                  tuple_addr_schema, base_address,
+                                                                                  layout, layout_schema, tuple_id);
+            case 32: return compile_data_layout_sequential<true, 32, true, false>(tuple_value_schema,
+                                                                                  tuple_addr_schema, base_address,
+                                                                                  layout, layout_schema, tuple_id);
         }
     }
 }
 
 template<VariableKind Kind>
 std::tuple<m::wasm::Block, m::wasm::Block, m::wasm::Block>
-m::wasm::compile_load_sequential(const Schema &tuple_schema, Ptr<void> base_address, const storage::DataLayout &layout,
-                                 std::size_t num_simd_lanes, const Schema &layout_schema,
-                                 Variable<uint32_t, Kind, false> &tuple_id)
+m::wasm::compile_load_sequential(const Schema &tuple_value_schema, const Schema &tuple_addr_schema,
+                                 Ptr<void> base_address, const storage::DataLayout &layout, std::size_t num_simd_lanes,
+                                 const Schema &layout_schema, Variable<uint32_t, Kind, false> &tuple_id)
 {
     if (options::pointer_sharing) {
         switch (num_simd_lanes) {
             default: M_unreachable("unsupported number of SIMD lanes");
-            case  1: return compile_data_layout_sequential<false,  1, true, true>(tuple_schema, base_address, layout,
-                                                                                  layout_schema, tuple_id);
-            case  2: return compile_data_layout_sequential<false,  2, true, true>(tuple_schema, base_address, layout,
-                                                                                  layout_schema, tuple_id);
-            case  4: return compile_data_layout_sequential<false,  4, true, true>(tuple_schema, base_address, layout,
-                                                                                  layout_schema, tuple_id);
-            case  8: return compile_data_layout_sequential<false,  8, true, true>(tuple_schema, base_address, layout,
-                                                                                  layout_schema, tuple_id);
-            case 16: return compile_data_layout_sequential<false, 16, true, true>(tuple_schema, base_address, layout,
-                                                                                  layout_schema, tuple_id);
-            case 32: return compile_data_layout_sequential<false, 32, true, true>(tuple_schema, base_address, layout,
-                                                                                  layout_schema, tuple_id);
+            case  1: return compile_data_layout_sequential<false,  1, true, true>(tuple_value_schema, tuple_addr_schema,
+                                                                                  base_address, layout, layout_schema,
+                                                                                  tuple_id);
+            case  2: return compile_data_layout_sequential<false,  2, true, true>(tuple_value_schema, tuple_addr_schema,
+                                                                                  base_address, layout, layout_schema,
+                                                                                  tuple_id);
+            case  4: return compile_data_layout_sequential<false,  4, true, true>(tuple_value_schema, tuple_addr_schema,
+                                                                                  base_address, layout, layout_schema,
+                                                                                  tuple_id);
+            case  8: return compile_data_layout_sequential<false,  8, true, true>(tuple_value_schema, tuple_addr_schema,
+                                                                                  base_address, layout, layout_schema,
+                                                                                  tuple_id);
+            case 16: return compile_data_layout_sequential<false, 16, true, true>(tuple_value_schema, tuple_addr_schema,
+                                                                                  base_address, layout, layout_schema,
+                                                                                  tuple_id);
+            case 32: return compile_data_layout_sequential<false, 32, true, true>(tuple_value_schema, tuple_addr_schema,
+                                                                                  base_address, layout, layout_schema,
+                                                                                  tuple_id);
         }
     } else {
         switch (num_simd_lanes) {
             default: M_unreachable("unsupported number of SIMD lanes");
-            case  1: return compile_data_layout_sequential<false,  1, true, false>(tuple_schema, base_address, layout,
-                                                                                   layout_schema, tuple_id);
-            case  2: return compile_data_layout_sequential<false,  2, true, false>(tuple_schema, base_address, layout,
-                                                                                   layout_schema, tuple_id);
-            case  4: return compile_data_layout_sequential<false,  4, true, false>(tuple_schema, base_address, layout,
-                                                                                   layout_schema, tuple_id);
-            case  8: return compile_data_layout_sequential<false,  8, true, false>(tuple_schema, base_address, layout,
-                                                                                   layout_schema, tuple_id);
-            case 16: return compile_data_layout_sequential<false, 16, true, false>(tuple_schema, base_address, layout,
-                                                                                   layout_schema, tuple_id);
-            case 32: return compile_data_layout_sequential<false, 32, true, false>(tuple_schema, base_address, layout,
-                                                                                   layout_schema, tuple_id);
+            case  1: return compile_data_layout_sequential<false,  1, true, false>(tuple_value_schema,
+                                                                                   tuple_addr_schema, base_address,
+                                                                                   layout, layout_schema, tuple_id);
+            case  2: return compile_data_layout_sequential<false,  2, true, false>(tuple_value_schema,
+                                                                                   tuple_addr_schema, base_address,
+                                                                                   layout, layout_schema, tuple_id);
+            case  4: return compile_data_layout_sequential<false,  4, true, false>(tuple_value_schema,
+                                                                                   tuple_addr_schema, base_address,
+                                                                                   layout, layout_schema, tuple_id);
+            case  8: return compile_data_layout_sequential<false,  8, true, false>(tuple_value_schema,
+                                                                                   tuple_addr_schema, base_address,
+                                                                                   layout, layout_schema, tuple_id);
+            case 16: return compile_data_layout_sequential<false, 16, true, false>(tuple_value_schema,
+                                                                                   tuple_addr_schema, base_address,
+                                                                                   layout, layout_schema, tuple_id);
+            case 32: return compile_data_layout_sequential<false, 32, true, false>(tuple_value_schema,
+                                                                                   tuple_addr_schema, base_address,
+                                                                                   layout, layout_schema, tuple_id);
         }
     }
 }
 
 // explicit instantiations to prevent linker errors
 template std::tuple<m::wasm::Block, m::wasm::Block, m::wasm::Block> m::wasm::compile_store_sequential(
-    const Schema&, Ptr<void>, const storage::DataLayout&, std::size_t, const Schema&, Var<U32x1>&
+    const Schema&, const Schema&, Ptr<void>, const storage::DataLayout&, std::size_t, const Schema&, Var<U32x1>&
 );
 template std::tuple<m::wasm::Block, m::wasm::Block, m::wasm::Block> m::wasm::compile_store_sequential(
-    const Schema&, Ptr<void>, const storage::DataLayout&, std::size_t, const Schema&, Global<U32x1>&
+    const Schema&, const Schema&, Ptr<void>, const storage::DataLayout&, std::size_t, const Schema&, Global<U32x1>&
 );
 template std::tuple<m::wasm::Block, m::wasm::Block, m::wasm::Block> m::wasm::compile_store_sequential(
-    const Schema&, Ptr<void>, const storage::DataLayout&, std::size_t, const Schema&,
+    const Schema&, const Schema&, Ptr<void>, const storage::DataLayout&, std::size_t, const Schema&,
     Variable<uint32_t, VariableKind::Param, false>&
 );
 template std::tuple<m::wasm::Block, m::wasm::Block, m::wasm::Block> m::wasm::compile_store_sequential_single_pass(
-    const Schema&, Ptr<void>, const storage::DataLayout&, std::size_t, const Schema&, Var<U32x1>&
+    const Schema&, const Schema&, Ptr<void>, const storage::DataLayout&, std::size_t, const Schema&, Var<U32x1>&
 );
 template std::tuple<m::wasm::Block, m::wasm::Block, m::wasm::Block> m::wasm::compile_store_sequential_single_pass(
-    const Schema&, Ptr<void>, const storage::DataLayout&, std::size_t, const Schema&, Global<U32x1>&
+    const Schema&, const Schema&, Ptr<void>, const storage::DataLayout&, std::size_t, const Schema&, Global<U32x1>&
 );
 template std::tuple<m::wasm::Block, m::wasm::Block, m::wasm::Block> m::wasm::compile_store_sequential_single_pass(
-    const Schema&, Ptr<void>, const storage::DataLayout&, std::size_t, const Schema&,
+    const Schema&, const Schema&, Ptr<void>, const storage::DataLayout&, std::size_t, const Schema&,
     Variable<uint32_t, VariableKind::Param, false>&
 );
 template std::tuple<m::wasm::Block, m::wasm::Block, m::wasm::Block> m::wasm::compile_load_sequential(
-    const Schema&, Ptr<void>, const storage::DataLayout&, std::size_t, const Schema&, Var<U32x1>&
+    const Schema&, const Schema&, Ptr<void>, const storage::DataLayout&, std::size_t, const Schema&, Var<U32x1>&
 );
 template std::tuple<m::wasm::Block, m::wasm::Block, m::wasm::Block> m::wasm::compile_load_sequential(
-    const Schema&, Ptr<void>, const storage::DataLayout&, std::size_t, const Schema&, Global<U32x1>&
+    const Schema&, const Schema&, Ptr<void>, const storage::DataLayout&, std::size_t, const Schema&, Global<U32x1>&
 );
 template std::tuple<m::wasm::Block, m::wasm::Block, m::wasm::Block> m::wasm::compile_load_sequential(
-    const Schema&, Ptr<void>, const storage::DataLayout&, std::size_t, const Schema&, Variable<uint32_t,
-    VariableKind::Param, false>&
+    const Schema&, const Schema&, Ptr<void>, const storage::DataLayout&, std::size_t, const Schema&,
+    Variable<uint32_t, VariableKind::Param, false>&
 );
 
 namespace m {
@@ -1814,36 +1915,53 @@ namespace m {
 namespace wasm {
 
 /** Compiles the data layout \p layout starting at memory address \p base_address and containing tuples of schema
- * \p layout_schema such that it stores/loads the single tuple with schema \p tuple_schema and ID \p tuple_id.
+ * \p layout_schema such that it stores/loads the single tuple with schema \p _tuple_value_schema and ID \p tuple_id.
  *
- * If \tparam IsStore, emits the storing code into the current block, otherwise, emits the loading code into the
- * current block and adds the loaded values into the current environment. */
+ * If \tparam IsStore, emits the storing code into the current block, otherwise, emits the loading code into the current
+ * block and adds the loaded values into the current environment.  Additionally, if not \tparam IsStore, adds the
+ * addresses of the values of tuples with schema \p _tuple_addr_schema into the current environment. */
 template<bool IsStore>
-void compile_data_layout_point_access(const Schema &tuple_schema, Ptr<void> base_address,
-                                      const storage::DataLayout &layout, const Schema &layout_schema, U32x1 tuple_id)
+void compile_data_layout_point_access(const Schema &_tuple_value_schema, const Schema &_tuple_addr_schema,
+                                      Ptr<void> base_address, const storage::DataLayout &layout,
+                                      const Schema &layout_schema, U32x1 tuple_id)
 {
-    M_insist(tuple_schema.num_entries() != 0, "point access must access at least one tuple schema entry");
+    const auto tuple_value_schema = _tuple_value_schema.deduplicate().drop_constants();
+    const auto tuple_addr_schema = _tuple_addr_schema.deduplicate().drop_constants();
+
+    M_insist(tuple_value_schema.num_entries() != 0, "point access must access at least one tuple schema entry");
+    M_insist(not IsStore or tuple_addr_schema.num_entries() == 0, "addresses are only computed for loads");
 #ifndef NDEBUG
-    for (auto &e : tuple_schema)
-        M_insist(layout_schema.find(e.id) != layout_schema.cend(), "tuple schema entry not found");
+    for (auto &e : tuple_value_schema)
+        M_insist(layout_schema.find(e.id) != layout_schema.cend(), "tuple value schema entry not found");
+    for (auto &e : tuple_addr_schema) {
+        auto it = layout_schema.find(e.id);
+        M_insist(it != layout_schema.cend(), "tuple address schema entry not found");
+        M_insist(not it->nullable(), "nullable tuple address schema entry not yet supported");
+        M_insist(not it->type->is_boolean(), "boolean tuple address schema entry not yet supported");
+        M_insist(not it->type->is_character_sequence(), "character sequence tuple address schema entry omitted");
+    }
 #endif
 
-    ///> the values loaded for the entries in `tuple_schema`
-    SQL_t values[tuple_schema.num_entries()];
-    ///> the NULL information loaded for the entries in `tuple_schema`
+    ///> the values loaded for the entries in `tuple_value_schema`
+    SQL_t values[tuple_value_schema.num_entries()];
+    ///> the addresses for the entries in `tuple_addr_schema`
+    SQL_addr_t *addrs;
+    if (not tuple_addr_schema.empty())
+        addrs = static_cast<SQL_addr_t*>(alloca(sizeof(SQL_addr_t) * tuple_addr_schema.num_entries()));
+    ///> the NULL information loaded for the entries in `tuple_value_schema`
     Boolx1 *null_bits;
     if constexpr (not IsStore)
-        null_bits = static_cast<Boolx1*>(alloca(sizeof(Boolx1) * tuple_schema.num_entries()));
+        null_bits = static_cast<Boolx1*>(alloca(sizeof(Boolx1) * tuple_value_schema.num_entries()));
 
     auto &env = CodeGenContext::Get().env(); // the current codegen environment
 
-    /*----- Check whether any of the entries in `tuple_schema` can be NULL, so that we need the NULL bitmap. -----*/
+    /*----- Check whether any of the entries in `tuple_value_schema` can be NULL, so that we need the NULL bitmap. -----*/
     const bool needs_null_bitmap = [&]() {
-        for (auto &tuple_entry : tuple_schema) {
+        for (auto &tuple_entry : tuple_value_schema) {
             if (layout_schema[tuple_entry.id].second.nullable())
-                return true; // found an entry in `tuple_schema` that can be NULL according to `layout_schema`
+                return true; // found an entry in `tuple_value_schema` that can be NULL according to `layout_schema`
         }
-        return false; // no attribute in `schema` can be NULL according to `layout_schema`
+        return false; // no attribute in `tuple_value_schema` can be NULL according to `layout_schema`
     }();
     bool has_null_bitmap = false; // indicates whether the data layout specifies a NULL bitmap
 
@@ -1916,8 +2034,8 @@ void compile_data_layout_point_access(const Schema &tuple_schema, Ptr<void> base
                     const Var<Ptr<void>> ptr(inode_ptr + leaf_byte_offset); // pointer to NULL bitmap
 
                     /*----- For each tuple entry that can be NULL, create a store/load with offset and mask. --*/
-                    for (std::size_t tuple_idx = 0; tuple_idx != tuple_schema.num_entries(); ++tuple_idx) {
-                        auto &tuple_entry = tuple_schema[tuple_idx];
+                    for (std::size_t tuple_idx = 0; tuple_idx != tuple_value_schema.num_entries(); ++tuple_idx) {
+                        auto &tuple_entry = tuple_value_schema[tuple_idx];
                         const auto &[layout_idx, layout_entry] = layout_schema[tuple_entry.id];
                         M_insist(*tuple_entry.type == *layout_entry.type);
                         if (layout_entry.nullable()) { // layout entry may be NULL
@@ -1969,6 +2087,7 @@ void compile_data_layout_point_access(const Schema &tuple_schema, Ptr<void> base
                                 U8x1 byte = *(ptr + byte_offset).template to<uint8_t*>(); // load the byte
                                 Var<Boolx1> value((byte bitand (uint8_t(1) << bit_offset)).to<bool>()); // mask bit
                                 new (&null_bits[tuple_idx]) Boolx1(value);
+                                /* Address for NULL bits not yet supported. */
                             }
                         } else { // entry must not be NULL
 #ifndef NDEBUG
@@ -2026,8 +2145,8 @@ void compile_data_layout_point_access(const Schema &tuple_schema, Ptr<void> base
                     }(); // pointer to NULL bitmap
 
                     /*----- For each tuple entry that can be NULL, create a store/load with offset and mask. --*/
-                    for (std::size_t tuple_idx = 0; tuple_idx != tuple_schema.num_entries(); ++tuple_idx) {
-                        auto &tuple_entry = tuple_schema[tuple_idx];
+                    for (std::size_t tuple_idx = 0; tuple_idx != tuple_value_schema.num_entries(); ++tuple_idx) {
+                        auto &tuple_entry = tuple_value_schema[tuple_idx];
                         const auto &[layout_idx, layout_entry] = layout_schema[tuple_entry.id];
                         M_insist(*tuple_entry.type == *layout_entry.type);
                         if (layout_entry.nullable()) { // layout entry may be NULL
@@ -2079,6 +2198,7 @@ void compile_data_layout_point_access(const Schema &tuple_schema, Ptr<void> base
                                 const uint8_t static_mask = 1U << static_bit_offset;
                                 Var<Boolx1> value((byte bitand static_mask).to<bool>()); // mask bit
                                 new (&null_bits[tuple_idx]) Boolx1(value);
+                                /* Address for NULL bits not yet supported. */
                             }
                         } else { // entry must not be NULL
 #ifndef NDEBUG
@@ -2123,11 +2243,14 @@ void compile_data_layout_point_access(const Schema &tuple_schema, Ptr<void> base
             } else { // regular entry
                 auto &layout_entry = layout_schema[leaf_info.leaf.index()];
                 M_insist(*layout_entry.type == *leaf_info.leaf.type());
-                auto tuple_it = tuple_schema.find(layout_entry.id);
-                if (tuple_it == tuple_schema.end())
-                    continue; // entry not contained in tuple schema
+                auto tuple_value_it = tuple_value_schema.find(layout_entry.id);
+                auto tuple_addr_it = tuple_addr_schema.find(layout_entry.id);
+                if (tuple_value_it == tuple_value_schema.end() and tuple_addr_it == tuple_addr_schema.end())
+                    continue; // entry not contained in both tuple schemas
+                auto tuple_it = tuple_value_it != tuple_value_schema.end() ? tuple_value_it : tuple_addr_it;
                 M_insist(*tuple_it->type == *layout_entry.type);
-                const auto tuple_idx = std::distance(tuple_schema.begin(), tuple_it);
+                const auto tuple_value_idx = std::distance(tuple_value_schema.begin(), tuple_value_it);
+                const auto tuple_addr_idx = std::distance(tuple_addr_schema.begin(), tuple_addr_it);
 
                 if (bit_stride) { // entry with bit stride requires dynamic masking
                     M_insist(tuple_it->type->is_boolean(), "leaf bit stride currently only for `Boolean` supported");
@@ -2148,8 +2271,13 @@ void compile_data_layout_point_access(const Schema &tuple_schema, Ptr<void> base
                     } else {
                         /*----- Load value. -----*/
                         /* TODO: load byte once, create values with respective mask */
-                        Var<Boolx1> value((*byte_ptr bitand mask).template to<bool>()); // mask bit with dynamic mask
-                        new (&values[tuple_idx]) SQL_t(_Boolx1(value));
+                        if (tuple_value_it != tuple_value_schema.end()) {
+                            Var<Boolx1> value((*byte_ptr.clone() bitand mask.clone()).template to<bool>()); // mask bit with dynamic mask
+                            new (&values[tuple_value_idx]) SQL_t(_Boolx1(value));
+                        }
+                        /* Address for booleans not yet supported. */
+                        byte_ptr.discard();
+                        mask.discard();
                     }
                 } else { // entry without bit stride; if masking is required, we can use a static mask
                     auto ptr = [&]() -> Ptr<void> {
@@ -2184,8 +2312,15 @@ void compile_data_layout_point_access(const Schema &tuple_schema, Ptr<void> base
                         using type = typename T::type;
                         M_insist(static_bit_offset == 0,
                                  "leaf offset of `Numeric`, `Date`, or `DateTime` must be byte aligned");
-                        Var<PrimitiveExpr<type>> value(*(ptr + static_byte_offset).template to<type*>());
-                        new (&values[tuple_idx]) SQL_t(T(value));
+                        if (tuple_value_it != tuple_value_schema.end()) {
+                            Var<PrimitiveExpr<type>> value(*(ptr.clone() + static_byte_offset).template to<type*>());
+                            new (&values[tuple_value_idx]) SQL_t(T(value));
+                        }
+                        if (tuple_addr_it != tuple_addr_schema.end())
+                            new (&addrs[tuple_addr_idx]) SQL_addr_t(
+                                (ptr.clone() + static_byte_offset).template to<type*>()
+                            );
+                        ptr.discard();
                     };
                     /*----- Select call target (store or load) and visit attribute type. -----*/
 #define CALL(TYPE) if constexpr (IsStore) store.template operator()<TYPE>(); else load.template operator()<TYPE>()
@@ -2201,8 +2336,13 @@ void compile_data_layout_point_access(const Schema &tuple_schema, Ptr<void> base
                                 /*----- Load value. -----*/
                                 /* TODO: load byte once, create values with respective mask */
                                 const uint8_t static_mask = 1U << static_bit_offset;
-                                Var<Boolx1> value((*byte_ptr bitand static_mask).to<bool>()); // mask bit
-                                new (&values[tuple_idx]) SQL_t(_Boolx1(value));
+
+                                if (tuple_value_it != tuple_value_schema.end()) {
+                                    Var<Boolx1> value((*byte_ptr.clone() bitand static_mask).to<bool>()); // mask bit
+                                    new (&values[tuple_value_idx]) SQL_t(_Boolx1(value));
+                                }
+                                /* Address for booleans not yet supported. */
+                                byte_ptr.discard();
                             }
                         },
                         [&](const Numeric &n) {
@@ -2235,9 +2375,10 @@ void compile_data_layout_point_access(const Schema &tuple_schema, Ptr<void> base
                                 };
                             } else {
                                 /*----- Load value. -----*/
-                                new (&values[tuple_idx]) SQL_t(
+                                new (&values[tuple_value_idx]) SQL_t(
                                     NChar(addr, layout_entry.nullable(), cs.length, cs.is_varying)
                                 );
+                                /* Omit addresses for character sequences. */
                             }
                         },
                         [&](const Date&) { CALL(_I32x1); },
@@ -2252,8 +2393,8 @@ void compile_data_layout_point_access(const Schema &tuple_schema, Ptr<void> base
 
     if constexpr (not IsStore) {
         /*----- Combine actual values and possible NULL bits to a new `SQL_t` and add this to the environment. -----*/
-        for (std::size_t idx = 0; idx != tuple_schema.num_entries(); ++idx) {
-            auto &tuple_entry = tuple_schema[idx];
+        for (std::size_t idx = 0; idx != tuple_value_schema.num_entries(); ++idx) {
+            auto &tuple_entry = tuple_value_schema[idx];
             std::visit(overloaded{
                 [&]<typename T>(Expr<T> value) {
                     if (has_null_bitmap and layout_schema[tuple_entry.id].second.nullable()) {
@@ -2279,15 +2420,23 @@ void compile_data_layout_point_access(const Schema &tuple_schema, Ptr<void> base
                 [](std::monostate) { M_unreachable("value must be loaded beforehand"); },
             }, values[idx]);
         }
+
+        /*----- Add addresses to the environment. -----*/
+        for (std::size_t idx = 0; idx != tuple_addr_schema.num_entries(); ++idx) {
+            auto &tuple_entry = tuple_addr_schema[idx];
+            env.add_addr(tuple_entry.id, std::move(addrs[idx]));
+        }
     }
 
-    /*----- Destroy created values. -----*/
-    for (std::size_t idx = 0; idx < tuple_schema.num_entries(); ++idx)
+    /*----- Destroy created values and addresses. -----*/
+    for (std::size_t idx = 0; idx < tuple_value_schema.num_entries(); ++idx)
         values[idx].~SQL_t();
+    for (std::size_t idx = 0; idx < tuple_addr_schema.num_entries(); ++idx)
+        addrs[idx].~SQL_addr_t();
     if constexpr (not IsStore) {
         /*----- Destroy created NULL bits. -----*/
-        for (std::size_t idx = 0; idx != tuple_schema.num_entries(); ++idx) {
-            if (has_null_bitmap and layout_schema[tuple_schema[idx].id].second.nullable())
+        for (std::size_t idx = 0; idx != tuple_value_schema.num_entries(); ++idx) {
+            if (has_null_bitmap and layout_schema[tuple_value_schema[idx].id].second.nullable())
                 null_bits[idx].~Boolx1();
         }
     }
@@ -2298,16 +2447,20 @@ void compile_data_layout_point_access(const Schema &tuple_schema, Ptr<void> base
 
 }
 
-void m::wasm::compile_store_point_access(const Schema &tuple_schema, Ptr<void> base_address, const DataLayout &layout,
-                                         const Schema &layout_schema, U32x1 tuple_id)
+void m::wasm::compile_store_point_access(const Schema &tuple_value_schema, const Schema &tuple_addr_schema,
+                                         Ptr<void> base_address, const DataLayout &layout, const Schema &layout_schema,
+                                         U32x1 tuple_id)
 {
-    return compile_data_layout_point_access<true>(tuple_schema, base_address, layout, layout_schema, tuple_id);
+    return compile_data_layout_point_access<true>(tuple_value_schema, tuple_addr_schema, base_address, layout,
+                                                  layout_schema, tuple_id);
 }
 
-void m::wasm::compile_load_point_access(const Schema &tuple_schema, Ptr<void> base_address, const DataLayout &layout,
-                                        const Schema &layout_schema, U32x1 tuple_id)
+void m::wasm::compile_load_point_access(const Schema &tuple_value_schema, const Schema &tuple_addr_schema,
+                                         Ptr<void> base_address, const DataLayout &layout, const Schema &layout_schema,
+                                         U32x1 tuple_id)
 {
-    return compile_data_layout_point_access<false>(tuple_schema, base_address, layout, layout_schema, tuple_id);
+    return compile_data_layout_point_access<false>(tuple_value_schema, tuple_addr_schema, base_address, layout,
+                                                   layout_schema, tuple_id);
 }
 
 
@@ -2357,16 +2510,25 @@ Buffer<IsGlobal>::~Buffer()
 }
 
 template<bool IsGlobal>
-buffer_load_proxy_t<IsGlobal> Buffer<IsGlobal>::create_load_proxy(param_t tuple_schema) const
+buffer_load_proxy_t<IsGlobal> Buffer<IsGlobal>::create_load_proxy(param_t _tuple_value_schema,
+                                                                  param_t _tuple_addr_schema) const
 {
 #ifndef NDEBUG
-    if (tuple_schema) {
-        for (auto &e : tuple_schema->get())
-            M_insist(schema_.get().find(e.id) != schema_.get().cend(), "tuple schema entry not found");
+    if (_tuple_value_schema) {
+        for (auto &e : _tuple_value_schema->get())
+            M_insist(schema_.get().find(e.id) != schema_.get().cend(), "tuple value schema entry not found");
+    }
+    if (_tuple_addr_schema) {
+        for (auto &e : _tuple_addr_schema->get())
+            M_insist(schema_.get().find(e.id) != schema_.get().cend(), "tuple address schema entry not found");
     }
 #endif
 
-    return tuple_schema ? buffer_load_proxy_t(*this, *tuple_schema) : buffer_load_proxy_t(*this, schema_);
+    static Schema empty_schema;
+    const auto &tuple_value_schema = _tuple_value_schema ? _tuple_value_schema->get() : schema_.get();
+    const auto &tuple_addr_schema = _tuple_addr_schema ? _tuple_addr_schema->get() : empty_schema;
+
+    return buffer_load_proxy_t(*this, tuple_value_schema, tuple_addr_schema);
 }
 
 template<bool IsGlobal>
@@ -2492,16 +2654,20 @@ void Buffer<IsGlobal>::teardown()
 }
 
 template<bool IsGlobal>
-void Buffer<IsGlobal>::resume_pipeline(param_t _tuple_schema) const
+void Buffer<IsGlobal>::resume_pipeline(param_t _tuple_value_schema, param_t _tuple_addr_schema) const
 {
     if (not pipeline_)
         return;
 
-    const auto &tuple_schema = _tuple_schema ? *_tuple_schema : schema_;
+    static Schema empty_schema;
+    const auto &tuple_value_schema = _tuple_value_schema ? _tuple_value_schema->get() : schema_.get();
+    const auto &tuple_addr_schema = _tuple_addr_schema ? _tuple_addr_schema->get() : empty_schema;
 
 #ifndef NDEBUG
-    for (auto &e : tuple_schema.get())
-        M_insist(schema_.get().find(e.id) != schema_.get().cend(), "tuple schema entry not found");
+    for (auto &e : tuple_value_schema)
+        M_insist(schema_.get().find(e.id) != schema_.get().cend(), "tuple value schema entry not found");
+    for (auto &e : tuple_addr_schema)
+        M_insist(schema_.get().find(e.id) != schema_.get().cend(), "tuple addr schema entry not found");
 #endif
 
     /*----- Create function on-demand to assert that all needed identifiers are already created. -----*/
@@ -2519,7 +2685,9 @@ void Buffer<IsGlobal>::resume_pipeline(param_t _tuple_schema) const
             const auto num_simd_lanes_preferred =
                 CodeGenContext::Get().num_simd_lanes_preferred(); // get other operators preferences
             const std::size_t num_simd_lanes =
-                load_simdfied_ ? std::max(num_simd_lanes_preferred, get_num_simd_lanes(layout_, schema_, tuple_schema))
+                load_simdfied_ ? std::max<std::size_t>({ num_simd_lanes_preferred,
+                                                       get_num_simd_lanes(layout_, schema_, tuple_value_schema),
+                                                       tuple_addr_schema.empty() ? 0UL : 4UL }) // 32-bit pointers and 128-bit SIMD vectors
                                : 1;
             CodeGenContext::Get().set_num_simd_lanes(num_simd_lanes);
 
@@ -2528,7 +2696,7 @@ void Buffer<IsGlobal>::resume_pipeline(param_t _tuple_schema) const
 
             Var<U32x1> load_tuple_id; // default initialized to 0
 
-            if (tuple_schema.get().num_entries() == 0) {
+            if (tuple_value_schema.num_entries() == 0 and tuple_addr_schema.num_entries() == 0) {
                 /*----- If no attributes must be loaded, generate a loop just executing the pipeline `size`-times. -----*/
                 WHILE (load_tuple_id < size) {
                     load_tuple_id += uint32_t(num_simd_lanes);
@@ -2538,7 +2706,8 @@ void Buffer<IsGlobal>::resume_pipeline(param_t _tuple_schema) const
             } else {
                 /*----- Compile data layout to generate sequential load from buffer. -----*/
                 auto [load_inits, loads, load_jumps] =
-                    compile_load_sequential(tuple_schema, base_address, layout_, num_simd_lanes, schema_, load_tuple_id);
+                    compile_load_sequential(tuple_value_schema, tuple_addr_schema, base_address, layout_,
+                                            num_simd_lanes, schema_, load_tuple_id);
 
                 /*----- Generate loop for loading entire buffer, with the pipeline emitted into the loop body. -----*/
                 load_inits.attach_to_current();
@@ -2561,23 +2730,27 @@ void Buffer<IsGlobal>::resume_pipeline(param_t _tuple_schema) const
 }
 
 template<bool IsGlobal>
-void Buffer<IsGlobal>::resume_pipeline_inline(param_t tuple_schema) const
+void Buffer<IsGlobal>::resume_pipeline_inline(param_t tuple_value_schema, param_t tuple_addr_schema) const
 {
-    execute_pipeline_inline(setup_, pipeline_, teardown_, std::move(tuple_schema));
+    execute_pipeline_inline(setup_, pipeline_, teardown_, std::move(tuple_value_schema), std::move(tuple_addr_schema));
 }
 
 template<bool IsGlobal>
 void Buffer<IsGlobal>::execute_pipeline(setup_t setup, pipeline_t pipeline, teardown_t teardown,
-                                        param_t _tuple_schema) const
+                                        param_t _tuple_value_schema, param_t _tuple_addr_schema) const
 {
     if (not pipeline)
         return;
 
-    const auto &tuple_schema = _tuple_schema ? *_tuple_schema : schema_;
+    static Schema empty_schema;
+    const auto &tuple_value_schema = _tuple_value_schema ? _tuple_value_schema->get() : schema_.get();
+    const auto &tuple_addr_schema = _tuple_addr_schema ? _tuple_addr_schema->get() : empty_schema;
 
 #ifndef NDEBUG
-    for (auto &e : tuple_schema.get())
-        M_insist(schema_.get().find(e.id) != schema_.get().cend(), "tuple schema entry not found");
+    for (auto &e : tuple_value_schema)
+        M_insist(schema_.get().find(e.id) != schema_.get().cend(), "tuple value schema entry not found");
+    for (auto &e : tuple_addr_schema)
+        M_insist(schema_.get().find(e.id) != schema_.get().cend(), "tuple addr schema entry not found");
 #endif
 
     /*----- Create function to resume the pipeline for each tuple contained in the buffer. -----*/
@@ -2593,7 +2766,9 @@ void Buffer<IsGlobal>::execute_pipeline(setup_t setup, pipeline_t pipeline, tear
         const auto num_simd_lanes_preferred =
             CodeGenContext::Get().num_simd_lanes_preferred(); // get other operators preferences
         const std::size_t num_simd_lanes =
-            load_simdfied_ ? std::max(num_simd_lanes_preferred, get_num_simd_lanes(layout_, schema_, tuple_schema))
+            load_simdfied_ ? std::max<std::size_t>({ num_simd_lanes_preferred,
+                                                   get_num_simd_lanes(layout_, schema_, tuple_value_schema),
+                                                   tuple_addr_schema.empty() ? 0UL : 4UL }) // 32-bit pointers and 128-bit SIMD vectors
                            : 1;
         CodeGenContext::Get().set_num_simd_lanes(num_simd_lanes);
 
@@ -2602,7 +2777,7 @@ void Buffer<IsGlobal>::execute_pipeline(setup_t setup, pipeline_t pipeline, tear
 
         Var<U32x1> load_tuple_id; // default initialized to 0
 
-        if (tuple_schema.get().num_entries() == 0) {
+        if (tuple_value_schema.num_entries() == 0 and tuple_addr_schema.num_entries() == 0) {
             /*----- If no attributes must be loaded, generate a loop just executing the pipeline `size`-times. -----*/
             WHILE (load_tuple_id < size) {
                 load_tuple_id += uint32_t(num_simd_lanes);
@@ -2612,7 +2787,8 @@ void Buffer<IsGlobal>::execute_pipeline(setup_t setup, pipeline_t pipeline, tear
         } else {
             /*----- Compile data layout to generate sequential load from buffer. -----*/
             auto [load_inits, loads, load_jumps] =
-                compile_load_sequential(tuple_schema, base_address, layout_, num_simd_lanes, schema_, load_tuple_id);
+                compile_load_sequential(tuple_value_schema, tuple_addr_schema, base_address, layout_, num_simd_lanes,
+                                        schema_, load_tuple_id);
 
             /*----- Generate loop for loading entire buffer, with the pipeline emitted into the loop body. -----*/
             load_inits.attach_to_current();
@@ -2633,16 +2809,20 @@ void Buffer<IsGlobal>::execute_pipeline(setup_t setup, pipeline_t pipeline, tear
 
 template<bool IsGlobal>
 void Buffer<IsGlobal>::execute_pipeline_inline(setup_t setup, pipeline_t pipeline, teardown_t teardown,
-                                               param_t _tuple_schema) const
+                                               param_t _tuple_value_schema, param_t _tuple_addr_schema) const
 {
     if (not pipeline)
         return;
 
-    const auto &tuple_schema = _tuple_schema ? *_tuple_schema : schema_;
+    static Schema empty_schema;
+    const auto &tuple_value_schema = _tuple_value_schema ? _tuple_value_schema->get() : schema_.get();
+    const auto &tuple_addr_schema = _tuple_addr_schema ? _tuple_addr_schema->get() : empty_schema;
 
 #ifndef NDEBUG
-    for (auto &e : tuple_schema.get())
-        M_insist(schema_.get().find(e.id) != schema_.get().cend(), "tuple schema entry not found");
+    for (auto &e : tuple_value_schema)
+        M_insist(schema_.get().find(e.id) != schema_.get().cend(), "tuple value schema entry not found");
+    for (auto &e : tuple_addr_schema)
+        M_insist(schema_.get().find(e.id) != schema_.get().cend(), "tuple addr schema entry not found");
 #endif
 
     /*----- Access base address and size depending on whether they are globals or locals. -----*/
@@ -2667,7 +2847,10 @@ void Buffer<IsGlobal>::execute_pipeline_inline(setup_t setup, pipeline_t pipelin
     const auto num_simd_lanes_preferred =
         CodeGenContext::Get().num_simd_lanes_preferred(); // get other operators preferences
     const std::size_t num_simd_lanes =
-        load_simdfied_ ? std::max(num_simd_lanes_preferred, get_num_simd_lanes(layout_, schema_, tuple_schema)) : 1;
+        load_simdfied_ ? std::max<std::size_t>({ num_simd_lanes_preferred,
+                                               get_num_simd_lanes(layout_, schema_, tuple_value_schema),
+                                               tuple_addr_schema.empty() ? 0UL : 4UL }) // 32-bit pointers and 128-bit SIMD vectors
+                       : 1;
     CodeGenContext::Get().set_num_simd_lanes(num_simd_lanes);
 
     /*----- Emit setup code *before* compiling data layout to not overwrite its temporary boolean variables. -----*/
@@ -2675,7 +2858,7 @@ void Buffer<IsGlobal>::execute_pipeline_inline(setup_t setup, pipeline_t pipelin
 
     Var<U32x1> load_tuple_id(0); // explicitly (re-)set tuple ID to 0
 
-    if (tuple_schema.get().num_entries() == 0) {
+    if (tuple_value_schema.num_entries() == 0 and tuple_addr_schema.num_entries() == 0) {
         /*----- If no attributes must be loaded, generate a loop just executing the pipeline `size`-times. -----*/
         WHILE (load_tuple_id < num_tuples) {
             load_tuple_id += uint32_t(num_simd_lanes);
@@ -2685,7 +2868,8 @@ void Buffer<IsGlobal>::execute_pipeline_inline(setup_t setup, pipeline_t pipelin
     } else {
         /*----- Compile data layout to generate sequential load from buffer. -----*/
         auto [load_inits, loads, load_jumps] =
-            compile_load_sequential(tuple_schema, base_address, layout_, num_simd_lanes, schema_, load_tuple_id);
+            compile_load_sequential(tuple_value_schema, tuple_addr_schema, base_address, layout_,
+                                    num_simd_lanes, schema_, load_tuple_id);
 
         /*----- Generate loop for loading entire buffer, with the pipeline emitted into the loop body. -----*/
         load_inits.attach_to_current();
@@ -2712,9 +2896,10 @@ void Buffer<IsGlobal>::consume()
     /* We are able to use a single-pass store, i.e. *local* pointers and masks, since we explicitly save the needed
      * variables, i.e. base address and size, using *global* backups and restore them before performing the actual
      * store in the case of global buffers.  For local buffers, stores must be done in a single pass anyway. */
+    static Schema empty_schema;
     auto [_store_inits, stores, _store_jumps] =
-        compile_store_sequential_single_pass(schema_, *base_address_, layout_, CodeGenContext::Get().num_simd_lanes(),
-                                             schema_, *size_);
+        compile_store_sequential_single_pass(schema_, empty_schema, *base_address_, layout_,
+                                             CodeGenContext::Get().num_simd_lanes(), schema_, *size_);
     Block store_inits(std::move(_store_inits)), store_jumps(std::move(_store_jumps));
 
     if (layout_.is_finite()) {

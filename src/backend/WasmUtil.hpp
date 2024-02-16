@@ -9,6 +9,8 @@
 #include <optional>
 #include <variant>
 
+#include <mutable/util/macro.hpp>
+
 
 namespace m {
 
@@ -292,6 +294,9 @@ using Decimal64 = Decimal<int64_t>;
 template<typename>
 struct is_sql_type;
 
+template<typename>
+struct is_sql_addr_type;
+
 #define SQL_TYPES_SCALAR(X) \
     X(_Boolx1) \
     X(_I8x1) \
@@ -300,6 +305,16 @@ struct is_sql_type;
     X(_I64x1) \
     X(_Floatx1) \
     X(_Doublex1) \
+    X(NChar)
+
+#define SQL_ADDR_TYPES_SCALAR(X) \
+    X(Ptr<Boolx1>) \
+    X(Ptr<I8x1>) \
+    X(Ptr<I16x1>) \
+    X(Ptr<I32x1>) \
+    X(Ptr<I64x1>) \
+    X(Ptr<Floatx1>) \
+    X(Ptr<Doublex1>) \
     X(NChar)
 
 #define SQL_TYPES(X) \
@@ -330,12 +345,47 @@ struct is_sql_type;
     X(_Doublex16) \
     X(_Doublex32)
 
+#define SQL_ADDR_TYPES(X) \
+    SQL_ADDR_TYPES_SCALAR(X) \
+    X(Ptr<Boolx16>) \
+    X(Ptr<Boolx32>) \
+    X(Ptr<I8x16>) \
+    X(Ptr<I8x32>) \
+    X(Ptr<I16x8>) \
+    X(Ptr<I16x16>) \
+    X(Ptr<I16x32>) \
+    X(Ptr<I32x4>) \
+    X(Ptr<I32x8>) \
+    X(Ptr<I32x16>) \
+    X(Ptr<I32x32>) \
+    X(Ptr<I64x2>) \
+    X(Ptr<I64x4>) \
+    X(Ptr<I64x8>) \
+    X(Ptr<I64x16>) \
+    X(Ptr<I64x32>) \
+    X(Ptr<Floatx4>) \
+    X(Ptr<Floatx8>) \
+    X(Ptr<Floatx16>) \
+    X(Ptr<Floatx32>) \
+    X(Ptr<Doublex2>) \
+    X(Ptr<Doublex4>) \
+    X(Ptr<Doublex8>) \
+    X(Ptr<Doublex16>) \
+    X(Ptr<Doublex32>)
+
 #define ADD_EXPR_SQL_TYPE(TYPE) template<> struct is_sql_type<TYPE>{};
 SQL_TYPES(ADD_EXPR_SQL_TYPE)
 #undef ADD_EXPR_SQL_TYPE
 
+#define ADD_EXPR_SQL_ADDR_TYPE(TYPE) template<> struct is_sql_addr_type<TYPE>{};
+SQL_ADDR_TYPES(ADD_EXPR_SQL_ADDR_TYPE)
+#undef ADD_EXPR_SQL_ADDR_TYPE
+
 template<typename T>
 concept sql_type = requires { is_sql_type<T>{}; };
+
+template<typename T>
+concept sql_addr_type = requires { is_sql_addr_type<T>{}; };
 
 using SQL_t = std::variant<
     std::monostate
@@ -344,6 +394,12 @@ using SQL_t = std::variant<
 #undef ADD_TYPE
 >;
 
+using SQL_addr_t = std::variant<
+    std::monostate
+#define ADD_TYPE(TYPE) , TYPE
+    SQL_ADDR_TYPES(ADD_TYPE)
+#undef ADD_TYPE
+>;
 
 template<typename T>
 concept sql_boolean_type = sql_type<T> and boolean<typename T::type>;
@@ -359,6 +415,14 @@ inline void discard(SQL_t &variant)
 {
     std::visit(overloaded {
         []<sql_type T>(T actual) -> void { actual.discard(); },
+        [](std::monostate) -> void { M_unreachable("invalid variant"); },
+    }, variant);
+}
+
+inline void discard(SQL_addr_t &variant)
+{
+    std::visit(overloaded {
+        []<sql_addr_type T>(T actual) -> void { actual.discard(); },
         [](std::monostate) -> void { M_unreachable("invalid variant"); },
     }, variant);
 }
@@ -498,6 +562,8 @@ struct Environment
     private:
     ///> maps `Schema::Identifier`s to `Expr<T>`s that evaluate to the current expression
     std::unordered_map<Schema::Identifier, SQL_t> exprs_;
+    ///> maps `Schema::Identifier`s to `Ptr<Expr<T>>`s that evaluate to the address of the current expression
+    std::unordered_map<Schema::Identifier, SQL_addr_t> expr_addrs_;
     ///> optional predicate if predication is used
     SQL_boolean_t predicate_;
 
@@ -509,12 +575,16 @@ struct Environment
     ~Environment() {
         for (auto &p : exprs_)
             discard(p.second);
+        for (auto &p : expr_addrs_)
+            discard(p.second);
         /* do not discard `predicate_` to make sure predication predicate is used if it was set */
     }
 
     /*----- Access methods -------------------------------------------------------------------------------------------*/
     /** Returns `true` iff this `Environment` contains \p id. */
     bool has(Schema::Identifier id) const { return exprs_.find(id) != exprs_.end(); }
+    /** Returns `true` iff this `Environment` contains the address of \p id. */
+    bool has_addr(Schema::Identifier id) const { return expr_addrs_.find(id) != expr_addrs_.end(); }
     /** Returns `true` iff the entry for identifier \p id has `sql_type` \tparam T. */
     template<sql_type T>
     bool is(Schema::Identifier id) const {
@@ -522,8 +592,15 @@ struct Environment
         M_insist(it != exprs_.end(), "identifier not found");
         return std::holds_alternative<T>(it->second);
     }
+    /** Returns `true` iff the address entry for identifier \p id has `sql_addr_type` \tparam T. */
+    template<sql_addr_type T>
+    bool is_addr(Schema::Identifier id) const {
+        auto it = expr_addrs_.find(id);
+        M_insist(it != expr_addrs_.end(), "identifier not found");
+        return std::holds_alternative<T>(it->second);
+    }
     /** Returns `true` iff this `Environment` is empty. */
-    bool empty() const { return exprs_.empty(); }
+    bool empty() const { return exprs_.empty() and expr_addrs_.empty(); }
 
     ///> Adds a mapping from \p id to \p expr.
     template<sql_type T>
@@ -537,6 +614,18 @@ struct Environment
         M_insist(res.second, "duplicate ID");
     }
 
+    ///> Adds a address mapping from \p id to \p expr.
+    template<sql_addr_type T>
+    void add_addr(Schema::Identifier id, T &&expr) {
+        auto res = expr_addrs_.emplace(id, std::forward<T>(expr));
+        M_insist(res.second, "duplicate ID");
+    }
+    ///> Adds a address mapping from \p id to \p expr.
+    void add_addr(Schema::Identifier id, SQL_addr_t &&expr) {
+        auto res = expr_addrs_.emplace(id, std::move(expr));
+        M_insist(res.second, "duplicate ID");
+    }
+
     ///> **Copies** all entries of \p other into `this`.
     void add(const Environment &other) {
         for (auto &p : other.exprs_) {
@@ -545,11 +634,19 @@ struct Environment
                 [this, &p](auto &e) -> void { this->add(p.first, e.clone()); },
             }, p.second);
         }
+        for (auto &p : other.expr_addrs_) {
+            std::visit(overloaded {
+                [](std::monostate) -> void { M_unreachable("invalid expression"); },
+                [this, &p](auto &e) -> void { this->add_addr(p.first, e.clone()); },
+            }, p.second);
+        }
     }
     ///> **Moves** all entries of \p other into `this`.
     void add(Environment &&other) {
         this->exprs_.merge(other.exprs_);
         M_insist(other.exprs_.empty(), "duplicate ID not moved from other to this");
+        this->expr_addrs_.merge(other.expr_addrs_);
+        M_insist(other.expr_addrs_.empty(), "duplicate ID not moved from other to this");
     }
 
     ///> Returns the **moved** entry for identifier \p id.
@@ -565,6 +662,23 @@ struct Environment
         auto it = exprs_.find(id);
         M_insist(it != exprs_.end(), "identifier not found");
         auto nh = exprs_.extract(it);
+        M_insist(std::holds_alternative<T>(nh.mapped()));
+        return *std::get_if<T>(&nh.mapped());
+    }
+
+    ///> Returns the **moved** address entry for identifier \p id.
+    SQL_addr_t extract_addr(Schema::Identifier id) {
+        auto it = expr_addrs_.find(id);
+        M_insist(it != expr_addrs_.end(), "identifier not found");
+        auto nh = expr_addrs_.extract(it);
+        return std::move(nh.mapped());
+    }
+    ///> Returns the **moved** address entry for identifier \p id.
+    template<sql_addr_type T>
+    T extract_addr(Schema::Identifier id) {
+        auto it = expr_addrs_.find(id);
+        M_insist(it != expr_addrs_.end(), "identifier not found");
+        auto nh = expr_addrs_.extract(it);
         M_insist(std::holds_alternative<T>(nh.mapped()));
         return *std::get_if<T>(&nh.mapped());
     }
@@ -586,6 +700,25 @@ struct Environment
         M_insist(std::holds_alternative<T>(it->second));
         return std::get_if<T>(&it->second)->clone();
     }
+
+    ///> Returns the **copied** address entry for identifier \p id.
+    SQL_addr_t get_addr(Schema::Identifier id) const {
+        auto it = expr_addrs_.find(id);
+        M_insist(it != expr_addrs_.end(), "identifier not found");
+        return std::visit(overloaded {
+            [](auto &e) -> SQL_addr_t { return e.clone(); },
+            [](std::monostate) -> SQL_addr_t { M_unreachable("invalid expression"); },
+        }, it->second);
+    }
+    ///> Returns the **copied** address entry for identifier \p id.
+    template<sql_addr_type T>
+    T get_addr(Schema::Identifier id) const {
+        auto it = expr_addrs_.find(id);
+        M_insist(it != expr_addrs_.end(), "identifier not found");
+        M_insist(std::holds_alternative<T>(it->second));
+        return std::get_if<T>(&it->second)->clone();
+    }
+
     ///> Returns the **copied** entry for identifier \p id.
     SQL_t operator[](Schema::Identifier id) const { return get(id); }
 
@@ -816,7 +949,7 @@ inline Environment Scope::extract()
  *====================================================================================================================*/
 
 /** Compiles the data layout \p layout containing tuples of schema \p layout_schema such that it sequentially stores
- * tuples of schema \p tuple_schema starting at memory address \p base_address and tuple ID \p tuple_id.  The store
+ * tuples of schema \p tuple_value_schema starting at memory address \p base_address and tuple ID \p tuple_id.  The store
  * does *not* have to be done in a single pass, i.e. the returned code may be emitted into a function which can be
  * called multiple times and each call starts storing at exactly the point where it has ended in the last call.  The
  * given variable \p tuple_id will be incremented automatically before advancing to the next tuple (i.e. code for
@@ -824,15 +957,17 @@ inline Environment Scope::extract()
  * respectively.  SIMDfication is supported and will be emitted iff \p num_simd_lanes is greater than 1.
  *
  * Does not emit any code but returns three `wasm::Block`s containing code: the first one initializes all needed
- * variables, the second one stores one tuple, and the third one advances to the next tuple. */
+ * variables, the second one stores one tuple, and the third one advances to the next tuple.  Additionally, if not
+ * \tparam IsStore, adds the addresses of the values of tuples with schema \p tuple_addr_schema into the current
+ * environment. */
 template<VariableKind Kind>
 std::tuple<Block, Block, Block>
-compile_store_sequential(const Schema &tuple_schema, Ptr<void> base_address, const storage::DataLayout &layout,
-                          std::size_t num_simd_lanes, const Schema &layout_schema,
-                          Variable<uint32_t, Kind, false> &tuple_id);
+compile_store_sequential(const Schema &tuple_value_schema, const Schema &tuple_addr_schema, Ptr<void> base_address,
+                         const storage::DataLayout &layout, std::size_t num_simd_lanes, const Schema &layout_schema,
+                         Variable<uint32_t, Kind, false> &tuple_id);
 
 /** Compiles the data layout \p layout containing tuples of schema \p layout_schema such that it sequentially stores
- * tuples of schema \p tuple_schema starting at memory address \p base_address and tuple ID \p tuple_id.  The store
+ * tuples of schema \p tuple_value_schema starting at memory address \p base_address and tuple ID \p tuple_id.  The store
  * has to be done in a single pass, i.e. the execution of the returned code must *not* be split among multiple
  * function calls.  The given variable \p tuple_id will be incremented automatically before advancing to the next
  * tuple (i.e. code for this will be emitted at the start of the block returned as third element).  Predication is
@@ -840,40 +975,50 @@ compile_store_sequential(const Schema &tuple_schema, Ptr<void> base_address, con
  * than 1.
  *
  * Does not emit any code but returns three `wasm::Block`s containing code: the first one initializes all needed
- * variables, the second one stores one tuple, and the third one advances to the next tuple. */
+ * variables, the second one stores one tuple, and the third one advances to the next tuple.  Additionally, if not
+ * \tparam IsStore, adds the addresses of the values of tuples with schema \p tuple_addr_schema into the current
+ * environment. */
 template<VariableKind Kind>
 std::tuple<Block, Block, Block>
-compile_store_sequential_single_pass(const Schema &tuple_schema, Ptr<void> base_address,
-                                     const storage::DataLayout &layout, std::size_t num_simd_lanes,
-                                     const Schema &layout_schema, Variable<uint32_t, Kind, false> &tuple_id);
+compile_store_sequential_single_pass(const Schema &tuple_value_schema, const Schema &tuple_addr_schema,
+                                     Ptr<void> base_address, const storage::DataLayout &layout,
+                                     std::size_t num_simd_lanes, const Schema &layout_schema,
+                                     Variable<uint32_t, Kind, false> &tuple_id);
 
 /** Compiles the data layout \p layout containing tuples of schema \p layout_schema such that it sequentially loads
- * tuples of schema \p tuple_schema starting at memory address \p base_address and tuple ID \p tuple_id.  The given
+ * tuples of schema \p tuple_value_schema starting at memory address \p base_address and tuple ID \p tuple_id.  The given
  * variable \p tuple_id will be incremented automatically before advancing to the next tuple (i.e. code for this will
  * be emitted at the start of the block returned as third element).  SIMDfication is supported and will be emitted
  * iff \p num_simd_lanes is greater than 1.
  *
  * Does not emit any code but returns three `wasm::Block`s containing code: the first one initializes all needed
- * variables, the second one loads one tuple, and the third one advances to the next tuple. */
+ * variables, the second one loads one tuple, and the third one advances to the next tuple.  Additionally, if not
+ * \tparam IsStore, adds the addresses of the values of tuples with schema \p tuple_addr_schema into the current
+ * environment. */
 template<VariableKind Kind>
 std::tuple<Block, Block, Block>
-compile_load_sequential(const Schema &tuple_schema, Ptr<void> base_address, const storage::DataLayout &layout,
-                         std::size_t num_simd_lanes, const Schema &layout_schema,
-                         Variable<uint32_t, Kind, false> &tuple_id);
+compile_load_sequential(const Schema &tuple_value_schema, const Schema &tuple_addr_schema, Ptr<void> base_address,
+                        const storage::DataLayout &layout, std::size_t num_simd_lanes, const Schema &layout_schema,
+                        Variable<uint32_t, Kind, false> &tuple_id);
 
 /** Compiles the data layout \p layout starting at memory address \p base_address and containing tuples of schema
- * \p layout_schema such that it stores the single tuple with schema \p tuple_schema and ID \p tuple_id.
+ * \p layout_schema such that it stores the single tuple with schema \p tuple_value_schema and ID \p tuple_id.
  *
- * Emits the storing code into the current block. */
-void compile_store_point_access(const Schema &tuple_schema, Ptr<void> base_address, const storage::DataLayout &layout,
-                                const Schema &layout_schema, U32x1 tuple_id);
+ * Emits the storing code into the current block.  Additionally, if not \tparam IsStore, adds the addresses of the
+ * values of tuples with schema \p tuple_addr_schema into the current environment. */
+void compile_store_point_access(const Schema &tuple_value_schema, const Schema &tuple_addr_schema,
+                                Ptr<void> base_address, const storage::DataLayout &layout, const Schema &layout_schema,
+                                U32x1 tuple_id);
 
 /** Compiles the data layout \p layout starting at memory address \p base_address and containing tuples of schema
- * \p layout_schema such that it loads the single tuple with schema \p tuple_schema and ID \p tuple_id.
+ * \p layout_schema such that it loads the single tuple with schema \p tuple_value_schema and ID \p tuple_id.
  *
- * Emits the loading code into the current block and adds the loaded values into the current environment. */
-void compile_load_point_access(const Schema &tuple_schema, Ptr<void> base_address, const storage::DataLayout &layout,
-                               const Schema &layout_schema, U32x1 tuple_id);
+ * Emits the loading code into the current block and adds the loaded values into the current environment.  Additionally,
+ * if not \tparam IsStore, adds the addresses of the values of tuples with schema \p tuple_addr_schema into the current
+ * environment. */
+void compile_load_point_access(const Schema &tuple_value_schema, const Schema &tuple_addr_schema,
+                               Ptr<void> base_address, const storage::DataLayout &layout, const Schema &layout_schema,
+                               U32x1 tuple_id);
 
 
 /*======================================================================================================================
@@ -958,9 +1103,10 @@ struct Buffer
         }
     }
 
-    /** Creates and returns a proxy object to load tuples of schema \p tuple_schema (default: entire tuples) from the
-     * buffer. */
-    buffer_load_proxy_t<IsGlobal> create_load_proxy(param_t tuple_schema = param_t()) const;
+    /** Creates and returns a proxy object to load value tuples of schema \p tuple_value_schema (default: entire tuples)
+     * and address tuples of schema \p tuple_addr_schema (default: empty tuples) from the buffer. */
+    buffer_load_proxy_t<IsGlobal> create_load_proxy(param_t tuple_value_schema = param_t(),
+                                                    param_t tuple_addr_schema = param_t()) const;
     /** Creates and returns a proxy object to store tuples of schema \p tuple_schema (default: entire tuples) to the
      * buffer. */
     buffer_store_proxy_t<IsGlobal> create_store_proxy(param_t tuple_schema = param_t()) const;
@@ -991,27 +1137,29 @@ struct Buffer
         base_address_.reset();
     }
 
-    /** Emits code into a separate function to resume the pipeline for each tuple of schema \p tuple_schema (default:
-     * entire tuples) in the buffer.  Used to explicitly resume pipeline for infinite or partially filled buffers. */
-    void resume_pipeline(param_t tuple_schema = param_t()) const;
-    /** Emits code inline to resume the pipeline for each tuple of schema \p tuple_schema (default: entire tuples) in
-     * the buffer.  Due to inlining the current `Environment` must not be cleared and this method should be used for
-     * n-ary operators.  Used to explicitly resume pipeline for infinite or partially filled buffers.  Predication is
-     * supported, i.e. if the predication predicate is not fulfilled, no tuples will be loaded and thus the pipeline
-     * will not be resumed. */
-    void resume_pipeline_inline(param_t tuple_schema = param_t()) const;
+    /** Emits code into a separate function to resume the pipeline for each value tuple of schema \p tuple_value_schema
+     * (default: entire tuples) and address tuple of schema \p tuple_addr_schema (default: empty tuples) in the buffer.
+     * Used to explicitly resume pipeline for infinite or partially filled buffers. */
+    void resume_pipeline(param_t tuple_value_schema = param_t(), param_t tuple_addr_schema = param_t()) const;
+    /** Emits code inline to resume the pipeline for each value tuple of schema \p tuple_value_schema (default: entire
+     * tuples) and address tuple of schema \p tuple_addr_schema (default: empty tuples) in the buffer.  Due to inlining
+     * the current `Environment` must not be cleared and this method should be used for n-ary operators.  Used to
+     * explicitly resume pipeline for infinite or partially filled buffers.  Predication is supported, i.e. if the
+     * predication predicate is not fulfilled, no tuples will be loaded and thus the pipeline will not be resumed. */
+    void resume_pipeline_inline(param_t tuple_value_schema = param_t(), param_t tuple_addr_schema = param_t()) const;
 
-    /** Emits code into a separate function to execute the give pipeline \p pipeline for each tuple of schema \p
-     * tuple_schema (default: entire tuples) in the buffer.  Used to explicitly execute a given pipeline. */
+    /** Emits code into a separate function to execute the give pipeline \p pipeline for each value tuple of schema \p
+     * tuple_value_schema (default: entire tuples) and address tuple of schema \p tuple_addr_schema (default: empty
+     * tuples) in the buffer.  Used to explicitly execute a given pipeline. */
     void execute_pipeline(setup_t setup, pipeline_t pipeline, teardown_t teardown,
-                          param_t tuple_schema = param_t()) const;
-    /** Emits code inline to execute the given pipeline \p pipeline for each tuple of schema \p tuple_schema (default:
-     * entire tuples) in the buffer.  Due to inlining the current `Environment` must not be cleared and this method
-     * should be used for n-ary operators.  Used to explicitly execute a given pipeline. Predication is supported, i.e.
-     * if the predication predicate is not fulfilled, no tuples will be loaded and thus the pipeline will not be
-     * executed. */
+                          param_t tuple_value_schema = param_t(), param_t tuple_addr_schema = param_t()) const;
+    /** Emits code inline to execute the given pipeline \p pipeline for each value tuple of schema \p tuple_value_schema
+     * (default: entire tuples) and address tuple of schema \p tuple_addr_schema (default: empty tuples) in the buffer.
+     * Due to inlining the current `Environment` must not be cleared and this method should be used for n-ary operators.
+     * Used to explicitly execute a given pipeline. Predication is supported, i.e. if the predication predicate is not
+     * fulfilled, no tuples will be loaded and thus the pipeline will not be executed. */
     void execute_pipeline_inline(setup_t setup, pipeline_t pipeline, teardown_t teardown,
-                                 param_t tuple_schema = param_t()) const;
+                                 param_t tuple_value_schema = param_t(), param_t tuple_addr_schema = param_t()) const;
 
     /** Emits code to store the current tuple into the buffer.  The behaviour depends on whether the buffer is finite:
      * - **finite:** If the buffer is full, resumes the pipeline for each tuple in the buffer and clears the buffer
@@ -1039,11 +1187,13 @@ struct buffer_load_proxy_t
 
     private:
     std::reference_wrapper<const Buffer<IsGlobal>> buffer_; ///< buffer to load from
-    std::reference_wrapper<const Schema> schema_; ///< entries to load
+    std::reference_wrapper<const Schema> value_schema_; ///< value entries to load
+    std::reference_wrapper<const Schema> addr_schema_; ///< address entries to load
 
-    buffer_load_proxy_t(const Buffer<IsGlobal> &buffer, const Schema &schema)
+    buffer_load_proxy_t(const Buffer<IsGlobal> &buffer, const Schema &value_schema, const Schema &addr_schema)
         : buffer_(std::cref(buffer))
-        , schema_(std::cref(schema))
+        , value_schema_(std::cref(value_schema))
+        , addr_schema_(std::cref(addr_schema))
     { }
 
     public:
@@ -1052,13 +1202,15 @@ struct buffer_load_proxy_t
 
     buffer_load_proxy_t & operator=(buffer_load_proxy_t&&) = default;
 
-    /** Returns the entries to load. */
-    const Schema & schema() const { return schema_; }
+    /** Returns the value entries to load. */
+    const Schema & value_schema() const { return value_schema_; }
+    /** Returns the address entries to load. */
+    const Schema & addr_schema() const { return addr_schema_; }
 
     /** Loads tuple with ID \p tuple_id into the current environment. */
     void operator()(U32x1 tuple_id) {
         Wasm_insist(tuple_id.clone() < buffer_.get().size(), "tuple ID out of bounds");
-        compile_load_point_access(schema_, buffer_.get().base_address(), buffer_.get().layout(),
+        compile_load_point_access(value_schema_, addr_schema_, buffer_.get().base_address(), buffer_.get().layout(),
                                   buffer_.get().schema(), tuple_id);
     }
 };
@@ -1089,8 +1241,9 @@ struct buffer_store_proxy_t
 
     /** Stores values from the current environment to tuple with ID \p tuple_id. */
     void operator()(U32x1 tuple_id) {
+        static Schema empty_schema;
         Wasm_insist(tuple_id.clone() < buffer_.get().size(), "tuple ID out of bounds");
-        compile_store_point_access(schema_, buffer_.get().base_address(), buffer_.get().layout(),
+        compile_store_point_access(schema_, empty_schema, buffer_.get().base_address(), buffer_.get().layout(),
                                    buffer_.get().schema(), tuple_id);
     }
 };
@@ -1231,33 +1384,33 @@ template _Boolx1  Environment::get_predicate() const;
 template _Boolx16 Environment::get_predicate() const;
 template _Boolx32 Environment::get_predicate() const;
 extern template std::tuple<Block, Block, Block> compile_store_sequential(
-    const Schema&, Ptr<void>, const storage::DataLayout&, std::size_t, const Schema&, Var<U32x1>&
+    const Schema&, const Schema&, Ptr<void>, const storage::DataLayout&, std::size_t, const Schema&, Var<U32x1>&
 );
 extern template std::tuple<Block, Block, Block> compile_store_sequential(
-    const Schema&, Ptr<void>, const storage::DataLayout&, std::size_t, const Schema&, Global<U32x1>&
+    const Schema&, const Schema&, Ptr<void>, const storage::DataLayout&, std::size_t, const Schema&, Global<U32x1>&
 );
 extern template std::tuple<Block, Block, Block> compile_store_sequential(
-    const Schema&, Ptr<void>, const storage::DataLayout&, std::size_t, const Schema&,
+    const Schema&, const Schema&, Ptr<void>, const storage::DataLayout&, std::size_t, const Schema&,
     Variable<uint32_t, VariableKind::Param, false>&
 );
 extern template std::tuple<Block, Block, Block> compile_store_sequential_single_pass(
-    const Schema&, Ptr<void>, const storage::DataLayout&, std::size_t, const Schema&, Var<U32x1>&
+    const Schema&, const Schema&, Ptr<void>, const storage::DataLayout&, std::size_t, const Schema&, Var<U32x1>&
 );
 extern template std::tuple<Block, Block, Block> compile_store_sequential_single_pass(
-    const Schema&, Ptr<void>, const storage::DataLayout&, std::size_t, const Schema&, Global<U32x1>&
+    const Schema&, const Schema&, Ptr<void>, const storage::DataLayout&, std::size_t, const Schema&, Global<U32x1>&
 );
 extern template std::tuple<Block, Block, Block> compile_store_sequential_single_pass(
-    const Schema&, Ptr<void>, const storage::DataLayout&, std::size_t, const Schema&,
+    const Schema&, const Schema&, Ptr<void>, const storage::DataLayout&, std::size_t, const Schema&,
     Variable<uint32_t, VariableKind::Param, false>&
 );
 extern template std::tuple<Block, Block, Block> compile_load_sequential(
-    const Schema&, Ptr<void>, const storage::DataLayout&, std::size_t, const Schema&, Var<U32x1>&
+    const Schema&, const Schema&, Ptr<void>, const storage::DataLayout&, std::size_t, const Schema&, Var<U32x1>&
 );
 extern template std::tuple<Block, Block, Block> compile_load_sequential(
-    const Schema&, Ptr<void>, const storage::DataLayout&, std::size_t, const Schema&, Global<U32x1>&
+    const Schema&, const Schema&, Ptr<void>, const storage::DataLayout&, std::size_t, const Schema&, Global<U32x1>&
 );
 extern template std::tuple<Block, Block, Block> compile_load_sequential(
-    const Schema&, Ptr<void>, const storage::DataLayout&, std::size_t, const Schema&,
+    const Schema&, const Schema&, Ptr<void>, const storage::DataLayout&, std::size_t, const Schema&,
     Variable<uint32_t, VariableKind::Param, false>&
 );
 extern template struct Buffer<false>;

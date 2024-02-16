@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import datetime
 import itertools
 import math
 import multiprocessing
@@ -7,6 +8,7 @@ import os
 import random
 import re
 import string
+import sys
 
 NUM_TUPLES = 1_000_000
 CHARS = ['0', '1']
@@ -33,6 +35,9 @@ TYPE_TO_STR = {
     'c59_dummy':    'CHAR(59)',
     'c60_dummy':    'CHAR(60)',
     'c124_dummy':   'CHAR(124)',
+    'date':         'DATE',
+    'datetime':     'DATETIME',
+    'dec10:2':      'DECIMAL(10,2)',
 }
 SCHEMA = {
     'Relation_parent': [
@@ -315,6 +320,48 @@ def gen_random_string_values(length :int, num :int):
     assert len(values) == len(list(values))
     return values
 
+# Generate `num` distinct decimal values of `scale` and `precision`.
+def gen_random_decimal_values(scale :int, precision :int, num :int):
+    assert scale + precision >= math.log10(num)
+
+    values = set()
+
+    while len(values) < num:
+        val = round(random.uniform(-10**scale + sys.float_info.epsilon, 10**scale), precision)
+        values.add(val)
+
+    assert len(values) == len(list(values))
+    return values
+
+# Generate `num` distinct date values.
+def gen_random_date_values(num :int):
+    lo = datetime.date.min.toordinal()
+    hi = datetime.date.max.toordinal()
+    assert num < hi - lo
+
+    values = set()
+
+    while len(values) < num:
+        val = datetime.date.fromordinal(random.randint(lo, hi)).strftime("%Y-%m-%d")
+        values.add(val)
+
+    assert len(values) == len(list(values))
+    return values
+
+# Generate `num` distinct datetime values.
+def gen_random_datetime_values(num :int):
+    lo = int(datetime.datetime.min.replace(tzinfo=datetime.timezone.utc).timestamp())
+    hi = int(datetime.datetime.max.replace(tzinfo=datetime.timezone.utc).timestamp())
+
+    values = set()
+
+    while len(values) < num:
+        val = datetime.date.fromtimestamp(random.randint(lo, hi)).strftime("%Y-%m-%d %I:%M:%S")
+        values.add(val)
+
+    assert len(values) == len(list(values))
+    return values
+
 
 #=======================================================================================================================
 # Data Generation
@@ -426,6 +473,12 @@ def gen_column(attr, num_tuples):
         values = gen_random_string_values(6,  min(len(CHARS) ** 6,  num_distinct_values))
     elif ty == 'c56_dummy' or ty == 'c59_dummy' or ty == 'c60_dummy' or ty == 'c124_dummy':
         values = [ '"ThisIsALongDummyString"' ]
+    elif ty == 'dec10:2':
+        values = gen_random_decimal_values(10, 2, num_distinct_values)
+    elif ty == 'date':
+        values = gen_random_date_values(num_distinct_values)
+    elif ty == 'datetime':
+        values = gen_random_datetime_values(num_distinct_values)
     else:
         raise Exception('unsupported type')
 

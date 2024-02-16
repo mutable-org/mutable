@@ -22,7 +22,7 @@ data:
             'id': 'INT NOT NULL'
             'd': 'DOUBLE NOT NULL'
             'd_sorted': 'DOUBLE NOT NULL'
-            'i32': 'INT NOT NULL'
+            'payload': 'INT NOT NULL'
 systems:
     mutable:
         args: >-
@@ -47,18 +47,18 @@ systems:
                 args: --data-layout PAX4M --filter-selection-strategy Predicated
                 pattern: '^Execute machine code:.*'
         cases:
-            0.00: SELECT 1 FROM Selectivity_d WHERE d_sorted <= 0.00 GROUP BY i32;
-            0.01: SELECT 1 FROM Selectivity_d WHERE d_sorted <= 0.01 GROUP BY i32;
-            0.05: SELECT 1 FROM Selectivity_d WHERE d_sorted <= 0.05 GROUP BY i32;
-            0.10: SELECT 1 FROM Selectivity_d WHERE d_sorted <= 0.10 GROUP BY i32;
-            0.20: SELECT 1 FROM Selectivity_d WHERE d_sorted <= 0.20 GROUP BY i32;
-            0.30: SELECT 1 FROM Selectivity_d WHERE d_sorted <= 0.30 GROUP BY i32;
-            0.40: SELECT 1 FROM Selectivity_d WHERE d_sorted <= 0.40 GROUP BY i32;
-            0.50: SELECT 1 FROM Selectivity_d WHERE d_sorted <= 0.50 GROUP BY i32;
-            0.60: SELECT 1 FROM Selectivity_d WHERE d_sorted <= 0.60 GROUP BY i32;
-            0.70: SELECT 1 FROM Selectivity_d WHERE d_sorted <= 0.70 GROUP BY i32;
-            0.80: SELECT 1 FROM Selectivity_d WHERE d_sorted <= 0.80 GROUP BY i32;
-            0.90: SELECT 1 FROM Selectivity_d WHERE d_sorted <= 0.90 GROUP BY i32;
-            0.95: SELECT 1 FROM Selectivity_d WHERE d_sorted <= 0.95 GROUP BY i32;
-            0.99: SELECT 1 FROM Selectivity_d WHERE d_sorted <= 0.99 GROUP BY i32;
-            1.00: SELECT 1 FROM Selectivity_d WHERE d_sorted <= 1.00 GROUP BY i32;
+            0.00: SELECT 1 FROM Selectivity_d WHERE d_sorted <= 0.00 GROUP BY payload;
+            0.01: SELECT 1 FROM Selectivity_d WHERE d_sorted <= 0.01 GROUP BY payload;
+            0.05: SELECT 1 FROM Selectivity_d WHERE d_sorted <= 0.05 GROUP BY payload;
+            0.10: SELECT 1 FROM Selectivity_d WHERE d_sorted <= 0.10 GROUP BY payload;
+            0.20: SELECT 1 FROM Selectivity_d WHERE d_sorted <= 0.20 GROUP BY payload;
+            0.30: SELECT 1 FROM Selectivity_d WHERE d_sorted <= 0.30 GROUP BY payload;
+            0.40: SELECT 1 FROM Selectivity_d WHERE d_sorted <= 0.40 GROUP BY payload;
+            0.50: SELECT 1 FROM Selectivity_d WHERE d_sorted <= 0.50 GROUP BY payload;
+            0.60: SELECT 1 FROM Selectivity_d WHERE d_sorted <= 0.60 GROUP BY payload;
+            0.70: SELECT 1 FROM Selectivity_d WHERE d_sorted <= 0.70 GROUP BY payload;
+            0.80: SELECT 1 FROM Selectivity_d WHERE d_sorted <= 0.80 GROUP BY payload;
+            0.90: SELECT 1 FROM Selectivity_d WHERE d_sorted <= 0.90 GROUP BY payload;
+            0.95: SELECT 1 FROM Selectivity_d WHERE d_sorted <= 0.95 GROUP BY payload;
+            0.99: SELECT 1 FROM Selectivity_d WHERE d_sorted <= 0.99 GROUP BY payload;
+            1.00: SELECT 1 FROM Selectivity_d WHERE d_sorted <= 1.00 GROUP BY payload;

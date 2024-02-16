@@ -22,7 +22,7 @@ data:
             'id': 'INT NOT NULL'
             'd': 'DOUBLE NOT NULL'
             'd_sorted': 'DOUBLE NOT NULL'
-            'i32': 'INT NOT NULL'
+            'payload': 'INT NOT NULL'
 systems:
     mutable:
         args: >-

@@ -69,7 +69,7 @@ SCHEMA = {
         ( 'id',       'i32', ['NOT NULL'] ),
         ( 'd',        'd',   ['NOT NULL'] ),
         ( 'd_sorted', 'd',   ['NOT NULL'] ),
-        ( 'i32',      'i32', ['NOT NULL'] ),
+        ( 'payload',  'i32', ['NOT NULL'] ),
     ],
 
     'Distinct_multi_i32': [

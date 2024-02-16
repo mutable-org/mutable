@@ -98,6 +98,27 @@ SCHEMA = {
         ( 'payload',  'i32', ['NOT NULL'] ),
     ],
 
+    'Selectivity_date': [
+        ( 'id',          'i32',  ['NOT NULL'] ),
+        ( 'date',        'date', ['NOT NULL'] ),
+        ( 'date_sorted', 'date', ['NOT NULL'] ),
+        ( 'payload',     'i32',  ['NOT NULL'] ),
+    ],
+
+    'Selectivity_datetime': [
+        ( 'id',              'i32',      ['NOT NULL'] ),
+        ( 'datetime',        'datetime', ['NOT NULL'] ),
+        ( 'datetime_sorted', 'datetime', ['NOT NULL'] ),
+        ( 'payload',         'i32',      ['NOT NULL'] ),
+    ],
+
+    'Selectivity_decimal': [
+        ( 'id',             'i32',     ['NOT NULL'] ),
+        ( 'decimal',        'dec10:2', ['NOT NULL'] ),
+        ( 'decimal_sorted', 'dec10:2', ['NOT NULL'] ),
+        ( 'payload',        'i32',     ['NOT NULL'] ),
+    ],
+
     'Distinct_multi_i32': [
         ( 'id',           'i32', ['NOT NULL'] ),
         ( 'n10',          'i32', ['NOT NULL'], {'num_distinct_values': 10} ),

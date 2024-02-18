@@ -452,6 +452,7 @@ struct _StringPool : PODPool<const char*, StrHash, StrEqual, StrClone, ThreadSaf
 
 using ThreadSafeStringPool = detail::_StringPool<true>;
 using ThreadSafePooledString = ThreadSafeStringPool::proxy_type;
+using ThreadSafePooledOptionalString = ThreadSafeStringPool::proxy_optional_type;
 
 using StringPool = detail::_StringPool<false>;
 using PooledString = StringPool::proxy_type;

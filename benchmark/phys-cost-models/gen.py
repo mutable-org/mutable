@@ -4,6 +4,7 @@ import datetime
 import itertools
 import math
 import multiprocessing
+import numpy as np
 import os
 import random
 import re
@@ -342,6 +343,22 @@ def gen_random_int_values(smallest :int, largest :int, num :int):
     assert len(values) == len(set(values))
     return values
 
+# Generate `num` distinct float values, drawn uniformly at random from range [0, 1).
+def gen_random_float_values(num :int):
+    values: set[np.float32] = set()
+    while len(values) < num:
+        val = np.float32(np.random.random())
+        values.add(val)
+    return values
+
+# Generate `num` distinct double values, drawn uniformly at random from range [0, 1).
+def gen_random_double_values(num :int):
+    values: set[np.float64] = set()
+    while len(values) < num:
+        val = np.float64(np.random.random())
+        values.add(val)
+    return values
+
 # Generate `num` distinct strings of `length` characters, each character drawn at random from `CHARS`.
 def gen_random_string_values(length :int, num :int):
     assert len(CHARS) ** length >= num
@@ -474,6 +491,7 @@ def gen_column(attr, num_tuples):
     fkey_join_selectivity = args.get('fkey_join_selectivity', FKEY_JOIN_SELECTIVITY)
     nm_join_selectivity = args.get('nm_join_selectivity', N_M_JOIN_SELECTIVITY)
     random.seed(hash(name))
+    np.random.seed(np.uint32(hash(name)))
 
     if 'fid' in name:
         num_fids_joining = min(int(fkey_join_selectivity * num_tuples * num_tuples), num_tuples)
@@ -491,8 +509,10 @@ def gen_column(attr, num_tuples):
         values = gen_random_int_values(-2**31 + 1, 2**31, num_distinct_values)
     elif ty == 'b':
         values = [ 'TRUE', 'FALSE' ]
-    elif ty == 'f' or ty == 'd':
-        values = [ random.random() for i in range(num_distinct_values) ]
+    elif ty == 'f':
+        values = gen_random_float_values(num_distinct_values)
+    elif ty == 'd':
+        values = gen_random_double_values(num_distinct_values)
     elif ty == 'i8':
         values = gen_random_int_values( -2**7 + 1,  2**7, min( 2**8 - 1, num_distinct_values))
     elif ty == 'i16':

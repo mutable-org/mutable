@@ -245,6 +245,7 @@ struct LinearAllocator : Allocator
             align_pre_memory(alignment);
         void *ptr = static_cast<uint8_t*>(memory_.addr()) + pre_alloc_addr_;
         pre_alloc_addr_ += bytes; // advance memory size by bytes
+        M_insist(memory_.size() >= pre_alloc_addr_, "allocation must fit in memory");
         return ptr;
     }
     Ptr<void> pre_allocate(uint32_t bytes, uint32_t alignment) override {
@@ -256,6 +257,7 @@ struct LinearAllocator : Allocator
             align_pre_memory(alignment);
         Ptr<void> ptr(U32x1(pre_alloc_addr_).template to<void*>());
         pre_alloc_addr_ += bytes; // advance memory size by bytes
+        M_insist(memory_.size() >= pre_alloc_addr_, "allocation must fit in memory");
         return ptr;
     }
     Var<Ptr<void>> allocate(U32x1 bytes, uint32_t alignment) override {
@@ -265,6 +267,7 @@ struct LinearAllocator : Allocator
             align_memory(alignment);
         Var<Ptr<void>> ptr(alloc_addr_.template to<void*>());
         alloc_addr_ += bytes; // advance memory size by bytes
+        Wasm_insist(memory_.size() >= alloc_addr_, "allocation must fit in memory");
         return ptr;
     }
 

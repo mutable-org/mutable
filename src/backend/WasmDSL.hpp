@@ -678,6 +678,8 @@ struct Module final
     ::wasm::Function *active_function_ = nullptr;
     ///> the main memory of the module
     ::wasm::Memory *memory_ = nullptr;
+    ///> the virtual address space and its backed memory; only set if no `WasmContext` was created
+    std::unique_ptr<std::pair<memory::AddressSpace, memory::Memory>> vm_;
     ///> the allocator
     std::unique_ptr<Allocator> allocator_;
     ///> stack of Binaryen branch targets
@@ -741,6 +743,9 @@ struct Module final
 
     /** Returns the currently active function. */
     static ::wasm::Function & Function() { return *M_notnull(Get().active_function_); }
+
+    /** Returns the virtual address space. */
+    static memory::AddressSpace & Memory();
 
     /** Returns the allocator. */
     static Allocator & Allocator();

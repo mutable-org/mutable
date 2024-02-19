@@ -116,25 +116,11 @@ struct MockInterface final : ::wasm::ModuleRunner::ExternalInterface
     using base_type = ::wasm::ModuleRunner::ExternalInterface;
 
     private:
-    void *memory_;
-    uint32_t size_;
-    bool allocated_ = false; ///< indicates whether `memory_` was allocated by this interface
+    ///> the underlying virtual address space used
+    const memory::AddressSpace &memory_;
 
     public:
-    MockInterface()
-        : memory_(malloc(WasmEngine::WASM_MAX_MEMORY))
-        , size_(WasmEngine::WASM_MAX_MEMORY)
-        , allocated_(true)
-    {
-        M_insist(memory_, "memory allocation failed");
-    }
-    MockInterface(const memory::AddressSpace &memory)
-        : memory_(memory.addr())
-        , size_(memory.size())
-    {
-        M_insist(memory_, "given memory is invalid");
-    }
-    ~MockInterface() { if (allocated_) free(memory_); }
+    MockInterface(const memory::AddressSpace &memory) : memory_(memory) { }
 
     void importGlobals(::wasm::GlobalValueSet &globals, ::wasm::Module&) override {
         M_insist(globals.empty(), "imports not supported");
@@ -164,27 +150,27 @@ struct MockInterface final : ::wasm::ModuleRunner::ExternalInterface
     private:
     template<typename T = void>
     T _load(::wasm::Address addr) {
-        M_insist(addr.addr < size_, "invalid address");
+        M_insist(addr.addr < memory_.size(), "invalid address");
         M_insist(addr.addr % alignof(T) == 0, "misaligned address");
-        return *reinterpret_cast<T*>(reinterpret_cast<uint8_t*>(memory_) + addr.addr);
+        return *reinterpret_cast<T*>(reinterpret_cast<uint8_t*>(memory_.addr()) + addr.addr);
     }
     template<>
     std::array<uint8_t, 16> _load<std::array<uint8_t, 16>>(::wasm::Address _addr) {
-        M_insist(_addr.addr + 16 <= size_, "invalid address");
-        auto addr = reinterpret_cast<uint8_t*>(memory_) + _addr.addr;
+        M_insist(_addr.addr + 16 <= memory_.size(), "invalid address");
+        auto addr = reinterpret_cast<uint8_t*>(memory_.addr()) + _addr.addr;
         return std::to_array<uint8_t, 16>(*reinterpret_cast<uint8_t(*)[16]>(addr));
     }
     template<typename T = void>
     void _store(::wasm::Address addr, T value) {
-        M_insist(addr.addr < size_, "invalid address");
+        M_insist(addr.addr < memory_.size(), "invalid address");
         M_insist(addr.addr % alignof(T) == 0, "misaligned address");
-        *reinterpret_cast<T*>(reinterpret_cast<uint8_t*>(memory_) + addr.addr) = value;
+        *reinterpret_cast<T*>(reinterpret_cast<uint8_t*>(memory_.addr()) + addr.addr) = value;
     }
     template<>
     void _store<const std::array<uint8_t, 16>&>(::wasm::Address addr, const std::array<uint8_t, 16> &value) {
-        M_insist(addr.addr + 16 <= size_, "invalid address");
+        M_insist(addr.addr + 16 <= memory_.size(), "invalid address");
         for (uint32_t idx = 0; idx < 16; ++idx)
-            *(reinterpret_cast<uint8_t*>(memory_) + addr.addr + idx) = value[idx];
+            *(reinterpret_cast<uint8_t*>(memory_.addr()) + addr.addr + idx) = value[idx];
     }
 
     public:
@@ -346,12 +332,8 @@ Module::Module()
 
 ::wasm::ModuleRunner::ExternalInterface * Module::get_mock_interface()
 {
-    if (not interface_) [[unlikely]] {
-        if (WasmEngine::Has_Wasm_Context(id_))
-            interface_ = std::make_unique<MockInterface>(WasmEngine::Get_Wasm_Context_By_ID(id_).vm);
-        else
-            interface_ = std::make_unique<MockInterface>();
-    }
+    if (not interface_) [[unlikely]]
+        interface_ = std::make_unique<MockInterface>(Memory());
     return interface_.get();
 }
 
@@ -471,6 +453,21 @@ void Module::emit_continue(PrimitiveExpr<bool, 1> cond, std::size_t level)
     IF (cond) {
         emit_continue(level);
     };
+}
+
+memory::AddressSpace & Module::Memory()
+{
+    if (WasmEngine::Has_Wasm_Context(ID())) {
+        return WasmEngine::Get_Wasm_Context_By_ID(ID()).vm;
+    } else {
+        if (not Get().vm_) [[unlikely]] {
+            memory::AddressSpace vm(WasmEngine::WASM_MAX_MEMORY);
+            auto mem = Catalog::Get().allocator().allocate(vm.size());
+            mem.map(vm.size(), 0, vm, 0); // map backed memory into vm
+            Get().vm_ = std::make_unique<std::pair<memory::AddressSpace, memory::Memory>>(std::move(vm), std::move(mem));
+        }
+        return Get().vm_->first;
+    }
 }
 
 Allocator & Module::Allocator()

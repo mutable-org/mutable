@@ -212,6 +212,8 @@ struct MockInterface final : ::wasm::ModuleRunner::ExternalInterface
 struct LinearAllocator : Allocator
 {
     private:
+    ///> the underlying virtual address space used
+    const memory::AddressSpace &memory_;
     ///> flag whether pre-allocations were already performed, i.e. `perform_pre_allocations()` was already called
     bool pre_allocations_performed_ = false;
     ///> compile-time size of the currently used memory, used as pointer to next free pre-allocation
@@ -220,8 +222,9 @@ struct LinearAllocator : Allocator
     Global<U32x1> alloc_addr_;
 
     public:
-    LinearAllocator(uint32_t start_addr)
-        : pre_alloc_addr_(start_addr)
+    LinearAllocator(const memory::AddressSpace &memory, uint32_t start_addr)
+        : memory_(memory)
+        , pre_alloc_addr_(start_addr)
     {
         M_insist(start_addr != 0, "memory address 0 is reserved as `nullptr`");
 #ifdef M_ENABLE_SANITY_FIELDS
@@ -240,8 +243,7 @@ struct LinearAllocator : Allocator
         M_insist(is_pow_2(alignment), "alignment must be a power of 2");
         if (alignment != 1U)
             align_pre_memory(alignment);
-        const auto &Ctx = WasmEngine::Get_Wasm_Context_By_ID(Module::ID());
-        void *ptr = static_cast<uint8_t*>(Ctx.vm.addr()) + pre_alloc_addr_;
+        void *ptr = static_cast<uint8_t*>(memory_.addr()) + pre_alloc_addr_;
         pre_alloc_addr_ += bytes; // advance memory size by bytes
         return ptr;
     }
@@ -474,9 +476,9 @@ Allocator & Module::Allocator()
 {
     if (not Get().allocator_) [[unlikely]] {
         if (WasmEngine::Has_Wasm_Context(ID()))
-            Get().allocator_ = std::make_unique<LinearAllocator>(WasmEngine::Get_Wasm_Context_By_ID(ID()).heap);
+            Get().allocator_ = std::make_unique<LinearAllocator>(Memory(), WasmEngine::Get_Wasm_Context_By_ID(ID()).heap);
         else
-            Get().allocator_ = std::make_unique<LinearAllocator>(1); // reserve address 0 for `nullptr`
+            Get().allocator_ = std::make_unique<LinearAllocator>(Memory(), 1); // reserve address 0 for `nullptr`
     }
     return *Get().allocator_;
 }

@@ -417,7 +417,7 @@ def gen_random_datetime_values(num :int):
     values = set()
 
     while len(values) < num:
-        val = (lo + datetime.timedelta(seconds=random.randrange(delta))).strftime("%Y-%m-%d %I:%M:%S")
+        val = (lo + datetime.timedelta(seconds=random.randrange(delta))).strftime("%Y-%m-%d %H:%M:%S")
         values.add(val)
 
     assert len(values) == len(list(values))

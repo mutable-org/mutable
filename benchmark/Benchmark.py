@@ -26,8 +26,6 @@ YML_SCHEMA: str = os.path.join('benchmark', '_schema.yml')                      
 
 BENCHMARK_SYSTEMS: list[str] = ['mutable', 'PostgreSQL', 'DuckDB', 'HyPer']     # List of systems
 
-N_RUNS: int = 5
-
 
 class BenchmarkError(Exception):
     pass
@@ -263,7 +261,8 @@ def perform_experiment(
     system: str,
     info: SimpleNamespace,
     results: Result,
-    output_csv_file: str | None
+    output_csv_file: str | None,
+    num_runs: int
 ) -> None:
     # Experiment parameters
     systems: dict[str, Any] = yml.get('systems', dict())
@@ -279,7 +278,7 @@ def perform_experiment(
 
     # Perform benchmark
     try:
-        connector_result: ConnectorResult = conn.execute(N_RUNS, params)
+        connector_result: ConnectorResult = conn.execute(num_runs, params)
     except connector.ConnectorException as ex:
         tqdm_print(f"\nAn error occurred for {system} while executing {info.path_to_file}: {str(ex)}\n")
         raise BenchmarkError()
@@ -479,7 +478,7 @@ def run_benchmarks(args: argparse.Namespace) -> None:
                     if system == 'mutable':
                         num_experiments_total += 1
                     try:
-                        perform_experiment(yml, conn, system, info, results, output_csv_file)
+                        perform_experiment(yml, conn, system, info, results, output_csv_file, args.num_runs)
                     except BenchmarkError:
                         pass  # nothing to be done
                     else:
@@ -513,6 +512,8 @@ if __name__ == '__main__':
                         help='Specify file to write measurement in CSV format')
     parser.add_argument('--args', dest='binargs', metavar='ARGS', default=None, action='store',
                         help='provide additional arguments to pass through to the binary')
+    parser.add_argument('-n', '--num-runs', dest='num_runs', metavar='RUNS', default=5, action='store', type=int,
+                        help='specify the number of runs per system, configuration, and case')
     parser.add_argument('-v', '--verbose', help='verbose output', dest='verbose', default=False, action='store_true')
     parser.add_argument('--pgsql', dest='pgsql', default=False, action='store_true',
                         help='create a .pgsql file with instructions to insert measurement results into a PostgreSQL '

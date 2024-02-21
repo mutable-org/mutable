@@ -72,45 +72,45 @@ SCHEMA = {
     ],
 
     'Selectivity_i32': [
-        ( 'id',         'i32', ['NOT NULL'] ),
-        ( 'i32',        'i32', ['NOT NULL'] ),
-        ( 'i32_sorted', 'i32', ['NOT NULL'] ),
-        ( 'payload',    'i32', ['NOT NULL'] ),
+        ( 'id',         'i32', ['NOT NULL'], {'num_distinct_values': NUM_TUPLES} ),
+        ( 'i32',        'i32', ['NOT NULL'], {'num_distinct_values': NUM_TUPLES} ),
+        ( 'i32_sorted', 'i32', ['NOT NULL'], {'num_distinct_values': NUM_TUPLES}  ),
+        ( 'payload',    'i32', ['NOT NULL'], {'num_distinct_values': NUM_TUPLES} ),
     ],
 
     'Selectivity_i64': [
-        ( 'id',         'i32', ['NOT NULL'] ),
-        ( 'i64',        'i64', ['NOT NULL'] ),
-        ( 'i64_sorted', 'i64', ['NOT NULL'] ),
-        ( 'payload',    'i32', ['NOT NULL'] ),
+        ( 'id',         'i32', ['NOT NULL'], {'num_distinct_values': NUM_TUPLES} ),
+        ( 'i64',        'i64', ['NOT NULL'], {'num_distinct_values': NUM_TUPLES} ),
+        ( 'i64_sorted', 'i64', ['NOT NULL'], {'num_distinct_values': NUM_TUPLES} ),
+        ( 'payload',    'i32', ['NOT NULL'], {'num_distinct_values': NUM_TUPLES} ),
     ],
 
     'Selectivity_f': [
-        ( 'id',       'i32', ['NOT NULL'] ),
-        ( 'f',        'f',   ['NOT NULL'] ),
-        ( 'f_sorted', 'f',   ['NOT NULL'] ),
-        ( 'payload',  'i32', ['NOT NULL'] ),
+        ( 'id',       'i32', ['NOT NULL'], {'num_distinct_values': NUM_TUPLES} ),
+        ( 'f',        'f',   ['NOT NULL'], {'num_distinct_values': NUM_TUPLES} ),
+        ( 'f_sorted', 'f',   ['NOT NULL'], {'num_distinct_values': NUM_TUPLES} ),
+        ( 'payload',  'i32', ['NOT NULL'], {'num_distinct_values': NUM_TUPLES} ),
     ],
 
     'Selectivity_d': [
-        ( 'id',       'i32', ['NOT NULL'] ),
-        ( 'd',        'd',   ['NOT NULL'] ),
-        ( 'd_sorted', 'd',   ['NOT NULL'] ),
-        ( 'payload',  'i32', ['NOT NULL'] ),
+        ( 'id',       'i32', ['NOT NULL'], {'num_distinct_values': NUM_TUPLES} ),
+        ( 'd',        'd',   ['NOT NULL'], {'num_distinct_values': NUM_TUPLES} ),
+        ( 'd_sorted', 'd',   ['NOT NULL'], {'num_distinct_values': NUM_TUPLES} ),
+        ( 'payload',  'i32', ['NOT NULL'], {'num_distinct_values': NUM_TUPLES} ),
     ],
 
     'Selectivity_date': [
-        ( 'id',          'i32',  ['NOT NULL'] ),
-        ( 'date',        'date', ['NOT NULL'] ),
-        ( 'date_sorted', 'date', ['NOT NULL'] ),
-        ( 'payload',     'i32',  ['NOT NULL'] ),
+        ( 'id',          'i32',  ['NOT NULL'], {'num_distinct_values': 100_000} ),
+        ( 'date',        'date', ['NOT NULL'], {'num_distinct_values': 100_000} ),
+        ( 'date_sorted', 'date', ['NOT NULL'], {'num_distinct_values': 100_000} ),
+        ( 'payload',     'i32',  ['NOT NULL'], {'num_distinct_values': 100_000} ),
     ],
 
     'Selectivity_datetime': [
-        ( 'id',              'i32',      ['NOT NULL'] ),
-        ( 'datetime',        'datetime', ['NOT NULL'] ),
-        ( 'datetime_sorted', 'datetime', ['NOT NULL'] ),
-        ( 'payload',         'i32',      ['NOT NULL'] ),
+        ( 'id',              'i32',      ['NOT NULL'], {'num_distinct_values': NUM_TUPLES} ),
+        ( 'datetime',        'datetime', ['NOT NULL'], {'num_distinct_values': NUM_TUPLES} ),
+        ( 'datetime_sorted', 'datetime', ['NOT NULL'], {'num_distinct_values': NUM_TUPLES} ),
+        ( 'payload',         'i32',      ['NOT NULL'], {'num_distinct_values': NUM_TUPLES} ),
     ],
 
     'Distinct_multi_i32': [

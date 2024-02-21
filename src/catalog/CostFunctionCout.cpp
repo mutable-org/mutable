@@ -11,7 +11,7 @@ static void register_cost_function()
 {
     Catalog &C = Catalog::Get();
     C.register_cost_function(
-        "CostFunctionCout",
+        C.pool("CostFunctionCout"),
         std::make_unique<CostFunctionCout>(),
         "implementation of cost function C_out from Sophie Cluet and Guido Moerkotte"
     );

@@ -31,17 +31,17 @@ TEST_CASE("StackMachine/Expressions", "[core][backend]")
     /* Get Catalog and create new database to use for unit testing. */
     Catalog::Clear();
     Catalog &C = Catalog::Get();
-    auto &db = C.add_database("mydb");
+    auto &db = C.add_database(C.pool("mydb"));
     C.set_database_in_use(db);
 
     /* Create pooled strings. */
-    const char *col_int64_t = C.pool("col_int64_t");
-    const char *col_float   = C.pool("col_float");
-    const char *col_double  = C.pool("col_double");
-    const char *col_decimal = C.pool("col_decimal");
-    const char *col_bool    = C.pool("col_bool");
-    const char *col_char    = C.pool("col_char");
-    const char *tbl_tbl1    = C.pool("tbl1");
+    ThreadSafePooledString col_int64_t = C.pool("col_int64_t");
+    ThreadSafePooledString col_float   = C.pool("col_float");
+    ThreadSafePooledString col_double  = C.pool("col_double");
+    ThreadSafePooledString col_decimal = C.pool("col_decimal");
+    ThreadSafePooledString col_bool    = C.pool("col_bool");
+    ThreadSafePooledString col_char    = C.pool("col_char");
+    ThreadSafePooledString tbl_tbl1    = C.pool("tbl1");
 
     /* Create tables. */
     Table &tbl1 = db.add_table(tbl_tbl1);
@@ -1149,6 +1149,7 @@ TEST_CASE("StackMachine/IO/Print_b", "[core][backend]")
 
 TEST_CASE("StackMachine/IO/Print_date", "[core][backend]")
 {
+    auto &C = Catalog::Get();
     StackMachine SM;
     Tuple res({ Type::Get_Date(Type::TY_Scalar) });
     Tuple *args[] = { &res };
@@ -1166,7 +1167,7 @@ TEST_CASE("StackMachine/IO/Print_date", "[core][backend]")
     SECTION("Print the date on top of stack (2042-11-17)")
     {
         std::size_t idx = SM.add(&oss);
-        SM.add_and_emit_load(Interpreter::eval(Constant(Token(Position("pos"), "d'2042-11-17'", TK_DATE))));
+        SM.add_and_emit_load(Interpreter::eval(Constant(Token(Position("pos"), C.pool("d'2042-11-17'"), TK_DATE))));
         SM.emit_Print_date(idx);
         SM(args);
         REQUIRE(oss.str() == "2042-11-17");
@@ -1175,7 +1176,7 @@ TEST_CASE("StackMachine/IO/Print_date", "[core][backend]")
     SECTION("Print the date on top of stack (-2042-11-17)")
     {
         std::size_t idx = SM.add(&oss);
-        SM.add_and_emit_load(Interpreter::eval(Constant(Token(Position("pos"), "d'-2042-11-17'", TK_DATE))));
+        SM.add_and_emit_load(Interpreter::eval(Constant(Token(Position("pos"), C.pool("d'-2042-11-17'"), TK_DATE))));
         SM.emit_Print_date(idx);
         SM(args);
         REQUIRE(oss.str() == "-2042-11-17");
@@ -1184,6 +1185,7 @@ TEST_CASE("StackMachine/IO/Print_date", "[core][backend]")
 
 TEST_CASE("StackMachine/IO/Print_datetime", "[core][backend]")
 {
+    auto &C = Catalog::Get();
     StackMachine SM;
     Tuple res({ Type::Get_Date(Type::TY_Scalar) });
     Tuple *args[] = { &res };
@@ -1201,7 +1203,7 @@ TEST_CASE("StackMachine/IO/Print_datetime", "[core][backend]")
     SECTION("Print the datetime on top of stack (2042-11-17 12:34:56)")
     {
         std::size_t idx = SM.add(&oss);
-        SM.add_and_emit_load(Interpreter::eval(Constant(Token(Position("pos"), "d'2042-11-17 12:34:56'", TK_DATE_TIME))));
+        SM.add_and_emit_load(Interpreter::eval(Constant(Token(Position("pos"), C.pool("d'2042-11-17 12:34:56'"), TK_DATE_TIME))));
         SM.emit_Print_datetime(idx);
         SM(args);
         REQUIRE(oss.str() == "2042-11-17 12:34:56");
@@ -1210,7 +1212,7 @@ TEST_CASE("StackMachine/IO/Print_datetime", "[core][backend]")
     SECTION("Print the datetime on top of stack (-2042-11-17 12:34:56)")
     {
         std::size_t idx = SM.add(&oss);
-        SM.add_and_emit_load(Interpreter::eval(Constant(Token(Position("pos"), "d'-2042-11-17 12:34:56'", TK_DATE_TIME))));
+        SM.add_and_emit_load(Interpreter::eval(Constant(Token(Position("pos"), C.pool("d'-2042-11-17 12:34:56'"), TK_DATE_TIME))));
         SM.emit_Print_datetime(idx);
         SM(args);
         REQUIRE(oss.str() == "-2042-11-17 12:34:56");

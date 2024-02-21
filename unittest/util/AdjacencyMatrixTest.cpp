@@ -115,21 +115,21 @@ TEST_CASE("AdjacencyMatrix/QueryGraph Matrix", "[core][util][unit]")
     /* Get Catalog and create new database to use for unit testing. */
     Catalog::Clear();
     Catalog &Cat = Catalog::Get();
-    auto &db = Cat.add_database("mydb");
+    auto &db = Cat.add_database(Cat.pool("mydb"));
     Cat.set_database_in_use(db);
 
     Diagnostic diag(false, std::cout, std::cerr);
 
     /* Create pooled strings. */
-    const char *str_A    = Cat.pool("A");
-    const char *str_B    = Cat.pool("B");
-    const char *str_C    = Cat.pool("C");
-    const char *str_D    = Cat.pool("D");
+    ThreadSafePooledString str_A    = Cat.pool("A");
+    ThreadSafePooledString str_B    = Cat.pool("B");
+    ThreadSafePooledString str_C    = Cat.pool("C");
+    ThreadSafePooledString str_D    = Cat.pool("D");
 
-    const char *col_id = Cat.pool("id");
-    const char *col_aid = Cat.pool("aid");
-    const char *col_bid = Cat.pool("bid");
-    const char *col_cid = Cat.pool("cid");
+    ThreadSafePooledString col_id  = Cat.pool("id");
+    ThreadSafePooledString col_aid = Cat.pool("aid");
+    ThreadSafePooledString col_bid = Cat.pool("bid");
+    ThreadSafePooledString col_cid = Cat.pool("cid");
 
     /* Create tables. */
     Table &tbl_A = db.add_table(str_A);
@@ -156,11 +156,11 @@ TEST_CASE("AdjacencyMatrix/QueryGraph Matrix", "[core][util][unit]")
     const AdjacencyMatrix &adj_mat = query_graph->adjacency_matrix();
 
     /* Mapping of relation name to SmallBitset of data source ID. */
-    std::unordered_map<const char *, SmallBitset> map;
+    std::unordered_map<ThreadSafePooledString, SmallBitset> map;
     for (auto &ds : query_graph->sources()) {
         auto tbl = cast<const BaseTable>(ds.get());
         REQUIRE(tbl != nullptr);
-        const char *str_name = tbl->table().name();
+        ThreadSafePooledString str_name = tbl->table().name();
         map[str_name] = SmallBitset(1 << ds->id());
     }
 
@@ -340,18 +340,18 @@ TEST_CASE("AdjacencyMatrix/QueryGraph Matrix Negative", "[core][util][unit]")
     /* Get Catalog and create new database to use for unit testing. */
     Catalog::Clear();
     Catalog &Cat = Catalog::Get();
-    auto &db = Cat.add_database("mydb");
+    auto &db = Cat.add_database(Cat.pool("mydb"));
     Cat.set_database_in_use(db);
 
     Diagnostic diag(false, std::cout, std::cerr);
 
     /* Create pooled strings. */
-    const char *str_A    = Cat.pool("A");
-    const char *str_B    = Cat.pool("B");
-    const char *str_C    = Cat.pool("C");
+    ThreadSafePooledString str_A    = Cat.pool("A");
+    ThreadSafePooledString str_B    = Cat.pool("B");
+    ThreadSafePooledString str_C    = Cat.pool("C");
 
-    const char *col_id = Cat.pool("id");
-    const char *col_aid = Cat.pool("aid");
+    ThreadSafePooledString col_id  = Cat.pool("id");
+    ThreadSafePooledString col_aid = Cat.pool("aid");
 
     /* Create tables. */
     Table &tbl_A = db.add_table(str_A);

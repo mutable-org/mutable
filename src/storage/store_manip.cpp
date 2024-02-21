@@ -242,7 +242,7 @@ void m::generate_column_data(void *column_ptr, const Attribute &attr, std::size_
 {
     M_insist(begin < end, "must set at least one row");
 
-    if (streq(attr.name, "id")) { // generate primary key
+    if (streq(*attr.name, "id")) { // generate primary key
         generate_primary_keys(column_ptr, *attr.type, begin, end);
     } else if (auto n = cast<const Numeric>(attr.type)) {
         switch (n->kind) {
@@ -282,7 +282,7 @@ void m::generate_correlated_column_data(void *left_ptr, void *right_ptr, const A
                                         std::size_t count_left, std::size_t count_right,
                                         std::size_t num_distinct_values_matching)
 {
-    if (streq(attr.name, "id")) { // primary keys cannot be correlated
+    if (streq(*attr.name, "id")) { // primary keys cannot be correlated
         M_unreachable("primary keys unsupported");
     } else if (auto n = cast<const Numeric>(attr.type)) {
         switch (n->size()) {

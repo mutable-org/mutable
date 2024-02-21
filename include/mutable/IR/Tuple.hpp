@@ -1,5 +1,6 @@
 #pragma once
 
+#include <mutable/util/Pool.hpp>
 #include <mutable/mutable-config.hpp>
 #include <mutable/util/ADT.hpp>
 #include <functional>
@@ -51,8 +52,8 @@ struct M_EXPORT Value
 
     template<typename T>
     Value(T val) : Value() {
-        static_assert(std::is_fundamental_v<T> or std::is_pointer_v<T>,
-                      "type T must be a fundamental or pointer type");
+        static_assert(std::is_fundamental_v<T> or std::is_pointer_v<T> or std::is_same_v<T, m::ThreadSafePooledString>,
+                      "type T must be either a fundamental, a pointer, or a pooled string type");
 #ifdef M_ENABLE_SANITY_FIELDS
 #define SET_TYPE(TY) this->type = V##TY
 #else
@@ -63,6 +64,9 @@ struct M_EXPORT Value
         else if constexpr (std::is_integral_v<T>)     SET(i)
         else if constexpr (std::is_same_v<T, float>)  SET(f)
         else if constexpr (std::is_same_v<T, double>) SET(d)
+        else if constexpr (std::is_same_v<T, m::ThreadSafePooledString>) {
+            val_.p = (void*)(const char*)(val); SET_TYPE(p); // TODO: This is a hack. `Value` must *own* the string.
+        }
         else if constexpr (std::is_pointer_v<T>) { val_.p = (void*)(val); SET_TYPE(p); }
         else static_assert(not std::is_same_v<T, T>, "unspoorted type T");
 #undef SET

@@ -55,15 +55,15 @@ void Catalog::Destroy()
 
 /*===== Databases ====================================================================================================*/
 
-Database & Catalog::add_database(const char *name)
+Database & Catalog::add_database(ThreadSafePooledString name)
 {
     auto it = databases_.find(name);
     if (it != databases_.end()) throw std::invalid_argument("database with that name already exist");
-    it = databases_.emplace_hint(it, name, new Database(name));
+    it = databases_.emplace_hint(it, std::move(name), new Database(name));
     return *it->second;
 }
 
-void Catalog::drop_database(const char *name)
+void Catalog::drop_database(const ThreadSafePooledString &name)
 {
     if (has_database_in_use() and get_database_in_use().name == name)
         throw std::invalid_argument("Cannot drop database; currently in use.");
@@ -87,7 +87,7 @@ static void add_catalog_args()
         /* description= */ "data layout to use",
         [&C] (const char *str) {
             try {
-                C.default_data_layout(str);
+                C.default_data_layout(C.pool(str));
             } catch (std::invalid_argument) {
                 std::cerr << "There is no data layout with the name \"" << str << "\".\n";
                 std::exit(EXIT_FAILURE);
@@ -101,7 +101,7 @@ static void add_catalog_args()
         /* description= */ "cardinality estimator to use",
         [&C] (const char *str) {
             try {
-                C.default_cardinality_estimator(str);
+                C.default_cardinality_estimator(C.pool(str));
             } catch (std::invalid_argument) {
                 std::cerr << "There is no cardinality estimator with the name \"" << str << "\".\n";
                 std::exit(EXIT_FAILURE);
@@ -115,7 +115,7 @@ static void add_catalog_args()
         /* description= */ "plan enumerator to use",
         [&C] (const char *str) {
             try {
-                C.default_plan_enumerator(str);
+                C.default_plan_enumerator(C.pool(str));
             } catch (std::invalid_argument) {
                 std::cerr << "There is no plan enumerator with the name \"" << str << "\".\n";
                 std::exit(EXIT_FAILURE);
@@ -129,7 +129,7 @@ static void add_catalog_args()
         /* description= */ "execution backend to use",
         [&C] (const char *str) {
             try {
-                C.default_backend(str);
+                C.default_backend(C.pool(str));
             } catch (std::invalid_argument) {
                 std::cerr << "There is no execution backend with the name \"" << str << "\".\n";
                 std::exit(EXIT_FAILURE);
@@ -143,7 +143,7 @@ static void add_catalog_args()
         /* description= */ "query scheduler to use",
         [&C] (const char *str) {
             try {
-                C.default_scheduler(str);
+                C.default_scheduler(C.pool(str));
             } catch (std::invalid_argument) {
                 std::cerr << "There is no query scheduler with the name \"" << str << "\".\n";
                 std::exit(EXIT_FAILURE);

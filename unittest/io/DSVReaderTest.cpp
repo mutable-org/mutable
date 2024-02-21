@@ -90,6 +90,7 @@ std::string format_string(const char *str, const DSVReader::Config cfg)
 TEST_CASE("DSVReader HEADER", "[core][io][unit]")
 {
     DSVReader::Config cfg;
+    auto &C = Catalog::Get();
 
     SECTION("no header")
     {
@@ -263,7 +264,7 @@ TEST_CASE("DSVReader HEADER", "[core][io][unit]")
         REQUIRE(diag.num_errors() == 0);
         REQUIRE(table.store().num_rows() == 5);
         test_table_imports(table, rows);
-        REQUIRE_THROWS_AS(table.at("extra_attr"), std::out_of_range);
+        REQUIRE_THROWS_AS(table.at(C.pool("extra_attr")), std::out_of_range);
     }
 
     SECTION("discard header")

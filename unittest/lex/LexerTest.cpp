@@ -133,10 +133,10 @@ TEST_CASE("Lexer::next()", "[core][lex][unit]")
                           << std::get<0>(e) << std::endl;
             REQUIRE(tok.type == std::get<1>(e));
 
-            if (!streq(tok.text, std::get<2>(e)))
+            if (!streq(*tok.text, std::get<2>(e)))
                 std::cerr << "expected " << std::get<2>(e) << ", got " << tok.text << " for expression "
                           << std::get<0>(e) << std::endl;
-            REQUIRE(streq(tok.text, std::get<2>(e)));
+            REQUIRE(streq(*tok.text, std::get<2>(e)));
 
             tok = lexer.next();
             if (tok.type != std::get<3>(e))
@@ -214,10 +214,10 @@ TEST_CASE("Lexer::next()", "[core][lex][unit]")
                               << std::get<0>(e) << std::endl;
                 REQUIRE(tok.type == TK_ERROR);
 
-                if (!streq(tok.text, std::get<1>(e)))
+                if (!streq(*tok.text, std::get<1>(e)))
                     std::cerr << "expected " << std::get<1>(e) << ", got " << tok.text << " for expression "
                               << std::get<0>(e) << std::endl;
-                REQUIRE(streq(tok.text, std::get<1>(e)));
+                REQUIRE(streq(*tok.text, std::get<1>(e)));
 
                 tok = lexer.next();
                 if (tok.type != std::get<2>(e))

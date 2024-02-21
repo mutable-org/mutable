@@ -35,13 +35,13 @@ TEST_CASE("Store", "[core][storage]")
 {
     Catalog &C = Catalog::Get();
     /* Construct a table definition. */
-    ConcreteTable table("mytable");
-    table.push_back("i1", Type::Get_Integer(Type::TY_Vector, 1)); // 1 byte
+    ConcreteTable table(C.pool("mytable"));
+    table.push_back(C.pool("i1"), Type::Get_Integer(Type::TY_Vector, 1)); // 1 byte
 
     SECTION("Create from string")
     {
 #define TEST(NAME) { \
-    auto store = C.create_store(#NAME, table); \
+    auto store = C.create_store(C.pool(#NAME), table); \
     REQUIRE(cast<NAME>(store.get())); \
 }
 

@@ -25,7 +25,7 @@ void add_table_args()
             Catalog &C = Catalog::Get();
             std::unique_ptr<TableFactory> table_factory = std::make_unique<ConcreteTableFactory>();
             for (auto property : properties)
-                table_factory = C.apply_table_property(std::string(property).c_str(), std::move(table_factory));
+                table_factory = C.apply_table_property(C.pool(property), std::move(table_factory));
             C.table_factory(std::move(table_factory));
         }
     );
@@ -43,5 +43,6 @@ void register_table_factories()
     std::unique_ptr<TableFactory> table_factory = std::make_unique<ConcreteTableFactory>();
     C.table_factory(std::move(table_factory));
 
-    C.register_table_property<ConcreteTableFactoryDecorator<MultiVersioningTable>>("multi-versioning", "enables multi-versioning");
+    C.register_table_property<ConcreteTableFactoryDecorator<MultiVersioningTable>>(C.pool("multi-versioning"),
+                                                                                   "enables multi-versioning");
 }

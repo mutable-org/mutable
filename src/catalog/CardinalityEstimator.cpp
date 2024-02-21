@@ -15,6 +15,7 @@
 #include <mutable/IR/QueryGraph.hpp>
 #include <mutable/Options.hpp>
 #include <mutable/util/Diagnostic.hpp>
+#include <mutable/util/Pool.hpp>
 #include <nlohmann/json.hpp>
 
 
@@ -157,7 +158,7 @@ M_LCOV_EXCL_STOP
 
 /*----- Constructors -------------------------------------------------------------------------------------------------*/
 
-InjectionCardinalityEstimator::InjectionCardinalityEstimator(const char *name_of_database)
+InjectionCardinalityEstimator::InjectionCardinalityEstimator(ThreadSafePooledString name_of_database)
     : fallback_(name_of_database)
 {
     Diagnostic diag(Options::Get().has_color, std::cout, std::cerr);
@@ -176,21 +177,17 @@ InjectionCardinalityEstimator::InjectionCardinalityEstimator(const char *name_of
     }
 }
 
-InjectionCardinalityEstimator::InjectionCardinalityEstimator(Diagnostic &diag, const char *name_of_database,
+InjectionCardinalityEstimator::InjectionCardinalityEstimator(Diagnostic &diag, ThreadSafePooledString name_of_database,
                                                              std::istream &in)
     : fallback_(name_of_database)
 {
     read_json(diag, in, name_of_database);
 }
 
-InjectionCardinalityEstimator::~InjectionCardinalityEstimator()
+void InjectionCardinalityEstimator::read_json(Diagnostic &diag, std::istream &in,
+                                              const ThreadSafePooledString &name_of_database)
 {
-    for (auto entry : cardinality_table_)
-        free((void*) entry.first);
-}
-
-void InjectionCardinalityEstimator::read_json(Diagnostic &diag, std::istream &in, const char *name_of_database)
-{
+    Catalog &C = Catalog::Get();
     Position pos("InjectionCardinalityEstimator");
     std::string prev_relation;
 
@@ -206,7 +203,7 @@ void InjectionCardinalityEstimator::read_json(Diagnostic &diag, std::istream &in
     }
     json *database_entry;
     try {
-        database_entry = &cardinalities.at(name_of_database); //throws if key does not exist
+        database_entry = &cardinalities.at(*name_of_database); //throws if key does not exist
     } catch (json::out_of_range &out_of_range) {
         diag.w(pos) << "No entry for the db " << name_of_database << " in the file.\n"
                     << "A dummy estimator will be used to do estimations.\n";
@@ -239,8 +236,8 @@ void InjectionCardinalityEstimator::read_json(Diagnostic &diag, std::istream &in
             buf_append(*it);
         }
         buf_.emplace_back(0);
-        auto str = strdup(buf_view());
-        auto res = cardinality_table_.emplace(str, *size);
+        ThreadSafePooledString str = C.pool(buf_view());
+        auto res = cardinality_table_.emplace(std::move(str), *size);
         M_insist(res.second, "insertion must not fail as we do not allow for duplicates in the input file");
     }
 }
@@ -258,7 +255,7 @@ std::unique_ptr<DataModel> InjectionCardinalityEstimator::estimate_scan(const Qu
     const auto idx = *P.begin();
     auto &DS = *G.sources()[idx];
 
-    if (auto it = cardinality_table_.find(DS.name()); it != cardinality_table_.end()) {
+    if (auto it = cardinality_table_.find(DS.name().assert_not_none()); it != cardinality_table_.end()) {
         return std::make_unique<InjectionCardinalityDataModel>(P, it->second);
     } else {
         /* no match, fall back */
@@ -298,13 +295,14 @@ InjectionCardinalityEstimator::estimate_grouping(const QueryGraph&, const DataMo
     oss_ << "g";
     for (auto [grp, alias] : exprs) {
         oss_ << '#';
-        if (alias)
+        if (alias.has_value())
             oss_ << alias;
         else
             oss_ << grp.get();
     }
+    ThreadSafePooledString id = Catalog::Get().pool(oss_.str().c_str());
 
-    if (auto it = cardinality_table_.find(oss_.str().c_str()); it != cardinality_table_.end()) {
+    if (auto it = cardinality_table_.find(id); it != cardinality_table_.end()) {
         /* Clamp injected cardinality to at most the cardinality of the grouping's child since it cannot produce more
          * tuples than it receives. */
         return std::make_unique<InjectionCardinalityDataModel>(data.subproblem_, std::min(it->second, data.size_));
@@ -322,7 +320,7 @@ InjectionCardinalityEstimator::estimate_join(const QueryGraph &G, const DataMode
     auto &right = as<const InjectionCardinalityDataModel>(_right);
 
     const Subproblem subproblem = left.subproblem_ | right.subproblem_;
-    const char *id = make_identifier(G, subproblem);
+    ThreadSafePooledString id = make_identifier(G, subproblem);
 
     /* Lookup cardinality in table. */
     if (auto it = cardinality_table_.find(id); it != cardinality_table_.end()) {
@@ -350,7 +348,7 @@ std::unique_ptr<DataModel>
 InjectionCardinalityEstimator::operator()(estimate_join_all_tag, PlanTable &&PT, const QueryGraph &G,
                                           Subproblem to_join, const cnf::CNF&) const
 {
-    const char *id = make_identifier(G, to_join);
+    ThreadSafePooledString id = make_identifier(G, to_join);
     if (auto it = cardinality_table_.find(id); it != cardinality_table_.end()) {
         /* Clamp injected cardinality to at most the cardinality of the cartesian product of the join's children
          * since it cannot produce more tuples than that. */
@@ -391,7 +389,7 @@ void InjectionCardinalityEstimator::print(std::ostream &out) const
     constexpr uint32_t max_rows_printed = 100;     /// Number of rows of the cardinality_table printed
     std::size_t sub_len = 13;                         /// Length of Subproblem column
     for (auto &entry : cardinality_table_)
-        sub_len = std::max(sub_len, strlen(entry.first));
+        sub_len = std::max(sub_len, strlen(*entry.first));
 
     out << std::left << "InjectionCardinalityEstimator\n"
         << std::setw(sub_len) << "Subproblem" << "Size" << "\n" << std::right;
@@ -406,23 +404,24 @@ void InjectionCardinalityEstimator::print(std::ostream &out) const
 }
 M_LCOV_EXCL_STOP
 
-const char * InjectionCardinalityEstimator::make_identifier(const QueryGraph &G, const Subproblem S) const
+ThreadSafePooledString InjectionCardinalityEstimator::make_identifier(const QueryGraph &G, const Subproblem S) const
 {
-    static thread_local std::vector<const char*> names;
+    auto &C = Catalog::Get();
+    static thread_local std::vector<ThreadSafePooledString> names;
     names.clear();
     for (auto id : S)
-        names.push_back(G.sources()[id]->name());
-    std::sort(names.begin(), names.end(), [](auto lhs, auto rhs){ return strcmp(lhs, rhs) < 0; });
+        names.emplace_back(G.sources()[id]->name());
+    std::sort(names.begin(), names.end(), [](auto lhs, auto rhs){ return strcmp(*lhs, *rhs) < 0; });
 
     buf_.clear();
     for (auto it = names.begin(); it != names.end(); ++it) {
         if (it != names.begin())
             buf_.emplace_back('$');
-        buf_append(*it);
+        buf_append(**it);
     }
 
     buf_.emplace_back(0);
-    return buf_view();
+    return C.pool(buf_view());
 }
 
 
@@ -434,16 +433,16 @@ namespace {
 
 /** Visitor to translate a CNF to an Spn filter. Only consider sargable expressions. */
 struct FilterTranslator : ast::ConstASTExprVisitor {
-
-    const char* attribute;
+    Catalog &C = Catalog::Get();
+    ThreadSafePooledString attribute;
     float value;
     Spn::SpnOperator op;
 
-    FilterTranslator() : attribute(""), value(0), op(Spn::EQUAL) { }
+    FilterTranslator() : attribute(C.pool("")), value(0), op(Spn::EQUAL) { }
 
     using ConstASTExprVisitor::operator();
 
-    void operator()(const ast::Designator &designator) { attribute = designator.attr_name.text; }
+    void operator()(const ast::Designator &designator) { attribute = designator.attr_name.text.assert_not_none(); }
 
     void operator()(const ast::Constant &constant) {
         auto val = Interpreter::eval(constant);
@@ -501,7 +500,7 @@ struct FilterTranslator : ast::ConstASTExprVisitor {
 /** Visitor to translate a CNF join condition (get the two identifiers of an equi Join). */
 struct JoinTranslator : ast::ConstASTExprVisitor {
 
-    std::vector<std::pair<const char*, const char*>> join_designator;
+    std::vector<std::pair<ThreadSafePooledString, ThreadSafePooledString>> join_designator;
 
     using ConstASTExprVisitor::operator();
 
@@ -534,7 +533,7 @@ SpnEstimator::~SpnEstimator()
 
 void SpnEstimator::learn_spns() { table_to_spn_ = SpnWrapper::learn_spn_database(name_of_database_); }
 
-void SpnEstimator::learn_new_spn(const char *name_of_table)
+void SpnEstimator::learn_new_spn(const ThreadSafePooledString &name_of_table)
 {
     table_to_spn_.emplace(
         name_of_table,
@@ -545,7 +544,7 @@ void SpnEstimator::learn_new_spn(const char *name_of_table)
 std::pair<unsigned, bool> SpnEstimator::find_spn_id(const SpnDataModel &data, SpnJoin &join)
 {
     /* we only have a single spn */
-    const char *table_name = data.spns_.begin()->first;
+    ThreadSafePooledString table_name = data.spns_.begin()->first;
     auto &attr_to_id = data.spns_.begin()->second.get().get_attribute_to_id();
 
     unsigned spn_id = 0;
@@ -571,7 +570,7 @@ std::size_t SpnEstimator::max_frequency(const SpnDataModel &data, SpnJoin &join)
     return is_primary_key ? 1 : data.num_rows_ / spn.estimate_number_distinct_values(spn_id);
 }
 
-std::size_t SpnEstimator::max_frequency(const SpnDataModel &data, const char *attribute)
+std::size_t SpnEstimator::max_frequency(const SpnDataModel &data, const ThreadSafePooledString &attribute)
 {
     /* maximum frequency is only computed on data models which only have one Spn */
     const SpnWrapper &spn = data.spns_.begin()->second.get();
@@ -594,7 +593,7 @@ std::unique_ptr<DataModel> SpnEstimator::estimate_scan(const QueryGraph &G, Subp
     const auto idx = *P.begin();
     auto &BT = as<const BaseTable>(*G.sources()[idx]);
     /* get the Spn corresponding for the table to scan */
-    if (auto it = table_to_spn_.find(BT.name()); it != table_to_spn_.end()) {
+    if (auto it = table_to_spn_.find(BT.name().assert_not_none()); it != table_to_spn_.end()) {
         table_spn_map spns;
         const SpnWrapper &spn = *it->second;
         spns.emplace(BT.name(), spn);
@@ -653,13 +652,13 @@ std::unique_ptr<DataModel> SpnEstimator::estimate_grouping(const QueryGraph&, co
         auto designator = cast<const ast::Designator>(&grp.get());
         if (not designator)
             throw data_model_exception("SpnEstimator only supports Designators and no composed expressions");
-        auto spn_it = model->spns_.find(designator->table_name.text);
+        auto spn_it = model->spns_.find(designator->table_name.text.assert_not_none());
         if (spn_it == model->spns_.end())
             throw data_model_exception("Could not find table for grouping.");
 
         auto &spn = spn_it->second.get();
         auto &attr_to_id = spn.get_attribute_to_id();
-        if (auto attr_it = attr_to_id.find(designator->attr_name.text); attr_it != attr_to_id.end()) {
+        if (auto attr_it = attr_to_id.find(designator->attr_name.text.assert_not_none()); attr_it != attr_to_id.end()) {
             num_rows *= spn.estimate_number_distinct_values(attr_it->second);
         } else {
             num_rows *= spn.num_rows(); // if attribute is primary key, distinct values = num rows
@@ -679,7 +678,6 @@ SpnEstimator::estimate_join(const QueryGraph&, const DataModel &_left, const Dat
     auto new_left = std::make_unique<SpnDataModel>(left);
     auto new_right = std::make_unique<SpnDataModel>(right);
 
-    SpnJoin join;
     JoinTranslator jt;
 
     if (not condition.empty()) {
@@ -687,7 +685,7 @@ SpnEstimator::estimate_join(const QueryGraph&, const DataModel &_left, const Dat
         jt(*condition[0][0]);
         auto first_identifier = std::make_pair(jt.join_designator[0].first, jt.join_designator[0].second);
         auto second_identifier = std::make_pair(jt.join_designator[1].first, jt.join_designator[1].second);
-        join = std::make_pair(first_identifier, second_identifier);
+        SpnJoin join = std::make_pair(first_identifier, second_identifier);
 
         /* if a data model is only responsible for one table (one spn) add the maximum frequency of the value
         * of the joined attribute */
@@ -741,7 +739,7 @@ SpnEstimator::operator()(estimate_join_all_tag, PlanTable &&PT, const QueryGraph
 
     /* get all attributes to join on */
     JoinTranslator jt;
-    std::unordered_map<const char*, const char*> table_to_attribute;
+    std::unordered_map<ThreadSafePooledString, ThreadSafePooledString> table_to_attribute;
     for (auto clause : condition) {
         jt(*clause[0]);
         table_to_attribute.emplace(jt.join_designator[0].first, jt.join_designator[0].second);
@@ -750,7 +748,7 @@ SpnEstimator::operator()(estimate_join_all_tag, PlanTable &&PT, const QueryGraph
 
     /* get first model to join */
     SpnDataModel final_model = as<const SpnDataModel>(*PT[to_join.begin().as_set()].model);
-    const char *first_table_name = final_model.spns_.begin()->first;
+    ThreadSafePooledString first_table_name = final_model.spns_.begin()->first;
 
     /* if there is a join condition on this model, get the maximum frequency of the attribute */
     if (auto find_iter = table_to_attribute.find(first_table_name); find_iter != table_to_attribute.end()) {
@@ -764,7 +762,7 @@ SpnEstimator::operator()(estimate_join_all_tag, PlanTable &&PT, const QueryGraph
     /* iteratively add the next model to join via distinct count estimates */
     for (auto it = ++to_join.begin(); it != to_join.end(); it++) {
         SpnDataModel model = as<const SpnDataModel>(*PT[it.as_set()].model);
-        const char *table_name = model.spns_.begin()->first;
+        ThreadSafePooledString table_name = model.spns_.begin()->first;
 
         if (auto find_iter = table_to_attribute.find(table_name); find_iter != table_to_attribute.end()) {
             model.max_frequencies_.emplace_back(max_frequency(model, find_iter->second));
@@ -821,7 +819,7 @@ static void register_cardinality_estimators()
     Catalog &C = Catalog::Get();
 
 #define REGISTER(TYPE, NAME, DESCRIPTION) \
-    C.register_cardinality_estimator<TYPE>(NAME, DESCRIPTION);
+    C.register_cardinality_estimator<TYPE>(C.pool(NAME), DESCRIPTION);
 LIST_CE(REGISTER)
 #undef REGISTER
 

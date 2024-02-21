@@ -5,6 +5,7 @@
 #include <cerrno>
 #include <cstdlib>
 #include <iterator>
+#include <mutable/catalog/Catalog.hpp>
 #include <mutable/Options.hpp>
 #include <mutable/parse/AST.hpp>
 #include <mutable/util/fn.hpp>
@@ -643,6 +644,7 @@ struct NestedLoopsJoinData : JoinData
 
 struct SimpleHashJoinData : JoinData
 {
+    Catalog &C = Catalog::Get();
     bool is_probe_phase = false; ///< determines whether tuples are used to *build* or *probe* the hash table
     std::vector<std::pair<const ast::Expr*, const ast::Expr*>> exprs;
     StackMachine build_key; ///< extracts the key of the build input
@@ -677,7 +679,7 @@ struct SimpleHashJoinData : JoinData
             M_insist(first->type() == second->type(), "operand types must be equal");
 
             /* Add type to general key schema. */
-            key_schema.add("key", first->type());
+            key_schema.add(C.pool("key"), first->type());
 
             /*----- Decide which side of the join the predicate belongs to. -----*/
             auto required_by_first = first->get_required();
@@ -1656,5 +1658,5 @@ __attribute__((constructor(202)))
 static void register_interpreter()
 {
     Catalog &C = Catalog::Get();
-    C.register_backend<Interpreter>("Interpreter", "tuple-at-a-time Interpreter built with virtual stack machines");
+    C.register_backend<Interpreter>(C.pool("Interpreter"), "tuple-at-a-time Interpreter built with virtual stack machines");
 }

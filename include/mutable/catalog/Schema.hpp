@@ -44,30 +44,29 @@ struct M_EXPORT Schema
         static Identifier CONST_ID_;
 
         public:
-        const char *prefix = nullptr; ///< prefix of this `Identifier`, may be `nullptr`
-        const char *name = nullptr; ///< the name of this `Identifier`
+        ThreadSafePooledOptionalString prefix; ///< optional prefix of this `Identifier`, may not have a value
+        ThreadSafePooledString name;           ///< the name of this `Identifier`
 
-        Identifier() = default;
-        Identifier(const char *name) : prefix(nullptr), name(name) { }
-        Identifier(const char *prefix, const char *name)
-            : prefix(prefix) , name(name)
+        Identifier(ThreadSafePooledString name) : name(std::move(name)) { }
+        Identifier(ThreadSafePooledOptionalString prefix, ThreadSafePooledString name)
+            : prefix(std::move(prefix)), name(std::move(name))
         {
-            if (prefix != nullptr and strlen(prefix) == 0)
+            if (this->prefix.has_value() and strlen(*this->prefix) == 0)
                 throw invalid_argument("prefix must not be the empty string");
         }
         explicit Identifier(const ast::Expr&);
 
-        static Identifier GetConstant() { return CONST_ID_; }
-        bool is_constant() const { return operator==(CONST_ID_); }
+        static Identifier GetConstant();
+        bool is_constant() const { return operator==(GetConstant()); }
 
-        bool operator==(Identifier other) const {
+        bool operator==(const Identifier &other) const {
             return this->prefix == other.prefix and this->name == other.name;
         }
-        bool operator!=(Identifier other) const { return not operator==(other); }
+        bool operator!=(const Identifier &other) const { return not operator==(other); }
 
 M_LCOV_EXCL_START
-        friend std::ostream & operator<<(std::ostream &out, Identifier id) {
-            if (id.prefix)
+        friend std::ostream & operator<<(std::ostream &out, const Identifier &id) {
+            if (id.prefix.has_value())
                 out << id.prefix << '.';
             return out << id.name;
         }
@@ -88,13 +87,17 @@ M_LCOV_EXCL_STOP
         const Type *type;
         constraints_t constraints;
 
+        private:
+        entry_type();
+
         public:
-        entry_type() = default;
         entry_type(Identifier id, const Type *type, constraints_t constraints = constraints_t{0})
-            : id(id)
+            : id(std::move(id))
             , type(M_notnull(type))
             , constraints(constraints)
         { }
+
+        static entry_type CreateArtificial() { return entry_type(); }
 
         bool nullable() const { return not (NOT_NULLABLE & constraints); }
         bool unique() const { return bool(UNIQUE & constraints); }
@@ -123,7 +126,7 @@ M_LCOV_EXCL_STOP
     bool empty() const { return entries_.empty(); }
 
     /** Returns an iterator to the entry with the given `Identifier` `id`, or `end()` if no such entry exists.  */
-    iterator find(Identifier id) {
+    iterator find(const Identifier &id) {
         auto pred = [&id](const entry_type &e) -> bool { return e.id == id; }; // match qualified
         auto it = std::find_if(begin(), end(), pred);
         if (it != end() and std::find_if(std::next(it), end(), pred) != end())
@@ -131,10 +134,10 @@ M_LCOV_EXCL_STOP
         return it;
     }
     /** Returns an iterator to the entry with the given `Identifier` `id`, or `end()` if no such entry exists.  */
-    const_iterator find(Identifier id) const { return const_cast<Schema*>(this)->find(id); }
+    const_iterator find(const Identifier &id) const { return const_cast<Schema*>(this)->find(id); }
 
     /** Returns `true` iff this `Schema` contains an entry with `Identifier` `id`. */
-    bool has(Identifier id) const { return find(id) != end(); }
+    bool has(const Identifier &id) const { return find(id) != end(); }
 
     /** Returns the entry at index `idx` with in-bounds checking. */
     entry_type & at(std::size_t idx) {
@@ -154,7 +157,7 @@ M_LCOV_EXCL_STOP
 
     /** Returns a `std::pair` of the index and a reference to the entry with `Identifier` `id` with in-bounds checking.
      */
-    std::pair<std::size_t, entry_type&> at(Identifier id) {
+    std::pair<std::size_t, entry_type&> at(const Identifier &id) {
         auto pos = find(id);
         if (pos == end())
             throw out_of_range("identifier not found");
@@ -162,25 +165,25 @@ M_LCOV_EXCL_STOP
     }
     /** Returns a `std::pair` of the index and a reference to the entry with `Identifier` `id` with in-bounds checking.
      */
-    std::pair<std::size_t, const entry_type&> at(Identifier id) const { return const_cast<Schema*>(this)->at(id); }
+    std::pair<std::size_t, const entry_type&> at(const Identifier &id) const { return const_cast<Schema*>(this)->at(id); }
     /** Returns a `std::pair` of the index and a reference to the entry with `Identifier` `id`. */
-    std::pair<std::size_t, entry_type&> operator[](Identifier id) {
+    std::pair<std::size_t, entry_type&> operator[](const Identifier &id) {
         auto pos = find(id);
         M_insist(pos != end(), "identifier not found");
         return { std::distance(begin(), pos), *pos };
     }
     /** Returns a `std::pair` of the index and a reference to the entry with `Identifier` `id`. */
-    std::pair<std::size_t, const entry_type&> operator[](Identifier id) const {
+    std::pair<std::size_t, const entry_type&> operator[](const Identifier &id) const {
         return const_cast<Schema*>(this)->operator[](id);
     }
 
     /** Adds the entry `e` to this `Schema`. */
-    void add(entry_type e) { entries_.push_back(e); }
+    void add(entry_type e) { entries_.emplace_back(std::move(e)); }
     /** Adds a new entry `id` of type `type` to this `Schema`. */
-    void add(Identifier id, const Type *type) { entries_.emplace_back(id, type); }
+    void add(Identifier id, const Type *type) { entries_.emplace_back(std::move(id), type); }
     /** Adds a new entry `id` of type `type` with constraints `constraints` to this `Schema`. */
     void add(Identifier id, const Type *type, entry_type::constraints_t constraints) {
-        entries_.emplace_back(id, type, constraints);
+        entries_.emplace_back(std::move(id), type, constraints);
     }
 
     /** Returns a deduplicated version of `this` `Schema`, i.e. duplicate entries are only contained once.  */
@@ -289,7 +292,7 @@ struct M_EXPORT Attribute
     std::size_t id; ///< the internal identifier of the attribute, unique within its table
     const Table &table; ///< the table the attribute belongs to
     const PrimitiveType *type; ///< the type of the attribute
-    const char *name; ///< the name of the attribute
+    ThreadSafePooledString name; ///< the name of the attribute
     bool not_nullable = false; ///< the flag indicating whether the attribute must not be NULL
     ///> the flag indicating whether the attribute is unique; note that a singleton primary key is also unique
     bool unique = false;
@@ -297,11 +300,11 @@ struct M_EXPORT Attribute
     const Attribute *reference = nullptr; ///< the referenced attribute
 
     private:
-    explicit Attribute(std::size_t id, const Table &table, const PrimitiveType *type, const char *name)
+    explicit Attribute(std::size_t id, const Table &table, const PrimitiveType *type, ThreadSafePooledString name)
         : id(id)
         , table(table)
         , type(M_notnull(type))
-        , name(M_notnull(name))
+        , name(std::move(name))
     {
         if (not type->is_vectorial())
             throw invalid_argument("attributes must be of vectorial type");
@@ -552,21 +555,21 @@ struct M_EXPORT Table
 
     /** Returns the attribute with the given `name`.  Throws `std::out_of_range` if no attribute with the given `name`
      * exists. */
-    virtual Attribute & at(const char *name) = 0;
-    virtual const Attribute & at(const char *name) const = 0;
+    virtual Attribute & at(const ThreadSafePooledString &name) = 0;
+    virtual const Attribute & at(const ThreadSafePooledString &name) const = 0;
     /** Returns the attribute with the given `name`. */
-    virtual Attribute & operator[](const char *name) = 0;
-    virtual const Attribute & operator[](const char *name) const = 0;
+    virtual Attribute & operator[](const ThreadSafePooledString &name) = 0;
+    virtual const Attribute & operator[](const ThreadSafePooledString &name) const = 0;
 
     /** Returns `true` iff the table has an attribute \p name. */
-    virtual bool has_attribute(const char *name) const = 0;
+    virtual bool has_attribute(const ThreadSafePooledString &name) const = 0;
 
     /** Returns `true` iff the `Table` \p other is the same as `this`, `false` otherwise. */
     virtual bool operator== (const Table &other) = 0;
     virtual bool operator== (const Table &other) const = 0;
 
     /** Returns the name of the Table. */
-    virtual const char * name() const = 0;
+    virtual const ThreadSafePooledString & name() const = 0;
 
     /** Returns a reference to the backing store. */
     virtual Store & store() const = 0;
@@ -585,14 +588,14 @@ struct M_EXPORT Table
 
     /** Adds an attribute with the given `name` to the primary key of this table. Throws `std::out_of_range` if no
      * attribute with the given `name` exists. */
-    virtual void add_primary_key(const char *name) = 0;
+    virtual void add_primary_key(const ThreadSafePooledString &name) = 0;
 
     /** Adds a new attribute with the given `name` and `type` to the table.  Throws `std::invalid_argument` if the
      * `name` is already in use. */
-    virtual void push_back(const char *name, const PrimitiveType *type) = 0;
+    virtual void push_back(ThreadSafePooledString name, const PrimitiveType *type) = 0;
 
     /** Returns a `Schema` for this `Table` given the alias `alias`. */
-    virtual Schema schema(const char *alias = nullptr) const = 0;
+    virtual Schema schema(const ThreadSafePooledOptionalString &alias = {}) const = 0;
 
     /** Converts the `id` an non-hidden attribute would have in a table without any hidden attributes
      * and returns the actual id of that attribute. */
@@ -606,15 +609,15 @@ struct M_EXPORT Table
 struct M_EXPORT ConcreteTable : Table
 {
     private:
-    const char *name_; ///< the name of the table
+    ThreadSafePooledString name_; ///< the name of the table
     table_type attrs_; ///< the attributes of this table, maintained as a sorted set
-    std::unordered_map<const char*, table_type::size_type> name_to_attr_; ///< maps attribute names to attributes
+    std::unordered_map<ThreadSafePooledString, table_type::size_type> name_to_attr_; ///< maps attribute names to attributes
     std::unique_ptr<Store> store_; ///< the store backing this table; may be `nullptr`
     storage::DataLayout layout_; ///< the physical data layout for this table
     SmallBitset primary_key_; ///< the primary key of this table, maintained as a `SmallBitset` over attribute id's
 
     public:
-    ConcreteTable(const char *name) : name_(name) { }
+    ConcreteTable(ThreadSafePooledString name) : name_(std::move(name)) { }
     virtual ~ConcreteTable() = default;
 
     /** Returns the number of non-hidden attributes in this table. */
@@ -662,20 +665,20 @@ struct M_EXPORT ConcreteTable : Table
 
     /** Returns the attribute with the given `name`.  Throws `std::out_of_range` if no attribute with the given `name`
      * exists. */
-    Attribute & at(const char *name) override {
+    Attribute & at(const ThreadSafePooledString &name) override {
         if (auto it = name_to_attr_.find(name); it != name_to_attr_.end()) {
             M_insist(it->second < attrs_.size());
             return operator[](it->second);
         }
         throw std::out_of_range("name does not exists");
     }
-    const Attribute & at(const char *name) const override { return const_cast<ConcreteTable*>(this)->at(name); }
+    const Attribute & at(const ThreadSafePooledString &name) const override { return const_cast<ConcreteTable*>(this)->at(name); }
     /** Returns the attribute with the given `name`. */
-    Attribute & operator[](const char *name) override { return operator[](name_to_attr_.find(name)->second); }
-    const Attribute & operator[](const char *name) const override { return const_cast<ConcreteTable*>(this)->operator[](name); }
+    Attribute & operator[](const ThreadSafePooledString &name) override { return operator[](name_to_attr_.find(name)->second); }
+    const Attribute & operator[](const ThreadSafePooledString &name) const override { return const_cast<ConcreteTable*>(this)->operator[](name); }
 
      /** Returns `true` iff the table has an attribute \p name. */
-    bool has_attribute(const char *name) const override { return name_to_attr_.contains(name); }
+    bool has_attribute(const ThreadSafePooledString &name) const override { return name_to_attr_.contains(name); }
 
     /** Returns `true` iff the `Table` \p other is the same as `this`, `false` otherwise. */
     bool operator== (const Table &other) override {
@@ -688,7 +691,7 @@ struct M_EXPORT ConcreteTable : Table
     bool operator== (const Table &other) const override { return const_cast<ConcreteTable*>(this)->operator==(other); }
 
     /** Returns the name of the Table. */
-    const char * name() const override { return name_; }
+    const ThreadSafePooledString & name() const override { return name_; }
 
     /** Returns a reference to the backing store. */
     Store & store() const override { return *store_; }
@@ -711,22 +714,22 @@ struct M_EXPORT ConcreteTable : Table
     }
     /** Adds an attribute with the given `name` to the primary key of this table. Throws `std::out_of_range` if no
      * attribute with the given `name` exists. */
-    void add_primary_key(const char *name) override {
+    void add_primary_key(const ThreadSafePooledString &name) override {
         auto &attr = at(name);
         primary_key_(attr.id) = true;
     }
 
     /** Adds a new attribute with the given `name` and `type` to the table.  Throws `std::invalid_argument` if the
      * `name` is already in use. */
-    void push_back(const char *name, const PrimitiveType *type) override {
+    void push_back(ThreadSafePooledString name, const PrimitiveType *type) override {
         auto res = name_to_attr_.emplace(name, attrs_.size());
         if (not res.second)
             throw std::invalid_argument("attribute name already in use");
-        attrs_.emplace_back(Attribute(attrs_.size(), *this, type, name));
+        attrs_.emplace_back(Attribute(attrs_.size(), *this, type, std::move(name)));
     }
 
     /** Returns a `Schema` for this `Table` given the alias `alias`. */
-    Schema schema(const char *alias = nullptr) const override;
+    Schema schema(const ThreadSafePooledOptionalString &alias = {}) const override;
 
     /** Converts the `id` an non-hidden attribute would have in a table without any hidden attributes
      * and returns the actual id of that attribute. */
@@ -775,18 +778,18 @@ struct TableDecorator : Table
     virtual Attribute & operator[](std::size_t id) override { return table_->operator[](id); }
     virtual const Attribute & operator[](std::size_t id) const override { return table_->operator[](id); }
 
-    virtual Attribute & at(const char *name) override { return table_->at(name); }
-    virtual const Attribute & at(const char *name) const override { return table_->at(name); }
+    virtual Attribute & at(const ThreadSafePooledString &name) override { return table_->at(name); }
+    virtual const Attribute & at(const ThreadSafePooledString &name) const override { return table_->at(name); }
 
-    virtual Attribute & operator[](const char *name) override { return table_->at(name); }
-    virtual const Attribute & operator[](const char *name) const override { return table_->at(name); }
+    virtual Attribute & operator[](const ThreadSafePooledString &name) override { return table_->at(name); }
+    virtual const Attribute & operator[](const ThreadSafePooledString &name) const override { return table_->at(name); }
 
-    virtual bool has_attribute(const char *name) const override { return table_->has_attribute(name); }
+    virtual bool has_attribute(const ThreadSafePooledString &name) const override { return table_->has_attribute(name); }
 
     virtual bool operator== (const Table &other) override { return other == *table_; }
     virtual bool operator== (const Table &other) const override { return const_cast<TableDecorator*>(this)->operator==(other); }
 
-    virtual const char * name() const override { return table_->name(); }
+    virtual const ThreadSafePooledString & name() const override { return table_->name(); }
 
     virtual Store & store() const override { return table_->store(); }
     virtual void store(std::unique_ptr<Store> new_store) override { table_->store(std::move(new_store)); }
@@ -796,11 +799,11 @@ struct TableDecorator : Table
     virtual void layout(const storage::DataLayoutFactory &factory) override { table_->layout(factory); }
 
     virtual std::vector<std::reference_wrapper<const Attribute>> primary_key() const override { return table_->primary_key(); }
-    virtual void add_primary_key(const char * name) override { table_->add_primary_key(name); }
+    virtual void add_primary_key(const ThreadSafePooledString &name) override { table_->add_primary_key(name); }
 
-    virtual void push_back(const char * name, const PrimitiveType * type) override { table_->push_back(name, type); }
+    virtual void push_back(ThreadSafePooledString name, const PrimitiveType * type) override { table_->push_back(std::move(name), type); }
 
-    virtual Schema schema(const char * alias) const override { return table_->schema(); }
+    virtual Schema schema(const ThreadSafePooledOptionalString &alias) const override { return table_->schema(alias); }
 
     virtual size_t convert_id(size_t id) override { return table_->convert_id(id); }
 
@@ -834,11 +837,11 @@ struct M_EXPORT Function
         FN_UDF, // for all user-defined functions
     };
 
-    const char *name; ///< the name of the function
+    ThreadSafePooledString name; ///< the name of the function
     fnid_t fnid; ///< the function id
     M_DECLARE_ENUM(kind_t) kind; ///< the function kind: Scalar, Aggregate, etc.
 
-    Function(const char *name, fnid_t fnid, kind_t kind) : name(name), fnid(fnid), kind(kind) { }
+    Function(ThreadSafePooledString name, fnid_t fnid, kind_t kind) : name(std::move(name)), fnid(fnid), kind(kind) { }
 
     /** Returns `true` iff this is a user-defined function. */
     bool is_UDF() const { return fnid == FN_UDF; }
@@ -869,15 +872,15 @@ struct M_EXPORT Database
 
     struct index_entry_type
     {
-        const char *name; ///< the name of the index
+        ThreadSafePooledString name; ///< the name of the index
         const Table &table; ///< the table of the index
         const Attribute &attribute; ///< the indexed attribute
         std::unique_ptr<idx::IndexBase> index; ///< the actual index
         bool is_valid; ///< indicates if the index should be used to answer queries
 
-        index_entry_type(const char *name, const Table &table, const Attribute &attribute,
+        index_entry_type(ThreadSafePooledString name, const Table &table, const Attribute &attribute,
                          std::unique_ptr<idx::IndexBase> index)
-            : name(name)
+            : name(std::move(name))
             , table(table)
             , attribute(attribute)
             , index(std::move(index))
@@ -886,15 +889,15 @@ struct M_EXPORT Database
     };
 
     public:
-    const char *name; ///< the name of the database
+    ThreadSafePooledString name; ///< the name of the database
     private:
-    std::unordered_map<const char*, std::unique_ptr<Table>> tables_; ///< the tables of this database
-    std::unordered_map<const char*, Function*> functions_; ///< functions defined in this database
+    std::unordered_map<ThreadSafePooledString, std::unique_ptr<Table>> tables_; ///< the tables of this database
+    std::unordered_map<ThreadSafePooledString, Function*> functions_; ///< functions defined in this database
     std::unique_ptr<CardinalityEstimator> cardinality_estimator_; ///< the `CardinalityEstimator` of this `Database`
     std::list<index_entry_type> indexes_; ///< the indexes of this database
 
     private:
-    Database(const char *name);
+    Database(ThreadSafePooledString name);
 
     public:
     ~Database();
@@ -907,10 +910,10 @@ struct M_EXPORT Database
     /*===== Tables ===================================================================================================*/
     /** Returns a reference to the `Table` with the given \p name.  Throws `std::out_of_range` if no `Table` with the
      * given \p name exists in this `Database`. */
-    Table & get_table(const char *name) const { return *tables_.at(name); }
+    Table & get_table(const ThreadSafePooledString &name) const { return *tables_.at(name); }
     /** Adds a new `Table` to this `Database`.  Throws `std::invalid_argument` if a `Table` with the given `name`
      * already exists. */
-    Table & add_table(const char *name);
+    Table & add_table(ThreadSafePooledString name);
     /** Adds a new `Table` to this `Database`. */
     Table & add(std::unique_ptr<Table> table) {
         auto it = tables_.find(table->name());
@@ -919,9 +922,9 @@ struct M_EXPORT Database
         return *it->second;
     }
     /** Returns `true` iff a `Table` with the given \p name exists. */
-    bool has_table(const char *name) const { return tables_.contains(name); }
+    bool has_table(const ThreadSafePooledString &name) const { return tables_.contains(name); }
     /** Drops the `Table` with the given \p name.  Throws `std::invalid_argument` if no such `Table` exists. */
-    void drop_table(const char *name) {
+    void drop_table(const ThreadSafePooledString &name) {
         auto it = tables_.find(name);
         if (it == tables_.end())
             throw std::invalid_argument("Table of that name does not exist.");
@@ -933,7 +936,7 @@ struct M_EXPORT Database
     /** Returns a reference to the `Function` with the given `name`.  First searches this `Database` instance.  If no
      * `Function` with the given `name` is found, searches the global `Catalog`.  Throws `std::invalid_argument` if no
      * `Function` with the given `name` exists. */
-    const Function * get_function(const char *name) const;
+    const Function * get_function(const ThreadSafePooledString &name) const;
 
     /*===== Statistics ===============================================================================================*/
     /** Sets the `CardinalityEstimator` of this `Database`.  Returns the old `CardinalityEstimator`.
@@ -950,18 +953,18 @@ struct M_EXPORT Database
      * `Table` with the given \p table_name does not exist.  Throws `std::out_of_range` if an `Attribute` with the given
      * \p attribute_name does not exist.  Throws `m::invalid_argument` if an index with the given \p index_name already
      * exists. */
-    void add_index(std::unique_ptr<idx::IndexBase> index, const char *table_name, const char *attribute_name,
-                   const char *index_name)
+    void add_index(std::unique_ptr<idx::IndexBase> index, const ThreadSafePooledString &table_name,
+                   const ThreadSafePooledString &attribute_name, ThreadSafePooledString index_name)
     {
         if (has_index(index_name))
             throw invalid_argument("Index with that name already exists.");
         auto &table = get_table(table_name);
         auto &attribute = table.at(attribute_name);
-        indexes_.emplace_back(index_name, table, attribute, std::move(index));
+        indexes_.emplace_back(std::move(index_name), table, attribute, std::move(index));
     }
     /** Drops the index with the given \p index_name.  Throws `m::invalid_argument` if an index with the given \p
      * index_name does not exist. */
-    void drop_index(const char *index_name) {
+    void drop_index(const ThreadSafePooledString &index_name) {
         for (auto it = indexes_.cbegin(); it != indexes_.cend(); ++it) {
             if (it->name == index_name) {
                 indexes_.erase(it);
@@ -972,7 +975,7 @@ struct M_EXPORT Database
     }
     /** Drops all indexes from the table with the given \p table_name.  Throws `m::invalid_argument` if a table with the
      * given \p table_name does not exist. */
-    void drop_indexes(const char *table_name) {
+    void drop_indexes(const ThreadSafePooledString &table_name) {
         if (not has_table(table_name))
             throw invalid_argument("Table with that name does not exist.");
         for (auto it = indexes_.cbegin(); it != indexes_.end();) {
@@ -983,7 +986,7 @@ struct M_EXPORT Database
         }
     }
     /** Returns `true` iff there is an index with the given \p index_name. */
-    bool has_index(const char *index_name) const {
+    bool has_index(const ThreadSafePooledString &index_name) const {
         for (auto it = indexes_.cbegin(); it != indexes_.cend(); ++it)
             if (it->name == index_name) return true;
         return false;
@@ -991,7 +994,8 @@ struct M_EXPORT Database
     /** Returns `true` iff there is a valid index using \p method on \p attribute_name of \p table_name.  Throws
      * `m::invalid_argument` if a `Table` with the given \p table_name does not exist.  Throws `m::invalid_argument` if
      * an `Attribute` with \p attribute_name does not exist in `Table` \p table_name. */
-    bool has_index(const char *table_name, const char *attribute_name, idx::IndexMethod method) const {
+    bool has_index(const ThreadSafePooledString &table_name, const ThreadSafePooledString &attribute_name,
+                   idx::IndexMethod method) const {
         auto it = tables_.find(table_name);
         if (it == tables_.end())
             throw m::invalid_argument("Table with that name does not exist.");
@@ -1009,7 +1013,7 @@ struct M_EXPORT Database
     }
     /** Returns the index with the given \p index_name.  Throws `m::invalid_argument` an index with the given \p
      * index_name does not exist. */
-    const idx::IndexBase & get_index(const char *index_name) const {
+    const idx::IndexBase & get_index(const ThreadSafePooledString &index_name) const {
         for (auto &entry : indexes_) {
             if (entry.name == index_name)
                 return *entry.index;
@@ -1020,7 +1024,8 @@ struct M_EXPORT Database
      * `m::invalid_argument` if such an index does not exist.  Throws `m::invalid_argument` if a `Table` with the given
      * \p table_name does not exist. Throws `m::invalid_argument` if an `Attribute` with \p attribute_name does not
      * exist in `Table` \p table_name. */
-    const idx::IndexBase & get_index(const char *table_name, const char *attribute_name, idx::IndexMethod method) const {
+    const idx::IndexBase & get_index(const ThreadSafePooledString &table_name,
+                                     const ThreadSafePooledString &attribute_name, idx::IndexMethod method) const {
         auto it = tables_.find(table_name);
         if (it == tables_.end())
             throw m::invalid_argument("Table with that name does not exist.");
@@ -1038,7 +1043,7 @@ struct M_EXPORT Database
     }
     /** Invalidates all indexes on attributes of `Table` \p table_name s.t. they are no longer used to answer queries.
      * Throws `m_invalid_argument` if a `Table` with the given \p table_name does not exist. */
-    void invalidate_indexes(const char *table_name) {
+    void invalidate_indexes(const ThreadSafePooledString &table_name) {
         if (not has_table(table_name))
             throw m::invalid_argument("Table with that name does not exist.");
         for (auto &entry : indexes_) {
@@ -1056,12 +1061,12 @@ namespace std {
 template<>
 struct hash<m::Schema::Identifier>
 {
-    uint64_t operator()(m::Schema::Identifier id) const {
-        m::StrHash h;
-        uint64_t hash = h(id.name);
-        if (id.prefix)
-            hash *= h(id.prefix);
-        return hash;
+    uint64_t operator()(const m::Schema::Identifier &id) const {
+        using std::hash;
+        uint64_t h = hash<m::ThreadSafePooledString>{}(id.name);
+        if (id.prefix.has_value())
+            h *= hash<m::ThreadSafePooledOptionalString>{}(id.prefix);
+        return h;
     }
 };
 
@@ -1070,8 +1075,9 @@ template<>
 struct hash<m::Attribute>
 {
     uint64_t operator()(const m::Attribute &attr) const {
-        m::StrHash h;
-        return h(attr.table.name()) * (attr.id + 1);
+        using std::hash;
+        auto h = hash<m::ThreadSafePooledString>{}(attr.table.name());
+        return h * (attr.id + 1);
     }
 };
 

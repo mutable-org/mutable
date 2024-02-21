@@ -74,10 +74,10 @@ TEST_CASE("Parser c'tor", "[core][parse][unit]")
     /* Verify the initial state. */
     auto &tok0 = parser.token<0>();
     REQUIRE(tok0 == TK_Select);
-    REQUIRE(streq(tok0.text, "SELECT"));
+    REQUIRE(streq(*tok0.text, "SELECT"));
     auto &tok1 = parser.token<1>();
     REQUIRE(tok1 == TK_ASTERISK);
-    REQUIRE(streq(tok1.text, "*"));
+    REQUIRE(streq(*tok1.text, "*"));
 }
 
 TEST_CASE("Parser::token()", "[core][parse][unit]")
@@ -1819,30 +1819,38 @@ TEST_CASE("Parser::parse_Stmt() sanity tests", "[core][parse][unit]")
 
 TEST_CASE("Parser::parse_Instruction()", "[core][parse][unit]")
 {
-    std::pair<const char*, Instruction> instruction_pairs[] = {
-            /* { instruction, expected resulting instruction } */
+    auto &C = Catalog::Get();
+    // helper function to create an Instruction
+    auto build_instruction = [&](const char *name,
+                                 std::initializer_list<std::string> args,
+                                 Token tok = Token::CreateArtificial()) {
+        return Instruction(tok, C.pool(name), std::move(args));
+    };
 
-            { "\\instr;", Instruction(Token(), "instr", {}) },
-            { "\\instr\n ;", Instruction(Token(), "instr", {}) },
-            { "\\instr arg1;", Instruction(Token(), "instr", {"arg1"}) },
-            { "\\instr arg1\n;", Instruction(Token(), "instr", {"arg1"}) },
-            { "\\instr arg1 ;", Instruction(Token(), "instr", {"arg1"}) },
-            { "\\instr\narg1;", Instruction(Token(), "instr", {"arg1"}) },
-            { "\\instr arg1 arg2;", Instruction(Token(), "instr", {"arg1", "arg2"}) },
-            { "\\instr arg1\narg2;", Instruction(Token(), "instr", {"arg1", "arg2"}) },
-            { "\\instr\narg1\n  arg2;", Instruction(Token(), "instr", {"arg1", "arg2"}) },
-            { "\\instr arg1 arg2 arg3;", Instruction(Token(), "instr", {"arg1", "arg2", "arg3"}) },
-            { "\\instr \narg1 arg2\n   arg3  ;", Instruction(Token(), "instr", {"arg1", "arg2", "arg3"}) }
+    std::pair<const char *, Instruction> instruction_pairs[] = {
+        /* { instruction, expected resulting instruction } */
+
+        { "\\instr;", build_instruction("instr", {}) },
+        { "\\instr\n ;", build_instruction("instr", {}) },
+        { "\\instr arg1;", build_instruction("instr", {"arg1"}) },
+        { "\\instr arg1\n;", build_instruction("instr", {"arg1"}) },
+        { "\\instr arg1 ;", build_instruction("instr", {"arg1"}) },
+        { "\\instr\narg1;", build_instruction("instr", {"arg1"}) },
+        { "\\instr arg1 arg2;", build_instruction("instr", {"arg1", "arg2"}) },
+        { "\\instr arg1\narg2;", build_instruction("instr", {"arg1", "arg2"}) },
+        { "\\instr\narg1\n  arg2;", build_instruction("instr", {"arg1", "arg2"}) },
+        { "\\instr arg1 arg2 arg3;", build_instruction("instr", {"arg1", "arg2", "arg3"}) },
+        { "\\instr \narg1 arg2\n   arg3  ;", build_instruction("instr", {"arg1", "arg2", "arg3"}) }
     };
 
     for (const auto &test_pair : instruction_pairs) {
         LEXER(test_pair.first);
         Parser parser(lexer);
         auto instruction = parser.parse_Instruction();
-        CHECK(instruction->name == C.pool(test_pair.second.name));
+        CHECK(instruction->name == test_pair.second.name);
         CHECK(instruction->args.size() == test_pair.second.args.size());
         for (std::size_t i = 0; i < instruction->args.size(); ++i) {
-            CHECK(instruction->args[i] == C.pool(test_pair.second.args[i]));
+            CHECK(instruction->args[i] == *C.pool(test_pair.second.args[i]));
         }
 
         CHECK(diag.num_errors() == 0);

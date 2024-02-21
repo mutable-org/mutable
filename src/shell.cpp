@@ -434,9 +434,9 @@ Immanuel Haffner\
         std::cout << "List of available data layouts:";
         range layouts(C.data_layouts_cbegin(), C.data_layouts_cend());
         std::size_t max_len = 0;
-        for (auto &layout : layouts) max_len = std::max(max_len, strlen(layout.first));
+        for (auto &layout : layouts) max_len = std::max(max_len, strlen(*layout.first));
         for (auto &layout : layouts) {
-            std::cout << "\n    " << layout.first << std::setw(max_len - strlen(layout.first)) << "";
+            std::cout << "\n    " << layout.first << std::setw(max_len - strlen(*layout.first)) << "";
             if (layout.second.description())
                 std::cout << "    -    " << layout.second.description();
         }
@@ -447,9 +447,9 @@ Immanuel Haffner\
         std::cout << "List of available cardinality estimators:";
         range cardinality_estimators(C.cardinality_estimators_cbegin(), C.cardinality_estimators_cend());
         std::size_t max_len = 0;
-        for (auto &ce : cardinality_estimators) max_len = std::max(max_len, strlen(ce.first));
+        for (auto &ce : cardinality_estimators) max_len = std::max(max_len, strlen(*ce.first));
         for (auto &ce : cardinality_estimators) {
-            std::cout << "\n    " << ce.first << std::setw(max_len - strlen(ce.first)) << "";;
+            std::cout << "\n    " << ce.first << std::setw(max_len - strlen(*ce.first)) << "";;
             if (ce.second.description())
                 std::cout << "    -    " << ce.second.description();
         }
@@ -460,9 +460,9 @@ Immanuel Haffner\
         std::cout << "List of available plan enumerators:";
         range plan_enumerators(C.plan_enumerators_cbegin(), C.plan_enumerators_cend());
         std::size_t max_len = 0;
-        for (auto &pe : plan_enumerators) max_len = std::max(max_len, strlen(pe.first));
+        for (auto &pe : plan_enumerators) max_len = std::max(max_len, strlen(*pe.first));
         for (auto &pe : plan_enumerators) {
-            std::cout << "\n    " << pe.first << std::setw(max_len - strlen(pe.first)) << "";;
+            std::cout << "\n    " << pe.first << std::setw(max_len - strlen(*pe.first)) << "";;
             if (pe.second.description())
                 std::cout << "    -    " << pe.second.description();
         }
@@ -473,9 +473,9 @@ Immanuel Haffner\
         std::cout << "List of available backends:";
         std::size_t max_len = 0;
         range backends(C.backends_cbegin(), C.backends_cend());
-        for (auto &backend : backends) max_len = std::max(max_len, strlen(backend.first));
+        for (auto &backend : backends) max_len = std::max(max_len, strlen(*backend.first));
         for (auto &backend : backends) {
-            std::cout << "\n    " << backend.first << std::setw(max_len - strlen(backend.first)) << "";;
+            std::cout << "\n    " << backend.first << std::setw(max_len - strlen(*backend.first)) << "";;
             if (backend.second.description())
                 std::cout << "    -    " << backend.second.description();
         }
@@ -486,9 +486,9 @@ Immanuel Haffner\
         std::cout << "List of available cost functions:";
         std::size_t max_len = 0;
         range cost_functions(C.cost_functions_cbegin(), C.cost_functions_cend());
-        for (auto &cf : cost_functions) max_len = std::max(max_len, strlen(cf.first));
+        for (auto &cf : cost_functions) max_len = std::max(max_len, strlen(*cf.first));
         for (auto &cf : cost_functions) {
-            std::cout << "\n    " << cf.first << std::setw(max_len - strlen(cf.first)) << "";;
+            std::cout << "\n    " << cf.first << std::setw(max_len - strlen(*cf.first)) << "";;
             if (cf.second.description())
                 std::cout << "    -    " << cf.second.description();
         }
@@ -500,9 +500,9 @@ Immanuel Haffner\
         std::cout << "List of available schedulers:";
         std::size_t max_len = 0;
         range schedulers(C.schedulers_cbegin(), C.schedulers_cend());
-        for (auto &scheduler : schedulers) max_len = std::max(max_len, strlen(scheduler.first));
+        for (auto &scheduler : schedulers) max_len = std::max(max_len, strlen(*scheduler.first));
         for (auto &scheduler : schedulers) {
-            std::cout << "\n    " << scheduler.first << std::setw(max_len - strlen(scheduler.first)) << "";;
+            std::cout << "\n    " << scheduler.first << std::setw(max_len - strlen(*scheduler.first)) << "";;
             if (scheduler.second.description())
                 std::cout << "    -    " << scheduler.second.description();
         }
@@ -513,9 +513,9 @@ Immanuel Haffner\
         std::cout << "List of available table properties:";
         std::size_t max_len = 0;
         range table_factories(C.table_properties_cbegin(), C.table_properties_cend());
-        for (auto &table_factory : table_factories) max_len = std::max(max_len, strlen(table_factory.first));
+        for (auto &table_factory : table_factories) max_len = std::max(max_len, strlen(*table_factory.first));
         for (auto &table_factory : table_factories) {
-            std::cout << "\n    " << table_factory.first << std::setw(max_len - strlen(table_factory.first)) << "";;
+            std::cout << "\n    " << table_factory.first << std::setw(max_len - strlen(*table_factory.first)) << "";;
             if (table_factory.second.description())
                 std::cout << "    -    " << table_factory.second.description();
         }
@@ -542,9 +542,9 @@ Immanuel Haffner\
     /* ----- Cost model training -------------------------------------------------------------------------------------*/
     if (Options::Get().train_cost_models) {
         auto CF = CostModelFactory::get_cost_function();
-        C.register_cost_function("TrainedCostFunction", std::move(CF),
+        C.register_cost_function(C.pool("TrainedCostFunction"), std::move(CF),
                                  "cost models trained on current hardware using linear regression");
-        C.default_cost_function("TrainedCostFunction");
+        C.default_cost_function(C.pool("TrainedCostFunction"));
     }
 
     /* ----- Replxx configuration ------------------------------------------------------------------------------------*/

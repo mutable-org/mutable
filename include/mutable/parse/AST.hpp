@@ -50,8 +50,8 @@ struct M_EXPORT Expr
     bool is_correlated_ = false;
 
     public:
-    explicit Expr(Token tok) : tok(tok) { }
-    Expr(Token tok, const Type *type) : tok(tok), type_(type) { }
+    explicit Expr(Token tok) : tok(std::move(tok)) { }
+    Expr(Token tok, const Type *type) : tok(std::move(tok)), type_(type) { }
     virtual ~Expr() { }
 
     /** Returns the `Type` of this `Expr`.  Assumes that the `Expr` has been assigned a `Type` by the `Sema`. */
@@ -114,7 +114,7 @@ M_LCOV_EXCL_STOP
 /** The error expression.  Used when the parser encountered a syntactical error. */
 struct M_EXPORT ErrorExpr : Expr
 {
-    explicit ErrorExpr(Token tok) : Expr(tok) {}
+    explicit ErrorExpr(Token tok) : Expr(std::move(tok)) { }
 
     bool is_constant() const override { return false; }
     bool can_be_null() const override { return false; }
@@ -140,21 +140,25 @@ struct M_EXPORT Designator : Expr
     private:
     target_type target_; ///< the target that is referenced by this designator
     unsigned binding_depth_ = 0; ///< at which level above this designator is bound; 0 for bound variables, ≥ 1 for free
-    const char *unique_id_ = nullptr; ///< a unique ID created for Designators in nested queries (for decorrelation)
+    ThreadSafePooledOptionalString unique_id_; ///< a unique ID created for Designators in nested queries (for decorrelation)
 
     public:
-    explicit Designator(Token attr_name) : Expr(attr_name), attr_name(attr_name) { }
+    explicit Designator(Token attr_name)
+        : Expr(attr_name)
+        , table_name(Token::CreateArtificial())
+        , attr_name(std::move(attr_name))
+    { }
 
     Designator(Token dot, Token table_name, Token attr_name)
-        : Expr(dot)
-        , table_name(table_name)
-        , attr_name(attr_name)
+        : Expr(std::move(dot))
+        , table_name(std::move(table_name))
+        , attr_name(std::move(attr_name))
     { }
 
     Designator(Token dot, Token table_name, Token attr_name, const Type *type, target_type target)
-        : Expr(dot, type)
-        , table_name(table_name)
-        , attr_name(attr_name)
+        : Expr(std::move(dot), type)
+        , table_name(std::move(table_name))
+        , attr_name(std::move(attr_name))
         , target_(target)
     { }
 
@@ -189,11 +193,11 @@ struct M_EXPORT Designator : Expr
     /** Returns `true` iff this `Designator` has *no* table name, neither explicitly nor implicitly (by sema). */
     bool is_identifier() const { return not has_table_name(); }
 
-    bool has_table_name() const { return table_name.text != nullptr; }
-    const char * get_table_name() const {
-        M_insist(table_name.text != nullptr,
+    bool has_table_name() const { return table_name.text.has_value(); }
+    ThreadSafePooledString get_table_name() const {
+        M_insist(has_table_name(),
                "if the table name was not explicitly provided, semantic analysis must deduce it first");
-        return table_name.text;
+        return table_name.text.assert_not_none();
     }
 
     const target_type & target() const { return target_; }
@@ -207,7 +211,7 @@ struct M_EXPORT Designator : Expr
 /** A constant: a string literal or a numeric constant. */
 struct M_EXPORT Constant : Expr
 {
-    Constant(Token tok) : Expr(tok) {}
+    Constant(Token tok) : Expr(std::move(tok)) {}
 
     bool is_constant() const override { return true; }
     bool can_be_null() const override { return is_null(); }
@@ -234,7 +238,7 @@ struct M_EXPORT Constant : Expr
 /** A postfix expression. */
 struct M_EXPORT PostfixExpr : Expr
 {
-    PostfixExpr(Token tok) : Expr(tok) {}
+    PostfixExpr(Token tok) : Expr(std::move(tok)) {}
 };
 
 /** A function application. */
@@ -249,7 +253,7 @@ struct M_EXPORT FnApplicationExpr : PostfixExpr
 
     public:
     FnApplicationExpr(Token lpar, std::unique_ptr<Expr> fn, std::vector<std::unique_ptr<Expr>> args)
-        : PostfixExpr(lpar)
+        : PostfixExpr(std::move(lpar))
         , fn(M_notnull(std::move(fn)))
         , args(std::move(args))
     {
@@ -321,7 +325,7 @@ struct M_EXPORT UnaryExpr : Expr
     std::unique_ptr<Expr> expr;
 
     UnaryExpr(Token op, std::unique_ptr<Expr> expr)
-        : Expr(op)
+        : Expr(std::move(op))
         , expr(M_notnull(std::move(expr)))
     { }
 
@@ -347,7 +351,7 @@ struct M_EXPORT BinaryExpr : Expr
     const Numeric *common_operand_type = nullptr;
 
     BinaryExpr(Token op, std::unique_ptr<Expr> lhs, std::unique_ptr<Expr> rhs)
-        : Expr(op)
+        : Expr(std::move(op))
         , lhs(M_notnull(std::move(lhs)))
         , rhs(M_notnull(std::move(rhs)))
     { }
@@ -386,13 +390,13 @@ struct M_EXPORT QueryExpr : Expr
     std::unique_ptr<Stmt> query;
 
     private:
-    const char *alias_; ///< the alias that is used for this query expression
+    ThreadSafePooledString alias_; ///< the alias that is used for this query expression
 
     public:
     QueryExpr(Token op, std::unique_ptr<Stmt> query)
-        : Expr(op)
+        : Expr(std::move(op))
         , query(M_notnull(std::move(query)))
-        , alias_(M_notnull(make_unique_alias()))
+        , alias_(make_unique_alias())
     { }
 
     bool is_constant() const override;
@@ -414,10 +418,10 @@ struct M_EXPORT QueryExpr : Expr
     void accept(ASTExprVisitor &v) override;
     void accept(ConstASTExprVisitor &v) const override;
 
-    const char * alias() const { return M_notnull(alias_); }
+    const ThreadSafePooledString & alias() const { return alias_; }
 
     private:
-    static const char * make_unique_alias();
+    static ThreadSafePooledString make_unique_alias();
 };
 
 #define M_AST_EXPR_LIST(X) \
@@ -495,7 +499,7 @@ struct M_EXPORT Clause
 {
     Token tok;
 
-    Clause(Token tok) : tok(tok) { }
+    Clause(Token tok) : tok(std::move(tok)) { }
     virtual ~Clause() { }
 
     virtual void accept(ASTClauseVisitor &v) = 0;
@@ -511,7 +515,7 @@ struct M_EXPORT Clause
 
 struct M_EXPORT ErrorClause : Clause
 {
-    ErrorClause(Token tok) : Clause(tok) { }
+    ErrorClause(Token tok) : Clause(std::move(tok)) { }
 
     void accept(ASTClauseVisitor &v) override;
     void accept(ConstASTClauseVisitor &v) const override;
@@ -526,9 +530,9 @@ struct M_EXPORT SelectClause : Clause
     std::vector<std::unique_ptr<Expr>> expanded_select_all; ///> list of expressions expanded from `SELECT *`
 
     SelectClause(Token tok, std::vector<select_type> select, Token select_all)
-            : Clause(tok)
+            : Clause(std::move(tok))
             , select(std::move(select))
-            , select_all(select_all)
+            , select_all(std::move(select_all))
     { }
 
     void accept(ASTClauseVisitor &v) override;
@@ -549,8 +553,8 @@ struct M_EXPORT FromClause : Clause
         const Table *table_ = nullptr; ///< the referenced table
 
         public:
-        from_type(Token name, Token alias) : source(name), alias(alias) { }
-        from_type(std::unique_ptr<Stmt> S, Token alias) : source(S.release()), alias(alias) { }
+        from_type(Token name, Token alias) : source(std::move(name)), alias(std::move(alias)) { }
+        from_type(std::unique_ptr<Stmt> S, Token alias) : source(S.release()), alias(std::move(alias)) { }
 
         const Table & table() const { return *M_notnull(table_); }
         bool has_table() const { return table_ != nullptr; }
@@ -558,7 +562,7 @@ struct M_EXPORT FromClause : Clause
 
     std::vector<from_type> from;
 
-    FromClause(Token tok, std::vector<from_type> from) : Clause(tok), from(from) { }
+    FromClause(Token tok, std::vector<from_type> from) : Clause(std::move(tok)), from(std::move(from)) { }
     ~FromClause();
 
     void accept(ASTClauseVisitor &v) override;
@@ -570,7 +574,7 @@ struct M_EXPORT WhereClause : Clause
     std::unique_ptr<Expr> where;
 
     WhereClause(Token tok, std::unique_ptr<Expr> where)
-        : Clause(tok)
+        : Clause(std::move(tok))
         , where(M_notnull(std::move(where)))
     { }
 
@@ -584,7 +588,7 @@ struct M_EXPORT GroupByClause : Clause
     std::vector<group_type> group_by; ///> a list of expressions to group by
 
     GroupByClause(Token tok, std::vector<group_type> group_by)
-        : Clause(tok)
+        : Clause(std::move(tok))
         , group_by(std::move(group_by))
     { }
 
@@ -597,7 +601,7 @@ struct M_EXPORT HavingClause : Clause
     std::unique_ptr<Expr> having;
 
     HavingClause(Token tok, std::unique_ptr<Expr> having)
-        : Clause(tok)
+        : Clause(std::move(tok))
         , having(M_notnull(std::move(having)))
     { }
 
@@ -612,8 +616,8 @@ struct M_EXPORT OrderByClause : Clause
     std::vector<order_type> order_by;
 
     OrderByClause(Token tok, std::vector<order_type> order_by)
-        : Clause(tok),
-        order_by(std::move(order_by))
+        : Clause(std::move(tok))
+        , order_by(std::move(order_by))
     { }
 
     void accept(ASTClauseVisitor &v) override;
@@ -625,7 +629,11 @@ struct M_EXPORT LimitClause : Clause
     Token limit;
     Token offset;
 
-    LimitClause(Token tok, Token limit, Token offset) : Clause(tok), limit(limit), offset(offset) { }
+    LimitClause(Token tok, Token limit, Token offset)
+        : Clause(std::move(tok))
+        , limit(std::move(limit))
+        , offset(std::move(offset))
+    { }
 
     void accept(ASTClauseVisitor &v) override;
     void accept(ConstASTClauseVisitor &v) const override;
@@ -654,7 +662,7 @@ struct M_EXPORT Constraint
 {
     Token tok;
 
-    Constraint(Token tok) : tok(tok) { }
+    Constraint(Token tok) : tok(std::move(tok)) { }
 
     virtual ~Constraint() { }
 
@@ -664,7 +672,7 @@ struct M_EXPORT Constraint
 
 struct M_EXPORT PrimaryKeyConstraint : Constraint
 {
-    PrimaryKeyConstraint(Token tok) : Constraint(tok) { }
+    PrimaryKeyConstraint(Token tok) : Constraint(std::move(tok)) { }
 
     void accept(ASTConstraintVisitor &v) override;
     void accept(ConstASTConstraintVisitor &v) const override;
@@ -672,7 +680,7 @@ struct M_EXPORT PrimaryKeyConstraint : Constraint
 
 struct M_EXPORT UniqueConstraint : Constraint
 {
-    UniqueConstraint(Token tok) : Constraint(tok) { }
+    UniqueConstraint(Token tok) : Constraint(std::move(tok)) { }
 
     void accept(ASTConstraintVisitor &v) override;
     void accept(ConstASTConstraintVisitor &v) const override;
@@ -680,7 +688,7 @@ struct M_EXPORT UniqueConstraint : Constraint
 
 struct M_EXPORT NotNullConstraint : Constraint
 {
-    NotNullConstraint(Token tok) : Constraint(tok) { }
+    NotNullConstraint(Token tok) : Constraint(std::move(tok)) { }
 
     void accept(ASTConstraintVisitor &v) override;
     void accept(ConstASTConstraintVisitor &v) const override;
@@ -691,7 +699,7 @@ struct M_EXPORT CheckConditionConstraint : Constraint
     std::unique_ptr<Expr> cond;
 
     CheckConditionConstraint(Token tok, std::unique_ptr<Expr> cond)
-        : Constraint(tok)
+        : Constraint(std::move(tok))
         , cond(std::move(cond))
     {
         M_insist(bool(this->cond));
@@ -714,9 +722,9 @@ struct M_EXPORT ReferenceConstraint : Constraint
     OnDeleteAction on_delete;
 
     ReferenceConstraint(Token tok, Token table_name, Token attr_name, OnDeleteAction action)
-            : Constraint(tok)
-            , table_name(table_name)
-            , attr_name(attr_name)
+            : Constraint(std::move(tok))
+            , table_name(std::move(table_name))
+            , attr_name(std::move(attr_name))
             , on_delete(action)
     { }
 
@@ -762,13 +770,13 @@ struct M_EXPORT Instruction : Command
     ///> the token of the `Instruction`; starts with `\`
     Token tok;
     ///> the name of the `Instruction` (without leading `\`)
-    const char *name;
+    ThreadSafePooledString name;
     ///> the arguments to the `Instruction`; may be empty
     std::vector<std::string> args;
 
-    Instruction(Token tok, const char *name, std::vector<std::string> args)
-        : tok(tok)
-        , name(name)
+    Instruction(Token tok, ThreadSafePooledString name, std::vector<std::string> args)
+        : tok(std::move(tok))
+        , name(std::move(name))
         , args(std::move(args))
     { }
 
@@ -795,7 +803,7 @@ struct M_EXPORT ErrorStmt : Stmt
 {
     Token tok;
 
-    explicit ErrorStmt(Token tok) : tok(tok) { }
+    explicit ErrorStmt(Token tok) : tok(std::move(tok)) { }
 
     void accept(ASTCommandVisitor &v) override;
     void accept(ConstASTCommandVisitor &v) const override;
@@ -805,7 +813,7 @@ struct M_EXPORT EmptyStmt : Stmt
 {
     Token tok;
 
-    explicit EmptyStmt(Token tok) : tok(tok) { }
+    explicit EmptyStmt(Token tok) : tok(std::move(tok)) { }
 
     void accept(ASTCommandVisitor &v) override;
     void accept(ConstASTCommandVisitor &v) const override;
@@ -815,7 +823,7 @@ struct M_EXPORT CreateDatabaseStmt : Stmt
 {
     Token database_name;
 
-    explicit CreateDatabaseStmt(Token database_name) : database_name(database_name) { }
+    explicit CreateDatabaseStmt(Token database_name) : database_name(std::move(database_name)) { }
 
     void accept(ASTCommandVisitor &v) override;
     void accept(ConstASTCommandVisitor &v) const override;
@@ -827,7 +835,7 @@ struct M_EXPORT DropDatabaseStmt : Stmt
     bool has_if_exists;
 
     explicit DropDatabaseStmt(Token database_name, bool has_if_exists)
-        : database_name(database_name)
+        : database_name(std::move(database_name))
         , has_if_exists(has_if_exists)
     { }
 
@@ -839,7 +847,7 @@ struct M_EXPORT UseDatabaseStmt : Stmt
 {
     Token database_name;
 
-    explicit UseDatabaseStmt(Token database_name) : database_name(database_name) { }
+    explicit UseDatabaseStmt(Token database_name) : database_name(std::move(database_name)) { }
 
     void accept(ASTCommandVisitor &v) override;
     void accept(ConstASTCommandVisitor &v) const override;
@@ -854,7 +862,7 @@ struct M_EXPORT CreateTableStmt : Stmt
         std::vector<std::unique_ptr<Constraint>> constraints;
 
         attribute_definition(Token name, const Type *type, std::vector<std::unique_ptr<Constraint>> constraints)
-                : name(name)
+                : name(std::move(name))
                 , type(type)
                 , constraints(std::move(constraints))
         { }
@@ -864,7 +872,7 @@ struct M_EXPORT CreateTableStmt : Stmt
     std::vector<std::unique_ptr<attribute_definition>> attributes;
 
     CreateTableStmt(Token table_name, std::vector<std::unique_ptr<attribute_definition>> attributes)
-            : table_name(table_name)
+            : table_name(std::move(table_name))
             , attributes(std::move(attributes))
     { }
 
@@ -897,11 +905,11 @@ struct M_EXPORT CreateIndexStmt : Stmt
 
     CreateIndexStmt(Token has_unique, bool has_if_not_exists, Token index_name, Token table_name, Token method,
                     std::vector<std::unique_ptr<Expr>> key_fields)
-        : has_unique(has_unique)
+        : has_unique(std::move(has_unique))
         , has_if_not_exists(has_if_not_exists)
-        , index_name(index_name)
-        , table_name(table_name)
-        , method(method)
+        , index_name(std::move(index_name))
+        , table_name(std::move(table_name))
+        , method(std::move(method))
         , key_fields(std::move(key_fields))
     { }
 
@@ -965,7 +973,7 @@ struct M_EXPORT InsertStmt : Stmt
     std::vector<tuple_t> tuples;
 
     InsertStmt(Token table_name, std::vector<tuple_t> tuples)
-        : table_name(table_name)\
+        : table_name(std::move(table_name))
         , tuples(std::move(tuples))
     { }
 
@@ -983,7 +991,7 @@ struct M_EXPORT UpdateStmt : Stmt
     std::unique_ptr<Clause> where;
 
     UpdateStmt(Token table_name, std::vector<set_type> set, std::unique_ptr<Clause> where)
-        : table_name(table_name)
+        : table_name(std::move(table_name))
         , set(std::move(set))
         , where(std::move(where))
     { }
@@ -999,7 +1007,7 @@ struct M_EXPORT DeleteStmt : Stmt
     std::unique_ptr<Clause> where = nullptr;
 
     DeleteStmt(Token table_name, std::unique_ptr<Clause> where)
-        : table_name(table_name)
+        : table_name(std::move(table_name))
         , where(std::move(where))
     { }
 
@@ -1011,18 +1019,21 @@ struct M_EXPORT DeleteStmt : Stmt
 struct M_EXPORT ImportStmt : Stmt
 {
     Token table_name;
+    ImportStmt(Token table_name) : table_name(std::move(table_name)) { }
 };
 
 /** An import statement for a delimiter separated values (DSV) file. */
 struct M_EXPORT DSVImportStmt : ImportStmt
 {
-    Token path;
-    Token delimiter;
-    Token escape;
-    Token quote;
-    Token rows;
+    Token path = Token::CreateArtificial();
+    Token delimiter = Token::CreateArtificial();
+    Token escape = Token::CreateArtificial();
+    Token quote = Token::CreateArtificial();
+    Token rows = Token::CreateArtificial();
     bool has_header = false;
     bool skip_header = false;
+
+    DSVImportStmt(Token table_name) : ImportStmt(std::move(table_name)) { }
 
     void accept(ASTCommandVisitor &v) override;
     void accept(ConstASTCommandVisitor &v) const override;

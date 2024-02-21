@@ -38,14 +38,14 @@ struct M_EXPORT DataSource
     private:
     cnf::CNF filter_; ///< filter condition on this data source
     std::vector<std::reference_wrapper<Join>> joins_; ///< joins with this data source
-    const char *alias_; ///< the alias of this data source, `nullptr` if this data source has no alias
+    ThreadSafePooledOptionalString alias_; ///< alias of this data source, may not have a value if this data source has no alias
     std::size_t id_; ///< unique identifier of this data source within its query graph
 
     bool decorrelated_ = true; ///< indicates whether this source is already decorrelated
 
     protected:
-    DataSource(std::size_t id, const char *alias) : alias_(alias), id_(id) {
-        if (alias and strlen(alias) == 0)
+    DataSource(std::size_t id, ThreadSafePooledOptionalString alias) : alias_(std::move(alias)), id_(id) {
+        if (alias_.has_value() and strlen(*alias_) == 0)
             throw invalid_argument("if the data source has an alias, it must not be empty");
     }
 
@@ -54,11 +54,11 @@ struct M_EXPORT DataSource
 
     /** Returns the id of this `DataSource`. */
     std::size_t id() const { return id_; }
-    /** Returns the alias of this `DataSource`.  May be `nullptr`. */
-    const char * alias() const { return alias_; }
+    /** Returns the alias of this `DataSource`.  May not have a value. */
+    const ThreadSafePooledOptionalString & alias() const { return alias_; }
     /** Returns the name of this `DataSource`.  Either the same as `alias()`, if an alias is given, otherwise the name
-     * of the referenced `Table`.  May return `nullptr` for anonymous nested queries (e.g. in a WHERE clause).  */
-    virtual const char * name() const = 0;
+     * of the referenced `Table`. Returned value might be empty for anonymous nested queries (e.g. in a WHERE clause). */
+    virtual ThreadSafePooledOptionalString name() const = 0;
     /** Returns the filter of this `DataSource`.  May be empty. */
     const cnf::CNF & filter() const { return filter_; }
     /** Adds `filter` to the current filter of this `DataSource` by logical conjunction. */
@@ -96,13 +96,15 @@ struct M_EXPORT BaseTable : DataSource
     // std::vector<const ast::Designator*> expansion_;
 
     private:
-    BaseTable(std::size_t id, const char *alias, const Table &table) : DataSource(id, alias), table_(table) { }
+    BaseTable(std::size_t id, ThreadSafePooledOptionalString alias, const Table &table)
+        : DataSource(id, std::move(alias)), table_(table)
+    { }
 
     public:
     /** Returns a reference to the `Table` providing the tuples. */
     const Table & table() const { return table_; }
 
-    const char * name() const override { return alias() ? alias() : table_.name(); }
+    ThreadSafePooledOptionalString name() const override { return alias().has_value() ? alias() : table_.name(); }
 
     /** `BaseTable` is never correlated.  Always returns `false`. */
     bool is_correlated() const override { return false; };
@@ -118,15 +120,15 @@ struct M_EXPORT Query : DataSource
     std::unique_ptr<QueryGraph> query_graph_; ///< query graph of the sub-query
 
     private:
-    Query(std::size_t id, const char *alias, std::unique_ptr<QueryGraph> query_graph)
-        : DataSource(id, alias), query_graph_(std::move(query_graph))
+    Query(std::size_t id, ThreadSafePooledOptionalString alias, std::unique_ptr<QueryGraph> query_graph)
+        : DataSource(id, std::move(alias)), query_graph_(std::move(query_graph))
     { }
 
     public:
     /** Returns a reference to the internal `QueryGraph`. */
     QueryGraph & query_graph() const { return *query_graph_; }
 
-    const char * name() const override { return alias(); }
+    ThreadSafePooledOptionalString name() const override { return alias(); }
 
     bool is_correlated() const override;
 };
@@ -173,9 +175,9 @@ struct M_EXPORT QueryGraph
     friend struct GetPrimaryKey;
 
     using Subproblem = SmallBitset; ///< encode `QueryGraph::Subproblem`s as `SmallBitset`s
-    using projection_type = std::pair<std::reference_wrapper<const ast::Expr>, const char*>;
+    using projection_type = std::pair<std::reference_wrapper<const ast::Expr>, ThreadSafePooledOptionalString>;
     using order_type = std::pair<std::reference_wrapper<const ast::Expr>, bool>; ///< true means ascending, false means descending
-    using group_type = std::pair<std::reference_wrapper<const ast::Expr>, const char*>;
+    using group_type = std::pair<std::reference_wrapper<const ast::Expr>, ThreadSafePooledOptionalString>;
 
     private:
     std::vector<std::unique_ptr<DataSource>> sources_; ///< collection of all data sources in this query graph
@@ -228,13 +230,13 @@ struct M_EXPORT QueryGraph
         source->id_ = sources_.size();
         sources_.emplace_back(source.release());
     }
-    BaseTable & add_source(const char *alias, const Table &table) {
-        std::unique_ptr<BaseTable> base(new BaseTable(sources_.size(), alias, table));
+    BaseTable & add_source(ThreadSafePooledOptionalString alias, const Table &table) {
+        std::unique_ptr<BaseTable> base(new BaseTable(sources_.size(), std::move(alias), table));
         auto &ref = sources_.emplace_back(std::move(base));
         return as<BaseTable>(*ref);
     }
-    Query & add_source(const char *alias, std::unique_ptr<QueryGraph> query_graph) {
-        std::unique_ptr<Query> Q(new Query(sources_.size(), alias, std::move(query_graph)));
+    Query & add_source(ThreadSafePooledOptionalString alias, std::unique_ptr<QueryGraph> query_graph) {
+        std::unique_ptr<Query> Q(new Query(sources_.size(), std::move(alias), std::move(query_graph)));
         auto &ref = sources_.emplace_back(std::move(Q));
         return as<Query>(*ref);
     }

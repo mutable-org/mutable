@@ -69,19 +69,19 @@ TEST_CASE("AStar_Chain_Bottomup_GOO", "[core][IR]")
     /* Get Catalog and create new database to use for unit testing. */
     Catalog::Clear();
     Catalog &Cat = Catalog::Get();
-    auto &db = Cat.add_database("db");
+    auto &db = Cat.add_database(Cat.pool("db"));
     Cat.set_database_in_use(db);
 
     /* Create pooled strings. */
-    const char *str_R0 = Cat.pool("R0");
-    const char *str_R1 = Cat.pool("R1");
-    const char *str_R2 = Cat.pool("R2");
-    const char *str_R3 = Cat.pool("R3");
+    ThreadSafePooledString str_R0 = Cat.pool("R0");
+    ThreadSafePooledString str_R1 = Cat.pool("R1");
+    ThreadSafePooledString str_R2 = Cat.pool("R2");
+    ThreadSafePooledString str_R3 = Cat.pool("R3");
 
-    const char *col_id = Cat.pool("id");
-    const char *col_fid_R1 = Cat.pool("fid_R1");
-    const char *col_fid_R2 = Cat.pool("fid_R2");
-    const char *col_fid_R3 = Cat.pool("fid_R3");
+    ThreadSafePooledString col_id     = Cat.pool("id");
+    ThreadSafePooledString col_fid_R1 = Cat.pool("fid_R1");
+    ThreadSafePooledString col_fid_R2 = Cat.pool("fid_R2");
+    ThreadSafePooledString col_fid_R3 = Cat.pool("fid_R3");
 
     /* Create tables. */
     Table &tbl_R0 = db.add_table(str_R0);
@@ -157,7 +157,7 @@ TEST_CASE("AStar_Chain_Bottomup_GOO", "[core][IR]")
                    {\"relations\": [\"R0\", \"R1\", \"R2\", \"R3\"], \"size\":15000} \
                    ]}");
 
-    auto ICE = std::make_unique<InjectionCardinalityEstimator>(diag, "mine", json_input);
+    auto ICE = std::make_unique<InjectionCardinalityEstimator>(diag, Cat.pool("mine"), json_input);
     db.cardinality_estimator(std::move(ICE));
 
     /* Initialize `PlanTable` for base case. */
@@ -266,19 +266,19 @@ TEST_CASE("AStar_Star_TopDown_zero", "[core][IR]")
     /* Get Catalog and create new database to use for unit testing. */
     Catalog::Clear();
     Catalog &Cat = Catalog::Get();
-    auto &db = Cat.add_database("db");
+    auto &db = Cat.add_database(Cat.pool("db"));
     Cat.set_database_in_use(db);
 
     /* Create pooled strings. */
-    const char *str_R0 = Cat.pool("R0");
-    const char *str_R1 = Cat.pool("R1");
-    const char *str_R2 = Cat.pool("R2");
-    const char *str_R3 = Cat.pool("R3");
+    ThreadSafePooledString str_R0 = Cat.pool("R0");
+    ThreadSafePooledString str_R1 = Cat.pool("R1");
+    ThreadSafePooledString str_R2 = Cat.pool("R2");
+    ThreadSafePooledString str_R3 = Cat.pool("R3");
 
-    const char *col_id = Cat.pool("id");
-    const char *col_fid_R1 = Cat.pool("fid_R1");
-    const char *col_fid_R2 = Cat.pool("fid_R2");
-    const char *col_fid_R3 = Cat.pool("fid_R3");
+    ThreadSafePooledString col_id     = Cat.pool("id");
+    ThreadSafePooledString col_fid_R1 = Cat.pool("fid_R1");
+    ThreadSafePooledString col_fid_R2 = Cat.pool("fid_R2");
+    ThreadSafePooledString col_fid_R3 = Cat.pool("fid_R3");
 
     /* Create tables. */
     Table &tbl_R0 = db.add_table(str_R0);
@@ -357,7 +357,7 @@ TEST_CASE("AStar_Star_TopDown_zero", "[core][IR]")
                    {\"relations\": [\"R0\", \"R1\", \"R2\", \"R3\"], \"size\":4000} \
                    ]}");
 
-    auto ICE = std::make_unique<InjectionCardinalityEstimator>(diag, "mine", json_input);
+    auto ICE = std::make_unique<InjectionCardinalityEstimator>(diag, Cat.pool("mine"), json_input);
     db.cardinality_estimator(std::move(ICE));
 
     /* Initialize `PlanTable` for base case. */
@@ -460,19 +460,19 @@ TEST_CASE("AStar_Clique_TopDown_sum", "[core][IR]")
     /* Get Catalog and create new database to use for unit testing. */
     Catalog::Clear();
     Catalog &Cat = Catalog::Get();
-    auto &db = Cat.add_database("db");
+    auto &db = Cat.add_database(Cat.pool("db"));
     Cat.set_database_in_use(db);
 
     /* Create pooled strings. */
-    const char *str_R0 = Cat.pool("R0");
-    const char *str_R1 = Cat.pool("R1");
-    const char *str_R2 = Cat.pool("R2");
-    const char *str_R3 = Cat.pool("R3");
+    ThreadSafePooledString str_R0 = Cat.pool("R0");
+    ThreadSafePooledString str_R1 = Cat.pool("R1");
+    ThreadSafePooledString str_R2 = Cat.pool("R2");
+    ThreadSafePooledString str_R3 = Cat.pool("R3");
 
-    const char *col_id = Cat.pool("id");
-    const char *col_fid_R1 = Cat.pool("fid_R1");
-    const char *col_fid_R2 = Cat.pool("fid_R2");
-    const char *col_fid_R3 = Cat.pool("fid_R3");
+    ThreadSafePooledString col_id     = Cat.pool("id");
+    ThreadSafePooledString col_fid_R1 = Cat.pool("fid_R1");
+    ThreadSafePooledString col_fid_R2 = Cat.pool("fid_R2");
+    ThreadSafePooledString col_fid_R3 = Cat.pool("fid_R3");
 
     /* Create tables. */
     Table &tbl_R0 = db.add_table(str_R0);
@@ -563,7 +563,7 @@ TEST_CASE("AStar_Clique_TopDown_sum", "[core][IR]")
                    {\"relations\": [\"R0\", \"R1\", \"R2\", \"R3\"], \"size\":4000} \
                    ]}");
 
-    auto ICE = std::make_unique<InjectionCardinalityEstimator>(diag, "mine", json_input);
+    auto ICE = std::make_unique<InjectionCardinalityEstimator>(diag, Cat.pool("mine"), json_input);
     db.cardinality_estimator(std::move(ICE));
 
     /* Initialize `PlanTable` for base case. */
@@ -745,19 +745,19 @@ TEST_CASE("AnytimeAStar_general_functionality_and_TopDown_path_completion", "[co
     /* Get Catalog and create new database to use for unit testing. */
     Catalog::Clear();
     Catalog &Cat = Catalog::Get();
-    auto &db = Cat.add_database("db");
+    auto &db = Cat.add_database(Cat.pool("db"));
     Cat.set_database_in_use(db);
 
     /* Create pooled strings. */
-    const char *str_R0 = Cat.pool("R0");
-    const char *str_R1 = Cat.pool("R1");
-    const char *str_R2 = Cat.pool("R2");
-    const char *str_R3 = Cat.pool("R3");
+    ThreadSafePooledString str_R0 = Cat.pool("R0");
+    ThreadSafePooledString str_R1 = Cat.pool("R1");
+    ThreadSafePooledString str_R2 = Cat.pool("R2");
+    ThreadSafePooledString str_R3 = Cat.pool("R3");
 
-    const char *col_id = Cat.pool("id");
-    const char *col_fid_R1 = Cat.pool("fid_R1");
-    const char *col_fid_R2 = Cat.pool("fid_R2");
-    const char *col_fid_R3 = Cat.pool("fid_R3");
+    ThreadSafePooledString col_id     = Cat.pool("id");
+    ThreadSafePooledString col_fid_R1 = Cat.pool("fid_R1");
+    ThreadSafePooledString col_fid_R2 = Cat.pool("fid_R2");
+    ThreadSafePooledString col_fid_R3 = Cat.pool("fid_R3");
 
     /* Create tables. */
     Table &tbl_R0 = db.add_table(str_R0);
@@ -841,7 +841,7 @@ TEST_CASE("AnytimeAStar_general_functionality_and_TopDown_path_completion", "[co
                    {\"relations\": [\"R0\", \"R1\", \"R2\", \"R3\"], \"size\":15000} \
                    ]}");
 
-    auto ICE = std::make_unique<InjectionCardinalityEstimator>(diag, "mine", json_input);
+    auto ICE = std::make_unique<InjectionCardinalityEstimator>(diag, Cat.pool("mine"), json_input);
     db.cardinality_estimator(std::move(ICE));
 
     /* Initialize `PlanTable` for base case. */
@@ -2073,19 +2073,19 @@ TEST_CASE("AnytimeAStar_BottomUp_path_completion", "[core][IR]")
     /* Get Catalog and create new database to use for unit testing. */
     Catalog::Clear();
     Catalog &Cat = Catalog::Get();
-    auto &db = Cat.add_database("db");
+    auto &db = Cat.add_database(Cat.pool("db"));
     Cat.set_database_in_use(db);
 
     /* Create pooled strings. */
-    const char *str_R0 = Cat.pool("R0");
-    const char *str_R1 = Cat.pool("R1");
-    const char *str_R2 = Cat.pool("R2");
-    const char *str_R3 = Cat.pool("R3");
+    ThreadSafePooledString str_R0 = Cat.pool("R0");
+    ThreadSafePooledString str_R1 = Cat.pool("R1");
+    ThreadSafePooledString str_R2 = Cat.pool("R2");
+    ThreadSafePooledString str_R3 = Cat.pool("R3");
 
-    const char *col_id = Cat.pool("id");
-    const char *col_fid_R1 = Cat.pool("fid_R1");
-    const char *col_fid_R2 = Cat.pool("fid_R2");
-    const char *col_fid_R3 = Cat.pool("fid_R3");
+    ThreadSafePooledString col_id     = Cat.pool("id");
+    ThreadSafePooledString col_fid_R1 = Cat.pool("fid_R1");
+    ThreadSafePooledString col_fid_R2 = Cat.pool("fid_R2");
+    ThreadSafePooledString col_fid_R3 = Cat.pool("fid_R3");
 
     /* Create tables. */
     Table &tbl_R0 = db.add_table(str_R0);
@@ -2169,7 +2169,7 @@ TEST_CASE("AnytimeAStar_BottomUp_path_completion", "[core][IR]")
                    {\"relations\": [\"R0\", \"R1\", \"R2\", \"R3\"], \"size\":15000} \
                    ]}");
 
-    auto ICE = std::make_unique<InjectionCardinalityEstimator>(diag, "mine", json_input);
+    auto ICE = std::make_unique<InjectionCardinalityEstimator>(diag, Cat.pool("mine"), json_input);
     db.cardinality_estimator(std::move(ICE));
 
     /* Initialize `PlanTable` for base case. */
@@ -2860,19 +2860,19 @@ TEST_CASE("AnytimeAStar_TopDown_cost-based_pruning_and_weighted_search", "[core]
     /* Get Catalog and create new database to use for unit testing. */
     Catalog::Clear();
     Catalog &Cat = Catalog::Get();
-    auto &db = Cat.add_database("db");
+    auto &db = Cat.add_database(Cat.pool("db"));
     Cat.set_database_in_use(db);
 
     /* Create pooled strings. */
-    const char *str_R0 = Cat.pool("R0");
-    const char *str_R1 = Cat.pool("R1");
-    const char *str_R2 = Cat.pool("R2");
-    const char *str_R3 = Cat.pool("R3");
+    ThreadSafePooledString str_R0 = Cat.pool("R0");
+    ThreadSafePooledString str_R1 = Cat.pool("R1");
+    ThreadSafePooledString str_R2 = Cat.pool("R2");
+    ThreadSafePooledString str_R3 = Cat.pool("R3");
 
-    const char *col_id = Cat.pool("id");
-    const char *col_fid_R1 = Cat.pool("fid_R1");
-    const char *col_fid_R2 = Cat.pool("fid_R2");
-    const char *col_fid_R3 = Cat.pool("fid_R3");
+    ThreadSafePooledString col_id     = Cat.pool("id");
+    ThreadSafePooledString col_fid_R1 = Cat.pool("fid_R1");
+    ThreadSafePooledString col_fid_R2 = Cat.pool("fid_R2");
+    ThreadSafePooledString col_fid_R3 = Cat.pool("fid_R3");
 
     /* Create tables. */
     Table &tbl_R0 = db.add_table(str_R0);
@@ -2956,7 +2956,7 @@ TEST_CASE("AnytimeAStar_TopDown_cost-based_pruning_and_weighted_search", "[core]
                    {\"relations\": [\"R0\", \"R1\", \"R2\", \"R3\"], \"size\":15000} \
                    ]}");
 
-    auto ICE = std::make_unique<InjectionCardinalityEstimator>(diag, "mine", json_input);
+    auto ICE = std::make_unique<InjectionCardinalityEstimator>(diag, Cat.pool("mine"), json_input);
     db.cardinality_estimator(std::move(ICE));
 
     /* Initialize `PlanTable` for base case. */
@@ -3282,19 +3282,19 @@ TEST_CASE("AnytimeAStar_BottomUp_and_TopDown_initial_upper_bound", "[core][IR]")
     /* Get Catalog and create new database to use for unit testing. */
     Catalog::Clear();
     Catalog &Cat = Catalog::Get();
-    auto &db = Cat.add_database("db");
+    auto &db = Cat.add_database(Cat.pool("db"));
     Cat.set_database_in_use(db);
 
     /* Create pooled strings. */
-    const char *str_R0 = Cat.pool("R0");
-    const char *str_R1 = Cat.pool("R1");
-    const char *str_R2 = Cat.pool("R2");
-    const char *str_R3 = Cat.pool("R3");
+    ThreadSafePooledString str_R0 = Cat.pool("R0");
+    ThreadSafePooledString str_R1 = Cat.pool("R1");
+    ThreadSafePooledString str_R2 = Cat.pool("R2");
+    ThreadSafePooledString str_R3 = Cat.pool("R3");
 
-    const char *col_id = Cat.pool("id");
-    const char *col_fid_R1 = Cat.pool("fid_R1");
-    const char *col_fid_R2 = Cat.pool("fid_R2");
-    const char *col_fid_R3 = Cat.pool("fid_R3");
+    ThreadSafePooledString col_id     = Cat.pool("id");
+    ThreadSafePooledString col_fid_R1 = Cat.pool("fid_R1");
+    ThreadSafePooledString col_fid_R2 = Cat.pool("fid_R2");
+    ThreadSafePooledString col_fid_R3 = Cat.pool("fid_R3");
 
     /* Create tables. */
     Table &tbl_R0 = db.add_table(str_R0);
@@ -3378,7 +3378,7 @@ TEST_CASE("AnytimeAStar_BottomUp_and_TopDown_initial_upper_bound", "[core][IR]")
                    {\"relations\": [\"R0\", \"R1\", \"R2\", \"R3\"], \"size\":15000} \
                    ]}");
 
-    auto ICE = std::make_unique<InjectionCardinalityEstimator>(diag, "mine", json_input);
+    auto ICE = std::make_unique<InjectionCardinalityEstimator>(diag, Cat.pool("mine"), json_input);
     db.cardinality_estimator(std::move(ICE));
 
     /* Initialize `PlanTable` for base case. */
@@ -3687,19 +3687,19 @@ TEST_CASE("AnytimeAStar_weighted_path_completion", "[core][IR]")
     /* Get Catalog and create new database to use for unit testing. */
     Catalog::Clear();
     Catalog &Cat = Catalog::Get();
-    auto &db = Cat.add_database("db");
+    auto &db = Cat.add_database(Cat.pool("db"));
     Cat.set_database_in_use(db);
 
     /* Create pooled strings. */
-    const char *str_R0 = Cat.pool("R0");
-    const char *str_R1 = Cat.pool("R1");
-    const char *str_R2 = Cat.pool("R2");
-    const char *str_R3 = Cat.pool("R3");
+    ThreadSafePooledString str_R0 = Cat.pool("R0");
+    ThreadSafePooledString str_R1 = Cat.pool("R1");
+    ThreadSafePooledString str_R2 = Cat.pool("R2");
+    ThreadSafePooledString str_R3 = Cat.pool("R3");
 
-    const char *col_id = Cat.pool("id");
-    const char *col_fid_R1 = Cat.pool("fid_R1");
-    const char *col_fid_R2 = Cat.pool("fid_R2");
-    const char *col_fid_R3 = Cat.pool("fid_R3");
+    ThreadSafePooledString col_id     = Cat.pool("id");
+    ThreadSafePooledString col_fid_R1 = Cat.pool("fid_R1");
+    ThreadSafePooledString col_fid_R2 = Cat.pool("fid_R2");
+    ThreadSafePooledString col_fid_R3 = Cat.pool("fid_R3");
 
     /* Create tables. */
     Table &tbl_R0 = db.add_table(str_R0);
@@ -3783,7 +3783,7 @@ TEST_CASE("AnytimeAStar_weighted_path_completion", "[core][IR]")
                    {\"relations\": [\"R0\", \"R1\", \"R2\", \"R3\"], \"size\":15000} \
                    ]}");
 
-    auto ICE = std::make_unique<InjectionCardinalityEstimator>(diag, "mine", json_input);
+    auto ICE = std::make_unique<InjectionCardinalityEstimator>(diag, Cat.pool("mine"), json_input);
     db.cardinality_estimator(std::move(ICE));
 
     /* Initialize `PlanTable` for base case. */
@@ -4038,19 +4038,19 @@ TEST_CASE("AnytimeAStar_OptFields", "[core][IR]")
     /* Get Catalog and create new database to use for unit testing. */
     Catalog::Clear();
     Catalog &Cat = Catalog::Get();
-    auto &db = Cat.add_database("db");
+    auto &db = Cat.add_database(Cat.pool("db"));
     Cat.set_database_in_use(db);
 
     /* Create pooled strings. */
-    const char *str_R0 = Cat.pool("R0");
-    const char *str_R1 = Cat.pool("R1");
-    const char *str_R2 = Cat.pool("R2");
-    const char *str_R3 = Cat.pool("R3");
+    ThreadSafePooledString str_R0 = Cat.pool("R0");
+    ThreadSafePooledString str_R1 = Cat.pool("R1");
+    ThreadSafePooledString str_R2 = Cat.pool("R2");
+    ThreadSafePooledString str_R3 = Cat.pool("R3");
 
-    const char *col_id = Cat.pool("id");
-    const char *col_fid_R1 = Cat.pool("fid_R1");
-    const char *col_fid_R2 = Cat.pool("fid_R2");
-    const char *col_fid_R3 = Cat.pool("fid_R3");
+    ThreadSafePooledString col_id     = Cat.pool("id");
+    ThreadSafePooledString col_fid_R1 = Cat.pool("fid_R1");
+    ThreadSafePooledString col_fid_R2 = Cat.pool("fid_R2");
+    ThreadSafePooledString col_fid_R3 = Cat.pool("fid_R3");
 
     /* Create tables. */
     Table &tbl_R0 = db.add_table(str_R0);
@@ -4134,7 +4134,7 @@ TEST_CASE("AnytimeAStar_OptFields", "[core][IR]")
                    {\"relations\": [\"R0\", \"R1\", \"R2\", \"R3\"], \"size\":15000} \
                    ]}");
 
-    auto ICE = std::make_unique<InjectionCardinalityEstimator>(diag, "mine", json_input);
+    auto ICE = std::make_unique<InjectionCardinalityEstimator>(diag, Cat.pool("mine"), json_input);
     db.cardinality_estimator(std::move(ICE));
 
     /* Initialize `PlanTable` for base case. */

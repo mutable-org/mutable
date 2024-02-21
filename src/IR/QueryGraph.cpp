@@ -556,8 +556,8 @@ bool equal(const ast::Designator &one, const ast::Designator &two) {
 }
 
 /** Like `std::vector::emplace_back()` but adds only iff `pair` is not already contained in `pairs`. */
-void emplace_back_unique(std::vector<std::pair<const ast::Expr*, const char*>> &pairs,
-                         const std::pair<const ast::Designator*, const char*> &pair)
+void emplace_back_unique(std::vector<std::pair<const ast::Expr*, PooledOptionalString>> &pairs,
+                         const std::pair<const ast::Designator*, PooledOptionalString> &pair)
 {
     for (auto p : pairs) {
         if (auto d = cast<const ast::Designator>(p.first); d and equal(*d, *pair.first))
@@ -567,11 +567,11 @@ void emplace_back_unique(std::vector<std::pair<const ast::Expr*, const char*>> &
 }
 
 /** Like `std::vector::emplace_back()` but adds only iff `pair` is not already contained in `pairs`. */
-void emplace_back_unique(std::vector<std::pair<const ast::Expr*, const char*>> &pairs,
-                         const std::pair<const ast::Expr*, const char*> &pair)
+void emplace_back_unique(std::vector<std::pair<const ast::Expr*, PooledOptionalString>> &pairs,
+                         const std::pair<const ast::Expr*, PooledOptionalString> &pair)
 {
     if (auto d = cast<const ast::Designator>(pair.first))
-        emplace_back_unique(pairs, std::pair<const ast::Designator*, const char*>(d, pair.second));
+        emplace_back_unique(pairs, std::pair<const ast::Designator*, PooledOptionalString>(d, pair.second));
     else if (not contains(pairs, pair))
         pairs.emplace_back(pair);
 }
@@ -1601,7 +1601,7 @@ void m::GraphBuilder::operator()(const ast::SelectStmt &stmt) {
     }
 
     ///> holds all nested queries occurring in the `SelectClause` of `stmt`
-    std::vector<std::pair<std::reference_wrapper<const ast::QueryExpr>, const char*>> nested_queries_in_select;
+    std::vector<std::pair<std::reference_wrapper<const ast::QueryExpr>, ThreadSafePooledOptionalString>> nested_queries_in_select;
 
     /*----- Process FROM and create data sources. -----*/
     if (stmt.from) {
@@ -1610,10 +1610,10 @@ void m::GraphBuilder::operator()(const ast::SelectStmt &stmt) {
             if (auto tok = std::get_if<ast::Token>(&tbl.source)) {
                 /* Create a new base table. */
                 M_insist(tbl.has_table());
-                auto &base = graph_->add_source(tbl.alias ? tbl.alias.text : nullptr, tbl.table());
+                auto &base = graph_->add_source(tbl.alias ? tbl.alias.text : ThreadSafePooledOptionalString{}, tbl.table());
                 named_sources_.emplace(base.name(), base);
             } else if (auto stmt = std::get_if<ast::Stmt*>(&tbl.source)) {
-                M_insist(tbl.alias.text, "every nested statement requires an alias");
+                M_insist(tbl.alias.text.has_value(), "every nested statement requires an alias");
                 auto &select = as<ast::SelectStmt>(**stmt);
                 /* Create a graph for the sub query. */
                 auto graph = QueryGraph::Build(select);
@@ -1639,8 +1639,8 @@ void m::GraphBuilder::operator()(const ast::SelectStmt &stmt) {
     /*----- Process SELECT and collect projections. -----*/
     auto SELECT = as<ast::SelectClause>(stmt.select.get());
     for (auto &e : SELECT->expanded_select_all)
-        graph_->projections_.emplace_back(*e, nullptr); // expansions never contain nested queries; directly add to
-                                                        // projections
+        graph_->projections_.emplace_back(*e, ThreadSafePooledOptionalString{}); // expansions never contain nested queries;
+                                                                                 // directly add to projections
     /* Collect nested queries in SELECT clause. */
     for (auto &s : SELECT->select) {
         if (auto query = cast<const ast::QueryExpr>(s.first)) // found nested query
@@ -1661,8 +1661,8 @@ void m::GraphBuilder::operator()(const ast::SelectStmt &stmt) {
 
         /*----- Introduce additional grouping keys. -----*/
         for (auto e : additional_grouping_keys_) {
-            graph_->group_by_.emplace_back(e, nullptr);
-            graph_->projections_.emplace_back(e, nullptr);
+            graph_->group_by_.emplace_back(e, ThreadSafePooledOptionalString{});
+            graph_->projections_.emplace_back(e, ThreadSafePooledOptionalString{});
         }
 
         for (auto &[clause, CI] : bound_clauses_) {
@@ -1776,9 +1776,9 @@ void m::GraphBuilder::operator()(const ast::SelectStmt &stmt) {
         auto having_clause = as<ast::HavingClause>(stmt.having.get());
         cnf_having = cnf::to_CNF(*having_clause->having);
         auto sub_graph = std::exchange(graph_, std::make_unique<QueryGraph>());
-        auto &sub = graph_->add_source(nullptr, std::move(sub_graph));
+        auto &sub = graph_->add_source(ThreadSafePooledOptionalString{}, std::move(sub_graph));
         sub.update_filter(cnf_having);
-        named_sources_.emplace("HAVING", sub);
+        named_sources_.emplace(C.pool("HAVING"), sub);
         /* Reset former computation of projection and move it after the HAVING. */
         std::swap(graph_->projections_, sub.query_graph().projections_);
         /* Update `decorrelated_`-flag. */
@@ -1806,12 +1806,12 @@ void m::GraphBuilder::operator()(const ast::SelectStmt &stmt) {
             nested_select_clause.select.front().second.text = C.pool("$res");
 
             /* Create a graph for the nested query.  Unnest the query by adding it as a source to the outer graph */
-            auto q_name = nested_query.alias();
+            auto &q_name = nested_query.alias();
             auto &Q = graph_->add_source(q_name, QueryGraph::Build(nested_stmt));
             named_sources_.emplace(q_name, Q);
 
             /* Create a join between the nested query and the HAVING. */
-            auto &J = graph_->joins_.emplace_back(new Join(cnf::CNF({clause}), {Q, named_sources_.at("HAVING")}));
+            auto &J = graph_->joins_.emplace_back(new Join(cnf::CNF({clause}), {Q, named_sources_.at(C.pool("HAVING"))}));
             for (auto ds : J->sources())
                 ds.get().add_join(*J);
         }
@@ -1823,8 +1823,8 @@ void m::GraphBuilder::operator()(const ast::SelectStmt &stmt) {
         (not graph_->group_by_.empty() or not graph_->aggregates_.empty()))
     {
         auto sub_graph = std::exchange(graph_, std::make_unique<QueryGraph>());
-        auto &sub = graph_->add_source(nullptr, std::move(sub_graph)); // anonymous source for nested query
-        named_sources_.emplace("SELECT", sub);
+        auto &sub = graph_->add_source(ThreadSafePooledOptionalString{}, std::move(sub_graph)); // anonymous source for nested query
+        named_sources_.emplace(C.pool("SELECT"), sub);
         /* Reset former computation of projection and move it after the SELECT. */
         std::swap(graph_->projections_, sub.query_graph().projections_);
         /* Update `decorrelated_`-flag. */
@@ -1845,16 +1845,16 @@ void m::GraphBuilder::operator()(const ast::SelectStmt &stmt) {
         select_clause.select.front().second.text = C.pool("$res");
         /* Create a sub graph for the nested query. */
         auto sub = QueryGraph::Build(select);
-        auto q_name = query.alias();
+        auto &q_name = query.alias();
         auto &Q = graph_->add_source(q_name, std::move(sub));
         /* Create a cartesian product between the nested query and an arbitrary source iff one exists. */
         if (not named_sources_.empty()) {
             /* TODO if Q is correlated use the referenced table */
             DataSource *source;
             try {
-                source = &named_sources_.at("SELECT").get();
+                source = &named_sources_.at(C.pool("SELECT")).get();
             } catch (std::out_of_range&) { try {
-                source = &named_sources_.at("HAVING").get();
+                source = &named_sources_.at(C.pool("HAVING")).get();
             } catch (std::out_of_range&) {
                 source = &named_sources_.begin()->second.get(); // any source
             } }
@@ -1877,10 +1877,10 @@ void m::GraphBuilder::operator()(const ast::SelectStmt &stmt) {
     if (stmt.limit) {
         auto LIMIT = as<ast::LimitClause>(stmt.limit.get());
         errno = 0;
-        graph_->limit_.limit = strtoull(LIMIT->limit.text, nullptr, 0);
+        graph_->limit_.limit = strtoull(*(LIMIT->limit.text), nullptr, 0);
         M_insist(errno == 0);
         if (LIMIT->offset) {
-            graph_->limit_.offset = strtoull(LIMIT->offset.text, nullptr, 0);
+            graph_->limit_.offset = strtoull(*(LIMIT->offset.text), nullptr, 0);
             M_insist(errno == 0);
         }
     }
@@ -2005,8 +2005,8 @@ void QueryGraph::dot_recursive(std::ostream &out) const
             if (it != projections_.begin())
                 out << ", ";
             out << html_escape(to_string(it->first.get()));
-            if (it->second)
-                out << " AS " << html_escape(it->second);
+            if (it->second.has_value())
+                out << " AS " << html_escape(*it->second);
         }
         out << "</FONT>\n"
             << "             </TD></TR>\n";
@@ -2019,8 +2019,8 @@ void QueryGraph::dot_recursive(std::ostream &out) const
         for (auto it = group_by_.begin(), end = group_by_.end(); it != end; ++it) {
             if (it != group_by_.begin()) out << ", ";
             out << html_escape(to_string(it->first.get()));
-            if (it->second)
-                out << " AS " << html_escape(it->second);
+            if (it->second.has_value())
+                out << " AS " << html_escape(*it->second);
         }
         if (not group_by_.empty() and not aggregates_.empty())
             out << ", ";
@@ -2060,7 +2060,7 @@ void QueryGraph::dump(std::ostream &out) const
             auto bt = as<BaseTable>(*src);
             out << bt.table().name();
         }
-        if (src->alias())
+        if (src->alias().has_value())
             out << " AS " << src->alias();
         if (not src->filter().empty())
             out << " WHERE " << src->filter();
@@ -2076,7 +2076,7 @@ void QueryGraph::dump(std::ostream &out) const
             auto &srcs = j->sources();
             for (auto it = srcs.begin(), end = srcs.end(); it != end; ++it) {
                 if (it != srcs.begin()) out << ' ';
-                if (it->get().alias())
+                if (it->get().alias().has_value())
                     out << it->get().alias();
                 else if (auto bt = cast<const BaseTable>(&it->get()))
                     out << bt->name();
@@ -2097,7 +2097,7 @@ void QueryGraph::dump(std::ostream &out) const
                 if (it != group_by().begin())
                     out << ", ";
                 out << it->first.get();
-                if (it->second)
+                if (it->second.has_value())
                     out << " AS " << it->second;
             }
         }
@@ -2126,7 +2126,7 @@ void QueryGraph::dump(std::ostream &out) const
     /*----- Print projections. ---------------------------------------------------------------------------------------*/
     out << "\n  projections: ";
     for (auto [expr, alias] : projections()) {
-        if (alias) {
+        if (alias.has_value()) {
             out << "\n    AS " << alias;
             ast::ASTDumper P(out, 3);
             P(expr.get());

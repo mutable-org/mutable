@@ -1,5 +1,6 @@
 #include "catch2/catch.hpp"
 
+#include <mutable/catalog/Catalog.hpp>
 #include <mutable/catalog/Schema.hpp>
 #include <mutable/IR/Tuple.hpp>
 
@@ -297,6 +298,7 @@ TEST_CASE("Value/initialization", "[core][storage][Value]")
 
 TEST_CASE("Tuple/c'tor", "[core][storage][Tuple]")
 {
+    auto &C = Catalog::Get();
     SECTION("default")
     {
         Tuple tup;
@@ -305,12 +307,12 @@ TEST_CASE("Tuple/c'tor", "[core][storage][Tuple]")
     SECTION("schema")
     {
         Schema S;
-        S.add({"0"}, Type::Get_Decimal(Type::TY_Vector, 10, 2));
-        S.add({"1"}, Type::Get_Float(Type::TY_Vector));
-        S.add({"2"}, Type::Get_Varchar(Type::TY_Vector, 42));
-        S.add({"3"}, Type::Get_Char(Type::TY_Vector, 2));
-        S.add({"4"}, Type::Get_Boolean(Type::TY_Vector));
-        S.add({"5"}, Type::Get_Char(Type::TY_Vector, 3));
+        S.add({C.pool("0")}, Type::Get_Decimal(Type::TY_Vector, 10, 2));
+        S.add({C.pool("1")}, Type::Get_Float(Type::TY_Vector));
+        S.add({C.pool("2")}, Type::Get_Varchar(Type::TY_Vector, 42));
+        S.add({C.pool("3")}, Type::Get_Char(Type::TY_Vector, 2));
+        S.add({C.pool("4")}, Type::Get_Boolean(Type::TY_Vector));
+        S.add({C.pool("5")}, Type::Get_Char(Type::TY_Vector, 3));
 
         Tuple tup(S);
         CHECK(tup.is_null(0));
@@ -327,12 +329,13 @@ TEST_CASE("Tuple/c'tor", "[core][storage][Tuple]")
 
 TEST_CASE("Tuple::set()/get()", "[core][storage][Tuple]")
 {
+    auto &C = Catalog::Get();
     Schema S;
-    S.add({"0"}, Type::Get_Integer(Type::TY_Vector, 4));
-    S.add({"1"}, Type::Get_Integer(Type::TY_Vector, 4));
-    S.add({"2"}, Type::Get_Integer(Type::TY_Vector, 4));
-    S.add({"3"}, Type::Get_Integer(Type::TY_Vector, 4));
-    S.add({"4"}, Type::Get_Integer(Type::TY_Vector, 4));
+    S.add({C.pool("0")}, Type::Get_Integer(Type::TY_Vector, 4));
+    S.add({C.pool("1")}, Type::Get_Integer(Type::TY_Vector, 4));
+    S.add({C.pool("2")}, Type::Get_Integer(Type::TY_Vector, 4));
+    S.add({C.pool("3")}, Type::Get_Integer(Type::TY_Vector, 4));
+    S.add({C.pool("4")}, Type::Get_Integer(Type::TY_Vector, 4));
 
     Tuple tup(S);
     Value val;
@@ -360,12 +363,13 @@ TEST_CASE("Tuple::set()/get()", "[core][storage][Tuple]")
 
 TEST_CASE("Tuple::clear()", "[core][storage][Tuple]")
 {
+    auto &C = Catalog::Get();
     Schema S;
-    S.add({"0"}, Type::Get_Integer(Type::TY_Vector, 4));
-    S.add({"1"}, Type::Get_Integer(Type::TY_Vector, 4));
-    S.add({"2"}, Type::Get_Integer(Type::TY_Vector, 4));
-    S.add({"3"}, Type::Get_Integer(Type::TY_Vector, 4));
-    S.add({"4"}, Type::Get_Integer(Type::TY_Vector, 4));
+    S.add({C.pool("0")}, Type::Get_Integer(Type::TY_Vector, 4));
+    S.add({C.pool("1")}, Type::Get_Integer(Type::TY_Vector, 4));
+    S.add({C.pool("2")}, Type::Get_Integer(Type::TY_Vector, 4));
+    S.add({C.pool("3")}, Type::Get_Integer(Type::TY_Vector, 4));
+    S.add({C.pool("4")}, Type::Get_Integer(Type::TY_Vector, 4));
 
     Tuple tup(S);
     tup.set(0, 42);
@@ -388,12 +392,13 @@ TEST_CASE("Tuple::clear()", "[core][storage][Tuple]")
 
 TEST_CASE("Tuple::insert()", "[core][storage][Tuple]")
 {
+    auto &C = Catalog::Get();
     Schema S;
-    S.add({"0"}, Type::Get_Integer(Type::TY_Vector, 4));
-    S.add({"1"}, Type::Get_Integer(Type::TY_Vector, 4));
-    S.add({"2"}, Type::Get_Integer(Type::TY_Vector, 4));
-    S.add({"3"}, Type::Get_Integer(Type::TY_Vector, 4));
-    S.add({"4"}, Type::Get_Integer(Type::TY_Vector, 4));
+    S.add({C.pool("0")}, Type::Get_Integer(Type::TY_Vector, 4));
+    S.add({C.pool("1")}, Type::Get_Integer(Type::TY_Vector, 4));
+    S.add({C.pool("2")}, Type::Get_Integer(Type::TY_Vector, 4));
+    S.add({C.pool("3")}, Type::Get_Integer(Type::TY_Vector, 4));
+    S.add({C.pool("4")}, Type::Get_Integer(Type::TY_Vector, 4));
 
     Tuple dst(S);
     Tuple src(S);
@@ -412,12 +417,13 @@ TEST_CASE("Tuple::insert()", "[core][storage][Tuple]")
 
 TEST_CASE("Tuple/comparison", "[core][storage][Tuple]")
 {
+    auto &C = Catalog::Get();
     Schema S;
-    S.add({"0"}, Type::Get_Integer(Type::TY_Vector, 4));
-    S.add({"1"}, Type::Get_Integer(Type::TY_Vector, 4));
-    S.add({"2"}, Type::Get_Integer(Type::TY_Vector, 4));
-    S.add({"3"}, Type::Get_Integer(Type::TY_Vector, 4));
-    S.add({"4"}, Type::Get_Integer(Type::TY_Vector, 4));
+    S.add({C.pool("0")}, Type::Get_Integer(Type::TY_Vector, 4));
+    S.add({C.pool("1")}, Type::Get_Integer(Type::TY_Vector, 4));
+    S.add({C.pool("2")}, Type::Get_Integer(Type::TY_Vector, 4));
+    S.add({C.pool("3")}, Type::Get_Integer(Type::TY_Vector, 4));
+    S.add({C.pool("4")}, Type::Get_Integer(Type::TY_Vector, 4));
 
     Tuple first(S);
     first.set(1, 42);

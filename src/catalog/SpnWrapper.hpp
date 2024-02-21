@@ -1,8 +1,8 @@
 #pragma once
 
-#include "util/Spn.hpp"
-#include <memory>
+#include <mutable/util/Pool.hpp>
 #include <unordered_map>
+#include <util/Spn.hpp>
 #include <vector>
 
 
@@ -12,13 +12,13 @@ namespace m {
 struct SpnWrapper
 {
     using Filter = std::unordered_map<unsigned, std::pair<Spn::SpnOperator, float>>;
-    using AttrFilter = std::unordered_map<const char*, std::pair<Spn::SpnOperator, float>>;
+    using AttrFilter = std::unordered_map<ThreadSafePooledString, std::pair<Spn::SpnOperator, float>>;
 
     private:
     Spn spn_;
-    std::unordered_map<const char*, unsigned> attribute_to_id_; ///< a map from attribute to spn internal id
+    std::unordered_map<ThreadSafePooledString, unsigned> attribute_to_id_; ///< a map from attribute to spn internal id
 
-    SpnWrapper(Spn spn, std::unordered_map<const char*, unsigned> attribute_to_id)
+    SpnWrapper(Spn spn, std::unordered_map<ThreadSafePooledString, unsigned> attribute_to_id)
         : spn_(std::move(spn))
         , attribute_to_id_(std::move(attribute_to_id))
     { }
@@ -29,7 +29,7 @@ struct SpnWrapper
         return filter;
     };
 
-    unsigned translate_attribute(const char *attribute) const {
+    unsigned translate_attribute(const ThreadSafePooledString &attribute) const {
         unsigned spn_id = 0;
         if (auto it = attribute_to_id_.find(attribute); it != attribute_to_id_.end()) {
             spn_id = it->second;
@@ -42,7 +42,7 @@ struct SpnWrapper
     SpnWrapper(SpnWrapper&&) = default;
 
     /** Get the reference to the attribute to spn internal id mapping. */
-    const std::unordered_map<const char*, unsigned> & get_attribute_to_id() const { return attribute_to_id_; }
+    const std::unordered_map<ThreadSafePooledString, unsigned> & get_attribute_to_id() const { return attribute_to_id_; }
 
     /** Learn an SPN over the given table.
      *
@@ -51,7 +51,8 @@ struct SpnWrapper
      * @param leaf_types        the types of a leaf for a non-primary key attribute
      * @return                  the learned SPN
      */
-    static SpnWrapper learn_spn_table(const char *name_of_database, const char *name_of_table,
+    static SpnWrapper learn_spn_table(const ThreadSafePooledString &name_of_database,
+                                      const ThreadSafePooledString &name_of_table,
                                       std::vector<Spn::LeafType> leaf_types = decltype(leaf_types)());
 
     /** Learn SPNs over the tables in the given database.
@@ -60,10 +61,10 @@ struct SpnWrapper
      * @param leaf_types        the type of a leaf for a non-primary key attribute in the respective table
      * @return                  the learned SPNs
      */
-    static std::unordered_map<const char*, SpnWrapper*>
+    static std::unordered_map<ThreadSafePooledString, SpnWrapper*>
     learn_spn_database(
-        const char *name_of_database,
-        std::unordered_map<const char*, std::vector<Spn::LeafType>> leaf_types = decltype(leaf_types)()
+        const ThreadSafePooledString &name_of_database,
+        std::unordered_map<ThreadSafePooledString, std::vector<Spn::LeafType>> leaf_types = decltype(leaf_types)()
     );
 
 
@@ -88,7 +89,7 @@ struct SpnWrapper
     float lower_bound(const Filter &filter) const { return spn_.lower_bound(filter); };
 
     /** Compute the expectation of the given attribute. */
-    float expectation(const char *attribute, const AttrFilter &attr_filter) const {
+    float expectation(const ThreadSafePooledString &attribute, const AttrFilter &attr_filter) const {
         return spn_.expectation(translate_attribute(attribute), translate_filter(attr_filter));
     }
     /** Compute the expectation of the given attribute. */
@@ -106,7 +107,7 @@ struct SpnWrapper
     void delete_row(Eigen::VectorXf &row) { spn_.delete_row(row); };
 
     /** Estimate the number of distinct values of the given attribute. */
-    std::size_t estimate_number_distinct_values(const char *attribute) const {
+    std::size_t estimate_number_distinct_values(const ThreadSafePooledString &attribute) const {
         return spn_.estimate_number_distinct_values(translate_attribute(attribute));
     }
     /** Estimate the number of distinct values of the given attribute. */

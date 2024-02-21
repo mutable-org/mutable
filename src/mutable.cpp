@@ -188,7 +188,7 @@ void m::execute_statement(Diagnostic &diag, const ast::Stmt &stmt, const bool is
             M_TIME_EXPR(backend->execute(*physical_plan), "Execute query", timer);
     } else if (auto I = cast<const ast::InsertStmt>(&stmt)) {
         auto &DB = C.get_database_in_use();
-        auto &T = DB.get_table(I->table_name.text);
+        auto &T = DB.get_table(I->table_name.text.assert_not_none());
         auto &store = T.store();
         StoreWriter W(store);
         auto &S = W.schema();
@@ -220,35 +220,36 @@ void m::execute_statement(Diagnostic &diag, const ast::Stmt &stmt, const bool is
             W.append(tup);
         }
     } else if (auto S = cast<const ast::CreateDatabaseStmt>(&stmt)) {
-        C.add_database(S->database_name.text);
+        C.add_database(S->database_name.text.assert_not_none());
     } else if (auto S = cast<const ast::DropDatabaseStmt>(&stmt)) {
         M_unreachable("not implemented");
     } else if (auto S = cast<const ast::UseDatabaseStmt>(&stmt)) {
-        auto &DB = C.get_database(S->database_name.text);
+        auto &DB = C.get_database(S->database_name.text.assert_not_none());
         C.set_database_in_use(DB);
     } else if (auto S = cast<const ast::CreateTableStmt>(&stmt)) {
         auto &DB = C.get_database_in_use();
-        auto &T = DB.add_table(S->table_name.text);
+        auto &T = DB.add_table(S->table_name.text.assert_not_none());
 
         for (auto &attr : S->attributes) {
             const PrimitiveType *ty = cast<const PrimitiveType>(attr->type);
+            auto attribute_name = attr->name.text.assert_not_none();
 
-            T.push_back(attr->name.text, ty->as_vectorial());
+            T.push_back(attribute_name, ty->as_vectorial());
             for (auto &c : attr->constraints) {
                 visit(overloaded {
                     [&](const PrimaryKeyConstraint&) {
-                        T.add_primary_key(attr->name.text);
+                        T.add_primary_key(attribute_name);
                     },
                     [&](const UniqueConstraint&) {
-                        T.at(attr->name.text).unique = true;
+                        T.at(attribute_name).unique = true;
                     },
                     [&](const NotNullConstraint&) {
-                        T.at(attr->name.text).not_nullable = true;
+                        T.at(attribute_name).not_nullable = true;
                     },
                     [&](const ReferenceConstraint &ref) {
-                        auto &ref_table = DB.get_table(ref.table_name.text);
-                        auto &ref_attr = ref_table.at(ref.attr_name.text);
-                        T.at(attr->name.text).reference = &ref_attr;
+                        auto &ref_table = DB.get_table(ref.table_name.text.assert_not_none());
+                        auto &ref_attr = ref_table.at(ref.attr_name.text.assert_not_none());
+                        T.at(attribute_name).reference = &ref_attr;
                     },
                     [](auto&&) { M_unreachable("constraint not implemented"); },
                 }, *c, tag<ConstASTConstraintVisitor>{});
@@ -261,20 +262,20 @@ void m::execute_statement(Diagnostic &diag, const ast::Stmt &stmt, const bool is
         M_unreachable("not implemented");
     } else if (auto S = cast<const ast::DSVImportStmt>(&stmt)) {
         auto &DB = C.get_database_in_use();
-        auto &T = DB.get_table(S->table_name.text);
+        auto &T = DB.get_table(S->table_name.text.assert_not_none());
 
         DSVReader::Config cfg;
-        if (S->rows) cfg.num_rows = strtol(S->rows.text, nullptr, 10);
-        if (S->delimiter) cfg.delimiter = unescape(S->delimiter.text)[1];
-        if (S->escape) cfg.escape = unescape(S->escape.text)[1];
-        if (S->quote) cfg.quote = unescape(S->quote.text)[1];
+        if (S->rows) cfg.num_rows = strtol(*S->rows.text, nullptr, 10);
+        if (S->delimiter) cfg.delimiter = unescape(*S->delimiter.text)[1];
+        if (S->escape) cfg.escape = unescape(*S->escape.text)[1];
+        if (S->quote) cfg.quote = unescape(*S->quote.text)[1];
         cfg.has_header = S->has_header;
         cfg.skip_header = S->skip_header;
 
         try {
             DSVReader R(T, std::move(cfg), diag);
 
-            std::string filename(S->path.text, 1, strlen(S->path.text) - 2);
+            std::string filename(*S->path.text, 1, strlen(*S->path.text) - 2);
             errno = 0;
             std::ifstream file(filename);
             if (not file) {
@@ -284,7 +285,7 @@ void m::execute_statement(Diagnostic &diag, const ast::Stmt &stmt, const bool is
                     diag.err() << ": " << strerror(errsv);
                 diag.err() << std::endl;
             } else {
-                M_TIME_EXPR(R(file, S->path.text), "Read DSV file", timer);
+                M_TIME_EXPR(R(file, *S->path.text), "Read DSV file", timer);
             }
         } catch (m::invalid_argument e) {
             diag.err() << "Error reading DSV file: " << e.what() << "\n";

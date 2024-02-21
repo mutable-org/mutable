@@ -49,8 +49,8 @@ bool find_Expr(const std::vector<std::reference_wrapper<const FnApplicationExpr>
     return false;
 }
 
-bool find_Proj(const std::vector<std::pair<std::reference_wrapper<const Expr>, const char*>> &haystack,
-               const std::pair<std::reference_wrapper<const Expr>, const char*> &needle)
+bool find_Proj(const std::vector<QueryGraph::projection_type> &haystack,
+               QueryGraph::projection_type &needle)
 {
     auto [needle_expr, needle_name] = needle;
     for (auto it = haystack.begin(), end = haystack.end(); it != end; ++it) {
@@ -61,7 +61,8 @@ bool find_Proj(const std::vector<std::pair<std::reference_wrapper<const Expr>, c
     return false;
 }
 
-DataSource * find_Source(const std::vector<std::reference_wrapper<DataSource>> &vec, const char *alias) {
+DataSource * find_Source(const std::vector<std::reference_wrapper<DataSource>> &vec,
+                         const ThreadSafePooledString &alias) {
     auto end = vec.end();
     for (auto it = vec.begin(); it != end; ++it) {
         auto &source = it->get();
@@ -71,7 +72,7 @@ DataSource * find_Source(const std::vector<std::reference_wrapper<DataSource>> &
     return nullptr;
 }
 
-DataSource * find_Source(const std::vector<std::unique_ptr<DataSource>> &vec, const char *alias) {
+DataSource * find_Source(const std::vector<std::unique_ptr<DataSource>> &vec, const ThreadSafePooledString &alias) {
     auto end = vec.end();
     for (auto it = vec.begin(); it != end; ++it) {
         auto source = it->get();
@@ -81,7 +82,8 @@ DataSource * find_Source(const std::vector<std::unique_ptr<DataSource>> &vec, co
     return nullptr;
 }
 
-Join * find_Join(const std::vector<std::reference_wrapper<Join>> &vec, const char * alias1, const char * alias2) {
+Join * find_Join(const std::vector<std::reference_wrapper<Join>> &vec, const ThreadSafePooledString &alias1,
+                 const ThreadSafePooledString &alias2) {
     auto end = vec.end();
     for (auto it = vec.begin(); it != end; ++it) {
         auto &join = it->get();
@@ -91,7 +93,8 @@ Join * find_Join(const std::vector<std::reference_wrapper<Join>> &vec, const cha
     return nullptr;
 }
 
-Join * find_Join(const std::vector<std::unique_ptr<Join>> &vec, const char * alias1, const char * alias2) {
+Join * find_Join(const std::vector<std::unique_ptr<Join>> &vec, const ThreadSafePooledString &alias1,
+                 const ThreadSafePooledString &alias2) {
     auto end = vec.end();
     for (auto it = vec.begin(); it != end; ++it) {
         auto join = it->get();
@@ -121,12 +124,13 @@ bool find_OrderBy(const std::vector<std::pair<std::reference_wrapper<const ast::
 
 TEST_CASE("DataSource", "[core][IR][unit]")
 {
+    Catalog &C = Catalog::Get();
     auto graph = new QueryGraph();
-    auto &ds = graph->add_source("one", ConcreteTable("tbl"));
+    auto &ds = graph->add_source(C.pool("one"), ConcreteTable(C.pool("tbl")));
 
     Position pos("test");
-    Designator DA(Token(pos, "A", TK_IDENTIFIER));
-    Designator DB(Token(pos, "B", TK_IDENTIFIER));
+    Designator DA(Token(pos, C.pool("A"), TK_IDENTIFIER));
+    Designator DB(Token(pos, C.pool("B"), TK_IDENTIFIER));
 
     cnf::Predicate PA = cnf::Predicate::Positive(&DA);
     cnf::Predicate PB = cnf::Predicate::Positive(&DB);
@@ -139,7 +143,7 @@ TEST_CASE("DataSource", "[core][IR][unit]")
 
     SECTION("check initial values") {
         REQUIRE(ds.id() == 0);
-        REQUIRE(streq(ds.alias(),"one"));
+        REQUIRE(streq(*ds.alias(),"one"));
         REQUIRE_FALSE(contains(ds.filter(), CA));
         REQUIRE_FALSE(contains(ds.filter(), CB));
         REQUIRE(ds.joins().empty());
@@ -169,10 +173,18 @@ TEST_CASE("DataSource", "[core][IR][unit]")
 
 TEST_CASE("get_tables", "[core][IR][unit]")
 {
+    Catalog &C = Catalog::Get();
     Position pos("test");
-    Token dot(pos, ".", TK_DOT);
-    auto A = std::make_unique<Designator>(dot, Token(pos, "A", TK_IDENTIFIER), Token(pos, "id", TK_IDENTIFIER));
-    auto B = std::make_unique<Designator>(dot, Token(pos, "B", TK_IDENTIFIER), Token(pos, "id", TK_IDENTIFIER));
+    Token dot(pos, C.pool("."), TK_DOT);
+    auto pooled_A = C.pool("A");
+    auto pooled_B = C.pool("B");
+    auto pooled_id = C.pool("id");
+    auto A = std::make_unique<Designator>(dot,
+                                          Token(pos, pooled_A, TK_IDENTIFIER),
+                                          Token(pos, pooled_id, TK_IDENTIFIER));
+    auto B = std::make_unique<Designator>(dot,
+                                          Token(pos, pooled_B, TK_IDENTIFIER),
+                                          Token(pos, pooled_id, TK_IDENTIFIER));
 
     SECTION("Designator")
     {
@@ -190,17 +202,17 @@ TEST_CASE("get_tables", "[core][IR][unit]")
         REQUIRE(tableEmpty.empty());
 
         REQUIRE(tableA.size() == 1);
-        REQUIRE(tableA.find("A") != tableA.end());
+        REQUIRE(tableA.contains(pooled_A));
 
         REQUIRE(tablesAB.size() == 2);
-        REQUIRE(tablesAB.find("A") != tablesAB.end());
-        REQUIRE(tablesAB.find("B") != tablesAB.end());
+        REQUIRE(tablesAB.contains(pooled_A));
+        REQUIRE(tablesAB.contains(pooled_B));
     }
 
     SECTION("FnApplicationExpr")
     {
-        auto min = std::make_unique<Designator>(Token(pos, "MIN", TK_IDENTIFIER));
-        Token lpar(pos, "(", TK_LPAR);
+        auto min = std::make_unique<Designator>(Token(pos, C.pool("MIN"), TK_IDENTIFIER));
+        Token lpar(pos, C.pool("("), TK_LPAR);
 
         SECTION("FnApplicationExpr with no argument")
         {
@@ -220,7 +232,7 @@ TEST_CASE("get_tables", "[core][IR][unit]")
             auto tableA = ClauseInfo(CA).data_sources;
 
             REQUIRE(tableA.size() == 1);
-            REQUIRE(tableA.find("A") != tableA.end());
+            REQUIRE(tableA.find(pooled_A) != tableA.end());
         }
 
         SECTION("FnApplicationExpr with two arguments") {
@@ -232,19 +244,19 @@ TEST_CASE("get_tables", "[core][IR][unit]")
             auto tablesAB = ClauseInfo(CAB).data_sources;
 
             REQUIRE(tablesAB.size() == 2);
-            REQUIRE(tablesAB.find("A") != tablesAB.end());
-            REQUIRE(tablesAB.find("B") != tablesAB.end());
+            REQUIRE(tablesAB.find(pooled_B) != tablesAB.end());
+            REQUIRE(tablesAB.find(pooled_B) != tablesAB.end());
         }
     }
 
     SECTION("composed expression types")
     {
-        auto const0 = std::make_unique<Constant>(Token(pos, "0", TK_Int));
-        auto const1 = std::make_unique<Constant>(Token(pos, "1", TK_Int));
-        Token plus(pos, "+", TK_PLUS);
+        auto const0 = std::make_unique<Constant>(Token(pos, C.pool("0"), TK_Int));
+        auto const1 = std::make_unique<Constant>(Token(pos, C.pool("1"), TK_Int));
+        Token plus(pos, C.pool("+"), TK_PLUS);
 
         SECTION("UnaryExpr") {
-            Token min(pos, "-", TK_MINUS);
+            Token min(pos, C.pool("-"), TK_MINUS);
 
             auto unaryConst = std::make_unique<UnaryExpr>(min, std::move(const0));
             auto unaryA = std::make_unique<UnaryExpr>(min, std::move(A));
@@ -258,7 +270,7 @@ TEST_CASE("get_tables", "[core][IR][unit]")
             REQUIRE(tableEmpty.empty());
 
             REQUIRE(tableA.size() == 1);
-            REQUIRE(tableA.find("A") != tableA.end());
+            REQUIRE(tableA.contains(pooled_A));
         }
 
         SECTION("BinaryExpr with constants") {
@@ -275,7 +287,7 @@ TEST_CASE("get_tables", "[core][IR][unit]")
             auto tableA = ClauseInfo(CA).data_sources;
 
             REQUIRE(tableA.size() == 1);
-            REQUIRE(tableA.find("A") != tableA.end());
+            REQUIRE(tableA.contains(pooled_A));
         }
 
         SECTION("BinaryExpr with two tables") {
@@ -284,8 +296,8 @@ TEST_CASE("get_tables", "[core][IR][unit]")
             auto tablesAB = ClauseInfo(CAB).data_sources;
 
             REQUIRE(tablesAB.size() == 2);
-            REQUIRE(tablesAB.find("A") != tablesAB.end());
-            REQUIRE(tablesAB.find("B") != tablesAB.end());
+            REQUIRE(tablesAB.contains(pooled_A));
+            REQUIRE(tablesAB.contains(pooled_A));
         }
     }
 }
@@ -307,14 +319,14 @@ TEST_CASE("get_aggregates", "[core][IR][unit]")
     auto c_lpar = C.pool("(");
 
     // create dummy db with table A and attributes A.id, A.val and A.bool
-    auto &DB = C.add_database("GetAggregates_DB");
+    auto &DB = C.add_database(C.pool("GetAggregates_DB"));
     C.set_database_in_use(DB);
     auto &table = DB.add_table(c_A);
     table.push_back(c_id, Type::Get_Integer(Type::TY_Vector, 4));
     table.push_back(c_val, Type::Get_Integer(Type::TY_Vector, 4));
     table.push_back(c_bool, Type::Get_Boolean(Type::TY_Vector));
 
-    Position pos(c_pos);
+    Position pos(*c_pos);
     Token dot(pos, c_dot, TK_DOT);
     auto max = std::make_unique<Designator>(Token(pos, c_max, TK_IDENTIFIER));
     auto sum = std::make_unique<Designator>(Token(pos, c_sum, TK_IDENTIFIER));
@@ -467,7 +479,7 @@ TEST_CASE("get_aggregates/no aggregate possible", "[IR][unit]")
         auto c_id = C.pool("id");
 
         // create dummy db with table A and attribute A.id
-        auto &DB = C.add_database("GetAggregates_DB");
+        auto &DB = C.add_database(C.pool("GetAggregates_DB"));
         C.set_database_in_use(DB);
         auto &table = DB.add_table(c_A);
         table.push_back(c_id, Type::Get_Integer(Type::TY_Vector, 4));
@@ -544,7 +556,7 @@ TEST_CASE("GraphBuilder/SelectStmt", "[core][IR][unit]")
     auto c_1 = C.pool("1");
 
     // create dummy db with tables A, B and C and attributes id, val and bool
-    auto &DB = C.add_database("GraphBuilder_DB");
+    auto &DB = C.add_database(C.pool("GraphBuilder_DB"));
     C.set_database_in_use(DB);
 
     auto &tableA = DB.add_table(c_A);
@@ -566,7 +578,7 @@ TEST_CASE("GraphBuilder/SelectStmt", "[core][IR][unit]")
     tableC.add_primary_key(c_id);
 
     // create common objects
-    Position pos(c_pos);
+    Position pos(*c_pos);
     Token dot(pos, c_dot, TK_DOT);
 
     SECTION("test projections")
@@ -576,11 +588,11 @@ TEST_CASE("GraphBuilder/SelectStmt", "[core][IR][unit]")
         Designator A_val(dot, Token(pos, c_A, TK_IDENTIFIER),
                         Token(pos, c_val, TK_IDENTIFIER));
         Constant const0(Token(pos, c_0, TK_Int));
-        std::pair<std::reference_wrapper<const Expr>, const char *> p_id_empty{A_id, NULL};
-        std::pair<std::reference_wrapper<const Expr>, const char *> p_val_empty{A_val, NULL};
-        std::pair<std::reference_wrapper<const Expr>, const char *> p_id_Aid{A_id, c_A_id};
-        std::pair<std::reference_wrapper<const Expr>, const char *> p_val_Aval{A_val, c_A_val};
-        std::pair<std::reference_wrapper<const Expr>, const char *> p_const0_empty{const0, NULL};
+        QueryGraph::projection_type p_id_empty{A_id, {}};
+        QueryGraph::projection_type p_val_empty{A_val, {}};
+        QueryGraph::projection_type p_id_Aid{A_id, c_A_id};
+        QueryGraph::projection_type p_val_Aval{A_val, c_A_val};
+        QueryGraph::projection_type p_const0_empty{const0, {}};
 
         SECTION("test constant projection")
         {
@@ -618,7 +630,7 @@ TEST_CASE("GraphBuilder/SelectStmt", "[core][IR][unit]")
             REQUIRE(graph->limit().limit == 0);
 
             REQUIRE(sources.size() == 1);
-            REQUIRE(sources[0]->alias() == nullptr);
+            REQUIRE_FALSE(sources[0]->alias().has_value());
             REQUIRE(sources[0]->name() == c_A);
             REQUIRE(sources[0]->joins().empty());
             REQUIRE(sources[0]->filter().empty());
@@ -644,7 +656,7 @@ TEST_CASE("GraphBuilder/SelectStmt", "[core][IR][unit]")
             REQUIRE(graph->limit().limit == 0);
 
             REQUIRE(sources.size() == 1);
-            REQUIRE(sources[0]->alias() == nullptr);
+            REQUIRE_FALSE(sources[0]->alias().has_value());
             REQUIRE(sources[0]->name() == c_A);
             REQUIRE(sources[0]->joins().empty());
             REQUIRE(sources[0]->filter().empty());
@@ -670,7 +682,7 @@ TEST_CASE("GraphBuilder/SelectStmt", "[core][IR][unit]")
             REQUIRE(graph->limit().limit == 0);
 
             REQUIRE(sources.size() == 1);
-            REQUIRE(sources[0]->alias() == nullptr);
+            REQUIRE_FALSE(sources[0]->alias().has_value());
             REQUIRE(sources[0]->name() == c_A);
             REQUIRE(sources[0]->joins().empty());
             REQUIRE(sources[0]->filter().empty());
@@ -697,7 +709,7 @@ TEST_CASE("GraphBuilder/SelectStmt", "[core][IR][unit]")
             REQUIRE(graph->limit().limit == 0);
 
             REQUIRE(sources.size() == 1);
-            REQUIRE(sources[0]->alias() == nullptr);
+            REQUIRE_FALSE(sources[0]->alias().has_value());
             REQUIRE(sources[0]->name() == c_A);
             REQUIRE(sources[0]->joins().empty());
             REQUIRE(sources[0]->filter().empty());
@@ -724,7 +736,7 @@ TEST_CASE("GraphBuilder/SelectStmt", "[core][IR][unit]")
             REQUIRE(graph->limit().limit == 0);
 
             REQUIRE(sources.size() == 1);
-            REQUIRE(sources[0]->alias() == nullptr);
+            REQUIRE_FALSE(sources[0]->alias().has_value());
             REQUIRE(sources[0]->name() == c_A);
             REQUIRE(sources[0]->joins().empty());
             REQUIRE(sources[0]->filter().empty());
@@ -772,7 +784,7 @@ TEST_CASE("GraphBuilder/SelectStmt", "[core][IR][unit]")
             REQUIRE(graph->projections().size() == tableA.num_attrs());
 
             REQUIRE(sources.size() == 1);
-            REQUIRE(sources[0]->alias() == nullptr);
+            REQUIRE_FALSE(sources[0]->alias().has_value());
             REQUIRE(sources[0]->name() == c_A);
             REQUIRE(sources[0]->joins().empty());
             REQUIRE(sources[0]->filter().empty());
@@ -819,7 +831,7 @@ TEST_CASE("GraphBuilder/SelectStmt", "[core][IR][unit]")
             REQUIRE(graph->projections().size() == tableA.num_attrs());
 
             REQUIRE(sources.size() == 1);
-            REQUIRE(sources[0]->alias() == nullptr);
+            REQUIRE_FALSE(sources[0]->alias().has_value());
             REQUIRE(sources[0]->name() == c_A);
             REQUIRE(sources[0]->joins().empty());
             REQUIRE(sources[0]->filter() == cnf_A_val_eq_const0);
@@ -867,7 +879,7 @@ TEST_CASE("GraphBuilder/SelectStmt", "[core][IR][unit]")
             REQUIRE(graph->projections().size() == tableA.num_attrs());
 
             REQUIRE(sources.size() == 1);
-            REQUIRE(sources[0]->alias() == nullptr);
+            REQUIRE_FALSE(sources[0]->alias().has_value());
             REQUIRE(sources[0]->name() == c_A);
             REQUIRE(sources[0]->joins().empty());
             REQUIRE(sources[0]->filter() == cnf::operator&&(cnf_A_val_eq_const0, cnf_not_A_bool));
@@ -974,7 +986,7 @@ TEST_CASE("GraphBuilder/SelectStmt", "[core][IR][unit]")
             REQUIRE(graph->projections().size() == tableA.num_attrs());
 
             REQUIRE(sources.size() == 1);
-            REQUIRE(sources[0]->alias() == nullptr);
+            REQUIRE_FALSE(sources[0]->alias().has_value());
             REQUIRE(sources[0]->name() == c_A);
             REQUIRE(sources[0]->joins().empty());
             REQUIRE(sources[0]->filter() == cnf_constTrue);
@@ -1059,7 +1071,7 @@ TEST_CASE("GraphBuilder/SelectStmt", "[core][IR][unit]")
             REQUIRE(graph->projections().size() == 1);
 
             REQUIRE(sources.size() == 1);
-            REQUIRE(sources[0]->alias() == nullptr);
+            REQUIRE_FALSE(sources[0]->alias().has_value());
             REQUIRE(sources[0]->name() == c_A);
             REQUIRE(sources[0]->joins().empty());
             REQUIRE(sources[0]->filter().empty());
@@ -1088,7 +1100,7 @@ TEST_CASE("GraphBuilder/SelectStmt", "[core][IR][unit]")
             REQUIRE(graph->projections().size() == 1);
 
             REQUIRE(sources.size() == 1);
-            REQUIRE(sources[0]->alias() == nullptr);
+            REQUIRE_FALSE(sources[0]->alias().has_value());
             REQUIRE(sources[0]->name() == c_A);
             REQUIRE(sources[0]->joins().empty());
             REQUIRE(sources[0]->filter().empty());
@@ -1117,7 +1129,7 @@ TEST_CASE("GraphBuilder/SelectStmt", "[core][IR][unit]")
             REQUIRE(graph->projections().size() == 1);
 
             REQUIRE(sources.size() == 1);
-            REQUIRE(sources[0]->alias() == nullptr);
+            REQUIRE_FALSE(sources[0]->alias().has_value());
             REQUIRE(sources[0]->name() == c_A);
             REQUIRE(sources[0]->joins().empty());
             REQUIRE(sources[0]->filter().empty());
@@ -1196,10 +1208,8 @@ TEST_CASE("GraphBuilder/SelectStmt", "[core][IR][unit]")
     }
 
     SECTION("test order by") {
-        Designator A_id(dot, Token(pos, c_A, TK_IDENTIFIER),
-                                          Token(pos, c_id, TK_IDENTIFIER));
-        Designator A_val(dot, Token(pos, c_A, TK_IDENTIFIER),
-                         Token(pos, c_val, TK_IDENTIFIER));
+        Designator A_id(dot, Token(pos, c_A, TK_IDENTIFIER), Token(pos, c_id, TK_IDENTIFIER));
+        Designator A_val(dot, Token(pos, c_A, TK_IDENTIFIER), Token(pos, c_val, TK_IDENTIFIER));
         std::pair<std::reference_wrapper<const Expr>, bool> p_id_ASC{A_id, true};
         std::pair<std::reference_wrapper<const Expr>, bool> p_id_DESC{A_id, false};
         std::pair<std::reference_wrapper<const Expr>, bool> p_val_ASC{A_val, true};
@@ -1220,7 +1230,7 @@ TEST_CASE("GraphBuilder/SelectStmt", "[core][IR][unit]")
             REQUIRE(graph->projections().size() == tableA.num_attrs());
 
             REQUIRE(sources.size() == 1);
-            REQUIRE(sources[0]->alias() == nullptr);
+            REQUIRE_FALSE(sources[0]->alias().has_value());
             REQUIRE(sources[0]->name() == c_A);
             REQUIRE(sources[0]->joins().empty());
             REQUIRE(sources[0]->filter().empty());
@@ -1245,7 +1255,7 @@ TEST_CASE("GraphBuilder/SelectStmt", "[core][IR][unit]")
             REQUIRE(graph->projections().size() == tableA.num_attrs());
 
             REQUIRE(sources.size() == 1);
-            REQUIRE(sources[0]->alias() == nullptr);
+            REQUIRE_FALSE(sources[0]->alias().has_value());
             REQUIRE(sources[0]->name() == c_A);
             REQUIRE(sources[0]->joins().empty());
             REQUIRE(sources[0]->filter().empty());
@@ -1271,7 +1281,7 @@ TEST_CASE("GraphBuilder/SelectStmt", "[core][IR][unit]")
             REQUIRE(graph->projections().size() == tableA.num_attrs());
 
             REQUIRE(sources.size() == 1);
-            REQUIRE(sources[0]->alias() == nullptr);
+            REQUIRE_FALSE(sources[0]->alias().has_value());
             REQUIRE(sources[0]->name() == c_A);
             REQUIRE(sources[0]->joins().empty());
             REQUIRE(sources[0]->filter().empty());
@@ -1297,7 +1307,7 @@ TEST_CASE("GraphBuilder/SelectStmt", "[core][IR][unit]")
             REQUIRE(graph->projections().size() == tableA.num_attrs());
 
             REQUIRE(sources.size() == 1);
-            REQUIRE(sources[0]->alias() == nullptr);
+            REQUIRE_FALSE(sources[0]->alias().has_value());
             REQUIRE(sources[0]->name() == c_A);
             REQUIRE(sources[0]->joins().empty());
             REQUIRE(sources[0]->filter().empty());
@@ -1323,7 +1333,7 @@ TEST_CASE("GraphBuilder/SelectStmt", "[core][IR][unit]")
             REQUIRE(graph->projections().size() == tableA.num_attrs());
 
             REQUIRE(sources.size() == 1);
-            REQUIRE(sources[0]->alias() == nullptr);
+            REQUIRE_FALSE(sources[0]->alias().has_value());
             REQUIRE(sources[0]->name() == c_A);
             REQUIRE(sources[0]->joins().empty());
             REQUIRE(sources[0]->filter().empty());
@@ -1352,7 +1362,7 @@ TEST_CASE("GraphBuilder/SelectStmt", "[core][IR][unit]")
             REQUIRE(graph->projections().size() == tableA.num_attrs());
 
             REQUIRE(sources.size() == 1);
-            REQUIRE(sources[0]->alias() == nullptr);
+            REQUIRE_FALSE(sources[0]->alias().has_value());
             REQUIRE(sources[0]->name() == c_A);
             REQUIRE(sources[0]->joins().empty());
             REQUIRE(sources[0]->filter().empty());
@@ -1378,7 +1388,7 @@ TEST_CASE("GraphBuilder/SelectStmt", "[core][IR][unit]")
             REQUIRE(graph->projections().size() == tableA.num_attrs());
 
             REQUIRE(sources.size() == 1);
-            REQUIRE(sources[0]->alias() == nullptr);
+            REQUIRE_FALSE(sources[0]->alias().has_value());
             REQUIRE(sources[0]->name() == c_A);
             REQUIRE(sources[0]->joins().empty());
             REQUIRE(sources[0]->filter().empty());

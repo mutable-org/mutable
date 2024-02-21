@@ -28,7 +28,7 @@ struct M_EXPORT Parser
     explicit Parser(Lexer &lexer)
         : lexer(lexer)
         , diag(lexer.diag)
-        , lookahead_({Token(), Token()})
+        , lookahead_({Token::CreateArtificial(), Token::CreateArtificial()})
     {
         consume();
         consume();
@@ -71,7 +71,7 @@ struct M_EXPORT Parser
     template<typename T>
     std::unique_ptr<T> recover(Token start, const follow_set_t &FS) {
         recover(FS);
-        return std::make_unique<T>(start);
+        return std::make_unique<T>(std::move(start));
     }
 
     std::unique_ptr<Command> parse();

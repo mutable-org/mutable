@@ -25,20 +25,26 @@ using namespace m;
  * Schema
  *====================================================================================================================*/
 
-Schema::Identifier Schema::Identifier::CONST_ID_ = Schema::Identifier(Catalog::Get().pool("$const"));
+Schema::Identifier Schema::Identifier::GetConstant()
+{
+    return Identifier(Catalog::Get().pool("$const"));
+}
 
 Schema::Identifier::Identifier(const ast::Expr &expr)
+    : name(Catalog::Get().pool(""))
 {
     if (auto d = cast<const ast::Designator>(&expr)) {
         prefix = d->table_name.text;
-        name = d->attr_name.text;
+        name = d->attr_name.text.assert_not_none();
     } else {
         std::ostringstream oss;
         oss << expr;
-        prefix = nullptr;
+        prefix = {};
         name = Catalog::Get().pool(oss.str().c_str());
     }
 }
+
+Schema::entry_type::entry_type() : id(Catalog::Get().pool("")) { }
 
 M_LCOV_EXCL_START
 void Schema::dump(std::ostream &out) const { out << *this << std::endl; }
@@ -74,7 +80,7 @@ M_LCOV_EXCL_STOP
  * ConcreteTable
  *====================================================================================================================*/
 
-Schema ConcreteTable::schema(const char *alias) const
+Schema ConcreteTable::schema(const ThreadSafePooledOptionalString &alias) const
 {
     Schema S;
     for (auto attr = this->begin_all(); attr != this->end_all(); ++attr) {
@@ -87,7 +93,7 @@ Schema ConcreteTable::schema(const char *alias) const
             constraints |= Schema::entry_type::REFERENCES_UNIQUE;
         if (attr->is_hidden)
             constraints |= Schema::entry_type::IS_HIDDEN;
-        S.add({alias ? alias : this->name(), attr->name}, attr->type, constraints);
+        S.add({alias.has_value() ? alias : this->name(), attr->name}, attr->type, constraints);
     }
     return S;
 }
@@ -266,7 +272,9 @@ __attribute__((constructor(202)))
 void register_pre_optimization()
 {
     Catalog &C = Catalog::Get();
-    C.register_pre_optimization("multi-versioning", apply_timestamp_filter, "adds timestamp filters to the QueryGraph");
+    C.register_pre_optimization(C.pool("multi-versioning"),
+                                apply_timestamp_filter,
+                                "adds timestamp filters to the QueryGraph");
 }
 
 
@@ -293,10 +301,10 @@ M_LCOV_EXCL_STOP
  * Database
  *====================================================================================================================*/
 
-Database::Database(const char *name)
+Database::Database(ThreadSafePooledString name)
     : name(name)
 {
-    cardinality_estimator_ = Catalog::Get().create_cardinality_estimator(name);
+    cardinality_estimator_ = Catalog::Get().create_cardinality_estimator(std::move(name));
 }
 
 Database::~Database()
@@ -305,14 +313,14 @@ Database::~Database()
         delete f.second;
 }
 
-Table & Database::add_table(const char *name) {
+Table & Database::add_table(ThreadSafePooledString name) {
     auto it = tables_.find(name);
     if (it != tables_.end()) throw std::invalid_argument("table with that name already exists");
-    it = tables_.emplace_hint(it, name, Catalog::Get().table_factory().make(name));
+    it = tables_.emplace_hint(it, std::move(name), Catalog::Get().table_factory().make(name));
     return *it->second;
 }
 
-const Function * Database::get_function(const char *name) const
+const Function * Database::get_function(const ThreadSafePooledString &name) const
 {
     try {
         return functions_.at(name);

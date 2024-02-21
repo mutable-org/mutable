@@ -2,6 +2,7 @@
 
 #include <mutable/lex/TokenType.hpp>
 #include <mutable/util/macro.hpp>
+#include <mutable/util/Pool.hpp>
 #include <mutable/util/Position.hpp>
 
 
@@ -12,16 +13,20 @@ namespace ast {
 struct Token
 {
     Position pos;
-    const char *text;
+    ThreadSafePooledOptionalString text; ///< declared as optional for dummy tokens
     TokenType type;
 
-    explicit Token(Position pos, const char *text, TokenType type)
+    private:
+    explicit Token(TokenType type) : pos(nullptr), text(), type(type) { }
+
+    public:
+    explicit Token(Position pos, ThreadSafePooledString text, TokenType type)
         : pos(pos)
-        , text(text)
+        , text(std::move(text))
         , type(type)
     { }
 
-    Token() : pos(nullptr), text(nullptr), type(TK_EOF) { }
+    static Token CreateArtificial(TokenType type = TK_EOF) { return Token(type); }
 
     operator bool() const { return type != TK_EOF; }
     operator TokenType() const { return type; }

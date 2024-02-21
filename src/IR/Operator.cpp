@@ -63,7 +63,7 @@ std::ostream & m::operator<<(std::ostream &out, const Operator &op) {
             for (auto begin = op.group_by().begin(), it = begin, end = op.group_by().end(); it != end; ++it) {
                 if (it != begin) out << ", ";
                 out << it->first.get();
-                if (it->second)
+                if (it->second.has_value())
                     out << " AS " << it->second;
             }
             out << "] [";
@@ -114,7 +114,7 @@ void Operator::dot(std::ostream &out) const
 #define id(X) q(std::hex << &X << std::dec) // convert virtual address to identifier
     visit(overloaded {
         [&out](const ScanOperator &op) {
-            out << "    " << id(op) << " [label=<<B>" << html_escape(op.alias()) << "</B>>];\n";
+            out << "    " << id(op) << " [label=<<B>" << html_escape(*op.alias()) << "</B>>];\n";
         },
         [&out](const FilterOperator &op) {
             out << "    " << id(op) << " [label=<<B>σ</B><SUB><FONT COLOR=\"0.0 0.0 0.25\" POINT-SIZE=\"10\">"
@@ -146,7 +146,7 @@ void Operator::dot(std::ostream &out) const
             for (auto it = P.begin(); it != P.end(); ++it) {
                 if (it != P.begin()) out << ", ";
                 out << it->first;
-                if (it->second)
+                if (it->second.has_value())
                     out << " AS " << it->second;
             }
             out << "</FONT></SUB>>];\n";
@@ -172,8 +172,8 @@ void Operator::dot(std::ostream &out) const
                 std::ostringstream oss;
                 oss << it->first.get();
                 out << html_escape(oss.str());
-                if (it->second)
-                    out << html_escape(it->second);
+                if (it->second.has_value())
+                    out << html_escape(*it->second);
             }
 
             if (G.size() and A.size()) out << ", ";
@@ -231,12 +231,12 @@ ProjectionOperator::ProjectionOperator(std::vector<projection_type> projections)
         Schema::entry_type::constraints_t constraints{0};
         if (not proj.get().can_be_null())
             constraints |= Schema::entry_type::NOT_NULLABLE;
-        if (alias) { // alias was given
-            Schema::Identifier id(alias);
-            S.add(id, ty, constraints);
+        if (alias.has_value()) { // alias was given
+            Schema::Identifier id(alias.assert_not_none());
+            S.add(std::move(id), ty, constraints);
         } else if (auto D = cast<const ast::Designator>(proj)) { // no alias, but designator -> keep name
-            Schema::Identifier id(D->table_name.text, D->attr_name.text);
-            S.add(id, ty, constraints);
+            Schema::Identifier id(D->table_name.text, D->attr_name.text.assert_not_none());
+            S.add(std::move(id), ty, constraints);
         } else { // no designator, no alias -> derive name
             if (is<const ast::Constant>(proj)) {
                 // TODO: use `Expr::is_constant()` once interpretation of constant expressions is supported
@@ -245,7 +245,7 @@ ProjectionOperator::ProjectionOperator(std::vector<projection_type> projections)
                 std::ostringstream oss;
                 oss << proj.get();
                 Schema::Identifier id(Catalog::Get().pool(oss.str().c_str()));
-                S.add(id, ty, constraints);
+                S.add(std::move(id), ty, constraints);
             }
         }
     }
@@ -268,16 +268,16 @@ GroupingOperator::GroupingOperator(std::vector<group_type> group_by,
                 constraints |= Schema::entry_type::UNIQUE;
             if (not grp.get().can_be_null())
                 constraints |= Schema::entry_type::NOT_NULLABLE;
-            if (alias) {
-                S.add(alias, pt->as_scalar(), constraints);
+            if (alias.has_value()) {
+                S.add(alias.assert_not_none(), pt->as_scalar(), constraints);
             } else if (auto D = cast<const ast::Designator>(grp)) { // designator -> keep name
-                Schema::Identifier id(nullptr, D->attr_name.text); // w/o table name
-                S.add(id, pt->as_scalar(), constraints);
+                Schema::Identifier id(D->attr_name.text.assert_not_none()); // w/o table name
+                S.add(std::move(id), pt->as_scalar(), constraints);
             } else {
                 oss.str("");
                 oss << grp.get();
                 auto alias = C.pool(oss.str().c_str());
-                S.add(alias, pt->as_scalar(), constraints);
+                S.add(std::move(alias), pt->as_scalar(), constraints);
             }
         }
     }
@@ -290,7 +290,7 @@ GroupingOperator::GroupingOperator(std::vector<group_type> group_by,
         Schema::entry_type::constraints_t constraints{0};
         if (not e.get().can_be_null()) // group cannot be empty, thus no default NULL will occur
             constraints |= Schema::entry_type::NOT_NULLABLE;
-        S.add(alias, ty, constraints);
+        S.add(std::move(alias), ty, constraints);
     }
 }
 
@@ -308,7 +308,7 @@ AggregationOperator::AggregationOperator(std::vector<std::reference_wrapper<cons
         Schema::entry_type::constraints_t constraints{Schema::entry_type::UNIQUE}; // since a single tuple is produced
         if (e.get().get_function().fnid == Function::FN_COUNT) // COUNT cannot be NULL (even for empty input)
             constraints |= Schema::entry_type::NOT_NULLABLE;
-        S.add(alias, ty, constraints);
+        S.add(std::move(alias), ty, constraints);
     }
 }
 
@@ -566,7 +566,7 @@ void register_post_optimization()
 {
     Catalog &C = Catalog::Get();
 
-    C.register_post_optimization("minimize schema", [](std::unique_ptr<Producer> plan) {
+    C.register_post_optimization(C.pool("minimize schema"), [](std::unique_ptr<Producer> plan) {
         plan->minimize_schema();
         return plan;
     }, "minimizes the schema of an operator tree");

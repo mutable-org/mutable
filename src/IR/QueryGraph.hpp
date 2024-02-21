@@ -18,12 +18,12 @@ struct SubqueryInfo
 {
     const ast::QueryExpr &expr;
     std::unique_ptr<GraphBuilder> builder;
-    const char *alias;
+    ThreadSafePooledString alias;
 
-    SubqueryInfo(const ast::QueryExpr &expr, std::unique_ptr<GraphBuilder> builder, const char *alias)
+    SubqueryInfo(const ast::QueryExpr &expr, std::unique_ptr<GraphBuilder> builder, ThreadSafePooledString alias)
         : expr(expr)
         , builder(std::move(builder))
-        , alias(alias)
+        , alias(std::move(alias))
     { }
 };
 
@@ -32,7 +32,7 @@ struct ClauseInfo
 {
     unsigned binding_depth = 0;
 
-    std::unordered_set<const char*> data_sources;
+    std::unordered_set<ThreadSafePooledString> data_sources;
     std::vector<SubqueryInfo> nested_queries;
 
     ClauseInfo(const cnf::Clause &clause);
@@ -61,7 +61,7 @@ struct GraphBuilder : ast::ConstASTCommandVisitor
     ///> the query graph that is being constructed
     std::unique_ptr<QueryGraph> graph_;
     ///> maps `DataSource` names/aliases to the `DataSource` instance
-    std::unordered_map<const char*, std::reference_wrapper<DataSource>> named_sources_;
+    std::unordered_map<ThreadSafePooledString, std::reference_wrapper<DataSource>> named_sources_;
     ///> whether this graph needs grouping; either by explicily grouping or implicitly by using aggregations
     bool needs_grouping_ = false;
 

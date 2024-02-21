@@ -194,10 +194,10 @@ struct DDLCommand : SQLCommand { };
 struct CreateDatabase : DDLCommand
 {
     private:
-    const char *db_name_;
+    ThreadSafePooledString db_name_;
 
     public:
-    CreateDatabase(const char *db_name) : db_name_(M_notnull(db_name)) { }
+    CreateDatabase(ThreadSafePooledString db_name) : db_name_(std::move(db_name)) { }
 
     void accept(DatabaseCommandVisitor &v) override;
     void accept(ConstDatabaseCommandVisitor &v) const override;
@@ -208,10 +208,10 @@ struct CreateDatabase : DDLCommand
 struct DropDatabase : DDLCommand
 {
     private:
-    const char *db_name_;
+    ThreadSafePooledString db_name_;
 
     public:
-    DropDatabase(const char *db_name) : db_name_(M_notnull(db_name)) { }
+    DropDatabase(ThreadSafePooledString db_name) : db_name_(std::move(db_name)) { }
 
     void accept(DatabaseCommandVisitor &v) override;
     void accept(ConstDatabaseCommandVisitor &v) const override;
@@ -222,10 +222,10 @@ struct DropDatabase : DDLCommand
 struct UseDatabase : DDLCommand
 {
     private:
-    const char *db_name_;
+    ThreadSafePooledString db_name_;
 
     public:
-    UseDatabase(const char *db_name) : db_name_(M_notnull(db_name)) { }
+    UseDatabase(ThreadSafePooledString db_name) : db_name_(std::move(db_name)) { }
 
     void accept(DatabaseCommandVisitor &v) override;
     void accept(ConstDatabaseCommandVisitor &v) const override;
@@ -250,14 +250,14 @@ struct CreateTable : DDLCommand
 struct DropTable : DDLCommand
 {
     private:
-    std::vector<const char*> table_names_;
+    std::vector<ThreadSafePooledString> table_names_;
 
     public:
-    DropTable(std::vector<const char*>table_names) : table_names_(std::move(table_names))
+    DropTable(std::vector<ThreadSafePooledString> table_names) : table_names_(std::move(table_names))
     {
 #ifndef NDEBUG
         for (auto t : table_names_)
-            M_notnull(t);
+            M_notnull(*t);
 #endif
     }
 
@@ -271,17 +271,17 @@ struct CreateIndex : DDLCommand
 {
     private:
     std::unique_ptr<idx::IndexBase> index_;
-    const char *table_name_;
-    const char *attribute_name_;
-    const char *index_name_;
+    ThreadSafePooledString table_name_;
+    ThreadSafePooledString attribute_name_;
+    ThreadSafePooledString index_name_;
 
     public:
-    CreateIndex(std::unique_ptr<idx::IndexBase> index, const char *table_name, const char *attribute_name,
-                const char *index_name)
+    CreateIndex(std::unique_ptr<idx::IndexBase> index, ThreadSafePooledString table_name,
+                ThreadSafePooledString attribute_name, ThreadSafePooledString index_name)
         : index_(M_notnull(std::move(index)))
-        , table_name_(table_name)
-        , attribute_name_(attribute_name)
-        , index_name_(index_name)
+        , table_name_(std::move(table_name))
+        , attribute_name_(std::move(attribute_name))
+        , index_name_(std::move(index_name))
     { }
 
     void accept(DatabaseCommandVisitor &v) override;
@@ -293,14 +293,14 @@ struct CreateIndex : DDLCommand
 struct DropIndex : DDLCommand
 {
     private:
-    std::vector<const char*> index_names_;
+    std::vector<ThreadSafePooledString> index_names_;
 
     public:
-    DropIndex(std::vector<const char*> index_names) : index_names_(std::move(index_names))
+    DropIndex(std::vector<ThreadSafePooledString> index_names) : index_names_(std::move(index_names))
     {
 #ifndef NDEBUG
         for (auto i : index_names_)
-            M_notnull(i);
+            M_notnull(*i);
 #endif
     }
 

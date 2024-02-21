@@ -226,20 +226,20 @@ struct M_EXPORT ScanOperator : Producer
 {
     private:
     const Store &store_;
-    const char *alias_;
+    ThreadSafePooledString alias_;
 
     public:
-    ScanOperator(const Store &store, const char *alias)
+    ScanOperator(const Store &store, ThreadSafePooledString alias)
         : store_(store)
-        , alias_(M_notnull(alias))
+        , alias_(std::move(alias))
     {
         auto &S = schema();
         for (auto &e : store.table().schema())
-            S.add({alias, e.id.name}, e.type, e.constraints);
+            S.add({alias_, e.id.name}, e.type, e.constraints);
     }
 
     const Store & store() const { return store_; }
-    const char * alias() const { return alias_; }
+    const ThreadSafePooledString & alias() const { return alias_; }
 
     void accept(OperatorVisitor &v) override;
     void accept(ConstOperatorVisitor &v) const override;
@@ -312,7 +312,7 @@ struct M_EXPORT ProjectionOperator : Producer, Consumer
         auto &S = schema();
         for (std::size_t i = 0; i < projections_.size(); ++i) {
             if (auto D = cast<const ast::Designator>(projections_[i].first)) {
-                Schema::Identifier id(D->table_name.text, D->attr_name.text);
+                Schema::Identifier id(D->table_name.text, D->attr_name.text.assert_not_none());
                 S[i].constraints |= child->schema()[id].second.constraints;
             }
         }
@@ -330,7 +330,7 @@ struct M_EXPORT ProjectionOperator : Producer, Consumer
         auto &S = schema();
         for (std::size_t i = 0; i < projections_.size(); ++i) {
             if (auto D = cast<const ast::Designator>(projections_[i].first)) {
-                Schema::Identifier id(D->table_name.text, D->attr_name.text);
+                Schema::Identifier id(D->table_name.text, D->attr_name.text.assert_not_none());
                 S[i].constraints |= child->schema()[id].second.constraints;
             }
         }
@@ -390,7 +390,7 @@ struct M_EXPORT GroupingOperator : Producer, Consumer
         auto &S = schema();
         for (std::size_t i = 0; i < group_by_.size(); ++i) {
             if (auto D = cast<const ast::Designator>(group_by_[i].first)) {
-                Schema::Identifier id(D->table_name.text, D->attr_name.text);
+                Schema::Identifier id(D->table_name.text, D->attr_name.text.assert_not_none());
                 S[i].constraints |= child->schema()[id].second.constraints;
             }
         }
@@ -408,7 +408,7 @@ struct M_EXPORT GroupingOperator : Producer, Consumer
         auto &S = schema();
         for (std::size_t i = 0; i < group_by_.size(); ++i) {
             if (auto D = cast<const ast::Designator>(group_by_[i].first)) {
-                Schema::Identifier id(D->table_name.text, D->attr_name.text);
+                Schema::Identifier id(D->table_name.text, D->attr_name.text.assert_not_none());
                 S[i].constraints |= child->schema()[id].second.constraints;
             }
         }

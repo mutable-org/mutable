@@ -42,7 +42,7 @@ Table & create_table()
     table.push_back(C.pool("dec"),      Type::Get_Decimal(Type::TY_Vector, 4, 2));
     table.push_back(C.pool("char15"),   Type::Get_Char(Type::TY_Vector, 15));
 
-    table.store(C.create_store("PaxStore", table));
+    table.store(C.create_store(C.pool("PaxStore"), table));
     PAXLayoutFactory factory(PAXLayoutFactory::NTuples, NUM_ROWS);
     table.layout(factory);
     return table;

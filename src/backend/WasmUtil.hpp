@@ -582,12 +582,12 @@ struct Environment
 
     /*----- Access methods -------------------------------------------------------------------------------------------*/
     /** Returns `true` iff this `Environment` contains \p id. */
-    bool has(Schema::Identifier id) const { return exprs_.find(id) != exprs_.end(); }
+    bool has(const Schema::Identifier &id) const { return exprs_.find(id) != exprs_.end(); }
     /** Returns `true` iff this `Environment` contains the address of \p id. */
-    bool has_addr(Schema::Identifier id) const { return expr_addrs_.find(id) != expr_addrs_.end(); }
+    bool has_addr(const Schema::Identifier &id) const { return expr_addrs_.find(id) != expr_addrs_.end(); }
     /** Returns `true` iff the entry for identifier \p id has `sql_type` \tparam T. */
     template<sql_type T>
-    bool is(Schema::Identifier id) const {
+    bool is(const Schema::Identifier &id) const {
         auto it = exprs_.find(id);
         M_insist(it != exprs_.end(), "identifier not found");
         return std::holds_alternative<T>(it->second);
@@ -615,12 +615,12 @@ struct Environment
     ///> Adds a mapping from \p id to \p expr.
     template<sql_type T>
     void add(Schema::Identifier id, T &&expr) {
-        auto res = exprs_.emplace(id, std::forward<T>(expr));
+        auto res = exprs_.emplace(std::move(id), std::forward<T>(expr));
         M_insist(res.second, "duplicate ID");
     }
     ///> Adds a mapping from \p id to \p expr.
     void add(Schema::Identifier id, SQL_t &&expr) {
-        auto res = exprs_.emplace(id, std::move(expr));
+        auto res = exprs_.emplace(std::move(id), std::move(expr));
         M_insist(res.second, "duplicate ID");
     }
 
@@ -660,7 +660,7 @@ struct Environment
     }
 
     ///> Returns the **moved** entry for identifier \p id.
-    SQL_t extract(Schema::Identifier id) {
+    SQL_t extract(const Schema::Identifier &id) {
         auto it = exprs_.find(id);
         M_insist(it != exprs_.end(), "identifier not found");
         auto nh = exprs_.extract(it);
@@ -668,7 +668,7 @@ struct Environment
     }
     ///> Returns the **moved** entry for identifier \p id.
     template<sql_type T>
-    T extract(Schema::Identifier id) {
+    T extract(const Schema::Identifier &id) {
         auto it = exprs_.find(id);
         M_insist(it != exprs_.end(), "identifier not found");
         auto nh = exprs_.extract(it);
@@ -677,7 +677,7 @@ struct Environment
     }
 
     ///> Returns the **moved** address entry for identifier \p id.
-    SQL_addr_t extract_addr(Schema::Identifier id) {
+    SQL_addr_t extract_addr(const Schema::Identifier &id) {
         auto it = expr_addrs_.find(id);
         M_insist(it != expr_addrs_.end(), "identifier not found");
         auto nh = expr_addrs_.extract(it);
@@ -685,7 +685,7 @@ struct Environment
     }
     ///> Returns the **moved** address entry for identifier \p id.
     template<sql_addr_type T>
-    T extract_addr(Schema::Identifier id) {
+    T extract_addr(const Schema::Identifier &id) {
         auto it = expr_addrs_.find(id);
         M_insist(it != expr_addrs_.end(), "identifier not found");
         auto nh = expr_addrs_.extract(it);
@@ -694,7 +694,7 @@ struct Environment
     }
 
     ///> Returns the **copied** entry for identifier \p id.
-    SQL_t get(Schema::Identifier id) const {
+    SQL_t get(const Schema::Identifier &id) const {
         auto it = exprs_.find(id);
         M_insist(it != exprs_.end(), "identifier not found");
         return std::visit(overloaded {
@@ -704,7 +704,7 @@ struct Environment
     }
     ///> Returns the **copied** entry for identifier \p id.
     template<sql_type T>
-    T get(Schema::Identifier id) const {
+    T get(const Schema::Identifier &id) const {
         auto it = exprs_.find(id);
         M_insist(it != exprs_.end(), "identifier not found");
         M_insist(std::holds_alternative<T>(it->second));
@@ -712,7 +712,7 @@ struct Environment
     }
 
     ///> Returns the **copied** address entry for identifier \p id.
-    SQL_addr_t get_addr(Schema::Identifier id) const {
+    SQL_addr_t get_addr(const Schema::Identifier &id) const {
         auto it = expr_addrs_.find(id);
         M_insist(it != expr_addrs_.end(), "identifier not found");
         return std::visit(overloaded {
@@ -722,7 +722,7 @@ struct Environment
     }
     ///> Returns the **copied** address entry for identifier \p id.
     template<sql_addr_type T>
-    T get_addr(Schema::Identifier id) const {
+    T get_addr(const Schema::Identifier &id) const {
         auto it = expr_addrs_.find(id);
         M_insist(it != expr_addrs_.end(), "identifier not found");
         M_insist(std::holds_alternative<T>(it->second));
@@ -730,7 +730,7 @@ struct Environment
     }
 
     ///> Returns the **copied** entry for identifier \p id.
-    SQL_t operator[](Schema::Identifier id) const { return get(id); }
+    SQL_t operator[](const Schema::Identifier &id) const { return get(id); }
 
 
     /*----- Expression and CNF compilation ---------------------------------------------------------------------------*/

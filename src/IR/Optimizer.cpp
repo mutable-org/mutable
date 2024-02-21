@@ -178,7 +178,7 @@ Optimizer::optimize_with_plantable(QueryGraph &G) const
             plan_table[s].cost = 0;
             plan_table[s].model = CE.estimate_scan(G, s);
             auto &store = bt->table().store();
-            auto source = new ScanOperator(store, bt->name());
+            auto source = new ScanOperator(store, bt->name().assert_not_none());
             source_plans[ds->id()] = source;
 
             /* Set operator information. */
@@ -189,12 +189,12 @@ Optimizer::optimize_with_plantable(QueryGraph &G) const
         } else {
             /* Recursively solve nested queries. */
             auto &Q = as<const Query>(*ds);
-            const bool old = std::exchange(needs_projection_, bool(Q.alias())); // aliased nested queries need projection
+            const bool old = std::exchange(needs_projection_, Q.alias().has_value()); // aliased nested queries need projection
             auto [sub_plan, sub] = optimize(Q.query_graph());
             needs_projection_ = old;
 
             /* If an alias for the nested query is given, prefix every attribute with the alias. */
-            if (Q.alias()) {
+            if (Q.alias().has_value()) {
                 M_insist(is<ProjectionOperator>(sub_plan), "only projection may rename attributes");
                 Schema S;
                 for (auto &e : sub_plan->schema())
@@ -339,13 +339,14 @@ Optimizer::optimize_with_plantable(QueryGraph &G) const
          * performed beforehand. */
         std::vector<projection_type> adapted_projections;
         for (auto [expr, alias] : G.projections()) {
-            if (alias) {
-                Token name(expr.get().tok.pos, alias, TK_IDENTIFIER);
-                auto d = std::make_unique<const Designator>(Token(), Token(), name, expr.get().type(), &expr.get());
-                adapted_projections.emplace_back(*d, nullptr);
+            if (alias.has_value()) {
+                Token name(expr.get().tok.pos, alias.assert_not_none(), TK_IDENTIFIER);
+                auto d = std::make_unique<const Designator>(Token::CreateArtificial(), Token::CreateArtificial(),
+                                                            std::move(name), expr.get().type(), &expr.get());
+                adapted_projections.emplace_back(*d, ThreadSafePooledOptionalString{});
                 created_exprs_.emplace_back(std::move(d));
             } else {
-                adapted_projections.emplace_back(expr, nullptr);
+                adapted_projections.emplace_back(expr, ThreadSafePooledOptionalString{});
             }
         }
         auto projection = std::make_unique<ProjectionOperator>(std::move(adapted_projections));
@@ -472,18 +473,18 @@ Optimizer::compute_projections_required_for_order_by(const std::vector<projectio
             }
             /*----- Find `d` in projections. -----*/
             for (auto &[expr, alias] : projections) {
-                if (not alias and d == expr.get())
+                if (not alias.has_value() and d == expr.get())
                     return; // found
             }
-            required_projections.emplace_back(d, nullptr);
+            required_projections.emplace_back(d, ThreadSafePooledOptionalString{});
         },
         [&](const ast::FnApplicationExpr &fn) -> void {
             /*----- Find `fn` in projections. -----*/
             for (auto &[expr, alias] : projections) {
-                if (not alias and fn == expr.get())
+                if (not alias.has_value() and fn == expr.get())
                     throw visit_skip_subtree(); // found
             }
-            required_projections.emplace_back(fn, nullptr);
+            required_projections.emplace_back(fn, ThreadSafePooledOptionalString{});
             throw visit_skip_subtree();
         },
         [](auto&&) -> void { /* nothing to be done */ },

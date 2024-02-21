@@ -5,6 +5,7 @@
 #include "parse/Sema.hpp"
 #include "testutil.hpp"
 #include <mutable/util/fn.hpp>
+#include <mutable/catalog/Catalog.hpp>
 #include <sstream>
 
 
@@ -18,11 +19,12 @@ using namespace m::cnf;
 
 TEST_CASE("CNF/Clause operators", "[core][ir][cnf]")
 {
+    auto &Cat = Catalog::Get();
     Position pos("test");
-    ast::Designator A(ast::Token(pos, "A", TK_IDENTIFIER));
-    ast::Designator B(ast::Token(pos, "B", TK_IDENTIFIER));
-    ast::Designator C(ast::Token(pos, "C", TK_IDENTIFIER));
-    ast::Designator D(ast::Token(pos, "D", TK_IDENTIFIER));
+    ast::Designator A(ast::Token(pos, Cat.pool("A"), TK_IDENTIFIER));
+    ast::Designator B(ast::Token(pos, Cat.pool("B"), TK_IDENTIFIER));
+    ast::Designator C(ast::Token(pos, Cat.pool("C"), TK_IDENTIFIER));
+    ast::Designator D(ast::Token(pos, Cat.pool("D"), TK_IDENTIFIER));
 
     Predicate PA = cnf::Predicate::Positive(&A);
     Predicate PB = cnf::Predicate::Positive(&B);
@@ -81,11 +83,12 @@ TEST_CASE("CNF/Clause operators", "[core][ir][cnf]")
 
 TEST_CASE("CNF/CNF operators", "[core][ir][cnf]")
 {
+    auto &Cat = Catalog::Get();
     Position pos("test");
-    ast::Designator A(ast::Token(pos, "A", TK_IDENTIFIER));
-    ast::Designator B(ast::Token(pos, "B", TK_IDENTIFIER));
-    ast::Designator C(ast::Token(pos, "C", TK_IDENTIFIER));
-    ast::Designator D(ast::Token(pos, "D", TK_IDENTIFIER));
+    ast::Designator A(ast::Token(pos, Cat.pool("A"), TK_IDENTIFIER));
+    ast::Designator B(ast::Token(pos, Cat.pool("B"), TK_IDENTIFIER));
+    ast::Designator C(ast::Token(pos, Cat.pool("C"), TK_IDENTIFIER));
+    ast::Designator D(ast::Token(pos, Cat.pool("D"), TK_IDENTIFIER));
 
     Predicate PA = cnf::Predicate::Positive(&A);
     Predicate PB = cnf::Predicate::Positive(&B);

@@ -71,7 +71,7 @@ int main(int argc, const char **argv)
     }
 
     Diagnostic diag(color, std::cout, std::cerr);
-    StringPool pool;
+    ThreadSafeStringPool pool;
     ast::Lexer lexer(diag, pool, filename, *in);
 
     while (auto tok = lexer.next())

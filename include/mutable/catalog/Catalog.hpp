@@ -44,15 +44,15 @@ struct CardinalityEstimatorFactory
 {
     virtual ~CardinalityEstimatorFactory() { }
 
-    virtual std::unique_ptr<m::CardinalityEstimator> make(const char *database) const = 0;
+    virtual std::unique_ptr<m::CardinalityEstimator> make(m::ThreadSafePooledString database) const = 0;
 };
 
 template<typename T>
 requires std::derived_from<T, m::CardinalityEstimator>
 struct ConcreteCardinalityEstimatorFactory : CardinalityEstimatorFactory
 {
-    std::unique_ptr<m::CardinalityEstimator> make(const char *database) const override {
-        return std::make_unique<T>(database);
+    std::unique_ptr<m::CardinalityEstimator> make(m::ThreadSafePooledString database) const override {
+        return std::make_unique<T>(std::move(database));
     }
 };
 
@@ -148,23 +148,23 @@ struct ComponentSet
     using type = T;
 
     private:
-    using map_t = std::unordered_map<const char*, Component<T>>;
+    using map_t = std::unordered_map<m::ThreadSafePooledString, Component<T>>;
     ///> all components
     map_t components_;
     ///> the default component
     typename map_t::iterator default_;
 
     public:
-    void add(const char *name, Component<T> &&component) {
+    void add(m::ThreadSafePooledString name, Component<T> &&component) {
         auto it = components_.find(name);
         if (it != components_.end())
             throw std::invalid_argument("component with that name already exists");
-        it = components_.emplace_hint(it, name, std::move(component));
+        it = components_.emplace_hint(it, std::move(name), std::move(component));
         if (default_ == components_.end())
             default_ = it;
     }
 
-    void set_default(const char *name) {
+    void set_default(const m::ThreadSafePooledString &name) {
         auto it = components_.find(name);
         if (it == components_.end())
             throw std::invalid_argument("component does not exist");
@@ -173,11 +173,11 @@ struct ComponentSet
 
     bool has_default() const { return default_ != components_.end(); }
 
-    const char * get_default_name() const { M_insist(has_default()); return default_->first; }
+    const m::ThreadSafePooledString & get_default_name() const { M_insist(has_default()); return default_->first; }
     const char * get_default_description() const { return default_->second.description; }
     T & get_default() const { M_insist(has_default()); return *default_->second; }
 
-    const char * get_description(const char *name) const {
+    const char * get_description(const m::ThreadSafePooledString &name) const {
         auto it = components_.find(name);
         if (it == components_.end())
             throw std::invalid_argument("component does not exist");
@@ -186,7 +186,7 @@ struct ComponentSet
 
     /** Returns the `Component` of the specified \p name.  Throws `std::invalid_argument` if no such `Component` exists
      */
-    T & get(const char *name) const {
+    T & get(const m::ThreadSafePooledString &name) const {
         auto it = components_.find(name);
         if (it == components_.end())
             throw std::invalid_argument("component does not exist");
@@ -220,10 +220,10 @@ struct M_EXPORT Catalog
     m::ArgParser arg_parser_;
 
     std::unique_ptr<memory::Allocator> allocator_; ///< our custom allocator
-    mutable StringPool pool_; ///< pool of strings
-    std::unordered_map<const char*, Database*> databases_; ///< the databases
+    mutable ThreadSafeStringPool pool_; ///< pool of strings
+    std::unordered_map<ThreadSafePooledString, Database*> databases_; ///< the databases
     Database *database_in_use_ = nullptr; ///< the currently used database
-    std::unordered_map<const char*, Function*> standard_functions_; ///< functions defined by the SQL standard
+    std::unordered_map<ThreadSafePooledString, Function*> standard_functions_; ///< functions defined by the SQL standard
     Timer timer_; ///< a global timer
 
     private:
@@ -256,9 +256,9 @@ struct M_EXPORT Catalog
     std::size_t num_databases() const { return databases_.size(); }
 
     /** Returns a reference to the `StringPool`. */
-    StringPool & get_pool() { return pool_; }
+    ThreadSafeStringPool & get_pool() { return pool_; }
     /** Returns a reference to the `StringPool`. */
-    const StringPool & get_pool() const { return pool_; }
+    const ThreadSafeStringPool & get_pool() const { return pool_; }
 
     /** Returns the global `Timer` instance. */
     Timer & timer() { return timer_; }
@@ -271,21 +271,21 @@ struct M_EXPORT Catalog
     const memory::Allocator & allocator() const { return *allocator_; }
 
     /** Creates an internalized copy of the string \p str by adding it to the internal `StringPool`. */
-    const char * pool(const char *str) const { return pool_(str); }
+    ThreadSafePooledString pool(const char *str) const { return pool_(str); }
     /** Creates an internalized copy of the string \p str by adding it to the internal `StringPool`. */
-    const char * pool(std::string_view str) const { return pool_(str); }
+    ThreadSafePooledString pool(std::string_view str) const { return pool_(str); }
 
     /*===== Database =================================================================================================*/
     /** Creates a new `Database` with the given `name`.  Throws `std::invalid_argument` if a `Database` with the given
      * `name` already exists. */
-    Database & add_database(const char *name);
+    Database & add_database(ThreadSafePooledString name);
     /** Returns the `Database` with the given \p name.  Throws `std::out_of_range` if no such `Database` exists. */
-    Database & get_database(const char *name) const { return *databases_.at(name); }
+    Database & get_database(const ThreadSafePooledString &name) const { return *databases_.at(name); }
     /** Returns `true` iff a `Database` with the given \p name exists. */
-    bool has_database(const char *name) const { return databases_.contains(name); }
+    bool has_database(const ThreadSafePooledString &name) const { return databases_.contains(name); }
     /** Drops the `Database` with the \p name.  Throws `std::out_of_range` if no such `Database` exists or if the
      * `Database` is currently in use.  See `get_database_in_use()`. */
-    void drop_database(const char *name);
+    void drop_database(const ThreadSafePooledString &name);
     /** Drops the `Database` \p db.  Throws `std::out_of_range` if the `db` is currently in use. */
     void drop_database(const Database &db) { return drop_database(db.name); }
 
@@ -307,7 +307,7 @@ struct M_EXPORT Catalog
     /*===== Functions ================================================================================================*/
     /** Returns a reference to the `Function` with the given \p name.  Throws `std::out_of_range` if no such `Function`
      * exists. */
-    const Function * get_function(const char *name) const { return standard_functions_.at(name); }
+    const Function * get_function(const ThreadSafePooledString &name) const { return standard_functions_.at(name); }
 
 
     /*------------------------------------------------------------------------------------------------------------------
@@ -337,22 +337,22 @@ struct M_EXPORT Catalog
     /** Registers a new `Store` with the given `name`. */
     template<typename T>
     requires std::derived_from<T, m::Store>
-    void register_store(const char *name, const char *description = nullptr) {
+    void register_store(ThreadSafePooledString name, const char *description = nullptr) {
         auto c = Component<StoreFactory>(description, std::make_unique<ConcreteStoreFactory<T>>());
-        stores_.add(pool(name), std::move(c));
+        stores_.add(std::move(name), std::move(c));
     }
     /** Sets the default `Store` to use. */
-    void default_store(const char *name) { stores_.set_default(pool(name)); }
+    void default_store(const ThreadSafePooledString &name) { stores_.set_default(name); }
     /** Returns `true` iff the `Catalog` has a default `Store`. */
     bool has_default_store() const { return stores_.has_default(); }
     /** Creates a new `Store` for the given `Table` `tbl`. */
     std::unique_ptr<Store> create_store(const Table &tbl) const { return stores_.get_default().make(tbl); }
     /** Creates a new `Store` of name `name` for the given `Table` `tbl`. */
-    std::unique_ptr<Store> create_store(const char *name, const Table &tbl) const {
-        return stores_.get(pool(name)).make(tbl);
+    std::unique_ptr<Store> create_store(const ThreadSafePooledString &name, const Table &tbl) const {
+        return stores_.get(name).make(tbl);
     }
     /** Returns the name of the default `Store`. */
-    const char * default_store_name() const { return stores_.get_default_name(); }
+    const ThreadSafePooledString & default_store_name() const { return stores_.get_default_name(); }
 
     auto stores_begin()        { return stores_.begin(); }
     auto stores_end()          { return stores_.end(); }
@@ -363,21 +363,21 @@ struct M_EXPORT Catalog
 
     /*===== DataLayouts ==============================================================================================*/
     /** Registers a new `DataLayoutFactory` with the given `name`. */
-    void register_data_layout(const char *name, std::unique_ptr<storage::DataLayoutFactory> data_layout,
+    void register_data_layout(ThreadSafePooledString name, std::unique_ptr<storage::DataLayoutFactory> data_layout,
                               const char *description = nullptr)
     {
-        data_layouts_.add(pool(name), Component<storage::DataLayoutFactory>(description, std::move(data_layout)));
+        data_layouts_.add(std::move(name), Component<storage::DataLayoutFactory>(description, std::move(data_layout)));
     }
     /** Sets the default `DataLayoutFactory` to use. */
-    void default_data_layout(const char *name) { data_layouts_.set_default(pool(name)); }
+    void default_data_layout(const ThreadSafePooledString &name) { data_layouts_.set_default(name); }
     /** Returns `true` iff the `Catalog` has a default `DataLayoutFactory`. */
     bool has_default_data_layout() const { return data_layouts_.has_default(); }
     /** Returns a reference to the default `DataLayoutFactory`. */
     storage::DataLayoutFactory & data_layout() const { return data_layouts_.get_default(); }
     /** Returns a reference to the `DataLayoutFactory` with the given `name`. */
-    storage::DataLayoutFactory & data_layout(const char *name) const { return data_layouts_.get(pool(name)); }
+    storage::DataLayoutFactory & data_layout(const ThreadSafePooledString &name) const { return data_layouts_.get(name); }
     /** Returns the name of the default `DataLayoutFactory`. */
-    const char * default_data_layout_name() const { return data_layouts_.get_default_name(); }
+    const m::ThreadSafePooledString & default_data_layout_name() const { return data_layouts_.get_default_name(); }
 
     auto data_layouts_begin()        { return data_layouts_.begin(); }
     auto data_layouts_end()          { return data_layouts_.end(); }
@@ -390,28 +390,31 @@ struct M_EXPORT Catalog
     /** Registers a new `CardinalityEstimator` with the given `name`. */
     template<typename T>
     requires std::derived_from<T, m::CardinalityEstimator>
-    void register_cardinality_estimator(const char *name, const char *description = nullptr) {
+    void register_cardinality_estimator(ThreadSafePooledString name, const char *description = nullptr) {
         auto c = Component<CardinalityEstimatorFactory>(
             description,
             std::make_unique<ConcreteCardinalityEstimatorFactory<T>>()
         );
-        cardinality_estimators_.add(pool(name), std::move(c));
+        cardinality_estimators_.add(std::move(name), std::move(c));
     }
 
     /** Sets the default `CardinalityEstimator` to use. */
-    void default_cardinality_estimator(const char *name) { cardinality_estimators_.set_default(pool(name)); }
+    void default_cardinality_estimator(const ThreadSafePooledString &name) { cardinality_estimators_.set_default(name); }
     /** Returns `true` iff the `Catalog` has a default `CardinalityEstimator`. */
     bool has_default_cardinality_estimator() const { return cardinality_estimators_.has_default(); }
     /** Creates a new `CardinalityEstimator`. */
-    std::unique_ptr<CardinalityEstimator> create_cardinality_estimator(const char *database) const {
-        return cardinality_estimators_.get_default().make(database);
+    std::unique_ptr<CardinalityEstimator> create_cardinality_estimator(ThreadSafePooledString database) const {
+        return cardinality_estimators_.get_default().make(std::move(database));
     }
     /** Creates a new `CardinalityEstimator` of name `name`. */
-    std::unique_ptr<CardinalityEstimator> create_cardinality_estimator(const char *name, const char *database) const {
-        return cardinality_estimators_.get(pool(name)).make(database);
+    std::unique_ptr<CardinalityEstimator> create_cardinality_estimator(const ThreadSafePooledString &name,
+                                                                       ThreadSafePooledString database) const {
+        return cardinality_estimators_.get(name).make(std::move(database));
     }
     /** Returns the name of the default `CardinalityEstimator`. */
-    const char * default_cardinality_estimator_name() const { return cardinality_estimators_.get_default_name(); }
+    const ThreadSafePooledString & default_cardinality_estimator_name() const {
+        return cardinality_estimators_.get_default_name();
+    }
 
     auto cardinality_estimators_begin()        { return cardinality_estimators_.begin(); }
     auto cardinality_estimators_end()          { return cardinality_estimators_.end(); }
@@ -422,21 +425,21 @@ struct M_EXPORT Catalog
 
     /*===== Plan Enumerators =========================================================================================*/
     /** Registers a new `PlanEnumerator` with the given `name`. */
-    void register_plan_enumerator(const char *name, std::unique_ptr<pe::PlanEnumerator> PE,
+    void register_plan_enumerator(ThreadSafePooledString name, std::unique_ptr<pe::PlanEnumerator> PE,
                                   const char *description = nullptr)
     {
-        plan_enumerators_.add(pool(name), Component<pe::PlanEnumerator>(description, std::move(PE)));
+        plan_enumerators_.add(std::move(name), Component<pe::PlanEnumerator>(description, std::move(PE)));
     }
     /** Sets the default `PlanEnumerator` to use. */
-    void default_plan_enumerator(const char *name) { plan_enumerators_.set_default(pool(name)); }
+    void default_plan_enumerator(const ThreadSafePooledString &name) { plan_enumerators_.set_default(name); }
     /** Returns `true` iff the `Catalog` has a default `PlanEnumerator`. */
     bool has_default_plan_enumerator() const { return plan_enumerators_.has_default(); }
     /** Returns a reference to the default `PlanEnumerator`. */
     pe::PlanEnumerator & plan_enumerator() const { return plan_enumerators_.get_default(); }
     /** Returns a reference to the `PlanEnumerator` with the given `name`. */
-    pe::PlanEnumerator & plan_enumerator(const char *name) const { return plan_enumerators_.get(pool(name)); }
+    pe::PlanEnumerator & plan_enumerator(const ThreadSafePooledString &name) const { return plan_enumerators_.get(name); }
     /** Returns the name of the default `PlanEnumerator`. */
-    const char * default_plan_enumerator_name() const { return plan_enumerators_.get_default_name(); }
+    const ThreadSafePooledString & default_plan_enumerator_name() const { return plan_enumerators_.get_default_name(); }
 
     auto plan_enumerators_begin() { return plan_enumerators_.begin(); }
     auto plan_enumerators_end() { return plan_enumerators_.end(); }
@@ -449,30 +452,30 @@ struct M_EXPORT Catalog
     /** Registers a new `Backend` with the given `name`. */
     template<typename T>
     requires std::derived_from<T, m::Backend>
-    void register_backend(const char *name, const char *description = nullptr) {
+    void register_backend(ThreadSafePooledString name, const char *description = nullptr) {
         auto c = Component<BackendFactory>(description, std::make_unique<ConcreteBackendFactory<T>>());
-        backends_.add(pool(name), std::move(c));
+        backends_.add(std::move(name), std::move(c));
     }
     /** Registers a new `WasmBackend` using the given `WasmEngine` with the given `name`. */
     template<typename T>
     requires std::derived_from<T, m::WasmEngine>
-    void register_wasm_backend(const char *name, const char *description = nullptr) {
+    void register_wasm_backend(ThreadSafePooledString name, const char *description = nullptr) {
         auto c = Component<BackendFactory>(
             description,
             std::make_unique<ConcreteWasmBackendFactory>(std::make_unique<ConcreteWasmEngineFactory<T>>())
         );
-        backends_.add(pool(name), std::move(c));
+        backends_.add(std::move(name), std::move(c));
     }
     /** Sets the default `Backend` to use. */
-    void default_backend(const char *name) { backends_.set_default(pool(name)); }
+    void default_backend(const ThreadSafePooledString &name) { backends_.set_default(name); }
     /** Returns `true` iff the `Catalog` has a default `Backend`. */
     bool has_default_backend() const { return backends_.has_default(); }
     /** Returns a new `Backend`. */
     std::unique_ptr<Backend> create_backend() const { return backends_.get_default().make(); }
     /** Returns a new `Backend` of name `name`. */
-    std::unique_ptr<Backend> create_backend(const char *name) const { return backends_.get(pool(name)).make(); }
+    std::unique_ptr<Backend> create_backend(const ThreadSafePooledString &name) const { return backends_.get(name).make(); }
     /** Returns the name of the default `Backend`. */
-    const char * default_backend_name() const { return backends_.get_default_name(); }
+    const ThreadSafePooledString & default_backend_name() const { return backends_.get_default_name(); }
 
     auto backends_begin()        { return backends_.begin(); }
     auto backends_end()          { return backends_.end(); }
@@ -483,21 +486,21 @@ struct M_EXPORT Catalog
 
     /*===== CostFunction =============================================================================================*/
     /** Registers a new `CostFunction` with the given `name`. */
-    void register_cost_function(const char *name, std::unique_ptr<CostFunction> CF,
+    void register_cost_function(ThreadSafePooledString name, std::unique_ptr<CostFunction> CF,
                                 const char *description = nullptr)
     {
-        cost_functions_.add(pool(name), Component<CostFunction>(description, std::move(CF)));
+        cost_functions_.add(std::move(name), Component<CostFunction>(description, std::move(CF)));
     }
     /** Sets the default `CostFunction` to use. */
-    void default_cost_function(const char *name) { cost_functions_.set_default(pool(name)); }
+    void default_cost_function(const ThreadSafePooledString &name) { cost_functions_.set_default(name); }
     /** Returns `true` iff the `Catalog` has a default `CostFunction`. */
     bool has_default_cost_function() const { return cost_functions_.has_default(); }
     /** Returns a reference to the default `CostFunction`. */
     CostFunction & cost_function() const { return cost_functions_.get_default(); }
     /** Returns a reference to the `CostFunction` with the given `name`. */
-    CostFunction & cost_function(const char *name) const { return cost_functions_.get(pool(name)); }
+    CostFunction & cost_function(const ThreadSafePooledString &name) const { return cost_functions_.get(name); }
     /** Returns the name of the default `CostFunction`. */
-    const char * default_cost_function_name() const { return cost_functions_.get_default_name(); }
+    const ThreadSafePooledString & default_cost_function_name() const { return cost_functions_.get_default_name(); }
 
     auto cost_functions_begin()        { return cost_functions_.begin(); }
     auto cost_functions_end()          { return cost_functions_.end(); }
@@ -510,17 +513,17 @@ struct M_EXPORT Catalog
     /** Registers a new `DatabaseInstruction` with the given `name`. */
     template<typename T>
     requires std::derived_from<T, m::DatabaseInstruction>
-    void register_instruction(const char *name, const char *description = nullptr)
+    void register_instruction(ThreadSafePooledString name, const char *description = nullptr)
     {
         auto I = Component<DatabaseInstructionFactory>(
             description,
             std::make_unique<ConcreteDatabaseInstructionFactory<T>>()
         );
-        instructions_.add(pool(name), std::move(I));
+        instructions_.add(std::move(name), std::move(I));
     }
     /** Returns a reference to the `DatabaseInstruction` with the given `name`.  Throws `std::invalid_argument` if no
      * `Instruction` with the given `name` exists. */
-    std::unique_ptr<DatabaseInstruction> create_instruction(const char *name,
+    std::unique_ptr<DatabaseInstruction> create_instruction(const ThreadSafePooledString &name,
                                                             const std::vector<std::string> &args) const
     {
         return instructions_.get(name).make(args);
@@ -535,19 +538,20 @@ struct M_EXPORT Catalog
 
     /*===== Schedulers =================================================================================================*/
     /** Registers a new `Scheduler` with the given `name`. */
-    void register_scheduler(const char *name, std::unique_ptr<Scheduler> scheduler, const char *description = nullptr) {
-        schedulers_.add(pool(name), Component<Scheduler>(description, std::move(scheduler)));
+    void register_scheduler(ThreadSafePooledString name, std::unique_ptr<Scheduler> scheduler,
+                            const char *description = nullptr) {
+        schedulers_.add(std::move(name), Component<Scheduler>(description, std::move(scheduler)));
     }
     /** Sets the default `Scheduler` to use. */
-    void default_scheduler(const char *name) { schedulers_.set_default(pool(name)); }
+    void default_scheduler(const ThreadSafePooledString &name) { schedulers_.set_default(name); }
     /** Returns `true` iff the `Catalog` has a default `Scheduler`. */
     bool has_default_scheduler() const { return schedulers_.has_default(); }
     /** Returns a reference to the default `Scheduler`. */
     Scheduler & scheduler() const { return schedulers_.get_default(); }
     /** Returns a reference to the `Scheduler` with the given `name`. */
-    Scheduler & scheduler(const char *name) const { return schedulers_.get(pool(name)); }
+    Scheduler & scheduler(const ThreadSafePooledString &name) const { return schedulers_.get(name); }
     /** Returns the name of the default `Scheduler`. */
-    const char * default_scheduler_name() const { return schedulers_.get_default_name(); }
+    const ThreadSafePooledString & default_scheduler_name() const { return schedulers_.get_default_name(); }
 
     auto schedulers_begin()        { return schedulers_.begin(); }
     auto schedulers_end()          { return schedulers_.end(); }
@@ -572,10 +576,10 @@ struct M_EXPORT Catalog
      * The `name` will be used as the property name of the decorator in `--table-properties`. */
     template<class T>
     requires std::derived_from<T, TableFactoryDecorator>
-    void register_table_property(const char *name, const char *description = nullptr)
+    void register_table_property(ThreadSafePooledString name, const char *description = nullptr)
     {
         table_properties_.add(
-                pool(name),
+                std::move(name),
                 Component<TableFactoryDecoratorCallback>(
                         description,
                         std::make_unique<TableFactoryDecoratorCallback>([](std::unique_ptr<TableFactory> table_factory)
@@ -586,9 +590,10 @@ struct M_EXPORT Catalog
     }
     /** Applies the `TableFactoryDecorator` corresponding to `name` to `table_factory`.
      * Returns the decorated `TableFactory`. */
-    std::unique_ptr<TableFactory> apply_table_property(const char *name, std::unique_ptr<TableFactory> table_factory) const
+    std::unique_ptr<TableFactory> apply_table_property(const ThreadSafePooledString &name,
+                                                       std::unique_ptr<TableFactory> table_factory) const
     {
-        return table_properties_.get(pool(name)).operator()(std::move(table_factory));
+        return table_properties_.get(name).operator()(std::move(table_factory));
     }
 
     auto table_properties_begin()        { return table_properties_.begin(); }
@@ -600,10 +605,11 @@ struct M_EXPORT Catalog
 
     /*===== Pre-Optimizations ========================================================================================*/
     /** Registers a new pre-optimization with the given `name`. */
-    void register_pre_optimization(const char *name, PreOptimizationCallback optimization, const char *description = nullptr)
+    void register_pre_optimization(ThreadSafePooledString name, PreOptimizationCallback optimization,
+                                   const char *description = nullptr)
     {
         pre_optimizations_.add(
-                pool(name),
+                std::move(name),
                 Component<PreOptimizationCallback>(description, std::make_unique<PreOptimizationCallback>(std::move(optimization)))
         );
     }
@@ -618,10 +624,11 @@ struct M_EXPORT Catalog
 
     /*===== Post-Optimizations ========================================================================================*/
     /** Registers a new post-optimization with the given `name`. */
-    void register_post_optimization(const char *name, PostOptimizationCallback optimization, const char *description = nullptr)
+    void register_post_optimization(ThreadSafePooledString name, PostOptimizationCallback optimization,
+                                    const char *description = nullptr)
     {
         post_optimizations_.add(
-                pool(name),
+                std::move(name),
                 Component<PostOptimizationCallback>(description, std::make_unique<PostOptimizationCallback>(std::move(optimization)))
         );
     }

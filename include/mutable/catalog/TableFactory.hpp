@@ -12,7 +12,7 @@ struct TableFactory
     virtual ~TableFactory() = default;
 
     /** Returns a `Table` with the given \p name. */
-    virtual std::unique_ptr<Table> make(const char *name) const = 0;
+    virtual std::unique_ptr<Table> make(ThreadSafePooledString name) const = 0;
 };
 
 
@@ -20,7 +20,9 @@ struct TableFactory
 struct ConcreteTableFactory : TableFactory
 {
     /** Returns a `Table` with the given \p name. */
-    std::unique_ptr<Table> make(const char *name) const override { return std::make_unique<ConcreteTable>(name); }
+    std::unique_ptr<Table> make(ThreadSafePooledString name) const override {
+        return std::make_unique<ConcreteTable>(std::move(name));
+    }
 };
 
 
@@ -35,8 +37,8 @@ struct TableFactoryDecorator : TableFactory
 
     /** Returns a `Table` with the given \p name.
      * Recursively calls all internal `TableFactory`s to construct and decorate the table. */
-    std::unique_ptr<Table> make(const char *name) const override {
-        auto table = table_factory_->make(name);
+    std::unique_ptr<Table> make(ThreadSafePooledString name) const override {
+        auto table = table_factory_->make(std::move(name));
         return decorate(std::move(table));
     }
 

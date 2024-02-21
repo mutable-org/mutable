@@ -56,15 +56,16 @@ TEST_CASE("Wasm/" BACKEND_NAME "/Scan", "[core][wasm]")
     Module::Init(); // fresh module
     static const Match<DummyOp> dummy_plan; ///< only needed to create Wasm context without having a physical plan
     auto &wasm_context = m::WasmEngine::Create_Wasm_Context_For_ID(Module::ID(), dummy_plan); // create fresh wasm context
+    auto &C = Catalog::Get();
 
     /* Create table. */
-    m::ConcreteTable table("dummy_table");
-    table.push_back("f", m::Type::Get_Float(m::Type::TY_Vector));
-    table.push_back("i64", m::Type::Get_Integer(m::Type::TY_Vector, 8));
-    table.push_back("b1", m::Type::Get_Boolean(m::Type::TY_Vector));
-    table.push_back("b2", m::Type::Get_Boolean(m::Type::TY_Vector));
-    table.push_back("c", m::Type::Get_Char(m::Type::TY_Vector, 10));
-    table.push_back("i8", m::Type::Get_Integer(m::Type::TY_Vector, 1));
+    m::ConcreteTable table(C.pool("dummy_table"));
+    table.push_back(C.pool("f"), m::Type::Get_Float(m::Type::TY_Vector));
+    table.push_back(C.pool("i64"), m::Type::Get_Integer(m::Type::TY_Vector, 8));
+    table.push_back(C.pool("b1"), m::Type::Get_Boolean(m::Type::TY_Vector));
+    table.push_back(C.pool("b2"), m::Type::Get_Boolean(m::Type::TY_Vector));
+    table.push_back(C.pool("c"), m::Type::Get_Char(m::Type::TY_Vector, 10));
+    table.push_back(C.pool("i8"), m::Type::Get_Integer(m::Type::TY_Vector, 1));
     table.store(std::make_unique<DummyStore>(table));
 
     constexpr std::size_t max_string_length = 10;

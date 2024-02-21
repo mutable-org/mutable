@@ -748,7 +748,7 @@ static void register_plan_enumerators()
 {
     Catalog &C = Catalog::Get();
 #define REGISTER(NAME, DESCRIPTION) \
-    C.register_plan_enumerator(#NAME, std::make_unique<NAME>(), DESCRIPTION);
+    C.register_plan_enumerator(C.pool(#NAME), std::make_unique<NAME>(), DESCRIPTION);
 LIST_PE(REGISTER)
 #undef REGISTER
 }

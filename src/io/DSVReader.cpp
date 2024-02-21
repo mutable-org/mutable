@@ -9,6 +9,7 @@
 #include <limits>
 #include <map>
 #include <memory>
+#include <mutable/catalog/Catalog.hpp>
 #include <mutable/storage/DataLayout.hpp>
 #include <mutable/storage/Store.hpp>
 #include <mutable/util/macro.hpp>
@@ -50,7 +51,7 @@ void DSVReader::operator()(std::istream &in, const char *name)
     pos = Position(name);
     step(); // initialize the variable `c` by reading the first character from the input stream
 
-    auto read_cell = [&]() -> const char* {
+    auto read_cell = [&]() -> ThreadSafePooledString {
         buf.clear();
         while (c != EOF and c != '\n' and c != config().delimiter) {
             buf.push_back(c);
@@ -217,6 +218,7 @@ void DSVReader::operator()(Const<CharacterSequence>&)
 
 void DSVReader::operator()(Const<Date>&)
 {
+    Catalog &C = Catalog::Get();
     buf.clear();
     buf.push_back('d');
     buf.push_back('\'');
@@ -236,7 +238,7 @@ void DSVReader::operator()(Const<Date>&)
     buf.push_back('\'');
     buf.push_back(0);
 
-    tup.set(col_idx, Interpreter::eval(ast::Constant(ast::Token(pos, &buf[0], TK_DATE))));
+    tup.set(col_idx, Interpreter::eval(ast::Constant(ast::Token(pos, C.pool(buf.data()), TK_DATE))));
     return;
 
 invalid:
@@ -246,6 +248,7 @@ invalid:
 
 void DSVReader::operator()(Const<DateTime>&)
 {
+    Catalog &C = Catalog::Get();
     buf.clear();
     buf.push_back('d');
     buf.push_back('\'');
@@ -270,7 +273,7 @@ void DSVReader::operator()(Const<DateTime>&)
 
     buf.push_back('\'');
     buf.push_back(0);
-    tup.set(col_idx, Interpreter::eval(ast::Constant(ast::Token(pos, &buf[0], TK_DATE_TIME))));
+    tup.set(col_idx, Interpreter::eval(ast::Constant(ast::Token(pos, C.pool(buf.data()), TK_DATE_TIME))));
     return;
 
 invalid:

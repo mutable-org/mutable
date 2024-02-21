@@ -279,7 +279,7 @@ TEST_CASE("Sema/Empty & Error")
 
     /* Create a dummy DB and a dummy table with a scalar and a vector attribute. */
     Catalog &C = Catalog::Get();
-    const char *db_name = "mydb";
+    ThreadSafePooledString db_name = C.pool("mydb");
     auto &DB = C.add_database(db_name);
     C.set_database_in_use(DB);
     auto &table = DB.add_table(C.pool("mytable"));
@@ -288,7 +288,7 @@ TEST_CASE("Sema/Empty & Error")
     SECTION("Error Expression")
     {
         LEXER(";");
-        Token tok;
+        Token tok = Token::CreateArtificial();
         ErrorExpr expr(tok);
         Sema sema(diag);
         sema(expr);
@@ -301,7 +301,7 @@ TEST_CASE("Sema/Empty & Error")
     {
         LEXER(";");
         Parser parser(lexer);
-        Token tok;
+        Token tok = Token::CreateArtificial();
         ErrorClause clause(tok);
         Sema sema(diag);
         sema(clause);
@@ -345,7 +345,7 @@ TEST_CASE("Sema/Expressions scalar-vector inference", "[core][parse][sema]")
 
     /* Create a dummy DB and a dummy table with a scalar and a vector attribute. */
     Catalog &C = Catalog::Get();
-    const char *db_name = "mydb";
+    ThreadSafePooledString db_name = C.pool("mydb");
     auto &DB = C.add_database(db_name);
     C.set_database_in_use(DB);
     auto &table = DB.add_table(C.pool("mytable"));
@@ -407,7 +407,7 @@ TEST_CASE("Sema/Expressions/Functions", "[core][parse][sema]")
 
     /* Create a dummy DB and a dummy table with a scalar and a vector attribute. */
     Catalog &C = Catalog::Get();
-    const char *db_name = "mydb";
+    ThreadSafePooledString db_name = C.pool("mydb");
     auto &DB = C.add_database(db_name);
     C.set_database_in_use(DB);
     auto &table = DB.add_table(C.pool("mytable"));
@@ -711,7 +711,7 @@ TEST_CASE("Sema/Expressions/Designator", "[core][parse][sema]")
 
     /* Create a dummy DB and dummy tables with attributes. */
     Catalog &C = Catalog::Get();
-    const char *db_name = "mydb";
+    ThreadSafePooledString db_name = C.pool("mydb");
     auto &DB = C.add_database(db_name);
     C.set_database_in_use(DB);
     auto &table1 = DB.add_table(C.pool("mytable1"));
@@ -1166,7 +1166,7 @@ TEST_CASE("Sema/Clauses/Select", "[core][parse][sema]")
 
     /* Create a dummy DB and a dummy table with 2 vector attributes. */
     Catalog &C = Catalog::Get();
-    const char *db_name = "mydb";
+    ThreadSafePooledString db_name = C.pool("mydb");
     auto &DB = C.add_database(db_name);
     C.set_database_in_use(DB);
     auto &table = DB.add_table(C.pool("mytable"));
@@ -1306,7 +1306,7 @@ TEST_CASE("Sema/Clauses/From", "[core][parse][sema]")
 
     /* Create a dummy DB and 2 dummy tables with 2 vector attributes. */
     Catalog &C = Catalog::Get();
-    const char *db_name = "mydb";
+    ThreadSafePooledString db_name = C.pool("mydb");
     auto &DB = C.add_database(db_name);
     C.set_database_in_use(DB);
     auto &table = DB.add_table(C.pool("mytable"));
@@ -1475,7 +1475,7 @@ TEST_CASE("Sema/Clauses/Where", "[core][parse][sema]")
 
     /* Create a dummy DB and a dummy table with a vector attribute. */
     Catalog &C = Catalog::Get();
-    const char *db_name = "mydb";
+    ThreadSafePooledString db_name = C.pool("mydb");
     auto &DB = C.add_database(db_name);
     C.set_database_in_use(DB);
     auto &table = DB.add_table(C.pool("mytable"));
@@ -1577,7 +1577,7 @@ TEST_CASE("Sema/Clauses/GroupBy", "[core][parse][sema]")
 
     /* Create a dummy DB and a dummy table with a vector attribute. */
     Catalog &C = Catalog::Get();
-    const char *db_name = "mydb";
+    ThreadSafePooledString db_name = C.pool("mydb");
     auto &DB = C.add_database(db_name);
     C.set_database_in_use(DB);
     auto &table = DB.add_table(C.pool("mytable"));
@@ -1662,7 +1662,7 @@ TEST_CASE("Sema/Clauses/Having", "[core][parse][sema]")
 
     /* Create a dummy DB and a dummy table with a vector attribute. */
     Catalog &C = Catalog::Get();
-    const char *db_name = "mydb";
+    ThreadSafePooledString db_name = C.pool("mydb");
     auto &DB = C.add_database(db_name);
     C.set_database_in_use(DB);
     auto &table = DB.add_table(C.pool("mytable"));
@@ -1733,7 +1733,7 @@ TEST_CASE("Sema/Clauses/OrderBy", "[core][parse][sema]")
 
     /* Create a dummy DB and a dummy table with 2 vector attributes. */
     Catalog &C = Catalog::Get();
-    const char *db_name = "mydb";
+    ThreadSafePooledString db_name = C.pool("mydb");
     auto &DB = C.add_database(db_name);
     C.set_database_in_use(DB);
     auto &table = DB.add_table(C.pool("mytable"));
@@ -1818,7 +1818,7 @@ TEST_CASE("Sema/Clauses/Limit", "[core][parse][sema]")
 
     /* Create a dummy DB and a dummy table with a vector attribute. */
     Catalog &C = Catalog::Get();
-    const char *db_name = "mydb";
+    ThreadSafePooledString db_name = C.pool("mydb");
     auto &DB = C.add_database(db_name);
     C.set_database_in_use(DB);
     auto &table = DB.add_table(C.pool("mytable"));
@@ -1863,7 +1863,7 @@ TEST_CASE("Sema/Statements/CreateDatabase", "[core][parse][sema]")
 
     /* Create a dummy DB to test on. */
     Catalog &C = Catalog::Get();
-    const char *db_name = C.pool("mydb");
+    ThreadSafePooledString db_name = C.pool("mydb");
     auto &DB = C.add_database(db_name);
     C.set_database_in_use(DB);
 
@@ -1903,7 +1903,7 @@ TEST_CASE("Sema/Statements/DropDatabase", "[core][parse][sema]")
 
     /* Create a dummy DB to test on. */
     Catalog &C = Catalog::Get();
-    const char *db_name = C.pool("mydb");
+    ThreadSafePooledString db_name = C.pool("mydb");
     C.add_database(db_name);
 
     SECTION("Drop Database Statement is ok.")
@@ -1956,9 +1956,9 @@ TEST_CASE("Sema/Statements/UseDatabase", "[core][parse][sema]")
 
     /* Create 2 dummy DBs to test on and set mydb in use. */
     Catalog &C = Catalog::Get();
-    const char *db_name1 = C.pool("mydb1");
+    ThreadSafePooledString db_name1 = C.pool("mydb1");
     auto &DB1 = C.add_database(db_name1);
-    const char *db_name2 = C.pool("mydb2");
+    ThreadSafePooledString db_name2 = C.pool("mydb2");
     C.add_database(db_name2);
     C.set_database_in_use(DB1);
 
@@ -2013,7 +2013,7 @@ TEST_CASE("Sema/Statements/CreateTable", "[core][parse][sema]")
 
     /* Create a dummy DB to test on. */
     Catalog &C = Catalog::Get();
-    const char *db_name = "mydb";
+    ThreadSafePooledString db_name = C.pool("mydb");
     auto &DB = C.add_database(db_name);
 
     SECTION("Create table without database selected")
@@ -2295,7 +2295,7 @@ TEST_CASE("Sema/Statements/DropTable", "[core][parse][sema]")
 
     /* Create a dummy DB and a dummy table. */
     Catalog &C = Catalog::Get();
-    const char *db_name = "mydb";
+    ThreadSafePooledString db_name = C.pool("mydb");
     auto &DB = C.add_database(db_name);
     C.set_database_in_use(DB);
     auto &table = DB.add_table(C.pool("mytable"));
@@ -2366,7 +2366,7 @@ TEST_CASE("Sema/Statements/Select", "[core][parse][sema]")
 
     /* Create a dummy DB and a dummy table with a vector attribute. */
     Catalog &C = Catalog::Get();
-    const char *db_name = "mydb";
+    ThreadSafePooledString db_name = C.pool("mydb");
     auto &DB = C.add_database(db_name);
     //C.set_database_in_use(DB);
     auto &table = DB.add_table(C.pool("mytable"));
@@ -2393,7 +2393,7 @@ TEST_CASE("Sema/Statements/CreateIndex", "[core][parse][sema]")
 
     /* Create a dummy DB and a dummy table. */
     Catalog &C = Catalog::Get();
-    const char *db_name = "mydb";
+    ThreadSafePooledString db_name = C.pool("mydb");
     auto &DB = C.add_database(db_name);
     C.set_database_in_use(DB);
     auto table_name = C.pool("mytable");
@@ -2518,7 +2518,7 @@ TEST_CASE("Sema/Statements/DropIndex", "[core][parse][sema]")
 
     /* Create a dummy DB and a dummy table. */
     Catalog &C = Catalog::Get();
-    const char *db_name = "mydb";
+    ThreadSafePooledString db_name = C.pool("mydb");
     auto &DB = C.add_database(db_name);
     C.set_database_in_use(DB);
     auto table_name = C.pool("mytable");
@@ -2594,7 +2594,7 @@ TEST_CASE("Sema/Statements/Insert", "[core][parse][sema]")
 
     /* Create a dummy DB and a dummy table with integer and boolean vectorial attribute. */
     Catalog &C = Catalog::Get();
-    const char *db_name = C.pool("mydb");
+    ThreadSafePooledString db_name = C.pool("mydb");
     auto &DB = C.add_database(db_name);
     //C.set_database_in_use(DB);
     auto &table1 = DB.add_table(C.pool("mytable"));
@@ -2794,7 +2794,7 @@ TEST_CASE("Sema/Statements/DSVImport", "[core][parse][sema]")
 
     //Create a dummy DB and a dummy table with integer and boolean vectorial attribute.
     Catalog &C = Catalog::Get();
-    const char *db_name = "mydb";
+    ThreadSafePooledString db_name = C.pool("mydb");
     auto &DB = C.add_database(db_name);
     //C.set_database_in_use(DB);
     auto &table = DB.add_table(C.pool("mytable"));
@@ -2952,7 +2952,7 @@ TEST_CASE("Sema/Nested Queries", "[core][parse][sema]")
 
     /* Create a dummy DB and three dummy tables with a vector attribute. */
     Catalog &Cat = Catalog::Get();
-    const char *db_name = "mydb";
+    ThreadSafePooledString db_name = Cat.pool("mydb");
     auto &DB = Cat.add_database(db_name);
     Cat.set_database_in_use(DB);
     auto &A = DB.add_table(Cat.pool("A"));

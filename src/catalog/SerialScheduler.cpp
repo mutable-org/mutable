@@ -168,7 +168,7 @@ static void register_scheduler()
 {
     Catalog &C = Catalog::Get();
     C.register_scheduler(
-        "SerialScheduler",
+        C.pool("SerialScheduler"),
         std::make_unique<SerialScheduler>(),
         "executes all incoming queries serially"
     );

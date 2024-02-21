@@ -88,7 +88,7 @@ void ASTDot::operator()(Const<Constant> &e)
     indent() << id(e) << " [label=<<B>";
 
     if (e.is_string()) {
-        out << html_escape(e.tok.text);
+        out << html_escape(*e.tok.text);
     } else {
         out << e.tok.text;
     }
@@ -126,7 +126,7 @@ void ASTDot::operator()(Const<FnApplicationExpr> &e)
 void ASTDot::operator()(Const<UnaryExpr> &e)
 {
     (*this)(*e.expr);
-    indent() << id(e) << " [label=<" << html_escape(e.op().text);
+    indent() << id(e) << " [label=<" << html_escape(*e.op().text);
 
     if (e.has_type()) {
         std::ostringstream oss;
@@ -142,7 +142,7 @@ void ASTDot::operator()(Const<BinaryExpr> &e)
 {
     (*this)(*e.lhs);
     (*this)(*e.rhs);
-    indent() << id(e) << " [label=<" << html_escape(e.op().text);
+    indent() << id(e) << " [label=<" << html_escape(*e.op().text);
 
     if (e.has_type()) {
         std::ostringstream oss;

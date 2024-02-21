@@ -35,12 +35,12 @@ struct QueryGraph2SQL : private ast::ConstASTExprVisitor
     void insert_projection(const ast::Expr*);
     /** Translates a projection for the given pair of `Expr` and alias. Adds an alias iff none is specified and the
      * expression has to be renamed, e.g. due to a multiple use of `.` in mu*t*able which is not valid in SQL. */
-    void translate_projection(std::pair<std::reference_wrapper<const ast::Expr>, const char*>);
+    void translate_projection(std::pair<std::reference_wrapper<const ast::Expr>, ThreadSafePooledOptionalString>);
 
     /** Checks whether the given target references an expression contained in the group_by clause. */
     bool references_group_by(ast::Designator::target_type);
 
-    static const char * make_unique_alias();
+    static ThreadSafePooledString make_unique_alias();
 
     using ConstASTExprVisitor::operator();
 #define DECLARE(CLASS) void operator()(Const<CLASS>&) override;

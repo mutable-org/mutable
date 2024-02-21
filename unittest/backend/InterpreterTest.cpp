@@ -42,7 +42,7 @@ TEST_CASE("RowStore/access", "[core][backend]")
 {
     Catalog::Clear();
     auto &C = Catalog::Get();
-    C.default_backend("Interpreter");
+    C.default_backend(C.pool("Interpreter"));
 
     auto &DB = C.add_database(C.pool("test_db"));
     auto &table = DB.add_table(C.pool("test"));
@@ -505,7 +505,7 @@ TEST_CASE("PaxStore/access", "[core][backend]")
 {
     Catalog::Clear();
     auto &C = Catalog::Get();
-    C.default_backend("Interpreter");
+    C.default_backend(C.pool("Interpreter"));
 
     auto &DB = C.add_database(C.pool("test_db"));
     auto &table = DB.add_table(C.pool("test"));

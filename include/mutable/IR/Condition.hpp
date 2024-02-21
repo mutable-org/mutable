@@ -20,8 +20,10 @@ struct ConditionPropertyMap
     private:
     struct IdentifierHash
     {
-        std::size_t operator()(Schema::Identifier id) const {
-            return murmur3_64(intptr_t(id.prefix) ^ intptr_t(id.name));
+        std::size_t operator()(const Schema::Identifier &id) const {
+            return id.prefix.has_value()
+                ? murmur3_64(intptr_t(*id.prefix) ^ intptr_t(*id.name))
+                : murmur3_64(intptr_t(*id.name));
         }
     };
 
@@ -35,9 +37,9 @@ struct ConditionPropertyMap
         auto it = find(id);
         if (it == cend()) {
             if constexpr (Ordered)
-                attrs.emplace_back(id, std::move(P));
+                attrs.emplace_back(std::move(id), std::move(P));
             else
-                attrs.emplace_hint(it, id, std::move(P));
+                attrs.emplace_hint(it, std::move(id), std::move(P));
         } else {
             throw invalid_argument("identifier already in use");
         }
@@ -56,7 +58,7 @@ struct ConditionPropertyMap
         }
     }
 
-    auto find(Schema::Identifier id) const {
+    auto find(const Schema::Identifier &id) const {
         if constexpr (Ordered) {
             auto pred = [&id](const auto &e) -> bool { return e.first == id; };
             auto it = std::find_if(cbegin(), cend(), pred);
@@ -70,7 +72,7 @@ struct ConditionPropertyMap
 
     void project_and_rename(const std::vector<std::pair<Schema::Identifier, Schema::Identifier>> &old2new) {
         auto old = std::exchange(*this, ConditionPropertyMap());
-        for (auto [old_id, new_id] : old2new) {
+        for (auto &[old_id, new_id] : old2new) {
             /*----- Try to find the entry with the old ID. -----*/
             auto it = old.find(old_id);
             if (it != old.cend()) {

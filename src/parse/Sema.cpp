@@ -29,9 +29,10 @@ bool Sema::is_nested() const
  * Sema Designator Helpers
  *--------------------------------------------------------------------------------------------------------------------*/
 
-std::unique_ptr<Designator> Sema::create_designator(const char *name, Token tok, const Expr &target)
+std::unique_ptr<Designator> Sema::create_designator(ThreadSafePooledString name, Token tok, const Expr &target)
 {
-    auto new_designator = std::make_unique<Designator>(tok, Token(), Token(tok.pos, name, TK_IDENTIFIER));
+    auto new_designator = std::make_unique<Designator>(tok, Token::CreateArtificial(),
+                                                       Token(tok.pos, std::move(name), TK_IDENTIFIER));
     new_designator->type_ = target.type();
     new_designator->target_ = &target;
     return new_designator;
@@ -43,13 +44,13 @@ std::unique_ptr<Designator> Sema::create_designator(const Expr &name, const Expr
 
     std::unique_ptr<Designator> new_designator;
     if (auto d = cast<const Designator>(&name)) {
-        Token table_name = drop_table_name ? Token() : d->table_name; // possibly drop table name
-        new_designator = std::make_unique<Designator>(d->tok, table_name, d->attr_name); // copy of `name`
+        Token table_name = drop_table_name ? Token::CreateArtificial() : d->table_name; // possibly drop table name
+        new_designator = std::make_unique<Designator>(d->tok, std::move(table_name), d->attr_name); // copy of `name`
     } else {
         oss.str("");
         oss << name; // stringify `name`
         Token tok(target.tok.pos, C.pool(oss.str().c_str()), TK_DEC_INT); // fresh identifier
-        new_designator = std::make_unique<Designator>(tok);
+        new_designator = std::make_unique<Designator>(std::move(tok));
     }
 
     new_designator->type_ = target.type();
@@ -68,15 +69,15 @@ void Sema::replace_by_fresh_designator_to(std::unique_ptr<Expr> &to_replace, con
  * Other Sema Helpers
  *--------------------------------------------------------------------------------------------------------------------*/
 
-const char * Sema::make_unique_id_from_binding_path(context_stack_t::reverse_iterator current_ctx,
-                                                    context_stack_t::reverse_iterator binding_ctx)
+ThreadSafePooledOptionalString Sema::make_unique_id_from_binding_path(context_stack_t::reverse_iterator current_ctx,
+                                                                      context_stack_t::reverse_iterator binding_ctx)
 {
-    if (current_ctx == binding_ctx) return nullptr;
+    if (current_ctx == binding_ctx) return {};
 
     oss.str("");
     for (auto it = current_ctx; it != binding_ctx; ++it) {
         if (it != current_ctx) oss << '.';
-        M_insist((*it)->alias, "nested queries must have an alias");
+        M_insist((*it)->alias.has_value(), "nested queries must have an alias");
         oss << (*it)->alias;
     }
 
@@ -150,6 +151,7 @@ void Sema::operator()(Designator &e)
 {
     Catalog &C = Catalog::Get();
     SemaContext *current_ctx = &get_context();
+    auto attr_name = e.attr_name.text.assert_not_none();
 
     oss.str("");
     oss << e;
@@ -164,8 +166,8 @@ void Sema::operator()(Designator &e)
             return;
         } else if (std::distance(begin, end) == 1) {
             SemaContext::result_t &result = begin->second;
-            if (auto d = cast<Designator>(&result.expr()); d and not result.alias) // target is a designator w/o
-                e.table_name.text = d->table_name.text;                            // explicit alias
+            if (auto d = cast<Designator>(&result.expr()); d and not result.alias.has_value()) // target is a designator
+                e.table_name.text = d->table_name.text;                                        // w/o explicit alias
             e.type_ = result.expr().type();
             e.target_ = &result.expr();
             return;
@@ -204,7 +206,7 @@ void Sema::operator()(Designator &e)
         auto it = contexts_.rbegin();
         for (auto end = contexts_.rend(); it != end; ++it) {
             try {
-                src = (*it)->sources.at(e.table_name.text).first;
+                src = (*it)->sources.at(e.table_name.text.assert_not_none()).first;
                 break;
             } catch (std::out_of_range) {
                 /* The source is not found in this context so iterate over the entire stack. */
@@ -225,25 +227,23 @@ void Sema::operator()(Designator &e)
             const Table &tbl = ref->get();
             /* Find the attribute inside the table. */
             try {
-                target = &tbl.at(e.attr_name.text); // we found an attribute of that name in the source tables
+                target = &tbl.at(attr_name); // we found an attribute of that name in the source tables
             } catch (std::out_of_range) {
-                diag.e(e.attr_name.pos) << "Table " << e.table_name.text << " has no attribute " << e.attr_name.text
-                                        << ".\n";
+                diag.e(e.attr_name.pos) << "Table " << e.table_name.text << " has no attribute " << attr_name << ".\n";
                 e.type_ = Type::Get_Error();
                 return;
             }
         } else if (auto T = std::get_if<SemaContext::named_expr_table>(&src)) {
             const SemaContext::named_expr_table &tbl = *T;
             /* Find expression inside named expression table. */
-            auto [begin, end] = tbl.equal_range(e.attr_name.text);
+            auto [begin, end] = tbl.equal_range(attr_name);
             if (begin == end) {
-                diag.e(e.attr_name.pos) << "Source " << e.table_name.text << " has no attribute " << e.attr_name.text
-                                        << ".\n";
+                diag.e(e.attr_name.pos) << "Source " << e.table_name.text << " has no attribute " << attr_name << ".\n";
                 e.type_ = Type::Get_Error();
                 return;
             } else if (std::distance(begin, end) > 1) {
-                diag.e(e.attr_name.pos) << "Source " << e.table_name.text << " has multiple attributes "
-                                        << e.attr_name.text << ".\n";
+                diag.e(e.attr_name.pos) << "Source " << e.table_name.text << " has multiple attributes " << attr_name
+                                        << ".\n";
                 e.type_ = Type::Get_Error();
                 return;
             } else {
@@ -258,19 +258,19 @@ void Sema::operator()(Designator &e)
     } else {
         /* No table name was specified.  The designator references either a result or a named expression.  Search the
          * named expressions first, because they overrule attribute names. */
-        if (auto [begin, end] = current_ctx->results.equal_range(e.attr_name.text);
+        if (auto [begin, end] = current_ctx->results.equal_range(attr_name);
             current_ctx->stage > SemaContext::S_Select and std::distance(begin, end) >= 1)
         {
             /* Found a named expression. */
             if (std::distance(begin, end) > 1) {
-                diag.e(e.attr_name.pos) << "Attribute specifier " << e.attr_name.text << " is ambiguous.\n";
+                diag.e(e.attr_name.pos) << "Attribute specifier " << attr_name << " is ambiguous.\n";
                 e.type_ = Type::Get_Error();
                 return;
             } else {
                 M_insist(std::distance(begin, end) == 1);
                 SemaContext::result_t &result = begin->second;
                 e.target_ = &result.expr();
-                if (auto d = cast<Designator>(&result.expr()); d and d->attr_name.text == e.attr_name.text)
+                if (auto d = cast<Designator>(&result.expr()); d and d->attr_name.text == attr_name)
                     e.table_name.text = d->table_name.text;
                 e.set_binding_depth(0); // bound by the current (innermost) context ⇒ bound variable
                 is_result = true;
@@ -279,7 +279,7 @@ void Sema::operator()(Designator &e)
         } else {
             /* Since no table was explicitly specified, we must search *all* sources for the attribute. */
             Designator::target_type target;
-            const char *alias = nullptr;
+            ThreadSafePooledOptionalString alias;
 
             /* Search all contexts, starting with the innermost and advancing outwards. */
             for (auto it = contexts_.rbegin(), end = contexts_.rend(); it != end; ++it) {
@@ -287,11 +287,10 @@ void Sema::operator()(Designator &e)
                     if (auto ref = std::get_if<std::reference_wrapper<const Table>>(&src.second.first)) {
                         const Table &tbl = ref->get();
                         try {
-                            const Attribute &A = tbl.at(e.attr_name.text);
+                            const Attribute &A = tbl.at(attr_name);
                             if (not std::holds_alternative<std::monostate>(target)) {
                                 /* ambiguous attribute name */
-                                diag.e(e.attr_name.pos) << "Attribute specifier " << e.attr_name.text
-                                                        << " is ambiguous.\n";
+                                diag.e(e.attr_name.pos) << "Attribute specifier " << attr_name << " is ambiguous.\n";
                                 // TODO print names of conflicting tables
                                 e.type_ = Type::Get_Error();
                                 return;
@@ -305,19 +304,18 @@ void Sema::operator()(Designator &e)
                         }
                     } else if (auto T = std::get_if<SemaContext::named_expr_table>(&src.second.first)) {
                         const SemaContext::named_expr_table &tbl = *T;
-                        auto [begin, end] = tbl.equal_range(e.attr_name.text);
+                        auto [begin, end] = tbl.equal_range(attr_name);
                         if (begin == end) {
                             /* This source table has no attribute of that name.  OK, continue. */
                         } else if (std::distance(begin, end) > 1) {
-                            diag.e(e.attr_name.pos) << "Attribute specifier " << e.attr_name.text << " is ambiguous.\n";
+                            diag.e(e.attr_name.pos) << "Attribute specifier " << attr_name << " is ambiguous.\n";
                             e.type_ = Type::Get_Error();
                             return;
                         } else {
                             M_insist(std::distance(begin, end) == 1);
                             if (not std::holds_alternative<std::monostate>(target)) {
                                 /* ambiguous attribute name */
-                                diag.e(e.attr_name.pos) << "Attribute specifier " << e.attr_name.text
-                                                        << " is ambiguous.\n";
+                                diag.e(e.attr_name.pos) << "Attribute specifier " << attr_name << " is ambiguous.\n";
                                 // TODO print names of conflicting tables
                                 e.type_ = Type::Get_Error();
                                 return;
@@ -338,7 +336,7 @@ void Sema::operator()(Designator &e)
 
             /* If this designator could not be resolved, emit an error and abort further semantic analysis. */
             if (std::holds_alternative<std::monostate>(target)) {
-                diag.e(e.attr_name.pos) << "Attribute " << e.attr_name.text << " not found.\n";
+                diag.e(e.attr_name.pos) << "Attribute " << attr_name << " not found.\n";
                 e.type_ = Type::Get_Error();
                 return;
             }
@@ -405,12 +403,12 @@ void Sema::operator()(Constant &e)
             break;
 
         case TK_STRING_LITERAL:
-            e.type_ = Type::Get_Char(Type::TY_Scalar, interpret(e.tok.text).length());
+            e.type_ = Type::Get_Char(Type::TY_Scalar, interpret(*e.tok.text).length());
             break;
 
         case TK_DATE: {
             int year, month, day;
-            sscanf(e.tok.text, "d'%d-%d-%d'", &year, &month, &day);
+            sscanf(*e.tok.text, "d'%d-%d-%d'", &year, &month, &day);
             if (year == 0) {
                 diag.e(e.tok.pos) << e << " has invalid year (after year -1 (1 BC) follows year 1 (1 AD)).\n";
                 e.type_ = Type::Get_Error();
@@ -435,7 +433,7 @@ void Sema::operator()(Constant &e)
 
         case TK_DATE_TIME: {
             int year, month, day, hour, minute, second;
-            sscanf(e.tok.text, "d'%d-%d-%d %d:%d:%d'", &year, &month, &day, &hour, &minute, &second);
+            sscanf(*e.tok.text, "d'%d-%d-%d %d:%d:%d'", &year, &month, &day, &hour, &minute, &second);
             if (year == 0) {
                 diag.e(e.tok.pos) << e << " has invalid year (after year -1 (1 BC) follows year 1 (1 AD)).\n";
                 e.type_ = Type::Get_Error();
@@ -486,7 +484,7 @@ void Sema::operator()(Constant &e)
         case TK_DEC_INT:
             base += 2;
         case TK_OCT_INT: {
-            int64_t value = strtol(e.tok.text, nullptr, base);
+            int64_t value = strtol(*e.tok.text, nullptr, base);
             if (value == int32_t(value))
                 e.type_ = Type::Get_Integer(Type::TY_Scalar, 4);
             else
@@ -524,7 +522,7 @@ void Sema::operator()(FnApplicationExpr &e)
     if (C.has_database_in_use()) {
         const auto &DB = C.get_database_in_use();
         try {
-            e.func_ = DB.get_function(d->attr_name.text);
+            e.func_ = DB.get_function(d->attr_name.text.assert_not_none());
         } catch (std::out_of_range) {
             diag.e(d->attr_name.pos) << "Function " << d->attr_name.text << " is not defined in database " << DB.name
                 << ".\n";
@@ -533,7 +531,7 @@ void Sema::operator()(FnApplicationExpr &e)
         }
     } else {
         try {
-            e.func_ = C.get_function(d->attr_name.text);
+            e.func_ = C.get_function(d->attr_name.text.assert_not_none());
         } catch (std::out_of_range) {
             diag.e(d->attr_name.pos) << "Function " << d->attr_name.text << " is not defined.\n";
             e.type_ = Type::Get_Error();
@@ -1045,9 +1043,9 @@ void Sema::operator()(SelectClause &c)
             for (auto &[expr, alias] : group_by.group_by) {
                 std::unique_ptr<Designator> d;
                 if (alias) { // alias was given
-                    d = create_designator(alias.text, expr->tok, *expr);
+                    d = create_designator(alias.text.assert_not_none(), expr->tok, *expr);
                 } else if (auto D = cast<const ast::Designator>(expr.get())) { // no alias, but designator -> keep name
-                    d = create_designator(D->attr_name.text, D->tok, *D);
+                    d = create_designator(D->attr_name.text.assert_not_none(), D->tok, *D);
                 } else { // no designator, no alias -> derive name
                     std::ostringstream oss;
                     oss << *expr;
@@ -1057,10 +1055,10 @@ void Sema::operator()(SelectClause &c)
                     d->type_ = ty->as_scalar();
                 else
                     M_insist(d->type()->is_error(), "grouping key must be of primitive type");
-                const char *attr_name = d->attr_name.text;
+                auto attr_name = d->attr_name.text.assert_not_none();
                 auto &ref = c.expanded_select_all.emplace_back(std::move(d));
                 (*this)(*ref);
-                Ctx.results.emplace(attr_name, SemaContext::result_t(*ref, result_counter++, alias.text));
+                Ctx.results.emplace(std::move(attr_name), SemaContext::result_t(*ref, result_counter++, alias.text));
             }
         } else if (stmt.having) {
             /* A statement with a HAVING clause but without a GROUP BY clause may only have literals in its SELECT
@@ -1068,8 +1066,8 @@ void Sema::operator()(SelectClause &c)
             diag.w(c.select_all.pos) << "The '*' has no meaning in this query.  Did you forget the GROUP BY clause?.\n";
         } else {
             /* The '*' in the SELECT clause selects all attributes of all sources. */
-            for (auto &[src_name, src] : Ctx.sorted_sources()) {
-                if (auto ref = std::get_if<std::reference_wrapper<const Table>>(&src)) {
+            for (auto &[src_name, src] : Ctx.sources) {
+                if (auto ref = std::get_if<std::reference_wrapper<const Table>>(&src.first)) {
                     /* The source is a database table. */
                     auto &tbl = ref->get();
                     for (auto &attr : tbl) {
@@ -1087,7 +1085,7 @@ void Sema::operator()(SelectClause &c)
                     has_vectorial = true;
                 } else {
                     /* The source is a nested query. */
-                    auto &named_exprs = std::get<SemaContext::named_expr_table>(src);
+                    auto &named_exprs = std::get<SemaContext::named_expr_table>(src.first);
                     std::vector<std::unique_ptr<Expr>> expanded_select_all(named_exprs.size());
                     for (auto &[name, expr_w_pos] : named_exprs) {
                         auto &[expr, pos] = expr_w_pos;
@@ -1188,14 +1186,14 @@ void Sema::operator()(FromClause &c)
     for (auto &src: c.from) {
         if (auto name = std::get_if<Token>(&src.source)) {
             try {
-                const Table &T = DB.get_table(name->text);
+                const Table &T = DB.get_table(name->text.assert_not_none());
                 Token table_name = src.alias ? src.alias : *name; // FROM name AS alias ?
                 auto res = Ctx.sources.emplace(table_name.text, std::make_pair(std::ref(T), source_counter++));
                 /* Check if the table name is already in use in other contexts. */
                 bool unique = true;
                 for (std::size_t i = 0; i < contexts_.size() - 1; ++i) {
                     if (contexts_[i]->stage == SemaContext::S_From) continue;
-                    if (contexts_[i]->sources.find(table_name.text) != contexts_[i]->sources.end()) {
+                    if (contexts_[i]->sources.contains(table_name.text.assert_not_none())) {
                         unique = false;
                         break;
                     }
@@ -1229,7 +1227,7 @@ void Sema::operator()(FromClause &c)
             bool unique = true;
             for (std::size_t i = 0; i < contexts_.size() - 1; ++i) {
                 if (contexts_[i]->stage == SemaContext::S_From) continue;
-                if (contexts_[i]->sources.find(src.alias.text) != contexts_[i]->sources.end()) {
+                if (contexts_[i]->sources.contains(src.alias.text.assert_not_none())) {
                     unique = false;
                     break;
                 }
@@ -1373,7 +1371,7 @@ void Sema::operator()(LimitClause &c)
     /* TODO limit only makes sense when SELECT is vectorial and not scalar */
 
     errno = 0;
-    strtoull(c.limit.text, nullptr, 0);
+    strtoull(*c.limit.text, nullptr, 0);
     if (errno == EINVAL)
         diag.e(c.limit.pos) << "Invalid value for LIMIT.\n";
     else if (errno == ERANGE)
@@ -1383,7 +1381,7 @@ void Sema::operator()(LimitClause &c)
 
     if (c.offset) {
         errno = 0;
-        strtoull(c.offset.text, nullptr, 0);
+        strtoull(*c.offset.text, nullptr, 0);
         if (errno == EINVAL)
             diag.e(c.offset.pos) << "Invalid value for OFFSET.\n";
         else if (errno == ERANGE)
@@ -1422,10 +1420,10 @@ void Sema::operator()(CreateDatabaseStmt &s)
 {
     RequireContext RCtx(this, s);
     Catalog &C = Catalog::Get();
-    const char *db_name = s.database_name.text;
+    auto db_name = s.database_name.text.assert_not_none();
 
     if (not C.has_database(db_name))
-        command_ = std::make_unique<CreateDatabase>(db_name);
+        command_ = std::make_unique<CreateDatabase>(std::move(db_name));
     else
         diag.e(s.database_name.pos) << "Database " << db_name << " already exists.\n";
 }
@@ -1434,7 +1432,7 @@ void Sema::operator()(DropDatabaseStmt &s)
 {
     RequireContext RCtx(this, s);
     Catalog &C = Catalog::Get();
-    const char *db_name = s.database_name.text;
+    auto db_name = s.database_name.text.assert_not_none();
 
     if (C.has_database_in_use()) {
         if (C.get_database_in_use().name == db_name) {
@@ -1444,7 +1442,7 @@ void Sema::operator()(DropDatabaseStmt &s)
     }
 
     if (C.has_database(db_name))
-        command_ = std::make_unique<DropDatabase>(db_name);
+        command_ = std::make_unique<DropDatabase>(std::move(db_name));
     else {
         if (s.has_if_exists)
             command_ = std::make_unique<EmptyCommand>();
@@ -1457,10 +1455,10 @@ void Sema::operator()(UseDatabaseStmt &s)
 {
     RequireContext RCtx(this, s);
     Catalog &C = Catalog::Get();
-    const char *db_name = s.database_name.text;
+    auto db_name = s.database_name.text.assert_not_none();
 
     if (C.has_database(db_name))
-        command_ = std::make_unique<UseDatabase>(db_name);
+        command_ = std::make_unique<UseDatabase>(std::move(db_name));
     else
         diag.e(s.database_name.pos) << "Database " << db_name << " does not exist.\n";
 }
@@ -1475,7 +1473,7 @@ void Sema::operator()(CreateTableStmt &s)
         return;
     }
     auto &DB = C.get_database_in_use();
-    const char *table_name = s.table_name.text;
+    auto table_name = s.table_name.text.assert_not_none();
     std::unique_ptr<Table> T = C.table_factory().make(table_name);
 
     /* Add the newly declared table to the list of sources of the sema context.  We need to add the table to the sema
@@ -1494,6 +1492,7 @@ void Sema::operator()(CreateTableStmt &s)
     /* Analyze attributes and add them to the new table. */
     bool has_primary_key = false;
     for (auto &attr : s.attributes) {
+        auto attribute_name = attr->name.text.assert_not_none();
         const PrimitiveType *ty = cast<const PrimitiveType>(attr->type);
         if (not ty) {
             diag.e(attr->name.pos) << "Attribute " << attr->name.text << " cannot be defined with type " << *attr->type
@@ -1505,7 +1504,7 @@ void Sema::operator()(CreateTableStmt &s)
         /* Before we check the constraints, we must add this newly declared attribute to its table, and hence to the
          * sema context. */
         try {
-            T->push_back(attr->name.text, ty->as_vectorial());
+            T->push_back(attribute_name, ty->as_vectorial());
         } catch (std::invalid_argument) {
             /* attribute name is a duplicate */
             diag.e(attr->name.pos) << "Attribute " << attr->name.text << " occurs multiple times in defintion of table "
@@ -1522,21 +1521,21 @@ void Sema::operator()(CreateTableStmt &s)
                     diag.e(attr->name.pos) << "Duplicate definition of primary key as attribute " << attr->name.text
                                           << ".\n";
                 has_primary_key = true;
-                T->add_primary_key(attr->name.text);
+                T->add_primary_key(attribute_name);
             }
 
             if (is<UniqueConstraint>(c)) {
                 if (is_unique)
                     diag.w(c->tok.pos) << "Duplicate definition of attribute " << attr->name.text << " as UNIQUE.\n";
                 is_unique = true;
-                T->at(attr->name.text).unique = true;
+                T->at(attribute_name).unique = true;
             }
 
             if (is<NotNullConstraint>(c)) {
                 if (is_not_null)
                     diag.w(c->tok.pos) << "Duplicate definition of attribute " << attr->name.text << " as NOT NULL.\n";
                 is_not_null = true;
-                T->at(attr->name.text).not_nullable = true;
+                T->at(attribute_name).not_nullable = true;
             }
 
             if (auto check = cast<CheckConditionConstraint>(c)) {
@@ -1556,12 +1555,12 @@ void Sema::operator()(CreateTableStmt &s)
 
                 /* Check that the referenced attribute exists. */
                 try {
-                    auto &ref_table = DB.get_table(ref->table_name.text);
+                    auto &ref_table = DB.get_table(ref->table_name.text.assert_not_none());
                     try {
-                        auto &ref_attr = ref_table.at(ref->attr_name.text);
+                        auto &ref_attr = ref_table.at(ref->attr_name.text.assert_not_none());
                         if (attr->type != ref_attr.type)
                             diag.e(ref->attr_name.pos) << "Referenced attribute has different type.\n";
-                        T->at(attr->name.text).reference = &ref_attr;
+                        T->at(attr->name.text.assert_not_none()).reference = &ref_attr;
                     } catch (std::out_of_range) {
                         diag.e(ref->attr_name.pos) << "Invalid reference, attribute " << ref->attr_name.text
                                                   << " not found in table " << ref->table_name.text << ".\n";
@@ -1590,9 +1589,9 @@ void Sema::operator()(DropTableStmt &s)
     auto &DB = C.get_database_in_use();
 
     bool ok = true;
-    std::vector<const char*> table_names;
+    std::vector<ThreadSafePooledString> table_names;
     for (auto &tok : s.table_names) {
-        const char *table_name = tok->text;
+        auto table_name = tok->text.assert_not_none();
         if (DB.has_table(table_name))
             table_names.emplace_back(std::move(table_name));
         else {
@@ -1633,7 +1632,7 @@ void Sema::operator()(CreateIndexStmt &s)
     }
 
     /* Check that the index name does not yet exist. */
-    auto index_name = s.index_name.text;
+    auto index_name = s.index_name.text.assert_not_none();
     if (DB.has_index(index_name)) {
         if (s.has_if_not_exists) {
             diag.w(s.index_name.pos) << "Index " << index_name << " already exists in database " << DB.name
@@ -1647,7 +1646,7 @@ void Sema::operator()(CreateIndexStmt &s)
     }
 
     /* Check that the table exists. */
-    auto table_name = s.table_name.text;
+    auto table_name = s.table_name.text.assert_not_none();
     if (not DB.has_table(table_name)) {
         diag.e(s.table_name.pos) << "Table " << table_name << " does not exist in database " << DB.name << "\n.";
         return;
@@ -1655,14 +1654,16 @@ void Sema::operator()(CreateIndexStmt &s)
     auto &table = DB.get_table(table_name);
 
     /* Check that the index method exists. */
-    if (not s.method) // if method is not set, set to default
-        s.method = Token(s.table_name.pos, nullptr, TK_Default);
+    if (not s.method) { // if method is not set, set to default
+        s.method = Token::CreateArtificial(TK_Default);
+        s.method.pos = s.table_name.pos;
+    }
     switch(s.method.type) {
         case TK_Default: // ok
             break;
 
         case TK_IDENTIFIER:
-            if (s.method.text == C.pool("array")) // ok
+            if (s.method.text.assert_not_none() == C.pool("array")) // ok
                 break;
             else { // unknown method, not ok
                 diag.e(s.method.pos) << "Index method " << s.method.text << " not supported.\n";
@@ -1684,7 +1685,7 @@ void Sema::operator()(CreateIndexStmt &s)
     for (auto it = s.key_fields.cbegin(), end = s.key_fields.cend(); it != end; ++it) {
         auto field = it->get();
         if (auto d = cast<Designator>(field)) {
-            if (not table.has_attribute(d->attr_name.text)) {
+            if (not table.has_attribute(d->attr_name.text.assert_not_none())) {
                 diag.e(d->tok.pos) << "Attribute " << d->attr_name.text << " does not exists in table "
                                    << table_name << ".\n";
                 return;
@@ -1694,7 +1695,7 @@ void Sema::operator()(CreateIndexStmt &s)
             return;
         }
     }
-    auto attribute_name = cast<Designator>(s.key_fields.front())->attr_name.text;
+    auto attribute_name = cast<Designator>(s.key_fields.front())->attr_name.text.assert_not_none();
     auto &attribute = table.at(attribute_name);
 
     /* Build index based on selected method and key type. */
@@ -1739,7 +1740,7 @@ void Sema::operator()(CreateIndexStmt &s)
     switch(s.method.type) {
         case TK_Default: set_index.operator()<idx::ArrayIndex>(); break;
         case TK_IDENTIFIER:
-            if (s.method.text == C.pool("array"))
+            if (s.method.text.assert_not_none() == C.pool("array"))
                 set_index.operator()<idx::ArrayIndex>();
             break;
         default:
@@ -1748,7 +1749,8 @@ void Sema::operator()(CreateIndexStmt &s)
     if (not index) // No index was set
         return;
 
-    command_ = std::make_unique<CreateIndex>(std::move(index), table_name, attribute_name, index_name);
+    command_ = std::make_unique<CreateIndex>(std::move(index), std::move(table_name), std::move(attribute_name),
+                                             std::move(index_name));
 }
 
 void Sema::operator()(DropIndexStmt &s)
@@ -1763,9 +1765,9 @@ void Sema::operator()(DropIndexStmt &s)
     auto &DB = C.get_database_in_use();
 
     bool ok = true;
-    std::vector<const char*> index_names;
+    std::vector<ThreadSafePooledString> index_names;
     for (auto &tok : s.index_names) {
-        const char *index_name = tok->text;
+        auto index_name = tok->text.assert_not_none();
         if (DB.has_index(index_name))
             index_names.emplace_back(index_name);
         else {
@@ -1819,7 +1821,7 @@ void Sema::operator()(InsertStmt &s)
 
     const Table *tbl;
     try {
-        tbl = &DB.get_table(s.table_name.text);
+        tbl = &DB.get_table(s.table_name.text.assert_not_none());
     } catch (std::out_of_range) {
         diag.e(s.table_name.pos) << "Table " << s.table_name.text << " does not exist in database " << DB.name << ".\n";
         return;
@@ -1904,7 +1906,7 @@ void Sema::operator()(DSVImportStmt &s)
 
     const Table *table = nullptr;
     try {
-        table = &DB.get_table(s.table_name.text);
+        table = &DB.get_table(s.table_name.text.assert_not_none());
     } catch (std::out_of_range) {
         diag.e(s.table_name.pos) << "Table " << s.table_name.text << " does not exist in database " << DB.name << ".\n";
     }
@@ -1913,12 +1915,12 @@ void Sema::operator()(DSVImportStmt &s)
     cfg.has_header = s.has_header;
     cfg.skip_header = s.skip_header;
     if (s.rows)
-        cfg.num_rows = atoi(s.rows.text);
+        cfg.num_rows = atoi(*s.rows.text);
 
     /* If character was provided by user, check that length is equal to 1. */
 #define SET_CHAR(NAME) \
     if (s.NAME) { \
-        std::string NAME = interpret(s.NAME.text); \
+        std::string NAME = interpret(*s.NAME.text); \
         if (NAME.length() == 1) \
             cfg.NAME = NAME[0]; \
         else \
@@ -1943,7 +1945,7 @@ void Sema::operator()(DSVImportStmt &s)
     }
 
     /* Get filesystem path from path token by removing surrounding quotation marks. */
-    std::filesystem::path path(std::string(s.path.text, 1, strlen(s.path.text) - 2));
+    std::filesystem::path path(std::string(*s.path.text, 1, strlen(*s.path.text) - 2));
 
     if (not diag.num_errors())
         command_ = std::make_unique<ImportDSV>(*table, path, std::move(cfg));

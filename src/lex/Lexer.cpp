@@ -22,7 +22,7 @@ Token Lexer::next()
     /* skip whitespaces and comments */
     for (;;) {
         switch (c_) {
-            case EOF: return Token(pos_, "EOF", TK_EOF);
+            case EOF: return Token(pos_, pool("EOF"), TK_EOF);
             case ' ': case '\t': case '\v': case '\f': case '\n': case '\r': step(); continue;
 
             case '-': {
@@ -65,7 +65,7 @@ after:
         }
 
         /* Punctuators */
-#define LEX(chr, text, tt, SUB) case chr: step(); switch (c_) { SUB } return Token(start_, text, tt);
+#define LEX(chr, text, tt, SUB) case chr: step(); switch (c_) { SUB } return Token(start_, pool(text), tt);
 #define GUESS(first, SUB) case first: step(); switch (c_) { SUB } UNDO(first); break;
         LEX('(', "(", TK_LPAR, );
         LEX(')', ")", TK_RPAR, );
@@ -101,9 +101,9 @@ after:
     if ('_' == c_ or is_alpha(c_)) return read_keyword_or_identifier();
 
     push();
-    const char *str = internalize();
+    const auto str = internalize();
     diag.e(start_) << "illegal character '" << str << "'\n";
-    return Token(start_, str, TK_ERROR);
+    return Token(start_, std::move(str), TK_ERROR);
 }
 
 
@@ -119,8 +119,8 @@ Token Lexer::read_keyword_or_identifier()
         push();
     const auto str = internalize();
     auto it = keywords_.find(str);
-    if (it == keywords_.end()) return Token(start_, str, TK_IDENTIFIER);
-    else return Token(start_, str, it->second);
+    if (it == keywords_.end()) return Token(start_, std::move(str), TK_IDENTIFIER);
+    else return Token(start_, std::move(str), it->second);
 }
 
 Token Lexer::read_number()
@@ -174,7 +174,7 @@ Token Lexer::read_number()
     if (empty or is != has) {
         const auto str = internalize();
         diag.e(start_) << "invalid number '" << str << "'\n";
-        return Token(start_, str, TK_ERROR);
+        return Token(start_, std::move(str), TK_ERROR);
     }
     TokenType tt;
     switch (is) {
@@ -212,7 +212,7 @@ Token Lexer::read_string_literal()
     if ('"' != c_) {
         const auto str = internalize();
         diag.e(start_) << "unterminated string literal '" << str << "'\n";
-        return Token(start_, str, TK_ERROR);
+        return Token(start_, std::move(str), TK_ERROR);
     }
 
     push(); // terminal '"'
@@ -220,10 +220,10 @@ Token Lexer::read_string_literal()
 
     if (invalid) {
         diag.e(start_) << "invalid escape sequence in string literal '" << str << "'\n";
-        return Token(start_, str, TK_ERROR);
+        return Token(start_, std::move(str), TK_ERROR);
     }
 
-    return Token(start_, str, TK_STRING_LITERAL);
+    return Token(start_, std::move(str), TK_STRING_LITERAL);
 }
 
 Token Lexer::read_date_or_datetime()
@@ -253,7 +253,7 @@ Token Lexer::read_date_or_datetime()
     if ('\'' != c_) {
         const auto str = internalize();
         diag.e(start_) << "unterminated " << (datetime ? "datetime" : "date") << " '" << str << "'\n";
-        return Token(start_, str, TK_ERROR);
+        return Token(start_, std::move(str), TK_ERROR);
     }
 
     push(); // terminal '''
@@ -261,10 +261,10 @@ Token Lexer::read_date_or_datetime()
 
     if (invalid) {
         diag.e(start_) << "invalid symbol in " << (datetime ? "datetime" : "date") << " '" << str << "'\n";
-        return Token(start_, str, TK_ERROR);
+        return Token(start_, std::move(str), TK_ERROR);
     }
 
-    return Token(start_, str, datetime ? TK_DATE_TIME : TK_DATE);
+    return Token(start_, std::move(str), datetime ? TK_DATE_TIME : TK_DATE);
 }
 
 Token Lexer::read_instruction()

@@ -72,7 +72,7 @@ TEMPLATE_TEST_CASE("ArrayIndex::bulkload() with Numeric types", "[core][storage]
 
     /* Create and use a DB. */
     Catalog &C = Catalog::Get();
-    const char *db_name = "db";
+    ThreadSafePooledString db_name = C.pool("db");
     auto &DB = C.add_database(db_name);
     C.set_database_in_use(DB);
     auto &table = DB.add_table(C.pool("t"));

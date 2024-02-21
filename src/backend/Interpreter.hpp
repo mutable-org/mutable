@@ -240,24 +240,24 @@ struct Interpreter : Backend, ConstOperatorVisitor
 
             /* Integer */
             case TK_OCT_INT:
-                return int64_t(strtoll(c.tok.text, nullptr, 8));
+                return int64_t(strtoll(*c.tok.text, nullptr, 8));
 
             case TK_DEC_INT:
-                return int64_t(strtoll(c.tok.text, nullptr, 10));
+                return int64_t(strtoll(*c.tok.text, nullptr, 10));
 
             case TK_HEX_INT:
-                return int64_t(strtoll(c.tok.text, nullptr, 16));
+                return int64_t(strtoll(*c.tok.text, nullptr, 16));
 
             /* Float */
             case TK_DEC_FLOAT:
-                return strtod(c.tok.text, nullptr);
+                return strtod(*c.tok.text, nullptr);
 
             case TK_HEX_FLOAT:
                 M_unreachable("not implemented");
 
             /* String */
             case TK_STRING_LITERAL: {
-                std::string str(c.tok.text);
+                std::string str(*c.tok.text);
                 auto substr = interpret(str);
                 return Catalog::Get().pool(substr.c_str()); // return internalized string by reference
             }
@@ -265,7 +265,7 @@ struct Interpreter : Backend, ConstOperatorVisitor
             /* Date */
             case TK_DATE: {
                 int year, month, day;
-                if (3 != sscanf(c.tok.text, "d'%d-%d-%d'", &year, &month, &day))
+                if (3 != sscanf(*c.tok.text, "d'%d-%d-%d'", &year, &month, &day))
                     M_unreachable("invalid date");
                 return int32_t(unsigned(year) << 9 | month << 5 | day);
             }
@@ -273,7 +273,7 @@ struct Interpreter : Backend, ConstOperatorVisitor
             /* Datetime */
             case TK_DATE_TIME: {
                 /* Extract date time from string. */
-                std::string str_datetime(c.tok.text);
+                std::string str_datetime(*c.tok.text);
                 std::istringstream ss(str_datetime.substr(2, str_datetime.length() - 3));
 
                 /* Parse date time. */

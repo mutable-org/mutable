@@ -11,7 +11,7 @@ using namespace m;
 using namespace m::ast;
 
 
-const char * QueryExpr::make_unique_alias() {
+ThreadSafePooledString QueryExpr::make_unique_alias() {
     static uint64_t id(0);
     std::ostringstream oss;
     oss << "$q_" << id++;
@@ -39,17 +39,18 @@ FromClause::~FromClause()
 
 uint64_t Designator::hash() const
 {
-    std::hash<const char*> h;
+    using std::hash;
+    auto h = hash<ThreadSafePooledOptionalString>{}(attr_name.text);
     if (has_table_name())
-        return std::rotl(h(get_table_name()), 17) xor h(attr_name.text);
+        return std::rotl(hash<ThreadSafePooledString>{}(get_table_name()), 17) xor h;
     else
-        return h(attr_name.text);
+        return h;
 }
 
 uint64_t Constant::hash() const
 {
-    std::hash<const char*> h;
-    return h(tok.text);
+    using std::hash;
+    return hash<ThreadSafePooledOptionalString>{}(tok.text);
 }
 
 uint64_t FnApplicationExpr::hash() const
@@ -148,9 +149,9 @@ Schema Expr::get_required() const
         [](auto&) { },
         [&schema](const Designator &d) {
             if (d.type()->is_primitive()) { // avoid non-primitive types, e.g. functions
-                Schema::Identifier id(d.table_name.text, d.attr_name.text);
+                Schema::Identifier id(d.table_name.text, d.attr_name.text.assert_not_none());
                 if (not schema.has(id)) // avoid duplicates
-                    schema.add(id, d.type());
+                    schema.add(std::move(id), d.type());
             }
         },
         [&schema](const FnApplicationExpr &fn) {
@@ -161,7 +162,7 @@ Schema Expr::get_required() const
                 oss << fn;
                 Schema::Identifier id(C.pool(oss.str()));
                 if (not schema.has(id)) // avoid duplicates
-                    schema.add(id, fn.type());
+                    schema.add(std::move(id), fn.type());
                 throw visit_skip_subtree{};
             }
         }

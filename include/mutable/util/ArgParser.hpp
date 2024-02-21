@@ -21,9 +21,9 @@ class M_EXPORT ArgParser
     /* Option for the ArgParser. */
     struct Option
     {
-        Option(const char *short_name, const char *long_name, const char *description)
-            : short_name(short_name)
-            , long_name(long_name)
+        Option(PooledOptionalString short_name, PooledOptionalString long_name, const char *description)
+            : short_name(std::move(short_name))
+            , long_name(std::move(long_name))
             , description(description)
         { }
 
@@ -31,8 +31,8 @@ class M_EXPORT ArgParser
 
         virtual void parse(const char **&argv) const = 0;
 
-        const char *short_name;
-        const char *long_name;
+        PooledOptionalString short_name;
+        PooledOptionalString long_name;
         const char *description;
     };
 
@@ -40,8 +40,8 @@ class M_EXPORT ArgParser
     struct OptionImpl : public Option
     {
         template<is_invocable<T> Callback>
-        OptionImpl(const char *short_name, const char *long_name, const char* description, Callback &&callback)
-            : Option(short_name, long_name, description)
+        OptionImpl(PooledOptionalString short_name, PooledOptionalString long_name, const char* description, Callback &&callback)
+            : Option(std::move(short_name), std::move(long_name), description)
             , callback(std::forward<Callback>(callback))
         { }
 
@@ -58,11 +58,11 @@ class M_EXPORT ArgParser
     ///> general options
     options_t general_options_;
     ///> group options
-    std::unordered_map<const char*, options_t> grouped_options_;
+    std::unordered_map<PooledString, options_t> grouped_options_;
     ///> positional arguments
     std::vector<const char*> args_;
     ///> maps the option name to the option object
-    std::unordered_map<const char*, std::reference_wrapper<const Option>> key_map_;
+    std::unordered_map<PooledString, std::reference_wrapper<const Option>> key_map_;
     ///> the deducted maximum length of all short options
     std::size_t short_len_ = 0;
     ///> the deducted maximum length of all long options
@@ -84,26 +84,27 @@ class M_EXPORT ArgParser
     void add(const char *group_name, const char *short_name, const char *long_name, const char *description,
              Callback &&callback)
     {
-        if (group_name) group_name = pool_(group_name);
-        if (short_name) short_name = pool_(short_name);
-        if (long_name)  long_name  = pool_(long_name);
+        PooledOptionalString pooled_group_name, pooled_short_name, pooled_long_name;
+        if (group_name) pooled_group_name  = pool_(group_name);
+        if (short_name) pooled_short_name  = pool_(short_name);
+        if (long_name)  pooled_long_name   = pool_(long_name);
 
-        auto &options = group_name ? grouped_options_[group_name] : general_options_;
+        auto &options = group_name ? grouped_options_[pooled_group_name.assert_not_none()] : general_options_;
         options.push_back(std::make_unique<const OptionImpl<T>>(
-            short_name, long_name, description, std::forward<Callback>(callback)
+            pooled_short_name, pooled_long_name, description, std::forward<Callback>(callback)
         ));
         auto it = std::prev(options.end());
 
         if (short_name) {
-            auto res = key_map_.emplace(short_name, **it);
+            auto res = key_map_.emplace(std::move(pooled_short_name), **it);
             M_insist(res.second, "name already in list");
-            short_len_ = std::max(short_len_, std::string(short_name).length());
+            short_len_ = std::max(short_len_, strlen(short_name));
         }
 
         if (long_name) {
-            auto res = key_map_.emplace(long_name, **it);
+            auto res = key_map_.emplace(std::move(pooled_long_name), **it);
             M_insist(res.second, "name already in list");
-            long_len_ = std::max(long_len_, std::string(long_name).length());
+            long_len_ = std::max(long_len_, strlen(long_name));
         }
     }
 

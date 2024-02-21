@@ -16,14 +16,14 @@ namespace wasm {
 inline void wasm_check(Boolx1 cond, const char *msg)
 {
     IF (not cond) {
-        Throw(exception::failed_unittest_check, Catalog::Get().pool(msg));
+        Throw(exception::failed_unittest_check, msg);
     };
 }
 
 inline void wasm_check(_Boolx1 cond, const char *msg)
 {
     IF (not (cond.is_true_and_not_null())) {
-        Throw(exception::failed_unittest_check, Catalog::Get().pool(msg));
+        Throw(exception::failed_unittest_check, msg);
     };
 }
 

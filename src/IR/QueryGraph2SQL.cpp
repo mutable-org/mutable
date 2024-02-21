@@ -32,7 +32,7 @@ void QueryGraph2SQL::translate(const QueryGraph &graph)
                 auto name = base->table().name();
                 out_ << name;
                 if (name != ds->alias()) {
-                    M_insist(ds->alias());
+                    M_insist(ds->alias().has_value());
                     out_ << " AS " << ds->alias();
                 }
             } else if (auto query = cast<Query>(ds.get())) {
@@ -40,8 +40,8 @@ void QueryGraph2SQL::translate(const QueryGraph &graph)
                 QueryGraph2SQL trans(out_);
                 trans.translate(query->query_graph());
                 out_ << ") AS ";
-                if (auto alias = ds->alias())
-                    out_ << alias;
+                if (ds->alias().has_value())
+                    out_ << ds->alias();
                 else
                     out_ << make_unique_alias(); // query is anonymous -> alias is never used but required by SQL syntax
             } else {
@@ -66,7 +66,7 @@ void QueryGraph2SQL::translate(const QueryGraph &graph)
             if (it != graph_->group_by().begin())
                 out_ << ", ";
             (*this)(it->first);
-            if (it->second)
+            if (it->second.has_value())
                 out_ << " AS " << it->second;
         }
     }
@@ -114,13 +114,14 @@ void QueryGraph2SQL::insert_projection(const ast::Expr *e)
         out_ << expr.str() << " AS " << alias;
 }
 
-void QueryGraph2SQL::translate_projection(const std::pair<std::reference_wrapper<const ast::Expr>, const char*> p)
+void QueryGraph2SQL::translate_projection(
+    const std::pair<std::reference_wrapper<const ast::Expr>, ThreadSafePooledOptionalString> p)
 {
-    if (p.second) {
+    if (p.second.has_value()) {
         /* With alias. Translate recursively and add the alias. */
         (*this)(p.first.get());
         out_ << " AS ";
-        std::string alias(p.second);
+        std::string alias(*p.second);
         alias = replace_all(alias, "$", "_"); // for `$res` in decorrelated queries
         out_ << alias;
     } else {
@@ -129,7 +130,7 @@ void QueryGraph2SQL::translate_projection(const std::pair<std::reference_wrapper
     }
 }
 
-const char * QueryGraph2SQL::make_unique_alias()
+ThreadSafePooledString QueryGraph2SQL::make_unique_alias()
 {
     static uint64_t id(0);
     std::ostringstream oss;

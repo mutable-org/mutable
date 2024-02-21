@@ -298,7 +298,7 @@ void generate_uncorrelated_cardinalities(table_type &table, const m::QueryGraph 
         /*----- Create a fresh PRNG from the sources that are being joined. -----*/
         std::size_t seed = 0;
         for (auto s : J)
-            seed = (seed * 526122883134911UL) ^ m::StrHash{}(s.get().name());
+            seed = (seed * 526122883134911UL) ^ m::StrHash{}(*s.get().name());
         std::mt19937_64 local_g(seed);
 
         /*----- Compute the selectivity of this join. -----*/

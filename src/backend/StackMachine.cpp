@@ -62,7 +62,7 @@ struct m::StackMachineBuilder : ast::ConstASTExprVisitor
 
     /** Returns a pair of (tuple_id, attr_id). */
     std::pair<std::size_t, std::size_t>
-    find_id(Schema::Identifier id) const {
+    find_id(const Schema::Identifier &id) const {
         for (std::size_t schema_idx = 0; schema_idx != schemas_.size(); ++schema_idx) {
             auto &S = schemas_[schema_idx];
             auto it = S.find(id);
@@ -86,7 +86,7 @@ std::unordered_map<std::string, std::regex> StackMachineBuilder::regexes_;
 
 void StackMachineBuilder::operator()(Const<ast::Designator> &e)
 {
-    auto [tuple_id, attr_id] = find_id({e.table_name.text, e.attr_name.text});
+    auto [tuple_id, attr_id] = find_id({e.table_name.text, e.attr_name.text.assert_not_none()});
     stack_machine_.emit_Ld_Tup(tuple_id, attr_id);
 }
 
@@ -483,7 +483,7 @@ void StackMachineBuilder::operator()(Const<ast::BinaryExpr> &e)
         case TK_Like: {
             if (auto rhs = cast<const ast::Constant>(e.rhs.get())) {
                 (*this)(*e.lhs);
-                auto pattern = interpret(rhs->tok.text);
+                auto pattern = interpret(*rhs->tok.text);
                 auto it = regexes_.find(pattern);
                 if (it == regexes_.end())
                     it = StackMachineBuilder::regexes_.insert({pattern, pattern_to_regex(pattern.c_str(), true)}).first;

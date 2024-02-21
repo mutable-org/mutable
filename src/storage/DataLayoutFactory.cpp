@@ -231,9 +231,9 @@ static void register_data_layouts()
 {
     Catalog &C = Catalog::Get();
 #define REGISTER_PAX_BYTES(NAME, BLOCK_SIZE, DESCRIPTION) \
-    C.register_data_layout(#NAME, std::make_unique<PAXLayoutFactory>(PAXLayoutFactory::NBytes, BLOCK_SIZE), DESCRIPTION)
+    C.register_data_layout(C.pool(#NAME), std::make_unique<PAXLayoutFactory>(PAXLayoutFactory::NBytes, BLOCK_SIZE), DESCRIPTION)
 #define REGISTER_PAX_TUPLES(NAME, BLOCK_SIZE, DESCRIPTION) \
-    C.register_data_layout(#NAME, std::make_unique<PAXLayoutFactory>(PAXLayoutFactory::NTuples, BLOCK_SIZE), DESCRIPTION)
+    C.register_data_layout(C.pool(#NAME), std::make_unique<PAXLayoutFactory>(PAXLayoutFactory::NTuples, BLOCK_SIZE), DESCRIPTION)
     REGISTER_PAX_BYTES(PAX4M, 1UL << 22, "stores attributes using PAX layout with 4MiB blocks"); // default
     REGISTER_PAX_BYTES(PAX4K, 1UL << 12, "stores attributes using PAX layout with 4KiB blocks");
     REGISTER_PAX_BYTES(PAX64K, 1UL << 16, "stores attributes using PAX layout with 64KiB blocks");
@@ -242,6 +242,6 @@ static void register_data_layouts()
     REGISTER_PAX_TUPLES(PAX16Tup, 16, "stores attributes using PAX layout with blocks for 16 tuples");
     REGISTER_PAX_TUPLES(PAX128Tup, 128, "stores attributes using PAX layout with blocks for 128 tuples");
     REGISTER_PAX_TUPLES(PAX1024Tup, 1024, "stores attributes using PAX layout with blocks for 1024 tuples");
-    C.register_data_layout("Row", std::make_unique<RowLayoutFactory>(), "stores attributes in row-major order");
+    C.register_data_layout(C.pool("Row"), std::make_unique<RowLayoutFactory>(), "stores attributes in row-major order");
 #undef REGISTER_PAX
 }

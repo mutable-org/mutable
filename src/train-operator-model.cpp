@@ -177,6 +177,7 @@ int main(int argc, const char **argv)
 
     /*----- Parse command line arguments. ----------------------------------------------------------------------------*/
     ArgParser AP;
+    Catalog &C = Catalog::Get();
 #define ADD(TYPE, VAR, INIT, SHORT, LONG, DESCR, CALLBACK)\
     VAR = INIT;\
     {\
@@ -266,7 +267,7 @@ int main(int argc, const char **argv)
         /* Callback         */
         [&](const char *str) {
             try {
-                Catalog::Get().default_backend(str);
+                C.default_backend(C.pool(str));
                 args.backend = str;
             } catch (std::invalid_argument) {
                 std::cerr << "There is no execution backend with the name \"" << str << "\".\n" << AP;

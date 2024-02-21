@@ -28,7 +28,7 @@ void learn_spns::execute(Diagnostic &diag)
     auto &DB = C.get_database_in_use();
     if (DB.size() == 0) { diag.err() << "There are no tables in the database.\n"; return; }
 
-    auto CE = C.create_cardinality_estimator("Spn", DB.name);
+    auto CE = C.create_cardinality_estimator(C.pool("Spn"), DB.name);
     auto spn_estimator = cast<SpnEstimator>(CE.get());
     spn_estimator->learn_spns();
     DB.cardinality_estimator(std::move(CE));
@@ -41,7 +41,7 @@ static void register_instructions()
 {
     Catalog &C = Catalog::Get();
 #define REGISTER(NAME, DESCRIPTION) \
-    C.register_instruction<NAME>(#NAME, DESCRIPTION)
+    C.register_instruction<NAME>(C.pool(#NAME), DESCRIPTION)
     REGISTER(learn_spns, "create an SPN for every table in the database");
 #undef REGISTER
 }
@@ -119,7 +119,7 @@ void InsertRecords::execute(Diagnostic&)
     auto &DB = C.get_database_in_use();
 
     auto &I = ast<ast::InsertStmt>();
-    auto &T = DB.get_table(I.table_name.text);
+    auto &T = DB.get_table(I.table_name.text.assert_not_none());
     auto &store = T.store();
     StoreWriter W(store);
     auto &S = W.schema();
@@ -250,7 +250,7 @@ void CreateTable::execute(Diagnostic &diag)
 {
     auto &C = Catalog::Get();
     auto &DB = C.get_database_in_use();
-    const char *table_name = table_->name();
+    ThreadSafePooledString table_name = table_->name();
     Table *table = nullptr;
     try {
         table = &DB.add(std::move(table_));

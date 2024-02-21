@@ -115,7 +115,7 @@ std::pair<Eigen::MatrixXd, Eigen::VectorXd> generate_training_suite_filter()
     table.push_back(C.pool("id"), Type::Get_Integer(Type::TY_Vector, 4));
     table.push_back(C.pool("val"), get_runtime_type<T>());
     /* Set table store and data layout. */
-    table.store(C.create_store("PaxStore", table));
+    table.store(C.create_store(C.pool("PaxStore"), table));
     PAXLayoutFactory factory(PAXLayoutFactory::NTuples, space_cardinality.hi());
     table.layout(factory); // consider maximal cardinality to reuse data layout
     uint8_t *mem_ptr = reinterpret_cast<uint8_t*>(table.store().memory().addr());
@@ -214,7 +214,7 @@ std::pair<Eigen::MatrixXd, Eigen::VectorXd> generate_training_suite_group_by()
     table.push_back(C.pool("id"), Type::Get_Integer(Type::TY_Vector, 4));
     table.push_back(C.pool("val"), get_runtime_type<T>());
     /* Set table store and data layout. */
-    table.store(C.create_store("PaxStore", table));
+    table.store(C.create_store(C.pool("PaxStore"), table));
     PAXLayoutFactory factory(PAXLayoutFactory::NTuples, space_cardinality.hi());
     table.layout(factory); // consider maximal cardinality to reuse data layout
     uint8_t *mem_ptr = reinterpret_cast<uint8_t*>(table.store().memory().addr());
@@ -353,8 +353,8 @@ std::pair<Eigen::MatrixXd, Eigen::VectorXd> generate_training_suite_join()
     table_right.push_back(C.pool("id"), Type::Get_Integer(Type::TY_Vector, 4));
     table_right.push_back(C.pool("val"), get_runtime_type<T>());
     /* Set table stores and data layouts. */
-    table_left.store(C.create_store("PaxStore", table_left));
-    table_right.store(C.create_store("PaxStore", table_right));
+    table_left.store(C.create_store(C.pool("PaxStore"), table_left));
+    table_right.store(C.create_store(C.pool("PaxStore"), table_right));
     PAXLayoutFactory factory_left(PAXLayoutFactory::NTuples, space_cardinality_left.hi());
     PAXLayoutFactory factory_right(PAXLayoutFactory::NTuples, space_cardinality_right.hi());
     table_left.layout(factory_left); // consider maximal cardinality to reuse data layout

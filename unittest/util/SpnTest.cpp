@@ -29,7 +29,7 @@ TEST_CASE("spn/learning","[core][util][spn]")
         auto stmt = statement_from_string(diag, oss.str());
         execute_statement(diag, *stmt);
 
-        auto spn = SpnWrapper::learn_spn_table("db", "table");
+        auto spn = SpnWrapper::learn_spn_table(C.pool("db"), C.pool("table"));
 
         /* Expect a leaf as the root */
         CHECK(spn.height() == 0);
@@ -53,7 +53,7 @@ TEST_CASE("spn/learning","[core][util][spn]")
         auto insert_stmt = statement_from_string(diag, oss_insert.str());
         execute_statement(diag, *insert_stmt);
 
-        auto spn = SpnWrapper::learn_spn_table("db", "table");
+        auto spn = SpnWrapper::learn_spn_table(C.pool("db"), C.pool("table"));
 
         /* Expect a leaf as the root */
         CHECK(spn.height() == 0);
@@ -78,7 +78,7 @@ TEST_CASE("spn/learning","[core][util][spn]")
         auto insert_stmt = statement_from_string(diag, oss_insert.str());
         execute_statement(diag, *insert_stmt);
 
-        auto spn = SpnWrapper::learn_spn_table("db", "table");
+        auto spn = SpnWrapper::learn_spn_table(C.pool("db"), C.pool("table"));
 
         /* Expect a product node as the root to split the attributes */
         CHECK(spn.height() == 1);
@@ -104,7 +104,7 @@ TEST_CASE("spn/learning","[core][util][spn]")
         auto insert_stmt = statement_from_string(diag, oss_insert.str());
         execute_statement(diag, *insert_stmt);
 
-        auto spn = SpnWrapper::learn_spn_table("db", "table");
+        auto spn = SpnWrapper::learn_spn_table(C.pool("db"), C.pool("table"));
 
         /* Expect a product node as the root to split the attributes */
         CHECK(spn.height() == 1);
@@ -136,7 +136,7 @@ TEST_CASE("spn/learning","[core][util][spn]")
             execute_statement(diag, *insert_stmt);
         }
 
-        auto spn = SpnWrapper::learn_spn_table("db", "table");
+        auto spn = SpnWrapper::learn_spn_table(C.pool("db"), C.pool("table"));
 
         /* Expect a sum node as the root to cluster into 2 clusters */
         CHECK(spn.height() == 2);
@@ -174,15 +174,15 @@ TEST_CASE("spn/inference","[core][util][spn]")
     }
 
     std::vector<Spn::LeafType> leaf_types_discrete = {Spn::DISCRETE, Spn::DISCRETE, Spn::DISCRETE};
-    auto spn_discrete = SpnWrapper::learn_spn_table("db", "table", leaf_types_discrete);
+    auto spn_discrete = SpnWrapper::learn_spn_table(C.pool("db"), C.pool("table"), leaf_types_discrete);
 
     std::vector<Spn::LeafType> leaf_types_continuous = {Spn::CONTINUOUS, Spn::CONTINUOUS, Spn::CONTINUOUS};
-    auto spn_continuous = SpnWrapper::learn_spn_table("db", "table", leaf_types_continuous);
+    auto spn_continuous = SpnWrapper::learn_spn_table(C.pool("db"), C.pool("table"), leaf_types_continuous);
 
     SECTION("EQUAL")
     {
         /* P(column_1 = 1) should be 1 */
-        std::unordered_map<const char*, std::pair<Spn::SpnOperator, float>> filter;
+        SpnWrapper::AttrFilter filter;
         filter.emplace(C.pool("column_1"), std::make_pair(Spn::EQUAL, 1));
         CHECK(spn_discrete.likelihood(filter) >= 0.999f);
         CHECK(spn_continuous.likelihood(filter) >= 0.999f);
@@ -191,7 +191,7 @@ TEST_CASE("spn/inference","[core][util][spn]")
     SECTION("LESS")
     {
         /* P(column_2 < 2000) should be 1 */
-        std::unordered_map<const char*, std::pair<Spn::SpnOperator, float>> filter;
+        SpnWrapper::AttrFilter filter;
         filter.emplace(C.pool("column_2"), std::make_pair(Spn::LESS, 2000));
         CHECK(spn_discrete.likelihood(filter) >= 0.999f);
         CHECK(spn_continuous.likelihood(filter) >= 0.999f);
@@ -200,7 +200,7 @@ TEST_CASE("spn/inference","[core][util][spn]")
     SECTION("LESS_EQUAL")
     {
         /* P(column_3 <= 101) should be 1 */
-        std::unordered_map<const char*, std::pair<Spn::SpnOperator, float>> filter;
+        SpnWrapper::AttrFilter filter;
         filter.emplace(C.pool("column_3"), std::make_pair(Spn::LESS_EQUAL, 101));
         CHECK(spn_discrete.likelihood(filter) >= 0.999f);
         CHECK(spn_continuous.likelihood(filter) >= 0.999f);
@@ -209,7 +209,7 @@ TEST_CASE("spn/inference","[core][util][spn]")
     SECTION("GREATER")
     {
         /* P(column_3 > -1) should be 1 */
-        std::unordered_map<const char*, std::pair<Spn::SpnOperator, float>> filter;
+        SpnWrapper::AttrFilter filter;
         filter.emplace(C.pool("column_3"), std::make_pair(Spn::GREATER, -1));
         CHECK(spn_discrete.likelihood(filter) >= 0.999f);
         CHECK(spn_continuous.likelihood(filter) >= 0.999f);
@@ -218,7 +218,7 @@ TEST_CASE("spn/inference","[core][util][spn]")
     SECTION("GREATER_EQUAL")
     {
         /* P(column_2 >= 0) should be 1 */
-        std::unordered_map<const char*, std::pair<Spn::SpnOperator, float>> filter;
+        SpnWrapper::AttrFilter filter;
         filter.emplace(C.pool("column_2"), std::make_pair(Spn::GREATER_EQUAL, 0));
         CHECK(spn_discrete.likelihood(filter) >= 0.999f);
         CHECK(spn_continuous.likelihood(filter) >= 0.999f);
@@ -227,7 +227,7 @@ TEST_CASE("spn/inference","[core][util][spn]")
     SECTION("IS_NULL")
     {
         /* P(column_3 being NULL) should be 0 */
-        std::unordered_map<const char*, std::pair<Spn::SpnOperator, float>> filter;
+        SpnWrapper::AttrFilter filter;
         filter.emplace(C.pool("column_3"), std::make_pair(Spn::IS_NULL, 0));
         CHECK(spn_discrete.likelihood(filter) <= 0.001f);
         CHECK(spn_continuous.likelihood(filter) <= 0.001f);
@@ -236,7 +236,7 @@ TEST_CASE("spn/inference","[core][util][spn]")
     SECTION("EXPECTATION")
     {
         /* E(column_1) should be 1 */
-        std::unordered_map<const char*, std::pair<Spn::SpnOperator, float>> filter;
+        SpnWrapper::AttrFilter filter;
         CHECK(spn_discrete.expectation(C.pool("column_1"), filter) == 1.f);
     }
 }

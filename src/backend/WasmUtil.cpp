@@ -164,7 +164,7 @@ void ExprCompiler::operator()(const ast::Designator &e)
     }
 
     /* Search with fully qualified name. */
-    Schema::Identifier id(e.table_name.text, e.attr_name.text);
+    Schema::Identifier id(e.table_name.text, e.attr_name.text.assert_not_none());
     set(env_.get(id));
 }
 

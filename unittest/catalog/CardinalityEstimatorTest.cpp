@@ -20,19 +20,19 @@ TEST_CASE("Injection estimator estimates", "[core][catalog][cardinality]")
     /* Get Catalog and create new database to use for unit testing. */
     Catalog::Clear();
     Catalog &Cat = Catalog::Get();
-    auto &db = Cat.add_database("db");
+    auto &db = Cat.add_database(Cat.pool("db"));
     Cat.set_database_in_use(db);
 
     std::ostringstream out, err;
     Diagnostic diag(false, out, err);
 
     /* Create pooled strings. */
-    const char *str_A = Cat.pool("A");
-    const char *str_B = Cat.pool("B");
-    const char *str_C = Cat.pool("C");
+    ThreadSafePooledString str_A = Cat.pool("A");
+    ThreadSafePooledString str_B = Cat.pool("B");
+    ThreadSafePooledString str_C = Cat.pool("C");
 
-    const char *col_id = Cat.pool("id");
-    const char *col_aid = Cat.pool("aid");
+    ThreadSafePooledString col_id  = Cat.pool("id");
+    ThreadSafePooledString col_aid = Cat.pool("aid");
 
     /* Create tables. */
     Table &tbl_A = db.add_table(str_A);
@@ -75,7 +75,7 @@ TEST_CASE("Injection estimator estimates", "[core][catalog][cardinality]")
                    {\"relations\": [\"A\"], \"size\":500}, \
                    {\"relations\": [\"A\", \"B\"], \"size\":1000} \
                    ]}");
-    InjectionCardinalityEstimator ICE(diag, "mine", json_input);
+    InjectionCardinalityEstimator ICE(diag, Cat.pool("mine"), json_input);
 
     //Always check if "A" == 500 because it is in the input_json
     //Always check if "B" == 10 because it is not in the input_json
@@ -145,7 +145,7 @@ TEST_CASE("Injection estimator estimates", "[core][catalog][cardinality]")
     {
         std::istringstream json_input_wrong_db;
         json_input_wrong_db.str("{ \"mine\": [{\"relations\": [\"A\", \"B\"], \"size\":1000}]}");
-        InjectionCardinalityEstimator ice_wrong_db(diag, "yours", json_input_wrong_db);
+        InjectionCardinalityEstimator ice_wrong_db(diag, Cat.pool("yours"), json_input_wrong_db);
 
         auto non_existing_entry_model_one = ice_wrong_db.estimate_scan(*G, Subproblem::Singleton(0));
         auto non_existing_entry_model_two = ice_wrong_db.estimate_scan(*G, Subproblem::Singleton(1));
@@ -165,19 +165,19 @@ TEST_CASE("Cartesian estimator estimates", "[core][catalog][cardinality]")
     /* Get Catalog and create new database to use for unit testing. */
     Catalog::Clear();
     Catalog &Cat = Catalog::Get();
-    auto &db = Cat.add_database("db");
+    auto &db = Cat.add_database(Cat.pool("db"));
     Cat.set_database_in_use(db);
 
     std::ostringstream out, err;
     Diagnostic diag(false, out, err);
 
     /* Create pooled strings. */
-    const char *str_A = Cat.pool("A");
-    const char *str_B = Cat.pool("B");
-    const char *str_C = Cat.pool("C");
+    ThreadSafePooledString str_A = Cat.pool("A");
+    ThreadSafePooledString str_B = Cat.pool("B");
+    ThreadSafePooledString str_C = Cat.pool("C");
 
-    const char *col_id = Cat.pool("id");
-    const char *col_aid = Cat.pool("aid");
+    ThreadSafePooledString col_id  = Cat.pool("id");
+    ThreadSafePooledString col_aid = Cat.pool("aid");
 
     /* Create tables. */
     Table &tbl_A = db.add_table(str_A);

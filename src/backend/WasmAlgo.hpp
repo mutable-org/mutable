@@ -431,16 +431,16 @@ struct HashTable
         bool empty() const { return refs_.empty(); }
 
         ///> Returns `true` iff `this` contains identifier \p id.
-        bool has(Schema::Identifier id) const { return refs_.contains(id); }
+        bool has(const Schema::Identifier &id) const { return refs_.contains(id); }
 
         ///> Adds a mapping from identifier \p id to reference \p ref.
         template<sql_type T>
         void add(Schema::Identifier id, the_reference<T, IsConst> &&ref) {
-            refs_.emplace(id, std::forward<the_reference<T, IsConst>>(ref));
+            refs_.emplace(std::move(id), std::forward<the_reference<T, IsConst>>(ref));
         }
 
         ///> Returns the **moved** entry for identifier \p id.
-        value_t extract(Schema::Identifier id) {
+        value_t extract(const Schema::Identifier &id) {
             auto it = refs_.find(id);
             M_insist(it != refs_.end(), "identifier not found");
             auto nh = refs_.extract(it);
@@ -448,7 +448,7 @@ struct HashTable
         }
         ///> Returns the **moved** entry for identifier \p id.
         template<sql_type T>
-        the_reference<T, IsConst> extract(Schema::Identifier id) {
+        the_reference<T, IsConst> extract(const Schema::Identifier &id) {
             using type = the_reference<T, IsConst>;
             M_insist(refs_.count(id) <= 1, "duplicate identifier, lookup ambiguous");
             auto it = refs_.find(id);
@@ -459,7 +459,7 @@ struct HashTable
         }
 
         ///> Returns the **copied** entry for identifier \p id.
-        value_t get(Schema::Identifier id) const {
+        value_t get(const Schema::Identifier &id) const {
             M_insist(refs_.count(id) <= 1, "duplicate identifier, lookup ambiguous");
             auto it = refs_.find(id);
             M_insist(it != refs_.end(), "identifier not found");
@@ -470,7 +470,7 @@ struct HashTable
         }
         ///> Returns the **copied** entry for identifier \p id.
         template<sql_type T>
-        the_reference<T, IsConst> get(Schema::Identifier id) const {
+        the_reference<T, IsConst> get(const Schema::Identifier &id) const {
             using type = the_reference<T, IsConst>;
             M_insist(refs_.count(id) <= 1, "duplicate identifier, lookup ambiguous");
             auto it = refs_.find(id);

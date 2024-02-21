@@ -828,7 +828,7 @@ __attribute__((constructor(202)))
 static void register_WasmV8()
 {
     Catalog &C = Catalog::Get();
-    C.register_wasm_backend<V8Engine>("WasmV8", "WebAssembly backend using Google's V8 engine");
+    C.register_wasm_backend<V8Engine>(C.pool("WasmV8"), "WebAssembly backend using Google's V8 engine");
 
     /*----- Command-line arguments -----------------------------------------------------------------------------------*/
     C.arg_parser().add<int>(

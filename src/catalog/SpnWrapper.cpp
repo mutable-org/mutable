@@ -8,17 +8,18 @@ using namespace m;
 using namespace Eigen;
 
 
-SpnWrapper SpnWrapper::learn_spn_table(const char *name_of_database, const char *name_of_table,
+SpnWrapper SpnWrapper::learn_spn_table(const ThreadSafePooledString &name_of_database,
+                                       const ThreadSafePooledString &name_of_table,
                                        std::vector<Spn::LeafType> leaf_types)
 {
     auto &C = Catalog::Get();
-    auto &db = C.get_database(C.pool(name_of_database));
-    auto &table = db.get_table(C.pool(name_of_table));
+    auto &db = C.get_database(name_of_database);
+    auto &table = db.get_table(name_of_table);
 
     leaf_types.resize(table.num_attrs(), Spn::AUTO); // pad with AUTO
 
     /* use CartesianProductEstimator to query data since there currently are no SPNs on the data. */
-    auto old_estimator = db.cardinality_estimator(C.create_cardinality_estimator("CartesianProduct", name_of_database));
+    auto old_estimator = db.cardinality_estimator(C.create_cardinality_estimator(C.pool("CartesianProduct"), db.name));
 
     std::size_t num_columns = table.num_attrs();
     std::size_t num_rows = table.store().num_rows();
@@ -33,11 +34,11 @@ SpnWrapper SpnWrapper::learn_spn_table(const char *name_of_database, const char 
 
     MatrixXf data(num_rows, num_columns - primary_key_id.size());
     MatrixXi null_matrix = MatrixXi::Zero(data.rows(), data.cols());
-    std::unordered_map<const char*, unsigned> attribute_to_id;
+    std::unordered_map<ThreadSafePooledString, unsigned> attribute_to_id;
 
     std::size_t primary_key_count = 0;
 
-    const std::string table_name = table.name();
+    const std::string table_name = *table.name();
     auto stmt = statement_from_string(diag, "SELECT * FROM " + table_name + ";");
     std::unique_ptr<ast::SelectStmt> select_stmt(dynamic_cast<ast::SelectStmt*>(stmt.release()));
 
@@ -128,14 +129,14 @@ SpnWrapper SpnWrapper::learn_spn_table(const char *name_of_database, const char 
     return SpnWrapper(Spn::learn_spn(data, null_matrix, leaf_types), std::move(attribute_to_id));
 }
 
-std::unordered_map<const char*, SpnWrapper*>
-SpnWrapper::learn_spn_database(const char *name_of_database,
-                               std::unordered_map<const char*, std::vector<Spn::LeafType>> leaf_types)
+std::unordered_map<ThreadSafePooledString, SpnWrapper*>
+SpnWrapper::learn_spn_database(const ThreadSafePooledString &name_of_database,
+                               std::unordered_map<ThreadSafePooledString, std::vector<Spn::LeafType>> leaf_types)
 {
     auto &C = Catalog::Get();
-    auto &db = C.get_database(C.pool(name_of_database));
+    auto &db = C.get_database(name_of_database);
 
-    std::unordered_map<const char*, SpnWrapper*> spns;
+    std::unordered_map<ThreadSafePooledString, SpnWrapper*> spns;
 
     for (auto table_it = db.begin_tables(); table_it != db.end_tables(); table_it++) {
         spns.emplace(

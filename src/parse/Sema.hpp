@@ -19,7 +19,7 @@ struct M_EXPORT Sema : ASTVisitor
     struct SemaContext
     {
         ///> if the statement that is being analyzed is a nested query, this is its alias in the outer statement
-        const char *alias = nullptr;
+        ThreadSafePooledOptionalString alias;
 
         ///> the statement that is currently being analyzed and for which this `SemaContext` is used
         Stmt &stmt;
@@ -40,39 +40,33 @@ struct M_EXPORT Sema : ASTVisitor
             std::reference_wrapper<Expr> expr_;
             ///> the order of this result column in the result set
             unsigned order;
-            ///> alias of the expression; may be `nullptr`
-            const char *alias = nullptr;
+            ///> alias of the expression; may not have a value
+            ThreadSafePooledOptionalString alias;
 
             result_t(Expr &expr, unsigned order) : expr_(expr), order(order) { }
-            result_t(Expr &expr, unsigned order, const char *alias) : expr_(expr), order(order), alias(alias) { }
+            result_t(Expr &expr, unsigned order, ThreadSafePooledOptionalString alias)
+                : expr_(expr), order(order), alias(std::move(alias))
+            { }
 
             Expr & expr() { return expr_.get(); }
             const Expr & expr() const { return expr_.get(); }
         };
 
         ///> list of all computed expressions along with their order
-        using named_expr_table = std::unordered_multimap<const char*, std::pair<std::reference_wrapper<Expr>, unsigned>>;
+        using named_expr_table = std::unordered_multimap<ThreadSafePooledString,
+                                                         std::pair<std::reference_wrapper<Expr>, unsigned>>;
         ///> the type of a source of data: either a database table or a nested query with named results
         using source_type = std::variant<std::monostate, std::reference_wrapper<const Table>, named_expr_table>;
         ///> associative container mapping source name to data source and its order
-        using source_table = std::unordered_map<const char*, std::pair<source_type, unsigned>>;
+        using source_table = std::unordered_map<ThreadSafePooledString, std::pair<source_type, unsigned>>;
         ///> list of all sources along with their order
         source_table sources;
         ///> list of all results computed by this statement along with their order
-        std::unordered_multimap<const char*, result_t> results;
+        std::unordered_multimap<ThreadSafePooledString, result_t> results;
         ///> list of grouping keys
-        std::unordered_multimap<const char*, std::reference_wrapper<Expr>> grouping_keys;
+        std::unordered_multimap<ThreadSafePooledString, std::reference_wrapper<Expr>> grouping_keys;
 
         SemaContext(Stmt &stmt) : stmt(stmt) { }
-
-        /* Returns the `sources` in a sorted manner according to their order. */
-        std::vector<std::pair<const char*, source_type>> sorted_sources() const {
-            std::vector<std::pair<const char*, source_type>> res(sources.size());
-
-            for (auto &src : sources)
-                res[src.second.second] = std::make_pair(src.first, src.second.first);
-            return res;
-        }
     };
 
     private:
@@ -127,9 +121,9 @@ struct M_EXPORT Sema : ASTVisitor
 #undef DECLARE
 
     private:
-    SemaContext & push_context(Stmt &stmt, const char *alias = nullptr) {
+    SemaContext & push_context(Stmt &stmt, ThreadSafePooledOptionalString alias = {}) {
         auto &ref = contexts_.emplace_back(new SemaContext(stmt));
-        ref->alias = alias;
+        ref->alias = std::move(alias);
         return *ref;
     }
     SemaContext pop_context() {
@@ -156,7 +150,7 @@ struct M_EXPORT Sema : ASTVisitor
      *----------------------------------------------------------------------------------------------------------------*/
 
     /** Creates a fresh `Designator` with the given \p name at location \p tok and with target \p target. */
-    std::unique_ptr<Designator> create_designator(const char *name, Token tok, const Expr &target);
+    std::unique_ptr<Designator> create_designator(ThreadSafePooledString name, Token tok, const Expr &target);
 
     /** Creates a fresh `Designator` with the same syntactical representation as \p name (except the table name if
      * \p drop_table_name) and with target \p target. */
@@ -164,14 +158,15 @@ struct M_EXPORT Sema : ASTVisitor
 
     /** Creates an entirely new `Designator`.  This method is used to introduce artificial `Designator`s to *expand* an
      * anti-projection (`SELECT` with asterisk `*`). */
-    std::unique_ptr<Designator> create_designator(Position pos, const char *table_name, const char *attr_name,
+    std::unique_ptr<Designator> create_designator(Position pos, ThreadSafePooledString table_name,
+                                                  ThreadSafePooledString attr_name,
                                                   typename Designator::target_type target, const Type *type)
     {
         auto &C = Catalog::Get();
         Token dot(pos, C.pool("."), TK_DOT);
-        Token table(pos, table_name, TK_IDENTIFIER);
-        Token attr(pos, attr_name, TK_IDENTIFIER);
-        auto d = std::make_unique<Designator>(dot, table, attr);
+        Token table(pos, std::move(table_name), TK_IDENTIFIER);
+        Token attr(pos, std::move(attr_name), TK_IDENTIFIER);
+        auto d = std::make_unique<Designator>(std::move(dot), std::move(table), std::move(attr));
         d->type_ = type;
         d->target_ = target;
         return d;
@@ -194,8 +189,8 @@ struct M_EXPORT Sema : ASTVisitor
     void compose_of(std::unique_ptr<ast::Expr> &ptr, const std::vector<std::reference_wrapper<ast::Expr>> components);
 
     /** Creates a unique ID from a sequence of `SemaContext`s by concatenating their aliases. */
-    const char * make_unique_id_from_binding_path(context_stack_t::reverse_iterator current_ctx,
-                                                  context_stack_t::reverse_iterator binding_ctx);
+    ThreadSafePooledOptionalString make_unique_id_from_binding_path(context_stack_t::reverse_iterator current_ctx,
+                                                                    context_stack_t::reverse_iterator binding_ctx);
 };
 
 }

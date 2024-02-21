@@ -131,7 +131,7 @@ void emit_query_slice(std::ostream &out, const m::QueryGraph &G, m::Subproblem s
         const auto source = G.sources()[*it].get();
         if (const m::BaseTable *T = cast<const m::BaseTable>(source)) {
             out << T->table().name();
-            if (T->alias())
+            if (T->alias().has_value())
                 out << " AS " << T->alias();
         } else {
             std::cerr << "ERROR: Nested queries are not supported." << std::endl;

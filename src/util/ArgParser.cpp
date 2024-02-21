@@ -169,11 +169,16 @@ void ArgParser::print_args(std::ostream &out) const
 
     out << "General:\n";
     for (auto &opt : general_options_)
-        print(opt->short_name ? opt->short_name : "", opt->long_name ? opt->long_name : "", opt->description);
+        print(opt->short_name.has_value() ? *opt->short_name : "",
+              opt->long_name.has_value()  ? *opt->long_name : "",
+              opt->description);
+
     for (auto &grp : grouped_options_) {
         out << grp.first << ":\n";
         for (auto &opt : grp.second)
-            print(opt->short_name ? opt->short_name : "", opt->long_name ? opt->long_name : "", opt->description);
+            print(opt->short_name.has_value() ? *opt->short_name : "",
+                  opt->long_name.has_value()  ? *opt->long_name : "",
+                  opt->description);
     }
 }
 M_LCOV_EXCL_STOP

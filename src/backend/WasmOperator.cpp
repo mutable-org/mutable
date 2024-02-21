@@ -451,7 +451,7 @@ static void add_wasm_operator_args()
                 if (idx == std::string_view::npos)
                     std::cerr << "warning: ignore invalid attribute " << elem << std::endl;
                 Schema::Identifier attr(C.pool(elem.substr(0, idx)), C.pool(elem.substr(idx + 1)));
-                options::sorted_attributes.emplace_back(attr, true);
+                options::sorted_attributes.emplace_back(std::move(attr), true);
             }
         }
     );
@@ -468,7 +468,7 @@ static void add_wasm_operator_args()
                 if (idx == std::string_view::npos)
                     std::cerr << "warning: ignore invalid attribute " << elem << std::endl;
                 Schema::Identifier attr(C.pool(elem.substr(0, idx)), C.pool(elem.substr(idx + 1)));
-                options::sorted_attributes.emplace_back(attr, false);
+                options::sorted_attributes.emplace_back(std::move(attr), false);
             }
         }
     );
@@ -782,7 +782,7 @@ compute_aggregate_info(const std::vector<std::reference_wrapper<const FnApplicat
                 return _fn_expr.get().get_function().fnid == m::Function::FN_COUNT and
                        not _fn_expr.get().args.empty() and *_fn_expr.get().args[0] == *fn_expr.args[0];
             };
-            Schema::Identifier running_count;
+            std::optional<Schema::Identifier> running_count;
             if (auto it = std::find_if(aggregates.cbegin(), aggregates.cend(), pred);
                 it != aggregates.cend())
             { // reuse found running count
@@ -793,14 +793,14 @@ compute_aggregate_info(const std::vector<std::reference_wrapper<const FnApplicat
                 oss << "$running_count_" << fn_expr;
                 running_count = Schema::Identifier(Catalog::Get().pool(oss.str().c_str()));
                 aggregates_info.emplace_back(aggregate_info_t{
-                    .entry = { running_count, Type::Get_Integer(Type::TY_Scalar, 8), Schema::entry_type::NOT_NULLABLE },
+                    .entry = { *running_count, Type::Get_Integer(Type::TY_Scalar, 8), Schema::entry_type::NOT_NULLABLE },
                     .fnid = m::Function::FN_COUNT,
                     .args = fn_expr.args
                 });
             }
 
             /*----- Decide how to compute the average aggregate and insert sum aggregate accordingly. -----*/
-            Schema::Identifier sum;
+            std::optional<Schema::Identifier> sum;
             bool compute_running_avg;
             if (fn_expr.args[0]->type()->size() <= 32) {
                 /* Compute average by summing up all values in a 64-bit field (thus no overflows should occur) and
@@ -832,7 +832,7 @@ compute_aggregate_info(const std::vector<std::reference_wrapper<const FnApplicat
                             type = Type::Get_Double(Type::TY_Scalar);
                     }
                     aggregates_info.emplace_back(aggregate_info_t{
-                        .entry = { sum, type, e.constraints },
+                        .entry = { *sum, type, e.constraints },
                         .fnid = m::Function::FN_SUM,
                         .args = fn_expr.args
                     });
@@ -851,8 +851,8 @@ compute_aggregate_info(const std::vector<std::reference_wrapper<const FnApplicat
 
             /*----- Add info for this AVG aggregate. -----*/
             avg_aggregates_info.try_emplace(e.id, avg_aggregate_info_t{
-                .running_count = running_count,
-                .sum = sum,
+                .running_count = std::move(*running_count),
+                .sum = std::move(*sum),
                 .compute_running_avg = compute_running_avg
             });
         } else {
@@ -883,10 +883,10 @@ decompose_equi_predicate(const cnf::CNF &cnf, const Schema &schema_left)
         M_insist(is<const Designator>(binary.lhs), "invalid equi-predicate");
         M_insist(is<const Designator>(binary.rhs), "invalid equi-predicate");
         Schema::Identifier id_first(*binary.lhs), id_second(*binary.rhs);
-        auto [id_left, id_right] = schema_left.has(id_first) ? std::make_pair(id_first, id_second)
-                                                             : std::make_pair(id_second, id_first);
-        ids_left.push_back(id_left);
-        ids_right.push_back(id_right);
+        const auto &[id_left, id_right] = schema_left.has(id_first) ? std::make_pair(id_first, id_second)
+                                                                    : std::make_pair(id_second, id_first);
+        ids_left.push_back(std::move(id_left));
+        ids_right.push_back(std::move(id_right));
     }
     M_insist(ids_left.size() == ids_right.size(), "number of found IDs differ");
     M_insist(not ids_left.empty(), "must find at least one ID");
@@ -894,7 +894,7 @@ decompose_equi_predicate(const cnf::CNF &cnf, const Schema &schema_left)
 }
 
 /** Returns a pointer to the beginning of table \p table_name in the WebAssembly linear memory. */
-Ptr<void> get_base_address(const char *table_name) {
+Ptr<void> get_base_address(const ThreadSafePooledString &table_name) {
     std::ostringstream oss;
     oss.str("");
     oss << table_name << "_mem";
@@ -1890,7 +1890,7 @@ ConditionSet OrderedGrouping::pre_condition(
     for (auto &p : std::get<0>(partial_inner_nodes)->group_by()) {
         Schema::Identifier id(p.first);
         if (orders.find(id) == orders.cend())
-            orders.add(id, Sortedness::O_UNDEF);
+            orders.add(std::move(id), Sortedness::O_UNDEF);
     }
     pre_cond.add_condition(Sortedness(std::move(orders)));
 
@@ -1913,9 +1913,10 @@ ConditionSet OrderedGrouping::adapt_post_condition(const Match<OrderedGrouping> 
     for (auto &[expr, alias] : M.grouping.group_by()) {
         auto it = sortedness_child.orders().find(Schema::Identifier(expr));
         M_insist(it != sortedness_child.orders().cend());
-        Schema::Identifier id = alias ? Schema::Identifier(alias) : Schema::Identifier(expr);
+        Schema::Identifier id = alias.has_value() ? Schema::Identifier(alias.assert_not_none())
+                                                  : Schema::Identifier(expr);
         if (orders.find(id) == orders.cend())
-            orders.add(id, it->second); // drop duplicate since it must not be used afterwards
+            orders.add(std::move(id), it->second); // drop duplicate since it must not be used afterwards
     }
     post_cond.add_condition(Sortedness(std::move(orders)));
 
@@ -3653,7 +3654,7 @@ ConditionSet Quicksort<CmpPredicated>::post_condition(const Match<Quicksort> &M)
     for (auto &o : M.sorting.order_by()) {
         Schema::Identifier id(o.first);
         if (orders.find(id) == orders.cend())
-            orders.add(id, o.second ? Sortedness::O_ASC : Sortedness::O_DESC);
+            orders.add(std::move(id), o.second ? Sortedness::O_ASC : Sortedness::O_DESC);
     }
     post_cond.add_condition(Sortedness(std::move(orders)));
 
@@ -3707,7 +3708,7 @@ ConditionSet NoOpSorting::pre_condition(std::size_t child_idx,
     for (auto &o : std::get<0>(partial_inner_nodes)->order_by()) {
         Schema::Identifier id(o.first);
         if (orders.find(id) == orders.cend())
-            orders.add(id, o.second ? Sortedness::O_ASC : Sortedness::O_DESC);
+            orders.add(std::move(id), o.second ? Sortedness::O_ASC : Sortedness::O_DESC);
     }
     pre_cond.add_condition(Sortedness(std::move(orders)));
 
@@ -4117,10 +4118,10 @@ ConditionSet SortMergeJoin<SortLeft, SortRight, Predicated, CmpPredicated>::pre_
         M_insist(is<const Designator>(binary.lhs), "invalid equi-predicate");
         M_insist(is<const Designator>(binary.rhs), "invalid equi-predicate");
         Schema::Identifier id_first(*binary.lhs), id_second(*binary.rhs);
-        Schema::entry_type dummy; ///< dummy entry used in case of `child_idx` != 1, i.e. `child` is not yet set
+        auto dummy = Schema::entry_type::CreateArtificial(); ///< dummy entry used in case of `child_idx` != 1, i.e. `child` is not yet set
         const auto &[entry_parent, entry_child] = parent->schema().has(id_first)
-            ? std::make_pair(parent->schema()[id_first].second, child_idx == 1 ? child->schema()[id_second].second : dummy)
-            : std::make_pair(parent->schema()[id_second].second, child_idx == 1 ? child->schema()[id_first].second : dummy);
+            ? std::make_pair(parent->schema()[id_first].second, child_idx == 1 ? child->schema()[id_second].second : std::move(dummy))
+            : std::make_pair(parent->schema()[id_second].second, child_idx == 1 ? child->schema()[id_first].second : std::move(dummy));
         keys_parent.push_back(entry_parent.id);
         keys_child.push_back(entry_child.id);
 
@@ -4287,12 +4288,12 @@ void SortMergeJoin<SortLeft, SortRight, Predicated, CmpPredicated>::execute(
         for (std::size_t i = 0; i < order_child.size(); ++i) {
             auto &des_parent = as<const Designator>(order_parent[i].first);
             auto &des_child  = as<const Designator>(order_child[i].first);
-            Token leq(Position(nullptr), nullptr, TK_LESS_EQUAL);
+            Token leq = Token::CreateArtificial(TK_LESS_EQUAL);
             auto cpy_parent = std::make_unique<Designator>(des_parent.tok, des_parent.table_name, des_parent.attr_name,
                                                            des_parent.type(), des_parent.target());
             auto cpy_child  = std::make_unique<Designator>(des_child.tok, des_child.table_name, des_child.attr_name,
                                                            des_child.type(), des_child.target());
-            BinaryExpr expr(leq, std::move(cpy_child), std::move(cpy_parent));
+            BinaryExpr expr(std::move(leq), std::move(cpy_child), std::move(cpy_parent));
 
             auto child = env.get(Schema::Identifier(des_child));
             Boolx1 cmp = env.compile<_Boolx1>(expr).is_true_and_not_null();
@@ -4502,7 +4503,7 @@ void HashBasedGroupJoin::execute(const Match<HashBasedGroupJoin> &M, setup_t set
             if (not info.args.empty()) {
                 M_insist(info.args.size() == 1, "aggregate functions expect at most one argument");
                 auto &des = as<const Designator>(*info.args[0]);
-                Schema::Identifier arg(des.table_name.text, des.attr_name.text);
+                Schema::Identifier arg(des.table_name.text, des.attr_name.text.assert_not_none());
                 if (M.probe.schema().has(arg))
                     needs_build_counter = true;
             }
@@ -4576,7 +4577,8 @@ void HashBasedGroupJoin::execute(const Match<HashBasedGroupJoin> &M, setup_t set
                 case m::Function::FN_MAX: {
                     M_insist(info.args.size() == 1, "MIN and MAX aggregate functions expect exactly one argument");
                     auto &arg = as<const Designator>(*info.args[0]);
-                    const bool bound = schema.has(Schema::Identifier(arg.table_name.text, arg.attr_name.text));
+                    const bool bound = schema.has(Schema::Identifier(arg.table_name.text,
+                                                                     arg.attr_name.text.assert_not_none()));
 
                     std::visit(overloaded {
                         [&]<sql_type _T>(HashTable::reference_t<_T> &&r) -> void
@@ -4677,7 +4679,8 @@ void HashBasedGroupJoin::execute(const Match<HashBasedGroupJoin> &M, setup_t set
                              "AVG aggregate may only occur for running average computations");
                     M_insist(info.args.size() == 1, "AVG aggregate function expects exactly one argument");
                     auto &arg = as<const Designator>(*info.args[0]);
-                    const bool bound = schema.has(Schema::Identifier(arg.table_name.text, arg.attr_name.text));
+                    const bool bound = schema.has(Schema::Identifier(arg.table_name.text,
+                                                                     arg.attr_name.text.assert_not_none()));
 
                     auto r = entry.extract<_Doublex1>(info.entry.id);
 
@@ -4748,7 +4751,8 @@ void HashBasedGroupJoin::execute(const Match<HashBasedGroupJoin> &M, setup_t set
                 case m::Function::FN_SUM: {
                     M_insist(info.args.size() == 1, "SUM aggregate function expects exactly one argument");
                     auto &arg = as<const Designator>(*info.args[0]);
-                    const bool bound = schema.has(Schema::Identifier(arg.table_name.text, arg.attr_name.text));
+                    const bool bound = schema.has(Schema::Identifier(arg.table_name.text,
+                                                                     arg.attr_name.text.assert_not_none()));
 
                     std::visit(overloaded {
                         [&]<sql_type _T>(HashTable::reference_t<_T> &&r) -> void
@@ -4837,7 +4841,8 @@ void HashBasedGroupJoin::execute(const Match<HashBasedGroupJoin> &M, setup_t set
                         }
                     } else {
                         auto &arg = as<const Designator>(*info.args[0]);
-                        const bool bound = schema.has(Schema::Identifier(arg.table_name.text, arg.attr_name.text));
+                        const bool bound = schema.has(Schema::Identifier(arg.table_name.text,
+                                                                         arg.attr_name.text.assert_not_none()));
 
                         if (build_phase) {
                             BLOCK_OPEN(init_aggs) {
@@ -5062,7 +5067,7 @@ void HashBasedGroupJoin::execute(const Match<HashBasedGroupJoin> &M, setup_t set
                                 } else {
                                     M_insist(it->args.size() == 1, "aggregate functions expect at most one argument");
                                     auto &des = as<const Designator>(*it->args[0]);
-                                    Schema::Identifier arg(des.table_name.text, des.attr_name.text);
+                                    Schema::Identifier arg(des.table_name.text, des.attr_name.text.assert_not_none());
                                     if (it->fnid == m::Function::FN_COUNT or it->fnid == m::Function::FN_SUM) {
                                         if (M.probe.schema().has(arg)) {
                                             I64x1 build_counter =
@@ -5175,7 +5180,7 @@ void Match<m::wasm::Print<SIMDfied>>::print(std::ostream &out, unsigned level) c
 template<bool SIMDfied>
 void Match<m::wasm::Scan<SIMDfied>>::print(std::ostream &out, unsigned level) const
 {
-    indent(out, level) << (SIMDfied ? "wasm::SIMDScan(" : "wasm::Scan(") << M_notnull(this->scan.alias()) << ") ";
+    indent(out, level) << (SIMDfied ? "wasm::SIMDScan(" : "wasm::Scan(") << this->scan.alias() << ") ";
     if (this->buffer_factory_ and this->scan.schema().drop_constants().deduplicate().num_entries())
         out << "with " << this->buffer_num_tuples_ << " tuples output buffer ";
     out << this->scan.schema() << " (cumulative cost " << cost() << ')';

@@ -51,7 +51,7 @@ TEST_CASE("PlanEnumerator", "[core][IR]")
     /* Get Catalog and create new database to use for unit testing. */
     Catalog::Clear();
     Catalog &Cat = Catalog::Get();
-    auto &db = Cat.add_database("db");
+    auto &db = Cat.add_database(Cat.pool("db"));
     Cat.set_database_in_use(db);
 
     Diagnostic diag(false, std::cout, std::cerr);
@@ -59,15 +59,15 @@ TEST_CASE("PlanEnumerator", "[core][IR]")
     CartesianProductEstimator CE;
 
     /* Create pooled strings. */
-    const char *str_A    = Cat.pool("A");
-    const char *str_B    = Cat.pool("B");
-    const char *str_C    = Cat.pool("C");
-    const char *str_D    = Cat.pool("D");
+    ThreadSafePooledString str_A    = Cat.pool("A");
+    ThreadSafePooledString str_B    = Cat.pool("B");
+    ThreadSafePooledString str_C    = Cat.pool("C");
+    ThreadSafePooledString str_D    = Cat.pool("D");
 
-    const char *col_id = Cat.pool("id");
-    const char *col_aid = Cat.pool("aid");
-    const char *col_bid = Cat.pool("bid");
-    const char *col_cid = Cat.pool("cid");
+    ThreadSafePooledString col_id  = Cat.pool("id");
+    ThreadSafePooledString col_aid = Cat.pool("aid");
+    ThreadSafePooledString col_bid = Cat.pool("bid");
+    ThreadSafePooledString col_cid = Cat.pool("cid");
 
     /* Create tables. */
     Table &tbl_A = db.add_table(str_A);
@@ -170,7 +170,7 @@ WHERE A.id = C.aid AND A.id = D.aid AND B.id = D.bid AND C.id = D.cid;";
             make_entry(B, C|D);
             make_entry(A|C, B|D);
 
-            auto &PE = Catalog::Get().plan_enumerator("DPsize");
+            auto &PE = Cat.plan_enumerator(Cat.pool("DPsize"));
             PE(G, C_out, plan_table);
             REQUIRE(expected == plan_table);
         }
@@ -186,7 +186,7 @@ WHERE A.id = C.aid AND A.id = D.aid AND B.id = D.bid AND C.id = D.cid;";
             make_entry(B, C|D);
             make_entry(A|C, B|D);
 
-            auto &PE = Catalog::Get().plan_enumerator("DPsizeOpt");
+            auto &PE = Cat.plan_enumerator(Cat.pool("DPsizeOpt"));
             PE(G, C_out, plan_table);
             REQUIRE(expected == plan_table);
         }
@@ -202,7 +202,7 @@ WHERE A.id = C.aid AND A.id = D.aid AND B.id = D.bid AND C.id = D.cid;";
             make_entry(B, C|D);
             make_entry(A|C, B|D);
 
-            auto &PE = Catalog::Get().plan_enumerator("DPsizeSub");
+            auto &PE = Cat.plan_enumerator(Cat.pool("DPsizeSub"));
             PE(G, C_out, plan_table);
             REQUIRE(expected == plan_table);
         }
@@ -218,7 +218,7 @@ WHERE A.id = C.aid AND A.id = D.aid AND B.id = D.bid AND C.id = D.cid;";
             make_entry(B, C|D);
             make_entry(A|C, B|D);
 
-            auto &PE = Catalog::Get().plan_enumerator("DPsub");
+            auto &PE = Cat.plan_enumerator(Cat.pool("DPsub"));
             PE(G, C_out, plan_table);
             REQUIRE(expected == plan_table);
         }
@@ -234,7 +234,7 @@ WHERE A.id = C.aid AND A.id = D.aid AND B.id = D.bid AND C.id = D.cid;";
             make_entry(B, C|D);
             make_entry(A|C, B|D);
 
-            auto &PE = Catalog::Get().plan_enumerator("DPsubOpt");
+            auto &PE = Cat.plan_enumerator(Cat.pool("DPsubOpt"));
             PE(G, C_out, plan_table);
             REQUIRE(expected == plan_table);
         }
@@ -250,7 +250,7 @@ WHERE A.id = C.aid AND A.id = D.aid AND B.id = D.bid AND C.id = D.cid;";
             make_entry(C|D, B);
             make_entry(B|D, A|C);
 
-            auto &PE = Catalog::Get().plan_enumerator("DPccp");
+            auto &PE = Cat.plan_enumerator(Cat.pool("DPccp"));
             PE(G, C_out, plan_table);
             REQUIRE(expected == plan_table);
         }
@@ -266,7 +266,7 @@ WHERE A.id = C.aid AND A.id = D.aid AND B.id = D.bid AND C.id = D.cid;";
             make_entry(B, C|D);
             make_entry(A|C, B|D);
 
-            auto &PE = Catalog::Get().plan_enumerator("TDbasic");
+            auto &PE = Cat.plan_enumerator(Cat.pool("TDbasic"));
             PE(G, C_out, plan_table);
             REQUIRE(expected == plan_table);
         }
@@ -282,7 +282,7 @@ WHERE A.id = C.aid AND A.id = D.aid AND B.id = D.bid AND C.id = D.cid;";
             make_entry(B, C|D);
             make_entry(A|C, B|D);
 
-            auto &PE = Catalog::Get().plan_enumerator("TDMinCutAGaT");
+            auto &PE = Cat.plan_enumerator(Cat.pool("TDMinCutAGaT"));
             PE(G, C_out, plan_table);
             REQUIRE(expected == plan_table);
         }
@@ -293,7 +293,7 @@ WHERE A.id = C.aid AND A.id = D.aid AND B.id = D.bid AND C.id = D.cid;";
             make_entry(B, D); // smallest join result
             make_entry(A|C, B|D);
 
-            auto &PE = Catalog::Get().plan_enumerator("GOO");
+            auto &PE = Cat.plan_enumerator(Cat.pool("GOO"));
             PE(G, C_out, plan_table);
             REQUIRE(expected == plan_table);
         }
@@ -304,7 +304,7 @@ WHERE A.id = C.aid AND A.id = D.aid AND B.id = D.bid AND C.id = D.cid;";
             make_entry(B, D);
             make_entry(A|C, B|D); // smallest split 40 + 120
 
-            auto &PE = Catalog::Get().plan_enumerator("TDGOO");
+            auto &PE = Cat.plan_enumerator(Cat.pool("TDGOO"));
             PE(G, C_out, plan_table);
             REQUIRE(expected == plan_table);
         }
@@ -374,7 +374,7 @@ WHERE A.id = C.aid AND A.id = D.aid AND B.id = D.bid AND C.id = D.cid;";
             make_entry(D, C); // smallest join result
             make_entry(A|B, C|D);
 
-            auto &PE = Catalog::Get().plan_enumerator("GOO");
+            auto &PE = Catalog::Get().plan_enumerator(Cat.pool("GOO"));
             PE(G, C_out, plan_table);
             REQUIRE(expected == plan_table);
         }
@@ -385,7 +385,7 @@ WHERE A.id = C.aid AND A.id = D.aid AND B.id = D.bid AND C.id = D.cid;";
             make_entry(B, C);
             make_entry(A|D, B|C); // smallest split 60 + 80 = 140
 
-            auto &PE = Catalog::Get().plan_enumerator("TDGOO");
+            auto &PE = Catalog::Get().plan_enumerator(Cat.pool("TDGOO"));
             PE(G, C_out, plan_table);
             REQUIRE(expected == plan_table);
         }

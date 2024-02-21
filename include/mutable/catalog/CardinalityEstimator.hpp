@@ -5,6 +5,7 @@
 #include <mutable/mutable-config.hpp>
 #include <mutable/util/ADT.hpp>
 #include <mutable/util/crtp.hpp>
+#include <mutable/util/Pool.hpp>
 #include <sstream>
 #include <unordered_map>
 #include <vector>
@@ -55,7 +56,7 @@ struct M_EXPORT estimate_join_all_tag : const_virtual_crtp_helper<estimate_join_
 struct M_EXPORT CardinalityEstimator : estimate_join_all_tag::base_type
 {
     using estimate_join_all_tag::base_type::operator();
-    using group_type = std::pair<std::reference_wrapper<const ast::Expr>, const char*>;
+    using group_type = std::pair<std::reference_wrapper<const ast::Expr>, ThreadSafePooledOptionalString>;
 
     /** `data_model_exception` is thrown if a `DataModel` implementation does not contain the requested information. */
     struct data_model_exception : m::exception
@@ -182,7 +183,7 @@ struct M_EXPORT CartesianProductEstimator : CardinalityEstimatorCRTP<CartesianPr
     };
 
     CartesianProductEstimator() { }
-    CartesianProductEstimator(const char*) { }
+    CartesianProductEstimator(ThreadSafePooledString) { }
 
 
     /*==================================================================================================================
@@ -251,7 +252,7 @@ struct M_EXPORT InjectionCardinalityEstimator : CardinalityEstimatorCRTP<Injecti
     ///> buffer used to construct identifiers
     mutable std::ostringstream oss_;
 
-    std::unordered_map<const char*, std::size_t, StrHash, StrEqual> cardinality_table_;
+    std::unordered_map<ThreadSafePooledString, std::size_t> cardinality_table_;
     CartesianProductEstimator fallback_;
 
     public:
@@ -260,16 +261,16 @@ struct M_EXPORT InjectionCardinalityEstimator : CardinalityEstimatorCRTP<Injecti
      *
      * @param name_of_database the name of the database to create the `InjectionCardinalityEstimator` for
      */
-    InjectionCardinalityEstimator(const char *name_of_database);
+    InjectionCardinalityEstimator(ThreadSafePooledString name_of_database);
 
     /** Create an `InjectionCardinalityEstimator` for the database `name_of_database` from the inputstream `in`
      *
      * @param name_of_database the name of the database to create the `InjectionCardinalityEstimator` for
      * @param in inputstream containing the injected cardinalities in JSON format
      */
-    InjectionCardinalityEstimator(Diagnostic &diag, const char *name_of_database, std::istream &in);
+    InjectionCardinalityEstimator(Diagnostic &diag, ThreadSafePooledString name_of_database, std::istream &in);
 
-    ~InjectionCardinalityEstimator();
+    ~InjectionCardinalityEstimator() = default;
 
     InjectionCardinalityEstimator(const InjectionCardinalityEstimator&) = delete;
     InjectionCardinalityEstimator(InjectionCardinalityEstimator&&) = default;
@@ -305,15 +306,15 @@ struct M_EXPORT InjectionCardinalityEstimator : CardinalityEstimatorCRTP<Injecti
     std::size_t predict_cardinality(const DataModel &data) const override;
 
     private:
-    void read_json(Diagnostic &diag, std::istream &in, const char *name_of_database);
+    void read_json(Diagnostic &diag, std::istream &in, const ThreadSafePooledString &name_of_database);
     void print(std::ostream &out) const override;
     void buf_append(const char *s) const { while (*s) buf_.emplace_back(*s++); }
     void buf_append(const std::string &s) const {
         buf_.reserve(buf_.size() + s.size());
         buf_append(s.c_str());
     }
-    const char * buf_view() const { return &buf_[0]; }
-    const char * make_identifier(const QueryGraph &G, const Subproblem S) const;
+    const char * buf_view() const { return buf_.data(); }
+    ThreadSafePooledString make_identifier(const QueryGraph &G, const Subproblem S) const;
 };
 
 /**
@@ -321,9 +322,9 @@ struct M_EXPORT InjectionCardinalityEstimator : CardinalityEstimatorCRTP<Injecti
  */
 struct M_EXPORT SpnEstimator : CardinalityEstimatorCRTP<SpnEstimator>
 {
-    using SpnIdentifier = std::pair<const char*, const char*>;
+    using SpnIdentifier = std::pair<ThreadSafePooledString, ThreadSafePooledString>;
     using SpnJoin = std::pair<SpnIdentifier, SpnIdentifier>;
-    using table_spn_map = std::unordered_map<const char*, std::reference_wrapper<const SpnWrapper>>;
+    using table_spn_map = std::unordered_map<ThreadSafePooledString, std::reference_wrapper<const SpnWrapper>>;
 
     struct SpnDataModel : DataModel
     {
@@ -346,12 +347,12 @@ struct M_EXPORT SpnEstimator : CardinalityEstimatorCRTP<SpnEstimator>
 
     private:
     ///> the map from every table to its respective Spn, initially empty
-    std::unordered_map<const char*, SpnWrapper*> table_to_spn_;
+    std::unordered_map<ThreadSafePooledString, SpnWrapper*> table_to_spn_;
     ///> the name of the database, the estimator is built on
-    const char *name_of_database_;
+    ThreadSafePooledString name_of_database_;
 
     public:
-    explicit SpnEstimator(const char *name_of_database) : name_of_database_(name_of_database) { }
+    explicit SpnEstimator(ThreadSafePooledString name_of_database) : name_of_database_(std::move(name_of_database)) { }
 
     ~SpnEstimator();
 
@@ -359,7 +360,7 @@ struct M_EXPORT SpnEstimator : CardinalityEstimatorCRTP<SpnEstimator>
     void learn_spns();
 
     /** Add a new Spn for a table in the database. */
-    void learn_new_spn(const char *name_of_table);
+    void learn_new_spn(const ThreadSafePooledString &name_of_table);
 
     private:
     /** Function to compute which of the two join identifiers belongs to the given data model and which attribute to choose.
@@ -384,7 +385,7 @@ struct M_EXPORT SpnEstimator : CardinalityEstimatorCRTP<SpnEstimator>
      * @param attribute the attribute
      * @return          the maximum frequency of the values of the attribute
      */
-    static std::size_t max_frequency(const SpnDataModel &data, const char *attribute);
+    static std::size_t max_frequency(const SpnDataModel &data, const ThreadSafePooledString &attribute);
 
     /*==================================================================================================================
      * Model calculation

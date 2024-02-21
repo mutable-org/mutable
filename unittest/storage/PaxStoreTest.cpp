@@ -1,6 +1,7 @@
 #include "catch2/catch.hpp"
 
 #include "storage/PaxStore.hpp"
+#include <mutable/catalog/Catalog.hpp>
 #include <mutable/storage/Store.hpp>
 
 
@@ -9,18 +10,19 @@ using namespace m;
 
 TEST_CASE("PaxStore", "[core][storage][paxstore]")
 {
+    auto &C = Catalog::Get();
     /* Construct a table definition. */
-    ConcreteTable table("mytable");
-    table.push_back("i1",      Type::Get_Integer(Type::TY_Vector, 1)); // 1 byte
-    table.push_back("i2",      Type::Get_Integer(Type::TY_Vector, 2)); // 2 byte
-    table.push_back("i4",      Type::Get_Integer(Type::TY_Vector, 4)); // 4 byte
-    table.push_back("i8",      Type::Get_Integer(Type::TY_Vector, 8)); // 8 byte
-    table.push_back("decimal", Type::Get_Decimal(Type::TY_Vector, 8, 2)); // 4 byte
-    table.push_back("f",       Type::Get_Float(Type::TY_Vector)); // 4 byte
-    table.push_back("d",       Type::Get_Double(Type::TY_Vector)); // 8 byte
-    table.push_back("char3",   Type::Get_Char(Type::TY_Vector, 3)); // 3 byte
-    table.push_back("b0",      Type::Get_Boolean(Type::TY_Vector)); // 1 bit
-    table.push_back("b1",      Type::Get_Boolean(Type::TY_Vector)); // 1 bit
+    ConcreteTable table(C.pool("mytable"));
+    table.push_back(C.pool("i1"),      Type::Get_Integer(Type::TY_Vector, 1)); // 1 byte
+    table.push_back(C.pool("i2"),      Type::Get_Integer(Type::TY_Vector, 2)); // 2 byte
+    table.push_back(C.pool("i4"),      Type::Get_Integer(Type::TY_Vector, 4)); // 4 byte
+    table.push_back(C.pool("i8"),      Type::Get_Integer(Type::TY_Vector, 8)); // 8 byte
+    table.push_back(C.pool("decimal"), Type::Get_Decimal(Type::TY_Vector, 8, 2)); // 4 byte
+    table.push_back(C.pool("f"),       Type::Get_Float(Type::TY_Vector)); // 4 byte
+    table.push_back(C.pool("d"),       Type::Get_Double(Type::TY_Vector)); // 8 byte
+    table.push_back(C.pool("char3"),   Type::Get_Char(Type::TY_Vector, 3)); // 3 byte
+    table.push_back(C.pool("b0"),      Type::Get_Boolean(Type::TY_Vector)); // 1 bit
+    table.push_back(C.pool("b1"),      Type::Get_Boolean(Type::TY_Vector)); // 1 bit
     constexpr std::size_t ROW_SIZE =
         64 + // i8
         64 + // d
@@ -36,16 +38,16 @@ TEST_CASE("PaxStore", "[core][storage][paxstore]")
 
     PaxStore store(table, BLOCK_SIZE);
 
-    auto &i1 = table["i1"];
-    auto &i2 = table["i2"];
-    auto &i4 = table["i4"];
-    auto &i8 = table["i8"];
-    auto &decimal = table["decimal"];
-    auto &f = table["f"];
-    auto &d = table["d"];
-    auto &char3 = table["char3"];
-    auto &b0 = table["b0"];
-    auto &b1 = table["b1"];
+    auto &i1 = table[C.pool("i1")];
+    auto &i2 = table[C.pool("i2")];
+    auto &i4 = table[C.pool("i4")];
+    auto &i8 = table[C.pool("i8")];
+    auto &decimal = table[C.pool("decimal")];
+    auto &f = table[C.pool("f")];
+    auto &d = table[C.pool("d")];
+    auto &char3 = table[C.pool("char3")];
+    auto &b0 = table[C.pool("b0")];
+    auto &b1 = table[C.pool("b1")];
 
     SECTION("ctor")
     {
@@ -89,9 +91,10 @@ TEST_CASE("PaxStore", "[core][storage][paxstore]")
 
 TEST_CASE("PaxStore sanity checks", "[core][storage][columnstore]")
 {
+    auto &Cat = Catalog::Get();
     /* Construct a table definition. */
-    ConcreteTable table("mytable");
-    table.push_back("char2048", Type::Get_Char(Type::TY_Vector, 2048)); // 2048 byte
+    ConcreteTable table(Cat.pool("mytable"));
+    table.push_back(Cat.pool("char2048"), Type::Get_Char(Type::TY_Vector, 2048)); // 2048 byte
 
     constexpr uint32_t BLOCK_SIZE = 1UL << 13; // 8 KiB
     PaxStore store(table, BLOCK_SIZE);

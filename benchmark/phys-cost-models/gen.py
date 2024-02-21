@@ -6,6 +6,7 @@ import math
 import multiprocessing
 import numpy as np
 import os
+import pandas as pd
 import random
 import re
 import string
@@ -394,14 +395,14 @@ def gen_random_decimal_values(scale :int, precision :int, num :int):
 
 # Generate `num` distinct date values.
 def gen_random_date_values(num :int):
-    lo = datetime.date.min.toordinal()
-    hi = datetime.date.max.toordinal()
-    assert num < hi - lo
+    lo = pd.Timestamp.min.to_pydatetime(warn=False)
+    hi = pd.Timestamp.max.to_pydatetime(warn=False)
+    delta = int((hi - lo).total_seconds())
 
     values = set()
 
     while len(values) < num:
-        val = datetime.date.fromordinal(random.randint(lo, hi)).strftime("%Y-%m-%d")
+        val = (lo + datetime.timedelta(seconds=random.randrange(delta))).strftime("%Y-%m-%d")
         values.add(val)
 
     assert len(values) == len(list(values))
@@ -409,13 +410,14 @@ def gen_random_date_values(num :int):
 
 # Generate `num` distinct datetime values.
 def gen_random_datetime_values(num :int):
-    lo = int(datetime.datetime.min.replace(tzinfo=datetime.timezone.utc).timestamp())
-    hi = int(datetime.datetime.max.replace(tzinfo=datetime.timezone.utc).timestamp())
+    lo = pd.Timestamp.min.to_pydatetime(warn=False)
+    hi = pd.Timestamp.max.to_pydatetime(warn=False)
+    delta = int((hi - lo).total_seconds())
 
     values = set()
 
     while len(values) < num:
-        val = datetime.date.fromtimestamp(random.randint(lo, hi)).strftime("%Y-%m-%d %I:%M:%S")
+        val = (lo + datetime.timedelta(seconds=random.randrange(delta))).strftime("%Y-%m-%d %I:%M:%S")
         values.add(val)
 
     assert len(values) == len(list(values))

@@ -39,7 +39,6 @@ TYPE_TO_STR = {
     'c124_dummy':   'CHAR(124)',
     'date':         'DATE',
     'datetime':     'DATETIME',
-    'dec10:2':      'DECIMAL(10,2)',
 }
 SCHEMA = {
     'Relation_parent': [
@@ -112,13 +111,6 @@ SCHEMA = {
         ( 'datetime',        'datetime', ['NOT NULL'] ),
         ( 'datetime_sorted', 'datetime', ['NOT NULL'] ),
         ( 'payload',         'i32',      ['NOT NULL'] ),
-    ],
-
-    'Selectivity_decimal': [
-        ( 'id',             'i32',     ['NOT NULL'] ),
-        ( 'decimal',        'dec10:2', ['NOT NULL'] ),
-        ( 'decimal_sorted', 'dec10:2', ['NOT NULL'] ),
-        ( 'payload',        'i32',     ['NOT NULL'] ),
     ],
 
     'Distinct_multi_i32': [
@@ -537,8 +529,6 @@ def gen_column(attr, num_tuples):
         values = gen_random_string_values(6,  min(len(CHARS) ** 6,  num_distinct_values))
     elif ty == 'c56_dummy' or ty == 'c59_dummy' or ty == 'c60_dummy' or ty == 'c124_dummy':
         values = [ '"ThisIsALongDummyString"' ]
-    elif ty == 'dec10:2':
-        values = gen_random_decimal_values(10, 2, num_distinct_values)
     elif ty == 'date':
         values = gen_random_date_values(num_distinct_values)
     elif ty == 'datetime':

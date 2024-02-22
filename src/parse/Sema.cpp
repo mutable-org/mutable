@@ -1699,30 +1699,38 @@ void Sema::operator()(CreateIndexStmt &s)
 
     /* Build index based on selected method and key type. */
     std::unique_ptr<idx::IndexBase> index;
+    auto make_index = [&]<template<typename> typename Index, typename Key>() {
+        if constexpr(requires { typename Index<Key>; }) {
+            return std::make_unique<Index<Key>>();
+        } else {
+            diag(s.method.pos) << "Index method not available for given key type.\n";
+            return nullptr;
+        }
+    };
     auto set_index = [&]<template<typename> typename Index>() {
         visit(overloaded {
-            [&](const Boolean&) { index = std::make_unique<Index<bool>>(); },
+            [&](const Boolean&) { index = make_index.operator()<Index, bool>(); },
             [&](const Numeric &n) {
                 switch (n.kind) {
                     case Numeric::N_Int:
                     case Numeric::N_Decimal:
                         switch (n.size()) {
                             default: M_unreachable("invalid size");
-                            case  8: index = std::make_unique<Index<int8_t>>(); break;
-                            case 16: index = std::make_unique<Index<int16_t>>(); break;
-                            case 32: index = std::make_unique<Index<int32_t>>(); break;
-                            case 64: index = std::make_unique<Index<int64_t>>(); break;
+                            case  8: index = make_index.operator()<Index, int8_t>(); break;
+                            case 16: index = make_index.operator()<Index, int16_t>(); break;
+                            case 32: index = make_index.operator()<Index, int32_t>(); break;
+                            case 64: index = make_index.operator()<Index, int64_t>(); break;
                         }
                         break;
                     case Numeric::N_Float:
                         switch (n.size()) {
                             default: M_unreachable("invalid size");
-                            case 32: index = std::make_unique<Index<float>>(); break;
-                            case 64: index = std::make_unique<Index<double>>(); break;
+                            case 32: index = make_index.operator()<Index, float>(); break;
+                            case 64: index = make_index.operator()<Index, double>(); break;
                     }
                 }
             },
-            [&](const CharacterSequence&) { index = std::make_unique<Index<const char*>>(); },
+            [&](const CharacterSequence&) { index = make_index.operator()<Index, const char*>(); },
             [&](const Date&) { index = std::make_unique<Index<int32_t>>(); },
             [&](const DateTime&) { index = std::make_unique<Index<int64_t>>(); },
             [](auto&&) { M_unreachable("invalid type"); },
@@ -1737,6 +1745,8 @@ void Sema::operator()(CreateIndexStmt &s)
         default:
             M_unreachable("invalid token type");
     }
+    if (not index) // No index was set
+        return;
 
     command_ = std::make_unique<CreateIndex>(std::move(index), table_name, attribute_name, index_name);
 }

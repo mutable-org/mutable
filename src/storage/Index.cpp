@@ -106,12 +106,6 @@ void m::idx::ArrayIndex<Key>::add(const key_type key, const value_type value)
     finalized_ = false;
 }
 
-template<typename Key>
-void m::idx::ArrayIndex<Key>::accept(IndexVisitor &v) { v(*this); }
-
-template<typename Key>
-void m::idx::ArrayIndex<Key>::accept(ConstIndexVisitor &v) const { v(*this); }
-
 // explicit instantiations to prevent linker errors
 #define INSTANTIATE(CLASS) \
     template struct CLASS;

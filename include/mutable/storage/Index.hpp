@@ -7,7 +7,6 @@
 #include <vector>
 #include <mutable/util/exception.hpp>
 #include <mutable/util/macro.hpp>
-#include <mutable/util/Visitor.hpp>
 
 
 namespace m {
@@ -21,10 +20,6 @@ namespace idx {
 
 /** An enum class that lists all supported index methods. */
 enum class IndexMethod { Array };
-
-// Forward declarations
-struct IndexVisitor;
-struct ConstIndexVisitor;
 
 /** The base class for indexes. */
 struct IndexBase
@@ -45,9 +40,6 @@ struct IndexBase
 
     virtual void dump(std::ostream &out) const = 0;
     virtual void dump() const = 0;
-
-    virtual void accept(IndexVisitor &v) = 0;
-    virtual void accept(ConstIndexVisitor &v) const = 0;
 
     protected:
     /** Constructs a query string to select all attributes in \p schema from \p table. */
@@ -129,8 +121,6 @@ struct ArrayIndex : IndexBase
     void dump(std::ostream &out) const override { out << "ArrayIndex<" << typeid(key_type).name() << '>' << std::endl; }
     void dump() const override { dump(std::cerr); }
 
-    void accept(IndexVisitor &v) override;
-    void accept(ConstIndexVisitor &v) const override;
 };
 
 #define M_INDEX_LIST_TEMPLATED(X) \
@@ -142,9 +132,6 @@ struct ArrayIndex : IndexBase
     X(m::idx::ArrayIndex<float>) \
     X(m::idx::ArrayIndex<double>) \
     X(m::idx::ArrayIndex<const char*>)
-
-M_DECLARE_VISITOR(IndexVisitor, IndexBase, M_INDEX_LIST_TEMPLATED)
-M_DECLARE_VISITOR(ConstIndexVisitor, const IndexBase, M_INDEX_LIST_TEMPLATED)
 
 }
 

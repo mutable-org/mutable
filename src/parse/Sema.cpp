@@ -1665,6 +1665,8 @@ void Sema::operator()(CreateIndexStmt &s)
         case TK_IDENTIFIER:
             if (s.method.text.assert_not_none() == C.pool("array")) // ok
                 break;
+            else if (s.method.text == C.pool("rmi")) // ok
+                break;
             else { // unknown method, not ok
                 diag.e(s.method.pos) << "Index method " << s.method.text << " not supported.\n";
                 return;
@@ -1742,6 +1744,8 @@ void Sema::operator()(CreateIndexStmt &s)
         case TK_IDENTIFIER:
             if (s.method.text.assert_not_none() == C.pool("array"))
                 set_index.operator()<idx::ArrayIndex>();
+            else if (s.method.text == C.pool("rmi"))
+                set_index.operator()<idx::RecursiveModelIndex>();
             break;
         default:
             M_unreachable("invalid token type");

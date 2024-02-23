@@ -1,5 +1,6 @@
 #!env python3
 
+import hashlib
 import itertools
 import math
 import multiprocessing
@@ -135,6 +136,10 @@ def grouper(iterable, n):
             return
         yield itertools.chain((first_el,), chunk_it)
 
+# Returns a string hash that is consistent across Python invocations.
+def get_string_hash(x: str) -> int:
+    return int(hashlib.sha256(x.encode('utf-8')).hexdigest(), 16) % 10**8
+
 # Generate `num` distinct integer values, drawn uniformly at random from the range [ `smallest`, `largest` ).
 def gen_random_int_values(smallest :int, largest :int, num :int):
     assert largest - smallest >= num
@@ -190,7 +195,7 @@ def gen_column(attr, num_tuples):
     name = attr[0]
     ty = attr[1]
     num_distinct_values = attr[2] if len(attr) >= 3 else NUM_DISTINCT_VALUES
-    random.seed(hash(name))
+    random.seed(get_string_hash(name))
 
     if 'fid' in name:
         num_fids_joining = min(int(FKEY_JOIN_SELECTIVITY * num_tuples * num_tuples), num_tuples)

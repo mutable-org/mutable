@@ -3,6 +3,7 @@
 #include <concepts>
 #include <functional>
 #include <memory>
+#include <mutable/util/unsharable_shared_ptr.hpp>
 #include <type_traits>
 
 
@@ -102,6 +103,10 @@ concept have_common_type = requires { typename common_type_t<T, U>; };
 /** Check whether \tparam T is a unique pointer type. */
 template<typename T>
 concept is_unique_ptr = std::same_as<std::decay_t<T>, std::unique_ptr<typename T::element_type>>;
+
+/** Check whether \tparam T is a unsharable shared pointer type. */
+template<typename T>
+concept is_unsharable_shared_ptr = std::same_as<std::decay_t<T>, unsharable_shared_ptr<typename T::element_type>>;
 
 /** Check whether \tparam T is a reference wrapper type. */
 template<typename T>

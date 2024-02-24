@@ -2,7 +2,6 @@
 
 #include <memory>
 #include <mutable/util/exception.hpp>
-#include <mutable/util/fn.hpp>
 #include <mutable/util/macro.hpp>
 
 
@@ -22,6 +21,9 @@ namespace m {
 template<typename T>
 struct unsharable_shared_ptr : public std::shared_ptr<T>
 {
+    template<typename To, typename From> friend unsharable_shared_ptr<To> cast(unsharable_shared_ptr<From>);
+    template<typename To, typename From> friend unsharable_shared_ptr<To> as(unsharable_shared_ptr<From>);
+
     using super = std::shared_ptr<T>;
     /* Must not add `using super::super` or `super::operator=` since this would allow construction or assignment from
      * a `std::shared_ptr` which we want to prevent because a custom deleter might not be set.  Instead, explicitly
@@ -52,9 +54,13 @@ struct unsharable_shared_ptr : public std::shared_ptr<T>
 
     template<typename Y>
     unsharable_shared_ptr(const std::shared_ptr<Y>&) = delete; // delete since custom deleter might not be set
+    private:
+    /* Conceptually deleted, since custom deleter might not be set but must be possible for befriended `cast()` and
+     * `as()`. */
     template<typename Y>
-    unsharable_shared_ptr(std::shared_ptr<Y>&&) = delete; // delete since custom deleter might not be set
+    unsharable_shared_ptr(std::shared_ptr<Y> &&ptr) : super(std::move(ptr)) { }
 
+    public:
     unsharable_shared_ptr & operator=(const unsharable_shared_ptr&) = default;
     unsharable_shared_ptr & operator=(unsharable_shared_ptr&&) = default;
 
@@ -78,7 +84,7 @@ struct unsharable_shared_ptr : public std::shared_ptr<T>
     std::unique_ptr<T> exclusive_shared_to_unique() {
         if (super::use_count() == 0) return nullptr;  // nothing to unshare
         if (super::use_count() > 1) throw m::invalid_state{"not exclusive"};
-        *std::get_deleter<deleter_func_type>(as<super>(*this)) = &unsharable_shared_ptr::noop_deleter;
+        *std::get_deleter<deleter_func_type>(static_cast<super>(*this)) = &unsharable_shared_ptr::noop_deleter;
         std::unique_ptr<T> uptr{super::get()};
         super::reset();  // this will *not* delete the referenced object
         M_insist(super::get() == nullptr);

@@ -1,5 +1,6 @@
 #include "catch2/catch.hpp"
 
+#include <mutable/util/fn.hpp>
 #include <mutable/util/unsharable_shared_ptr.hpp>
 #include <string>
 
@@ -153,5 +154,54 @@ TEST_CASE("make_unsharable_shared", "[core][util]")
         CHECK(uptr->str == "Hello, World!"s);
         CHECK(sp1.use_count() == 0);
         CHECK(sp1.get() == nullptr);
+    }
+}
+
+TEST_CASE("unsharable_shared_ptr/cast", "[core][util]")
+{
+    struct Foo
+    {
+        virtual ~Foo() { }
+    };
+    struct Bar : Foo { };
+
+    SECTION("is<Bar>(unsharable_shared_ptr<Foo>)")
+    {
+        unsharable_shared_ptr<Foo> sp1 = make_unsharable_shared<Bar>();
+        CHECK(sp1.use_count() == 1);
+        CHECK(is<Bar>(sp1));
+    }
+
+    SECTION("cast<Bar>(unsharable_shared_ptr<Foo>)")
+    {
+        unsharable_shared_ptr<Foo> sp1 = make_unsharable_shared<Bar>();
+        CHECK(sp1.use_count() == 1);
+        auto sp2 = cast<Bar>(sp1);
+        CHECK(bool(sp2));
+        CHECK(sp1.use_count() == 2);
+        CHECK(sp2.use_count() == 2);
+    }
+
+    SECTION("as<Bar>(unsharable_shared_ptr<Foo>)")
+    {
+        unsharable_shared_ptr<Foo> sp1 = make_unsharable_shared<Bar>();
+        CHECK(sp1.use_count() == 1);
+        auto sp2 = as<Bar>(sp1);
+        CHECK(bool(sp2));
+        CHECK(sp1.use_count() == 2);
+        CHECK(sp2.use_count() == 2);
+    }
+
+    SECTION("as<Bar>(unsharable_shared_ptr<Foo>) and convert to unique pointer")
+    {
+        unsharable_shared_ptr<Foo> sp1 = make_unsharable_shared<Bar>();
+        CHECK(sp1.use_count() == 1);
+        auto sp2 = as<Bar>(std::move(sp1));
+        CHECK(bool(sp2));
+        CHECK(sp2.use_count() == 1);
+
+        auto uptr = sp2.exclusive_shared_to_unique();
+        CHECK(sp2.use_count() == 0);
+        CHECK(sp2.get() == nullptr);
     }
 }

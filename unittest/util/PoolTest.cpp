@@ -2,12 +2,12 @@
 
 #include <functional>
 #include <mutable/util/Pool.hpp>
-#include <numeric>
-#include <random>
+#include <string_view>
 #include <thread>
 
 
 using namespace m;
+using namespace std::string_view_literals;
 
 
 TEST_CASE("Pool c'tor", "[core][util][pool]")
@@ -167,10 +167,11 @@ TEST_CASE("PooledOptionalString Utilization", "[core][util][pool]")
         REQUIRE(pool.size() == 1);
         REQUIRE(ps2.has_value());
         REQUIRE(ps0.has_value() == false);
+        CHECK(*ps2.assert_not_none() == "ps0"sv);
         REQUIRE(ps0.count() == 0);
 
         REQUIRE(ps1 == ps2);
-        REQUIRE(streq(*ps2, "ps0"));
+        REQUIRE(*ps2 == "ps0"sv);
         REQUIRE(ps1.count() == 2);
         REQUIRE(ps2.count() == 2);
     }
@@ -185,7 +186,7 @@ TEST_CASE("PooledOptionalString Utilization", "[core][util][pool]")
             }
             REQUIRE(pool.size() == 1);
             REQUIRE(ps0.has_value());
-            REQUIRE(streq(*ps0, "ps0"));
+            REQUIRE(*ps0 == "ps0"sv);
         }
         REQUIRE(pool.size() == 1); // TODO: size() should return 0 after garbage collection is implemented
     }
@@ -207,7 +208,7 @@ TEST_CASE("Interaction of optional & non-optional", "[core][util][pool]")
             REQUIRE(pool.size() == 2);
             REQUIRE(pos1.has_value());
             REQUIRE(pos1.count() == 2);
-            REQUIRE(streq(*pos1, "ps"));
+            REQUIRE(*pos1 == "ps"sv);
         }
 
         SECTION("conversion c'tor: optional -> non-optional")
@@ -216,7 +217,7 @@ TEST_CASE("Interaction of optional & non-optional", "[core][util][pool]")
             REQUIRE(pool.size() == 2);
             REQUIRE(pos0.has_value());
             REQUIRE(ps1.count() == 2);
-            REQUIRE(streq(*ps1, "pos"));
+            REQUIRE(*ps1 == "pos"sv);
         }
 
         SECTION("conversion move c'tor: non-optional -> optional")
@@ -226,7 +227,7 @@ TEST_CASE("Interaction of optional & non-optional", "[core][util][pool]")
             REQUIRE(pos2.has_value());
             REQUIRE(pos2.count() == 1);
             REQUIRE(ps0.count() == 0);
-            REQUIRE(streq(*pos2, "ps"));
+            REQUIRE(*pos2 == "ps"sv);
         }
 
         SECTION("conversion move c'tor: optional -> non-optional")
@@ -235,7 +236,7 @@ TEST_CASE("Interaction of optional & non-optional", "[core][util][pool]")
             REQUIRE(pool.size() == 2);
             REQUIRE(ps2.count() == 1);
             REQUIRE(pos0.count() == 0);
-            REQUIRE(streq(*ps2, "pos"));
+            REQUIRE(*ps2 == "pos"sv);
         }
     }
 

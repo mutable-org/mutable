@@ -232,6 +232,11 @@ struct Pooled
 
     bool has_value() const requires can_be_none { return ref_ != nullptr; }
 
+    Pooled<T, Pool, false> assert_not_none() const requires can_be_none {
+        M_insist(has_value());
+        return { pool_, ref_ };
+    }
+
     /**
      * Returns the number of references to the pooled object or 0 if
      * this `Pooled` CanBeNone and does *not* hold a reference to an object.

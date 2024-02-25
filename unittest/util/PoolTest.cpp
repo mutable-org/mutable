@@ -151,6 +151,7 @@ TEST_CASE("PooledOptionalString Utilization", "[core][util][pool]")
         PooledOptionalString ps0{ pool("ps0") };
         REQUIRE(pool.size() == 1);
         REQUIRE(ps0.has_value());
+        CHECK(*ps0.assert_not_none() == "ps0"sv);
         REQUIRE(ps0.count() == 1);
 
         // copy constructing a non-empty PooledOptionalString should not affect the pool
@@ -158,6 +159,7 @@ TEST_CASE("PooledOptionalString Utilization", "[core][util][pool]")
         REQUIRE(pool.size() == 1);
         REQUIRE(ps0.has_value());
         REQUIRE(ps1.has_value());
+        CHECK(*ps1.assert_not_none() == "ps0"sv);
         REQUIRE(ps0 == ps1);
         REQUIRE(ps0.count() == 2);
         REQUIRE(ps1.count() == 2);

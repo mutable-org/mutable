@@ -87,7 +87,7 @@ struct ArrayIndex : IndexBase
     void add(const key_type key, const value_type value);
 
     /** Sorts the underlying vector and flags the index as finalized. */
-    void finalize() {
+    virtual void finalize() {
         std::sort(data_.begin(), data_.end(), cmp);
         finalized_ = true;
     }
@@ -98,7 +98,7 @@ struct ArrayIndex : IndexBase
     /** Returns an iterator pointing to the first entry of the vector such that `entry.key` < \p key is `false`, i.e.
      * that is greater than or equal to \p key, or `end()` if no such element is found.  Throws `m::exception` if the
      * index is not finalized. */
-    const_iterator lower_bound(const key_type key) const {
+    virtual const_iterator lower_bound(const key_type key) const {
         if (not finalized_) throw m::exception("Index is not finalized.");
         return std::lower_bound(data_.begin(), data_.end(), entry_type{key, value_type()}, cmp);
     }
@@ -106,7 +106,7 @@ struct ArrayIndex : IndexBase
     /** Returns an iterator pointing to the first entry of the vector such that `entry.key` < \p key is `true`, i.e.
      * that is strictly greater than \p key, or `end()` if no such element is found.  Throws `m::exception` if the index
      * is not finalized. */
-    const_iterator upper_bound(const key_type key) const {
+    virtual const_iterator upper_bound(const key_type key) const {
         if (not finalized_) throw m::exception("Index is not finalized.");
         return std::upper_bound(data_.begin(), data_.end(), entry_type{key, value_type()}, cmp);
     }

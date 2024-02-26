@@ -214,76 +214,7 @@ struct RecursiveModelIndex : ArrayIndex<Key>
     IndexMethod method() const override { return IndexMethod::Rmi; }
 
     /** Sorts the underlying vector, builds the linear models, and flags the index as finalized. */
-    void finalize() override {
-        /* Sort data. */
-        std::sort(base_type::data_.begin(), base_type::data_.end(), base_type::cmp);
-
-        /* Compute number of models. */
-        auto begin = base_type::begin();
-        auto end = base_type::end();
-        std::size_t n_keys = std::distance(begin, end);
-        std::size_t n_models = std::max<std::size_t>(1, n_keys * 0.1);
-        models_.reserve(n_models + 1);
-
-        /* Train first layer. */
-        models_.emplace_back(
-            LinearModel::train_linear_spline(
-                /* begin=              */ begin,
-                /* end=                */ end,
-                /* offset=             */ 0,
-                /* compression_factor= */ static_cast<double>(n_models) / n_keys
-            )
-        );
-
-        /* Train second layer. */
-        auto get_segment_id = [&](entry_type e) { return std::clamp<double>(models_[0](e.first), 0, n_models - 1);  };
-        std::size_t segment_start = 0;
-        std::size_t segment_id = 0;
-        for (std::size_t i = 0; i != n_keys; ++i) {
-            auto pos = begin + i;
-            std::size_t pred_segment_id = get_segment_id(*pos);
-            if (pred_segment_id > segment_id) {
-                models_.emplace_back(
-                    LinearModel::train_linear_regression(
-                        /* begin=  */ begin + segment_start,
-                        /* end=    */ pos,
-                        /* offset= */ segment_start
-                    )
-                );
-                for (std::size_t j = segment_id + 1; j < pred_segment_id; ++j) {
-                    models_.emplace_back(
-                        LinearModel::train_linear_regression(
-                            /* begin=  */ pos - 1,
-                            /* end=    */ pos,
-                            /* offset= */ i - 1
-                        )
-                    );
-                }
-                segment_id = pred_segment_id;
-                segment_start = i;
-
-            }
-        }
-        models_.emplace_back(
-            LinearModel::train_linear_regression(
-                /* begin=  */ begin + segment_start,
-                /* end=    */ end,
-                /* offset= */ segment_start
-            )
-        );
-        for (std::size_t j = segment_id + 1; j < n_models; ++j) {
-            models_.emplace_back(
-                LinearModel::train_linear_regression(
-                    /* begin=  */ end - 1,
-                    /* end=    */ end,
-                    /* offset= */ n_keys - 1
-                )
-            );
-        }
-
-        /* Mark index as finalized. */
-        base_type::finalized_ = true;
-    };
+    void finalize() override;
 
     /** Returns an iterator pointing to the first entry of the vector such that `entry.key` < \p key is `false`, i.e.
      * that is greater than or equal to \p key, or `end()` if no such element is found.  Throws `m::exception` if the

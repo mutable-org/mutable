@@ -11,7 +11,31 @@
 using namespace m;
 using namespace m::idx;
 
+namespace {
 
+namespace options {
+
+/** Which ratio of linear models to index entries should be used for `idx::RecursiveModelIndex`. */
+double rmi_model_entry_ratio = 0.01;
+
+}
+
+__attribute__((constructor(201)))
+static void add_index_args()
+{
+    Catalog &C = Catalog::Get();
+
+    /*----- Command-line arguments -----*/
+    C.arg_parser().add<double>(
+        /* group=       */ "Index",
+        /* short=       */ nullptr,
+        /* long=        */ "--rmi-model-entry-ratio",
+        /* description= */ "specify the ratio of linear models to index entries for recursive model indexes",
+        /* callback=    */ [](double rmi_model_entry_ratio){ options::rmi_model_entry_ratio = rmi_model_entry_ratio; }
+    );
+}
+
+}
 
 std::string IndexBase::build_query(const Table &table, const Schema &schema)
 {
@@ -125,6 +149,79 @@ void ArrayIndex<Key>::add(const key_type key, const value_type value)
     }
     finalized_ = false;
 }
+
+template<arithmetic Key>
+void RecursiveModelIndex<Key>::finalize()
+{
+    /* Sort data. */
+    std::sort(base_type::data_.begin(), base_type::data_.end(), base_type::cmp);
+
+    /* Compute number of models. */
+    auto begin = base_type::begin();
+    auto end = base_type::end();
+    std::size_t n_keys = std::distance(begin, end);
+    std::size_t n_models = std::max<std::size_t>(1, n_keys * options::rmi_model_entry_ratio);
+    models_.reserve(n_models + 1);
+
+    /* Train first layer. */
+    models_.emplace_back(
+        LinearModel::train_linear_spline(
+            /* begin=              */ begin,
+            /* end=                */ end,
+            /* offset=             */ 0,
+            /* compression_factor= */ static_cast<double>(n_models) / n_keys
+        )
+    );
+
+    /* Train second layer. */
+    auto get_segment_id = [&](entry_type e) { return std::clamp<double>(models_[0](e.first), 0, n_models - 1);  };
+    std::size_t segment_start = 0;
+    std::size_t segment_id = 0;
+    for (std::size_t i = 0; i != n_keys; ++i) {
+        auto pos = begin + i;
+        std::size_t pred_segment_id = get_segment_id(*pos);
+        if (pred_segment_id > segment_id) {
+            models_.emplace_back(
+                LinearModel::train_linear_regression(
+                    /* begin=  */ begin + segment_start,
+                    /* end=    */ pos,
+                    /* offset= */ segment_start
+                )
+            );
+            for (std::size_t j = segment_id + 1; j < pred_segment_id; ++j) {
+                models_.emplace_back(
+                    LinearModel::train_linear_regression(
+                        /* begin=  */ pos - 1,
+                        /* end=    */ pos,
+                        /* offset= */ i - 1
+                    )
+                );
+            }
+            segment_id = pred_segment_id;
+            segment_start = i;
+
+        }
+    }
+    models_.emplace_back(
+        LinearModel::train_linear_regression(
+            /* begin=  */ begin + segment_start,
+            /* end=    */ end,
+            /* offset= */ segment_start
+        )
+    );
+    for (std::size_t j = segment_id + 1; j < n_models; ++j) {
+        models_.emplace_back(
+            LinearModel::train_linear_regression(
+                /* begin=  */ end - 1,
+                /* end=    */ end,
+                /* offset= */ n_keys - 1
+            )
+        );
+    }
+
+    /* Mark index as finalized. */
+    base_type::finalized_ = true;
+};
 
 // explicit instantiations to prevent linker errors
 #define INSTANTIATE(CLASS) \

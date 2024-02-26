@@ -56,7 +56,7 @@ struct ArrayIndex : IndexBase
     using container_type = std::vector<entry_type>;
     using const_iterator = typename container_type::const_iterator;
 
-    private:
+    protected:
     container_type data_; ///< A vector holding the index entries consisting of pairs of key and value
     bool finalized_; ///< flag to signalize whether index is finalized, i.e. array is sorted
 

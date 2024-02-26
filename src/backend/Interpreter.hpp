@@ -220,7 +220,7 @@ struct Interpreter : Backend, ConstOperatorVisitor
     void register_operators(PhysicalOptimizer &phys_opt) const override { register_interpreter_operators(phys_opt); }
 
     void execute(const MatchBase &plan) const override {
-        (*const_cast<Interpreter*>(this))(plan.get_matched_singleton()); // use former visitor pattern on logical operators
+        (*const_cast<Interpreter*>(this))(plan.get_matched_root()); // use former visitor pattern on logical operators
     }
 
     using ConstOperatorVisitor::operator();

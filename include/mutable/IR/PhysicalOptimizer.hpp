@@ -177,9 +177,8 @@ struct MatchBase
      * for the actual computation, and \p teardown for post-processing. */
     virtual void execute(setup_t setup, pipeline_t pipeline, teardown_t teardown) const = 0;
 
-    /** Returns the matched logical operator for physical operators with singleton patterns.  Must not be called for
-     * physical operators with a pattern tree. */
-    virtual const Operator & get_matched_singleton() const = 0;
+    /** Returns the matched logical root operator for physical operators. */
+    virtual const Operator & get_matched_root() const = 0;
 
     double cost() const { return cost_; }
     private:

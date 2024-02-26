@@ -293,7 +293,7 @@ void m::wasm::detail::read_result_set(const v8::FunctionCallbackInfo<v8::Value> 
 {
     auto &context = WasmEngine::Get_Wasm_Context_By_ID(Module::ID());
 
-    auto &root_op = context.plan.get_matched_singleton();
+    auto &root_op = context.plan.get_matched_root();
     auto &schema = root_op.schema();
     auto deduplicated_schema = schema.deduplicate();
     auto deduplicated_schema_without_constants = deduplicated_schema.drop_constants();
@@ -792,7 +792,7 @@ void V8Engine::execute(const MatchBase &plan)
                         "Execute machine code", C.timer());
 
         /* Print total number of result tuples. */
-        auto &root_op = plan.get_matched_singleton();
+        auto &root_op = plan.get_matched_root();
         if (auto print_op = cast<const PrintOperator>(&root_op)) {
             if (not Options::Get().quiet)
                 print_op->out << num_rows << " rows\n";
@@ -935,7 +935,7 @@ v8::Local<v8::Object> m::wasm::detail::create_env(v8::Isolate &isolate, const Ma
 
     /* Map all string literals into the Wasm module. */
     M_insist(Is_Page_Aligned(context.heap));
-    auto literals = CollectStringLiterals::Collect(plan.get_matched_singleton());
+    auto literals = CollectStringLiterals::Collect(plan.get_matched_root());
     std::size_t bytes = 0;
     for (auto literal : literals)
         bytes += strlen(literal) + 1;

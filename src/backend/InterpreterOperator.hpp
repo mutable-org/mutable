@@ -41,7 +41,7 @@ struct Match<interpreter::CLASS> : MatchBase \
                       "execution"); \
     } \
 \
-    const Operator & get_matched_singleton() const override { return op; } \
+    const Operator & get_matched_root() const override { return op; } \
 \
     protected: \
     void print(std::ostream &out, unsigned level) const override { \

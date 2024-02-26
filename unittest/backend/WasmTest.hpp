@@ -52,7 +52,7 @@ template<>
 struct Match<wasm::DummyOp> : MatchBase
 {
     void execute(setup_t, pipeline_t, teardown_t) const override { M_unreachable("must not be called"); }
-    const Operator & get_matched_singleton() const override { M_unreachable("must not be called"); }
+    const Operator & get_matched_root() const override { M_unreachable("must not be called"); }
     void print(std::ostream&, unsigned) const override { M_unreachable("must not be called"); }
 };
 

@@ -93,11 +93,13 @@ class PostgreSQL(Connector):
                             header: int = int(table.get('header', 0))
                             num_rows: int = round((table['lines_in_file'] - header) * sf)
                             cursor.execute(f'DELETE FROM "{table_name}";')     # empty existing table
-                            drop_indexes: list[str] = self.generate_drop_index_stmts(table.get('indexes', dict()))
-                            cursor.execute(''.join(drop_indexes))
+                            if 'indexes' in table:
+                                drop_indexes: list[str] = self.generate_drop_index_stmts(table['indexes'])
+                                cursor.execute(''.join(drop_indexes))
                             cursor.execute(f'INSERT INTO "{table_name}" SELECT * FROM "{table_name}{COMPLETE_TABLE_SUFFIX}" LIMIT {num_rows};')    # copy data with scale factor
-                            create_indexes: list[str] = self.generate_create_index_stmts(table_name, table.get('indexes', dict()))
-                            cursor.execute(''.join(create_indexes))
+                            if 'indexes' in table:
+                                create_indexes: list[str] = self.generate_create_index_stmts(table_name, table['indexes'])
+                                cursor.execute(''.join(create_indexes))
                     finally:
                         connection.close()
                         del connection

@@ -528,6 +528,8 @@ struct HashTable
 
     virtual ~HashTable() { }
 
+    const Schema & schema() const { return schema_; }
+
     /** Performs the setup of the hash table.  Must be called before any call to a setup method, i.e. setting the
      * high watermark, or an access method, i.e. clearing, insertion, lookup, or dummy entry creation. */
     virtual void setup() = 0;

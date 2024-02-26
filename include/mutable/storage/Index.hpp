@@ -76,6 +76,9 @@ struct ArrayIndex : IndexBase
      * more than one entry or `key_type` and the attribute type of the entry in \p key_schema do not match. */
     void bulkload(const Table &table, const Schema &key_schema) override;
 
+    /** Returns the number of entries in the index. */
+    std::size_t num_entries() const override { return data_.size(); }
+
     /** Returns the `IndexMethod` of the index. */
     IndexMethod method() const override { return IndexMethod::Array; }
 
@@ -88,6 +91,9 @@ struct ArrayIndex : IndexBase
         std::sort(data_.begin(), data_.end(), cmp);
         finalized_ = true;
     }
+
+    /** Returns `true` iff the index is currently finalized. */
+    bool finalized() const { return finalized_; }
 
     /** Returns an iterator pointing to the first entry of the vector such that `entry.key` < \p key is `false`, i.e.
      * that is greater than or equal to \p key, or `end()` if no such element is found.  Throws `m::exception` if the
@@ -111,12 +117,6 @@ struct ArrayIndex : IndexBase
     /** Returns an interator pointing to the first element following the last entry of the index. */
     const_iterator end() const  { return data_.cend(); }
     const_iterator cend() const { return data_.cend(); }
-
-    /** Returns the number of entries in the index. */
-    std::size_t num_entries() const override { return data_.size(); }
-
-    /** Returns `true` iff the index is currently finalized. */
-    bool finalized() const { return finalized_; }
 
     void dump(std::ostream &out) const override { out << "ArrayIndex<" << typeid(key_type).name() << '>' << std::endl; }
     void dump() const override { dump(std::cerr); }

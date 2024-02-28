@@ -7,7 +7,12 @@
 #include <mutable/Options.hpp>
 
 
-std::string m::idx::IndexBase::build_query(const Table &table, const Schema &schema)
+using namespace m;
+using namespace m::idx;
+
+
+
+std::string IndexBase::build_query(const Table &table, const Schema &schema)
 {
     std::ostringstream oss;
     oss << "SELECT ";
@@ -20,18 +25,18 @@ std::string m::idx::IndexBase::build_query(const Table &table, const Schema &sch
 }
 
 template<typename Key>
-void m::idx::ArrayIndex<Key>::bulkload(const Table &table, const Schema &key_schema)
+void ArrayIndex<Key>::bulkload(const Table &table, const Schema &key_schema)
 {
     /* Check that key schema contains a single entry. */
     if (key_schema.num_entries() != 1)
-        throw m::invalid_argument("Key schema should contain exactly one entry.");
+        throw invalid_argument("Key schema should contain exactly one entry.");
     auto entry = key_schema.at(0);
 
     /* Check that key type and attribute type match. */
     auto attribute_type = entry.type;
 #define CHECK(TYPE) \
     if constexpr(not std::same_as<key_type, TYPE>) \
-        throw m::invalid_argument("Key type and attribute type do not match."); \
+        throw invalid_argument("Key type and attribute type do not match."); \
     return
 
     visit(overloaded {
@@ -69,7 +74,7 @@ void m::idx::ArrayIndex<Key>::bulkload(const Table &table, const Schema &key_sch
     Diagnostic diag(Options::Get().has_color, std::cout, std::cerr);
 
     /* Compute statement from query string. */
-    auto stmt = m::statement_from_string(diag, query);
+    auto stmt = statement_from_string(diag, query);
 
     /* Define get function based on key_type. */
     std::function<key_type(const Tuple&)> fn_get;
@@ -95,7 +100,7 @@ void m::idx::ArrayIndex<Key>::bulkload(const Table &table, const Schema &key_sch
 }
 
 template<typename Key>
-void m::idx::ArrayIndex<Key>::add(const key_type key, const value_type value)
+void ArrayIndex<Key>::add(const key_type key, const value_type value)
 {
     if constexpr(std::same_as<key_type, const char*>) {
         Catalog &C = Catalog::Get();

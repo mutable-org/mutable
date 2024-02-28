@@ -13,7 +13,6 @@ namespace m {
 
 // Forward declarations
 struct Table;
-struct Attribute;
 struct Schema;
 
 namespace idx {

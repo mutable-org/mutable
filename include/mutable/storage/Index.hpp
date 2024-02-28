@@ -60,10 +60,18 @@ struct ArrayIndex : IndexBase
     bool finalized_; ///< flag to signalize whether index is finalized, i.e. array is sorted
 
     /** Custom comparator class to handle the special case of \tparam key_type being `const char*`. */
-    struct {
-        bool operator()(const entry_type lhs, const entry_type rhs) {
-            if constexpr(std::same_as<key_type, const char*>) return std::strcmp(lhs.first, rhs.first) < 0;
-            else return lhs.first < rhs.first;
+    struct
+    {
+        template<typename T, typename U>
+        requires (std::same_as<T, key_type> or std::same_as<T, entry_type>) and
+                 (std::same_as<U, key_type> or std::same_as<U, entry_type>)
+        bool operator()(const T &_lhs, const U &_rhs) const {
+            key_type lhs = M_CONSTEXPR_COND((std::same_as<T, key_type>), _lhs, _lhs.first);
+            key_type rhs = M_CONSTEXPR_COND((std::same_as<U, key_type>), _rhs, _rhs.first);
+            if constexpr(std::same_as<key_type, const char*>)
+                return std::strcmp(lhs, rhs) < 0;
+            else
+                return lhs < rhs;
         }
     } cmp;
 

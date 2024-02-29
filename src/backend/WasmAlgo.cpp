@@ -1230,7 +1230,7 @@ void ChainedHashTable<IsGlobal>::rehash()
                     std::visit(overloaded {
                         [&](auto &&r) -> void { key.emplace_back(r); },
                         [](std::monostate) -> void { M_unreachable("invalid reference"); },
-                    }, e_old.extract(schema_.get()[k].id));
+                    }, e_old.get(schema_.get()[k].id));
                 }
 
                 /*----- Compute new bucket address by hashing the key. Create variable to do not recompute the hash. -*/
@@ -2207,7 +2207,7 @@ void OpenAddressingHashTable<IsGlobal, ValueInPlace>::rehash()
                     std::visit(overloaded {
                         [&](auto &&r) -> void { key.emplace_back(r); },
                         [](std::monostate) -> void { M_unreachable("invalid reference"); },
-                    }, e_old.extract(schema_.get()[k].id));
+                    }, e_old.get(schema_.get()[k].id));
                 }
 
                 /*----- Insert key into new hash table. No rehashing needed since the new hash table is large enough. */
@@ -2225,7 +2225,6 @@ void OpenAddressingHashTable<IsGlobal, ValueInPlace>::rehash()
                             [](std::monostate) -> void { M_unreachable("invalid reference"); },
                         }, e_new.extract(id));
                     }
-                    M_insist(e_old.empty());
                     M_insist(e_new.empty());
                 } else {
                     /*----- Set pointer to out-of-place values of new entry to the one of old entry. -----*/

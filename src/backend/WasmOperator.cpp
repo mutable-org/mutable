@@ -3997,7 +3997,7 @@ void SimpleHashJoin<UniqueBuild, Predicated>::execute(const Match<SimpleHashJoin
                     /*----- Insert key. -----*/
                     std::vector<SQL_t> key;
                     for (auto &build_key : build_keys)
-                        key.emplace_back(env.extract(build_key));
+                        key.emplace_back(env.get(build_key));
                     auto entry = ht->emplace(std::move(key));
 
                     /*----- Insert payload. -----*/

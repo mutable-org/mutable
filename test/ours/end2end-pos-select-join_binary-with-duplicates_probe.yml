@@ -1,0 +1,61 @@
+description: join binary duplicates probe
+db: ours
+query: |
+    SELECT R.key FROM R, S WHERE R.key = S.key AND R.fkey = S.key;
+required: YES
+
+stages:
+    lexer:
+        out: |
+            -:1:1: SELECT TK_Select
+            -:1:8: R TK_IDENTIFIER
+            -:1:9: . TK_DOT
+            -:1:10: key TK_IDENTIFIER
+            -:1:14: FROM TK_From
+            -:1:19: R TK_IDENTIFIER
+            -:1:20: , TK_COMMA
+            -:1:22: S TK_IDENTIFIER
+            -:1:24: WHERE TK_Where
+            -:1:30: R TK_IDENTIFIER
+            -:1:31: . TK_DOT
+            -:1:32: key TK_IDENTIFIER
+            -:1:36: = TK_EQUAL
+            -:1:38: S TK_IDENTIFIER
+            -:1:39: . TK_DOT
+            -:1:40: key TK_IDENTIFIER
+            -:1:44: AND TK_And
+            -:1:48: R TK_IDENTIFIER
+            -:1:49: . TK_DOT
+            -:1:50: fkey TK_IDENTIFIER
+            -:1:55: = TK_EQUAL
+            -:1:57: S TK_IDENTIFIER
+            -:1:58: . TK_DOT
+            -:1:59: key TK_IDENTIFIER
+            -:1:62: ; TK_SEMICOL
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    parser:
+        out: |
+            SELECT R.key
+            FROM R, S
+            WHERE ((R.key = S.key) AND (R.fkey = S.key));
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    sema:
+        out: NULL
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    end2end:
+        cli_args: --insist-no-ternary-logic --simple-hash-join-ordering-strategy BuildOnRight
+        out: |
+            4
+            74
+        err: NULL
+        num_err: 0
+        returncode: 0

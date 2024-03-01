@@ -602,6 +602,16 @@ struct Environment
     /** Returns `true` iff this `Environment` is empty. */
     bool empty() const { return exprs_.empty() and expr_addrs_.empty(); }
 
+    /** Clears this `Environment`. */
+    void clear() {
+        for (auto &p : exprs_)
+            discard(p.second);
+        for (auto &p : expr_addrs_)
+            discard(p.second);
+        exprs_.clear();
+        expr_addrs_.clear();
+    }
+
     ///> Adds a mapping from \p id to \p expr.
     template<sql_type T>
     void add(Schema::Identifier id, T &&expr) {

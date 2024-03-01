@@ -67,25 +67,25 @@ systems:
         configurations:
             DPccp:
                 args: '--plan-enumerator DPccp'
-                pattern: '^Compute the query plan:.*'
+                pattern: '^Compute the logical query plan:.*'
             DPsizeOpt:
                 args: '--plan-enumerator DPsizeOpt'
-                pattern: '^Compute the query plan:.*'
+                pattern: '^Compute the logical query plan:.*'
             DPsub:
                 args: '--plan-enumerator DPsub'
-                pattern: '^Compute the query plan:.*'
+                pattern: '^Compute the logical query plan:.*'
             DPsubOpt:
                 args: '--plan-enumerator DPsubOpt'
-                pattern: '^Compute the query plan:.*'
+                pattern: '^Compute the logical query plan:.*'
             DPsizeSub:
                 args: '--plan-enumerator DPsizeSub'
-                pattern: '^Compute the query plan:.*'
+                pattern: '^Compute the logical query plan:.*'
             TDbasic:
                 args: '--plan-enumerator TDbasic'
-                pattern: '^Compute the query plan:.*'
+                pattern: '^Compute the logical query plan:.*'
             TDMinCutAGaT:
                 args: '--plan-enumerator TDMinCutAGaT'
-                pattern: '^Compute the query plan:.*'
+                pattern: '^Compute the logical query plan:.*'
         cases:
             2:  SELECT
                     *

@@ -891,12 +891,18 @@ v8::Local<v8::WasmModuleObject> m::wasm::detail::instantiate(v8::Isolate &isolat
         /* deleter_data= */ nullptr
     );
     auto buffer = v8::ArrayBuffer::New(&isolate, std::move(bs));
-    args_t module_args { buffer };
 
+    if (Options::Get().statistics)
+        std::cout << "Wasm code size: " << binary_size << 'B' << std::endl;
+
+    args_t module_args { buffer };
     auto wasm = Ctx->Global()->Get(Ctx, mkstr(isolate, "WebAssembly")).ToLocalChecked().As<v8::Object>(); // WebAssembly class
     auto wasm_module = wasm->Get(Ctx, mkstr(isolate, "Module")).ToLocalChecked().As<v8::Object>()
-                           ->CallAsConstructor(Ctx, 1, module_args).ToLocalChecked().As<v8::Object>();
+                           ->CallAsConstructor(Ctx, 1, module_args).ToLocalChecked().As<v8::WasmModuleObject>();
     free(binary_addr);
+
+    if (Options::Get().statistics)
+        std::cout << "Machine code size: " << wasm_module->GetCompiledModule().Serialize().size << 'B' << std::endl;
 
     args_t instance_args { wasm_module, imports };
     return wasm->Get(Ctx, mkstr(isolate, "Instance")).ToLocalChecked().As<v8::Object>()

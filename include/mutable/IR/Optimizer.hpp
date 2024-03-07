@@ -25,7 +25,8 @@ struct M_EXPORT Optimizer
     private:
     const pe::PlanEnumerator &pe_;
     const CostFunction &cf_;
-    mutable std::vector<std::unique_ptr<const ast::Expr>> created_exprs_; ///< additionally created expressions
+    ///> additionally created expressions; static to match lifetime of optimized logical plan
+    static thread_local inline std::vector<std::unique_ptr<const ast::Expr>> created_exprs_;
     mutable bool needs_projection_ = false; ///< flag to determine whether current query needs a projection as root
 
     public:

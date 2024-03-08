@@ -4135,6 +4135,9 @@ ConditionSet SortMergeJoin<SortLeft, SortRight, Predicated, CmpPredicated>::adap
         post_cond.add_or_replace_condition(m::Predicated(true));
     }
 
+    /*----- Sort merge join does not introduce SIMD. -----*/
+    post_cond.add_condition(NoSIMD());
+
     Sortedness::order_t orders;
     if constexpr (not SortLeft) {
         Sortedness sorting_left(post_cond_children[0].get().get_condition<Sortedness>());

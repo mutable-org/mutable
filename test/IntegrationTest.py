@@ -326,7 +326,7 @@ def lexer_command(test_case):
     binary = BINARIES['lex']
     command = [binary, '-']
     if test_case.cli_args:
-        command.append(test_case.cli_args)
+        command.extend(test_case.cli_args.split())
     return [ command ]
 
 
@@ -334,7 +334,7 @@ def parser_command(test_case):
     binary = BINARIES['parse']
     command = [binary, '-']
     if test_case.cli_args:
-        command.append(test_case.cli_args)
+        command.extend(test_case.cli_args.split())
     return [ command ]
 
 
@@ -343,7 +343,7 @@ def sema_command(test_case):
     setup = os.path.join(os.path.dirname(test_case.filename), 'data', 'schema.sql')
     command = [binary, '--quiet', setup, '-']
     if test_case.cli_args:
-        command.append(test_case.cli_args)
+        command.extend(test_case.cli_args.split())
     return [ command ]
 
 
@@ -352,7 +352,7 @@ def end2end_command(test_case):
     setup = os.path.join(os.path.dirname(test_case.filename), 'data', 'schema.sql')
     command = [binary, '--quiet', '--noprompt', setup, '-']
     if test_case.cli_args:
-        command.append(test_case.cli_args)
+        command.extend(test_case.cli_args.split())
     configurations = list()
     data_layout_options = enumerate_feature_options('data-layout')
     backend_options = enumerate_feature_options('backend')

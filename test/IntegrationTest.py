@@ -7,6 +7,7 @@ import itertools
 import math
 import multiprocessing
 import os
+import re
 import subprocess
 import yamale
 import yaml
@@ -131,7 +132,8 @@ def run_stage(args, test_case, stage_name, command) -> Tuple[bool, list[str]]:
             check_numerr(stage['num_err'], num_err)
         if 'err' in stage:
             check_stderr(stage['err'], err)
-        if 'out' in stage:
+        # in case there is no expected output, skip this check for all stages except the `end2end` stage
+        if 'out' in stage and (stage['out'] != None or stage_name == 'end2end'):
             check_stdout(stage['out'], out, args.verbose, is_sorted, consider_rounding_errors)
     except TestException as ex:
         return False, report_failure(str(ex), stage_name, test_case, args.debug, command)
@@ -208,39 +210,72 @@ def check_stderr(expected, actual):
     return
 
 
-def check_stdout(expected, actual, verbose, is_sorted, consider_rounding_errors):
-    if expected != None:
-        sort = lambda l: l if is_sorted else sorted(l)
-        expected_sorted, actual_sorted = sort(expected.split('\n')[:-1]), sort(actual.split('\n')[:-1])
+def check_result_set(expected, actual, verbose, is_sorted, consider_rounding_errors):
+    sort = lambda l: l if is_sorted else sorted(l)
+    expected_sorted, actual_sorted = sort(expected.split('\n')), sort(actual.split('\n'))
 
-        def equal(expected, actual):
-            if not consider_rounding_errors:
-                return expected == actual
+    def equal(expected, actual):
+        if len(expected) != len(actual):
+            return False
 
-            if len(expected) != len(actual):
+        if not consider_rounding_errors:
+            return expected == actual
+
+        # either the expected or actual result set was empty -> no need to consider rounding error
+        if len(expected) == 1 and (not expected[0] or not actual[0]):
+            return expected == actual
+
+        for i in range(len(expected)):
+            expected_tuple = expected[i].split(',')
+            actual_tuple = actual[i].split(',')
+            if len(expected_tuple) != len(actual_tuple):
                 return False
-            for i in range(len(expected)):
-                expected_tuple = expected[i].split(',')
-                actual_tuple = actual[i].split(',')
-                if len(expected_tuple) != len(actual_tuple):
-                    return False
-                for j in range(len(expected_tuple)):
-                    expected_value = expected_tuple[j]
-                    actual_value = actual_tuple[j]
-                    if expected_value[0] != '"' and '.' in expected_value: # floating point -> consider rounding errors
-                        if not math.isclose(float(expected_value), float(actual_value)):
-                            return False
-                    else: # all other types -> use exact string comparison
-                        if expected_value != actual_value:
-                            return False
-            return True
+            for j in range(len(expected_tuple)):
+                expected_value = expected_tuple[j]
+                actual_value = actual_tuple[j]
+                if expected_value[0] != '"' and '.' in expected_value: # floating point -> consider rounding errors
+                    if not math.isclose(float(expected_value), float(actual_value)):
+                        return False
+                else: # all other types -> use exact string comparison
+                    if expected_value != actual_value:
+                        return False
+        return True
 
-        if not equal(expected_sorted, actual_sorted):
-            diff = ""
-            if verbose:
-                diff = '\n==>' + colordiff(actual, expected).rstrip('\n').replace('\n', '\n   ')
-            raise TestException(f'Expected output differs.{diff}')
-    return
+    if not equal(expected_sorted, actual_sorted):
+        diff = ""
+        if verbose:
+            diff = '\n==>' + colordiff(actual, expected).rstrip('\n').replace('\n', '\n   ')
+        raise TestException(f'Expected output differs.{diff}')
+
+def check_stdout(expected, actual, verbose, is_sorted, consider_rounding_errors):
+    # split into indiviudal result sets and filter out the line with the number of rows of the actual output
+    def split(s) -> list():
+        result_sets = list()
+        res = ''
+        for line in s.splitlines():
+            if line.startswith("Result set for"):
+                if res != '':
+                    result_sets.append(res)
+                res = line + '\n'
+            elif re.match(r'^\d+ rows', line): # throw away the line with the number of rows "x rows"
+                continue
+            else:
+                res += line + '\n'
+        if res != '':
+            result_sets.append(res)
+        return result_sets
+    # sort result sets including substring "Result set for <table>:"
+    # in case the expected output is `None`, we have to check that the actual output is also empty
+    actual_split = sorted(split(actual))
+    expected_split = sorted(split(expected)) if expected != None else [''] * len(actual_split)
+
+    if len(expected_split) != len(actual_split):
+        raise TestException(f'Expected output differs in number of result sets.')
+    for expected_result_set, actual_result_set in zip(expected_split, actual_split):
+        # remove substring "Result set for <table>:\n" and trailing newline
+        expected_result_set = re.sub(r'^Result set for .*:\n', '', expected_result_set).rstrip('\n')
+        actual_result_set = re.sub(r'^Result set for .*:\n', '', actual_result_set).rstrip('\n')
+        check_result_set(expected_result_set, actual_result_set, verbose, is_sorted, consider_rounding_errors)
 
 
 #-----------------------------------------------------------------------------------------------------------------------

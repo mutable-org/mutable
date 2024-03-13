@@ -714,7 +714,9 @@ Ptr<void> ChainedHashTable<IsGlobal>::hash_to_bucket(std::vector<SQL_t> key) con
 
     /*----- Compute bucket address. -----*/
     U32x1 bucket_idx = hash.to<uint32_t>() bitand *mask_; // modulo capacity
-    return begin() + (bucket_idx * uint32_t(sizeof(uint32_t))).make_signed();
+    Ptr<void> bucket = begin() + (bucket_idx * uint32_t(sizeof(uint32_t))).make_signed();
+    Wasm_insist(begin() <= bucket.clone() and bucket.clone() < end(), "bucket out-of-bounds");
+    return bucket;
 }
 
 template<bool IsGlobal>
@@ -1334,7 +1336,9 @@ Ptr<void> OpenAddressingHashTableBase::hash_to_bucket(std::vector<SQL_t> key) co
 
     /*----- Compute bucket address. -----*/
     U32x1 bucket_idx = hash.to<uint32_t>() bitand mask(); // modulo capacity
-    return begin() + (bucket_idx * entry_size_in_bytes_).make_signed();
+    Ptr<void> bucket = begin() + (bucket_idx * entry_size_in_bytes_).make_signed();
+    Wasm_insist(begin() <= bucket.clone() and bucket.clone() < end(), "bucket out-of-bounds");
+    return bucket;
 }
 
 template<bool IsGlobal, bool ValueInPlace>

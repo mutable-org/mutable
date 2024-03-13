@@ -6,6 +6,7 @@
 
 #pragma once
 
+#include <boost/preprocessor/seq/for_each.hpp>
 #include <cstdlib>
 #include <initializer_list>
 #include <iostream>
@@ -38,6 +39,10 @@ namespace m {
 #define M_PASTE_(X, Y) X ## Y
 #define M_PASTE(X, Y) M_PASTE_(X, Y)
 
+/*===== First and second element of pair =============================================================================*/
+#define M_PAIR_FIRST(A, B) A
+#define M_PAIR_SECOND(A, B) B
+
 /*===== Head and tail of list ========================================================================================*/
 #define M_HEAD(X, ...) X
 #define M_TAIL(X, ...) __VA_ARGS__
@@ -52,6 +57,14 @@ namespace m {
 #define M_CONSTEXPR_COND_UNCAPTURED(COND, IF_TRUE, IF_FALSE) [](){ \
     if constexpr (COND) { return (IF_TRUE); } else { return (IF_FALSE); } \
 }()
+
+/*===== Transform X macro into other X macro =========================================================================*/
+#define M_PAIR_XFORM_MACRO_(_, PAIR, ELEM) \
+   M_PAIR_FIRST PAIR ( M_PAIR_SECOND PAIR (ELEM) )
+#define M_PAIR_XFORM_(PAIR, SEQ) \
+   BOOST_PP_SEQ_FOR_EACH(M_PAIR_XFORM_MACRO_, PAIR, SEQ)
+
+#define M_TRANSFORM_X_MACRO(X, SEQ, FUNC) M_PAIR_XFORM_((X, FUNC), SEQ())
 
 /*===== Define enum ==================================================================================================*/
 #define M_DECLARE_ENUM(LIST) \

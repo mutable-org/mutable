@@ -8,6 +8,14 @@
 
 namespace m {
 
+namespace wasm {
+
+// forward declarations
+struct MatchBaseVisitor;
+struct ConstMatchBaseVisitor;
+
+}
+
 namespace option_configs {
 
 /*----- algorithmic decisions ----------------------------------------------------------------------------------------*/
@@ -173,6 +181,16 @@ extern std::vector<std::pair<m::Schema::Identifier, bool>> sorted_attributes;
 
 namespace m {
 
+#define M_WASM_OPERATOR_LIST_NON_TEMPLATED(X) \
+    X(NoOp) \
+    X(LazyDisjunctiveFilter) \
+    X(Projection) \
+    X(HashBasedGrouping) \
+    X(OrderedGrouping) \
+    X(Aggregation) \
+    X(NoOpSorting) \
+    X(Limit) \
+    X(HashBasedGroupJoin)
 #define M_WASM_OPERATOR_LIST_TEMPLATED(X) \
     X(Callback<false>) \
     X(Callback<true>) \
@@ -206,37 +224,56 @@ namespace m {
     X(SortMergeJoin<M_COMMA(true)  M_COMMA(true)  M_COMMA(false) true>) \
     X(SortMergeJoin<M_COMMA(true)  M_COMMA(true)  M_COMMA(true)  false>) \
     X(SortMergeJoin<M_COMMA(true)  M_COMMA(true)  M_COMMA(true)  true>)
-
 #define M_WASM_OPERATOR_LIST(X) \
-    X(NoOp) \
-    X(LazyDisjunctiveFilter) \
-    X(Projection) \
-    X(HashBasedGrouping) \
-    X(OrderedGrouping) \
-    X(Aggregation) \
-    X(NoOpSorting) \
-    X(Limit) \
-    X(HashBasedGroupJoin) \
+    M_WASM_OPERATOR_LIST_NON_TEMPLATED(X) \
     M_WASM_OPERATOR_LIST_TEMPLATED(X)
 
 
+#define MAKE_MATCH_(OP) Match<wasm::OP>
+#define M_WASM_MATCH_LIST_NON_TEMPLATED(X) M_TRANSFORM_X_MACRO(X, M_WASM_OPERATOR_LIST_NON_TEMPLATED, MAKE_MATCH_)
+#define M_WASM_MATCH_LIST_TEMPLATED(X) \
+    X(Match<wasm::Callback<false>>) \
+    X(Match<wasm::Callback<true>>) \
+    X(Match<wasm::Print<false>>) \
+    X(Match<wasm::Print<true>>) \
+    X(Match<wasm::Scan<false>>) \
+    X(Match<wasm::Scan<true>>) \
+    X(Match<wasm::Filter<false>>) \
+    X(Match<wasm::Filter<true>>) \
+    X(Match<wasm::Quicksort<false>>) \
+    X(Match<wasm::Quicksort<true>>) \
+    X(Match<wasm::NestedLoopsJoin<false>>) \
+    X(Match<wasm::NestedLoopsJoin<true>>) \
+    X(Match<wasm::SimpleHashJoin<M_COMMA(false) false>>) \
+    X(Match<wasm::SimpleHashJoin<M_COMMA(false) true>>) \
+    X(Match<wasm::SimpleHashJoin<M_COMMA(true) false>>) \
+    X(Match<wasm::SimpleHashJoin<M_COMMA(true) true>>) \
+    X(Match<wasm::SortMergeJoin<M_COMMA(false) M_COMMA(false) M_COMMA(false) false>>) \
+    X(Match<wasm::SortMergeJoin<M_COMMA(false) M_COMMA(false) M_COMMA(false) true>>) \
+    X(Match<wasm::SortMergeJoin<M_COMMA(false) M_COMMA(false) M_COMMA(true)  false>>) \
+    X(Match<wasm::SortMergeJoin<M_COMMA(false) M_COMMA(false) M_COMMA(true)  true>>) \
+    X(Match<wasm::SortMergeJoin<M_COMMA(false) M_COMMA(true)  M_COMMA(false) false>>) \
+    X(Match<wasm::SortMergeJoin<M_COMMA(false) M_COMMA(true)  M_COMMA(false) true>>) \
+    X(Match<wasm::SortMergeJoin<M_COMMA(false) M_COMMA(true)  M_COMMA(true)  false>>) \
+    X(Match<wasm::SortMergeJoin<M_COMMA(false) M_COMMA(true)  M_COMMA(true)  true>>) \
+    X(Match<wasm::SortMergeJoin<M_COMMA(true)  M_COMMA(false) M_COMMA(false) false>>) \
+    X(Match<wasm::SortMergeJoin<M_COMMA(true)  M_COMMA(false) M_COMMA(false) true>>) \
+    X(Match<wasm::SortMergeJoin<M_COMMA(true)  M_COMMA(false) M_COMMA(true)  false>>) \
+    X(Match<wasm::SortMergeJoin<M_COMMA(true)  M_COMMA(false) M_COMMA(true)  true>>) \
+    X(Match<wasm::SortMergeJoin<M_COMMA(true)  M_COMMA(true)  M_COMMA(false) false>>) \
+    X(Match<wasm::SortMergeJoin<M_COMMA(true)  M_COMMA(true)  M_COMMA(false) true>>) \
+    X(Match<wasm::SortMergeJoin<M_COMMA(true)  M_COMMA(true)  M_COMMA(true)  false>>) \
+    X(Match<wasm::SortMergeJoin<M_COMMA(true)  M_COMMA(true)  M_COMMA(true)  true>>)
+#define M_WASM_MATCH_LIST(X) \
+    M_WASM_MATCH_LIST_NON_TEMPLATED(X) \
+    M_WASM_MATCH_LIST_TEMPLATED(X)
+
 // forward declarations
-#define M_WASM_OPERATOR_DECLARATION_LIST(X) \
-    X(NoOp) \
-    X(LazyDisjunctiveFilter) \
-    X(Projection) \
-    X(HashBasedGrouping) \
-    X(OrderedGrouping) \
-    X(Aggregation) \
-    X(NoOpSorting) \
-    X(Limit) \
-    X(HashBasedGroupJoin)
 #define DECLARE(OP) \
     namespace wasm { struct OP; } \
     template<> struct Match<wasm::OP>;
-    M_WASM_OPERATOR_DECLARATION_LIST(DECLARE)
+    M_WASM_OPERATOR_LIST_NON_TEMPLATED(DECLARE)
 #undef DECLARE
-#undef M_WASM_OPERATOR_DECLARATION_LIST
 
 namespace wasm { template<bool SIMDfied> struct Callback; }
 template<bool SIMDfied> struct Match<wasm::Callback<SIMDfied>>;
@@ -506,9 +543,11 @@ void execute_buffered(const Match<T> &M, const Schema &schema,
 
 namespace wasm {
 
-/** An abstract `MatchBase` for the `WasmV8` backend. */
+/** An abstract `MatchBase` for the `WasmV8` backend.  Adds accept methods for repsective visitor.  */
 struct MatchBase : m::MatchBase
 {
+    virtual void accept(MatchBaseVisitor &v) = 0;
+    virtual void accept(ConstMatchBaseVisitor &v) const = 0;
 };
 
 /** Intermediate match type for leaves, i.e. physical operator matches without children. */
@@ -559,6 +598,9 @@ struct Match<wasm::NoOp> : wasm::MatchSingleChild
 
     const Operator & get_matched_root() const override { return noop; }
 
+    void accept(wasm::MatchBaseVisitor &v) override;
+    void accept(wasm::ConstMatchBaseVisitor &v) const override;
+
     protected:
     void print(std::ostream &out, unsigned level) const override;
 };
@@ -582,6 +624,9 @@ struct Match<wasm::Callback<SIMDfied>> : wasm::MatchSingleChild
 
     const Operator & get_matched_root() const override { return callback; }
 
+    void accept(wasm::MatchBaseVisitor &v) override;
+    void accept(wasm::ConstMatchBaseVisitor &v) const override;
+
     protected:
     void print(std::ostream &out, unsigned level) const override;
 };
@@ -604,6 +649,9 @@ struct Match<wasm::Print<SIMDfied>> : wasm::MatchSingleChild
     }
 
     const Operator & get_matched_root() const override { return print_op; }
+
+    void accept(wasm::MatchBaseVisitor &v) override;
+    void accept(wasm::ConstMatchBaseVisitor &v) const override;
 
     protected:
     void print(std::ostream &out, unsigned level) const override;
@@ -653,6 +701,9 @@ struct Match<wasm::Scan<SIMDfied>> : wasm::MatchLeaf
 
     const Operator & get_matched_root() const override { return scan; }
 
+    void accept(wasm::MatchBaseVisitor &v) override;
+    void accept(wasm::ConstMatchBaseVisitor &v) const override;
+
     protected:
     void print(std::ostream &out, unsigned level) const override;
 };
@@ -681,6 +732,9 @@ struct Match<wasm::Filter<Predicated>> : wasm::MatchSingleChild
 
     const Operator & get_matched_root() const override { return filter; }
 
+    void accept(wasm::MatchBaseVisitor &v) override;
+    void accept(wasm::ConstMatchBaseVisitor &v) const override;
+
     protected:
     void print(std::ostream &out, unsigned level) const override;
 };
@@ -708,6 +762,9 @@ struct Match<wasm::LazyDisjunctiveFilter> : wasm::MatchSingleChild
     }
 
     const Operator & get_matched_root() const override { return filter; }
+
+    void accept(wasm::MatchBaseVisitor &v) override;
+    void accept(wasm::ConstMatchBaseVisitor &v) const override;
 
     protected:
     void print(std::ostream &out, unsigned level) const override;
@@ -742,6 +799,9 @@ struct Match<wasm::Projection> : wasm::MatchBase
 
     const Operator & get_matched_root() const override { return projection; }
 
+    void accept(wasm::MatchBaseVisitor &v) override;
+    void accept(wasm::ConstMatchBaseVisitor &v) const override;
+
     protected:
     void print(std::ostream &out, unsigned level) const override;
 };
@@ -768,6 +828,9 @@ struct Match<wasm::HashBasedGrouping> : wasm::MatchSingleChild
 
     const Operator & get_matched_root() const override { return grouping; }
 
+    void accept(wasm::MatchBaseVisitor &v) override;
+    void accept(wasm::ConstMatchBaseVisitor &v) const override;
+
     protected:
     void print(std::ostream &out, unsigned level) const override;
 };
@@ -788,6 +851,9 @@ struct Match<wasm::OrderedGrouping> : wasm::MatchSingleChild
 
     const Operator & get_matched_root() const override { return grouping; }
 
+    void accept(wasm::MatchBaseVisitor &v) override;
+    void accept(wasm::ConstMatchBaseVisitor &v) const override;
+
     protected:
     void print(std::ostream &out, unsigned level) const override;
 };
@@ -807,6 +873,9 @@ struct Match<wasm::Aggregation> : wasm::MatchSingleChild
     }
 
     const Operator & get_matched_root() const override { return aggregation; }
+
+    void accept(wasm::MatchBaseVisitor &v) override;
+    void accept(wasm::ConstMatchBaseVisitor &v) const override;
 
     protected:
     void print(std::ostream &out, unsigned level) const override;
@@ -830,6 +899,9 @@ struct Match<wasm::Quicksort<CmpPredicated>> : wasm::MatchSingleChild
 
     const Operator & get_matched_root() const override { return sorting; }
 
+    void accept(wasm::MatchBaseVisitor &v) override;
+    void accept(wasm::ConstMatchBaseVisitor &v) const override;
+
     protected:
     void print(std::ostream &out, unsigned level) const override;
 };
@@ -849,6 +921,9 @@ struct Match<wasm::NoOpSorting> : wasm::MatchSingleChild
     }
 
     const Operator & get_matched_root() const override { return sorting; }
+
+    void accept(wasm::MatchBaseVisitor &v) override;
+    void accept(wasm::ConstMatchBaseVisitor &v) const override;
 
     protected:
     void print(std::ostream &out, unsigned level) const override;
@@ -881,6 +956,9 @@ struct Match<wasm::NestedLoopsJoin<Predicated>> : wasm::MatchMultipleChildren
     }
 
     const Operator & get_matched_root() const override { return join; }
+
+    void accept(wasm::MatchBaseVisitor &v) override;
+    void accept(wasm::ConstMatchBaseVisitor &v) const override;
 
     protected:
     void print(std::ostream &out, unsigned level) const override;
@@ -923,6 +1001,9 @@ struct Match<wasm::SimpleHashJoin<UniqueBuild, Predicated>> : wasm::MatchMultipl
 
     const Operator & get_matched_root() const override { return join; }
 
+    void accept(wasm::MatchBaseVisitor &v) override;
+    void accept(wasm::ConstMatchBaseVisitor &v) const override;
+
     protected:
     void print(std::ostream &out, unsigned level) const override;
 };
@@ -956,6 +1037,9 @@ struct Match<wasm::SortMergeJoin<SortLeft, SortRight, Predicated, CmpPredicated>
 
     const Operator & get_matched_root() const override { return join; }
 
+    void accept(wasm::MatchBaseVisitor &v) override;
+    void accept(wasm::ConstMatchBaseVisitor &v) const override;
+
     protected:
     void print(std::ostream &out, unsigned level) const override;
 };
@@ -975,6 +1059,9 @@ struct Match<wasm::Limit> : wasm::MatchSingleChild
     }
 
     const Operator & get_matched_root() const override { return limit; }
+
+    void accept(wasm::MatchBaseVisitor &v) override;
+    void accept(wasm::ConstMatchBaseVisitor &v) const override;
 
     protected:
     void print(std::ostream &out, unsigned level) const override;
@@ -1019,9 +1106,62 @@ struct Match<wasm::HashBasedGroupJoin> : wasm::MatchMultipleChildren
 
     const Operator & get_matched_root() const override { return grouping; }
 
+    void accept(wasm::MatchBaseVisitor &v) override;
+    void accept(wasm::ConstMatchBaseVisitor &v) const override;
+
     protected:
     void print(std::ostream &out, unsigned level) const override;
 };
+
+namespace wasm {
+
+#define M_WASM_VISITABLE_MATCH_LIST(X) \
+    M_WASM_MATCH_LIST(X) \
+    X(MatchLeaf) \
+    X(MatchSingleChild) \
+    X(MatchMultipleChildren)
+
+M_DECLARE_VISITOR(MatchBaseVisitor, MatchBase, M_WASM_VISITABLE_MATCH_LIST)
+M_DECLARE_VISITOR(ConstMatchBaseVisitor, const MatchBase, M_WASM_VISITABLE_MATCH_LIST)
+
+/** A generic base class for implementing recursive `wasm::MatchBase` visitors. */
+template<bool C>
+struct TheRecursiveMatchBaseVisitor : std::conditional_t<C, ConstMatchBaseVisitor, MatchBaseVisitor>
+{
+    using super = std::conditional_t<C, ConstMatchBaseVisitor, MatchBaseVisitor>;
+    template<typename T> using Const = typename super::template Const<T>;
+
+    virtual ~TheRecursiveMatchBaseVisitor() { }
+
+    using super::operator();
+    void operator()(Const<MatchLeaf>&) override { /* nothing to be done */ }
+    void operator()(Const<MatchSingleChild> &M) override { (*this)(*M.child); }
+    void operator()(Const<Match<Projection>> &M) override { if (M.child) (*this)(**M.child); }
+    void operator()(Const<MatchMultipleChildren> &M) override { for (auto &c : M.children) (*this)(*c); }
+};
+
+using RecursiveMatchBaseVisitor = TheRecursiveMatchBaseVisitor<false>;
+using RecursiveConstMatchBaseVisitor = TheRecursiveMatchBaseVisitor<true>;
+
+M_MAKE_STL_VISITABLE(RecursiveMatchBaseVisitor, MatchBase, M_WASM_VISITABLE_MATCH_LIST)
+M_MAKE_STL_VISITABLE(RecursiveConstMatchBaseVisitor, const MatchBase, M_WASM_VISITABLE_MATCH_LIST)
+
+#undef M_WASM_VISITABLE_MATCH_LIST
+
+}
+
+// delayed definitions (must occur *before* explicit instantiation below)
+#define ACCEPT(CLASS) \
+    inline void CLASS::accept(wasm::MatchBaseVisitor &v)            { v(*this); } \
+    inline void CLASS::accept(wasm::ConstMatchBaseVisitor &v) const { v(*this); }
+M_WASM_MATCH_LIST_NON_TEMPLATED(ACCEPT)
+#undef ACCEPT
+
+#define ACCEPT(CLASS) \
+    template<> inline void CLASS::accept(wasm::MatchBaseVisitor &v)            { v(*this); } \
+    template<> inline void CLASS::accept(wasm::ConstMatchBaseVisitor &v) const { v(*this); }
+M_WASM_MATCH_LIST_TEMPLATED(ACCEPT)
+#undef ACCEPT
 
 }
 

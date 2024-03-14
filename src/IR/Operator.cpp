@@ -221,12 +221,9 @@ void Operator::dump(std::ostream &out) const { out << *this << std::endl; }
 void Operator::dump() const { dump(std::cerr); }
 M_LCOV_EXCL_STOP
 
-ProjectionOperator::ProjectionOperator(std::vector<projection_type> projections)
-    : projections_(std::move(projections))
-{
-    /* Compute the schema of the operator. */
-    auto &S = schema();
-    for (auto &[proj, alias] : projections_) {
+Schema compute_projection_schema(std::vector<QueryGraph::projection_type> &projections) {
+    Schema S;
+    for (auto &[proj, alias] : projections) {
         auto ty = proj.get().type();
         Schema::entry_type::constraints_t constraints{0};
         if (not proj.get().can_be_null())
@@ -249,6 +246,16 @@ ProjectionOperator::ProjectionOperator(std::vector<projection_type> projections)
             }
         }
     }
+    return S;
+}
+
+ProjectionOperator::ProjectionOperator(std::vector<projection_type> projections)
+    : projections_(std::move(projections))
+{
+    /* Compute the schema of the operator. */
+    auto &S = schema();
+    M_insist(S.empty());
+    S = compute_projection_schema(projections_);
 }
 
 GroupingOperator::GroupingOperator(std::vector<group_type> group_by,

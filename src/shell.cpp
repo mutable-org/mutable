@@ -309,6 +309,10 @@ int main(int argc, const char **argv)
         nullptr, "--dryrun",                                /* Short, Long      */
         "don't actually execute the query",                 /* Description      */
         [&](bool) { Options::Get().dryrun = true; });       /* Callback         */
+    ADD(bool, Options::Get().result_db, false,                      /* Type, Var, Init  */
+        nullptr, "--result-db",                                     /* Short, Long      */
+        "compute multipe result sets using semi-join reduction",    /* Description      */
+        [&](bool) { Options::Get().result_db = true; });            /* Callback         */
     ADD(bool, Options::Get().benchmark, false,              /* Type, Var, Init  */
         nullptr, "--benchmark",                             /* Short, Long      */
         "run queries in benchmark mode",                    /* Description      */

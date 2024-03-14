@@ -47,6 +47,9 @@ struct M_EXPORT Options
     bool plandot;
     bool physplan;
 
+    /** If `true`, compute multiple result sets using semi-join reduction. */
+    bool result_db;
+
     /** If `true`, do not pass the query to the backend for execution. */
     bool dryrun;
 

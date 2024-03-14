@@ -504,18 +504,54 @@ void execute_buffered(const Match<T> &M, const Schema &schema,
     }
 }
 
-template<>
-struct Match<wasm::NoOp> : MatchBase
-{
-    const NoOpOperator &noop;
-    unsharable_shared_ptr<const MatchBase> child;
+namespace wasm {
 
-    Match(const NoOpOperator *noop, std::vector<unsharable_shared_ptr<const MatchBase>> &&children)
-        : noop(*noop)
-        , child(std::move(children[0]))
+/** An abstract `MatchBase` for the `WasmV8` backend. */
+struct MatchBase : m::MatchBase
+{
+};
+
+/** Intermediate match type for leaves, i.e. physical operator matches without children. */
+struct MatchLeaf : wasm::MatchBase { };
+/** Intermediate match type for physical operator matches with a single child. */
+struct MatchSingleChild : wasm::MatchBase
+{
+    unsharable_shared_ptr<const wasm::MatchBase> child;
+
+    MatchSingleChild(std::vector<unsharable_shared_ptr<const m::MatchBase>> &&children)
+        : child(as<const wasm::MatchBase>(std::move(children[0])))
     {
         M_insist(children.size() == 1);
     }
+};
+/** Intermediate match type for physical operator matches with multiple children. */
+struct MatchMultipleChildren : wasm::MatchBase
+{
+    std::vector<unsharable_shared_ptr<const wasm::MatchBase>> children;
+
+    MatchMultipleChildren(std::vector<unsharable_shared_ptr<const m::MatchBase>> &&children)
+        : children([&children](){
+            std::vector<unsharable_shared_ptr<const wasm::MatchBase>> res;
+            for (auto &c : children)
+                res.push_back(as<const wasm::MatchBase>(std::move(c)));
+            return res;
+        }())
+    {
+        M_insist(children.size() >= 2);
+    }
+};
+
+};
+
+template<>
+struct Match<wasm::NoOp> : wasm::MatchSingleChild
+{
+    const NoOpOperator &noop;
+
+    Match(const NoOpOperator *noop, std::vector<unsharable_shared_ptr<const m::MatchBase>> &&children)
+        : wasm::MatchSingleChild(std::move(children))
+        , noop(*noop)
+    { }
 
     void execute(setup_t setup, pipeline_t pipeline, teardown_t teardown) const override {
         wasm::NoOp::execute(*this, std::move(setup), std::move(pipeline), std::move(teardown));
@@ -528,20 +564,17 @@ struct Match<wasm::NoOp> : MatchBase
 };
 
 template<bool SIMDfied>
-struct Match<wasm::Callback<SIMDfied>> : MatchBase
+struct Match<wasm::Callback<SIMDfied>> : wasm::MatchSingleChild
 {
     const CallbackOperator &callback;
-    unsharable_shared_ptr<const MatchBase> child;
     std::unique_ptr<const storage::DataLayoutFactory> result_set_factory =
         M_notnull(options::hard_pipeline_breaker_layout.get())->clone();
     std::size_t result_set_window_size = options::result_set_window_size;
 
-    Match(const CallbackOperator *callback, std::vector<unsharable_shared_ptr<const MatchBase>> &&children)
-        : callback(*callback)
-        , child(std::move(children[0]))
-    {
-        M_insist(children.size() == 1);
-    }
+    Match(const CallbackOperator *callback, std::vector<unsharable_shared_ptr<const m::MatchBase>> &&children)
+        : wasm::MatchSingleChild(std::move(children))
+        , callback(*callback)
+    { }
 
     void execute(setup_t setup, pipeline_t pipeline, teardown_t teardown) const override {
         wasm::Callback<SIMDfied>::execute(*this, std::move(setup), std::move(pipeline), std::move(teardown));
@@ -554,20 +587,17 @@ struct Match<wasm::Callback<SIMDfied>> : MatchBase
 };
 
 template<bool SIMDfied>
-struct Match<wasm::Print<SIMDfied>> : MatchBase
+struct Match<wasm::Print<SIMDfied>> : wasm::MatchSingleChild
 {
     const PrintOperator &print_op;
-    unsharable_shared_ptr<const MatchBase> child;
     std::unique_ptr<const storage::DataLayoutFactory> result_set_factory =
         M_notnull(options::hard_pipeline_breaker_layout.get())->clone();
     std::size_t result_set_window_size = options::result_set_window_size;
 
-    Match(const PrintOperator *print, std::vector<unsharable_shared_ptr<const MatchBase>> &&children)
-        : print_op(*print)
-        , child(std::move(children[0]))
-    {
-        M_insist(children.size() == 1);
-    }
+    Match(const PrintOperator *print, std::vector<unsharable_shared_ptr<const m::MatchBase>> &&children)
+        : wasm::MatchSingleChild(std::move(children))
+        , print_op(*print)
+    { }
 
     void execute(setup_t setup, pipeline_t pipeline, teardown_t teardown) const override {
         wasm::Print<SIMDfied>::execute(*this, std::move(setup), std::move(pipeline), std::move(teardown));
@@ -580,7 +610,7 @@ struct Match<wasm::Print<SIMDfied>> : MatchBase
 };
 
 template<bool SIMDfied>
-struct Match<wasm::Scan<SIMDfied>> : MatchBase
+struct Match<wasm::Scan<SIMDfied>> : wasm::MatchLeaf
 {
     const ScanOperator &scan;
     private:
@@ -591,7 +621,7 @@ struct Match<wasm::Scan<SIMDfied>> : MatchBase
     std::size_t buffer_num_tuples_ = options::soft_pipeline_breaker_num_tuples;
 
     public:
-    Match(const ScanOperator *scan, std::vector<unsharable_shared_ptr<const MatchBase>> &&children)
+    Match(const ScanOperator *scan, std::vector<unsharable_shared_ptr<const m::MatchBase>> &&children)
         : scan(*scan)
     {
         M_insist(children.empty());
@@ -628,10 +658,9 @@ struct Match<wasm::Scan<SIMDfied>> : MatchBase
 };
 
 template<bool Predicated>
-struct Match<wasm::Filter<Predicated>> : MatchBase
+struct Match<wasm::Filter<Predicated>> : wasm::MatchSingleChild
 {
     const FilterOperator &filter;
-    unsharable_shared_ptr<const MatchBase> child;
     private:
     std::unique_ptr<const storage::DataLayoutFactory> buffer_factory_ =
         bool(options::soft_pipeline_breaker bitand option_configs::SoftPipelineBreakerStrategy::AFTER_FILTER)
@@ -640,12 +669,10 @@ struct Match<wasm::Filter<Predicated>> : MatchBase
     std::size_t buffer_num_tuples_ = options::soft_pipeline_breaker_num_tuples;
 
     public:
-    Match(const FilterOperator *filter, std::vector<unsharable_shared_ptr<const MatchBase>> &&children)
-        : filter(*filter)
-        , child(std::move(children[0]))
-    {
-        M_insist(children.size() == 1);
-    }
+    Match(const FilterOperator *filter, std::vector<unsharable_shared_ptr<const m::MatchBase>> &&children)
+        : wasm::MatchSingleChild(std::move(children))
+        , filter(*filter)
+    { }
 
     void execute(setup_t setup, pipeline_t pipeline, teardown_t teardown) const override {
         execute_buffered(*this, filter.schema(), buffer_factory_, buffer_num_tuples_,
@@ -659,10 +686,9 @@ struct Match<wasm::Filter<Predicated>> : MatchBase
 };
 
 template<>
-struct Match<wasm::LazyDisjunctiveFilter> : MatchBase
+struct Match<wasm::LazyDisjunctiveFilter> : wasm::MatchSingleChild
 {
     const DisjunctiveFilterOperator &filter;
-    unsharable_shared_ptr<const MatchBase> child;
     private:
     std::unique_ptr<const storage::DataLayoutFactory> buffer_factory_ =
         bool(options::soft_pipeline_breaker bitand option_configs::SoftPipelineBreakerStrategy::AFTER_FILTER)
@@ -671,12 +697,10 @@ struct Match<wasm::LazyDisjunctiveFilter> : MatchBase
     std::size_t buffer_num_tuples_ = options::soft_pipeline_breaker_num_tuples;
 
     public:
-    Match(const DisjunctiveFilterOperator *filter, std::vector<unsharable_shared_ptr<const MatchBase>> &&children)
-        : filter(*filter)
-        , child(std::move(children[0]))
-    {
-        M_insist(children.size() == 1);
-    }
+    Match(const DisjunctiveFilterOperator *filter, std::vector<unsharable_shared_ptr<const m::MatchBase>> &&children)
+        : wasm::MatchSingleChild(std::move(children))
+        , filter(*filter)
+    { }
 
     void execute(setup_t setup, pipeline_t pipeline, teardown_t teardown) const override {
         execute_buffered(*this, filter.schema(), buffer_factory_, buffer_num_tuples_,
@@ -690,10 +714,10 @@ struct Match<wasm::LazyDisjunctiveFilter> : MatchBase
 };
 
 template<>
-struct Match<wasm::Projection> : MatchBase
+struct Match<wasm::Projection> : wasm::MatchBase
 {
     const ProjectionOperator &projection;
-    std::optional<unsharable_shared_ptr<const MatchBase>> child;
+    std::optional<unsharable_shared_ptr<const wasm::MatchBase>> child;
     private:
     std::unique_ptr<const storage::DataLayoutFactory> buffer_factory_ =
         bool(options::soft_pipeline_breaker bitand option_configs::SoftPipelineBreakerStrategy::AFTER_PROJECTION)
@@ -702,12 +726,12 @@ struct Match<wasm::Projection> : MatchBase
     std::size_t buffer_num_tuples_ = options::soft_pipeline_breaker_num_tuples;
 
     public:
-    Match(const ProjectionOperator *projection, std::vector<unsharable_shared_ptr<const MatchBase>> &&children)
+    Match(const ProjectionOperator *projection, std::vector<unsharable_shared_ptr<const m::MatchBase>> &&children)
         : projection(*projection)
     {
         if (not children.empty()) {
             M_insist(children.size() == 1);
-            child = std::move(children[0]);
+            child = as<const wasm::MatchBase>(std::move(children[0]));
         }
     }
 
@@ -723,10 +747,9 @@ struct Match<wasm::Projection> : MatchBase
 };
 
 template<>
-struct Match<wasm::HashBasedGrouping> : MatchBase
+struct Match<wasm::HashBasedGrouping> : wasm::MatchSingleChild
 {
     const GroupingOperator &grouping;
-    unsharable_shared_ptr<const MatchBase> child;
     bool use_open_addressing_hashing =
         bool(options::hash_table_implementation bitand option_configs::HashTableImplementation::OPEN_ADDRESSING);
     bool use_in_place_values = bool(options::hash_table_storing_strategy bitand option_configs::StoringStrategy::IN_PLACE);
@@ -734,12 +757,10 @@ struct Match<wasm::HashBasedGrouping> : MatchBase
     double load_factor =
         use_open_addressing_hashing ? options::load_factor_open_addressing : options::load_factor_chained;
 
-    Match(const GroupingOperator *grouping, std::vector<unsharable_shared_ptr<const MatchBase>> &&children)
-        : grouping(*grouping)
-        , child(std::move(children[0]))
-    {
-        M_insist(children.size() == 1);
-    }
+    Match(const GroupingOperator *grouping, std::vector<unsharable_shared_ptr<const m::MatchBase>> &&children)
+        : wasm::MatchSingleChild(std::move(children))
+        , grouping(*grouping)
+    { }
 
     void execute(setup_t setup, pipeline_t pipeline, teardown_t teardown) const override {
         wasm::HashBasedGrouping::execute(*this, std::move(setup), std::move(pipeline), std::move(teardown));
@@ -752,17 +773,14 @@ struct Match<wasm::HashBasedGrouping> : MatchBase
 };
 
 template<>
-struct Match<wasm::OrderedGrouping> : MatchBase
+struct Match<wasm::OrderedGrouping> : wasm::MatchSingleChild
 {
     const GroupingOperator &grouping;
-    unsharable_shared_ptr<const MatchBase> child;
 
-    Match(const GroupingOperator *grouping, std::vector<unsharable_shared_ptr<const MatchBase>> &&children)
-        : grouping(*grouping)
-        , child(std::move(children[0]))
-    {
-        M_insist(children.size() == 1);
-    }
+    Match(const GroupingOperator *grouping, std::vector<unsharable_shared_ptr<const m::MatchBase>> &&children)
+        : wasm::MatchSingleChild(std::move(children))
+        , grouping(*grouping)
+    { }
 
     void execute(setup_t setup, pipeline_t pipeline, teardown_t teardown) const override {
         wasm::OrderedGrouping::execute(*this, std::move(setup), std::move(pipeline), std::move(teardown));
@@ -775,17 +793,14 @@ struct Match<wasm::OrderedGrouping> : MatchBase
 };
 
 template<>
-struct Match<wasm::Aggregation> : MatchBase
+struct Match<wasm::Aggregation> : wasm::MatchSingleChild
 {
     const AggregationOperator &aggregation;
-    unsharable_shared_ptr<const MatchBase> child;
 
-    Match(const AggregationOperator *aggregation, std::vector<unsharable_shared_ptr<const MatchBase>> &&children)
-        : aggregation(*aggregation)
-        , child(std::move(children[0]))
-    {
-        M_insist(children.size() == 1);
-    }
+    Match(const AggregationOperator *aggregation, std::vector<unsharable_shared_ptr<const m::MatchBase>> &&children)
+        : wasm::MatchSingleChild(std::move(children))
+        , aggregation(*aggregation)
+    { }
 
     void execute(setup_t setup, pipeline_t pipeline, teardown_t teardown) const override {
         wasm::Aggregation::execute(*this, std::move(setup), std::move(pipeline), std::move(teardown));
@@ -798,19 +813,16 @@ struct Match<wasm::Aggregation> : MatchBase
 };
 
 template<bool CmpPredicated>
-struct Match<wasm::Quicksort<CmpPredicated>> : MatchBase
+struct Match<wasm::Quicksort<CmpPredicated>> : wasm::MatchSingleChild
 {
     const SortingOperator &sorting;
-    unsharable_shared_ptr<const MatchBase> child;
     std::unique_ptr<const storage::DataLayoutFactory> materializing_factory =
         M_notnull(options::hard_pipeline_breaker_layout.get())->clone();
 
-    Match(const SortingOperator *sorting, std::vector<unsharable_shared_ptr<const MatchBase>> &&children)
-        : sorting(*sorting)
-        , child(std::move(children[0]))
-    {
-        M_insist(children.size() == 1);
-    }
+    Match(const SortingOperator *sorting, std::vector<unsharable_shared_ptr<const m::MatchBase>> &&children)
+        : wasm::MatchSingleChild(std::move(children))
+        , sorting(*sorting)
+    { }
 
     void execute(setup_t setup, pipeline_t pipeline, teardown_t teardown) const override {
         wasm::Quicksort<CmpPredicated>::execute(*this, std::move(setup), std::move(pipeline), std::move(teardown));
@@ -823,17 +835,14 @@ struct Match<wasm::Quicksort<CmpPredicated>> : MatchBase
 };
 
 template<>
-struct Match<wasm::NoOpSorting> : MatchBase
+struct Match<wasm::NoOpSorting> : wasm::MatchSingleChild
 {
     const SortingOperator &sorting;
-    unsharable_shared_ptr<const MatchBase> child;
 
-    Match(const SortingOperator *sorting, std::vector<unsharable_shared_ptr<const MatchBase>> &&children)
-        : sorting(*sorting)
-        , child(std::move(children[0]))
-    {
-        M_insist(children.size() == 1);
-    }
+    Match(const SortingOperator *sorting, std::vector<unsharable_shared_ptr<const m::MatchBase>> &&children)
+        : wasm::MatchSingleChild(std::move(children))
+        , sorting(*sorting)
+    { }
 
     void execute(setup_t setup, pipeline_t pipeline, teardown_t teardown) const override {
         wasm::NoOpSorting::execute(*this, std::move(setup), std::move(pipeline), std::move(teardown));
@@ -846,10 +855,9 @@ struct Match<wasm::NoOpSorting> : MatchBase
 };
 
 template<bool Predicated>
-struct Match<wasm::NestedLoopsJoin<Predicated>> : MatchBase
+struct Match<wasm::NestedLoopsJoin<Predicated>> : wasm::MatchMultipleChildren
 {
     const JoinOperator &join;
-    const std::vector<unsharable_shared_ptr<const MatchBase>> children;
     std::vector<std::unique_ptr<const storage::DataLayoutFactory>> materializing_factories_;
     private:
     std::unique_ptr<const storage::DataLayoutFactory> buffer_factory_ =
@@ -859,13 +867,11 @@ struct Match<wasm::NestedLoopsJoin<Predicated>> : MatchBase
     std::size_t buffer_num_tuples_ = options::soft_pipeline_breaker_num_tuples;
 
     public:
-    Match(const JoinOperator *join, std::vector<unsharable_shared_ptr<const MatchBase>> &&children)
-        : join(*join)
-        , children(std::move(children))
+    Match(const JoinOperator *join, std::vector<unsharable_shared_ptr<const m::MatchBase>> &&children)
+        : wasm::MatchMultipleChildren(std::move(children))
+        , join(*join)
     {
-        M_insist(this->children.size() >= 2);
-
-        for (std::size_t i = 0; i < this->children.size() - 1; ++i)
+        for (std::size_t i = 0; i < children.size() - 1; ++i)
             materializing_factories_.push_back(M_notnull(options::hard_pipeline_breaker_layout.get())->clone());
     }
 
@@ -881,12 +887,11 @@ struct Match<wasm::NestedLoopsJoin<Predicated>> : MatchBase
 };
 
 template<bool UniqueBuild, bool Predicated>
-struct Match<wasm::SimpleHashJoin<UniqueBuild, Predicated>> : MatchBase
+struct Match<wasm::SimpleHashJoin<UniqueBuild, Predicated>> : wasm::MatchMultipleChildren
 {
     const JoinOperator &join;
     const Wildcard &build;
     const Wildcard &probe;
-    const std::vector<unsharable_shared_ptr<const MatchBase>> children;
     bool use_open_addressing_hashing =
         bool(options::hash_table_implementation bitand option_configs::HashTableImplementation::OPEN_ADDRESSING);
     bool use_in_place_values = bool(options::hash_table_storing_strategy bitand option_configs::StoringStrategy::IN_PLACE);
@@ -902,13 +907,13 @@ struct Match<wasm::SimpleHashJoin<UniqueBuild, Predicated>> : MatchBase
 
     public:
     Match(const JoinOperator *join, const Wildcard *build, const Wildcard *probe,
-          std::vector<unsharable_shared_ptr<const MatchBase>> &&children)
-        : join(*join)
+          std::vector<unsharable_shared_ptr<const m::MatchBase>> &&children)
+        : wasm::MatchMultipleChildren(std::move(children))
+        , join(*join)
         , build(*build)
         , probe(*probe)
-        , children(std::move(children))
     {
-        M_insist(this->children.size() == 2);
+        M_insist(children.size() == 2);
     }
 
     void execute(setup_t setup, pipeline_t pipeline, teardown_t teardown) const override {
@@ -923,25 +928,24 @@ struct Match<wasm::SimpleHashJoin<UniqueBuild, Predicated>> : MatchBase
 };
 
 template<bool SortLeft, bool SortRight, bool Predicated, bool CmpPredicated>
-struct Match<wasm::SortMergeJoin<SortLeft, SortRight, Predicated, CmpPredicated>> : MatchBase
+struct Match<wasm::SortMergeJoin<SortLeft, SortRight, Predicated, CmpPredicated>> : wasm::MatchMultipleChildren
 {
     const JoinOperator &join;
     const Wildcard &parent; ///< the referenced relation with unique join attributes
     const Wildcard &child; ///< the relation referencing the parent relation
-    std::vector<unsharable_shared_ptr<const MatchBase>> children;
     std::unique_ptr<const storage::DataLayoutFactory> left_materializing_factory =
         M_notnull(options::hard_pipeline_breaker_layout.get())->clone();
     std::unique_ptr<const storage::DataLayoutFactory> right_materializing_factory =
         M_notnull(options::hard_pipeline_breaker_layout.get())->clone();
 
     Match(const JoinOperator *join, const Wildcard *parent, const Wildcard *child,
-          std::vector<unsharable_shared_ptr<const MatchBase>> &&children)
-        : join(*join)
+          std::vector<unsharable_shared_ptr<const m::MatchBase>> &&children)
+        : wasm::MatchMultipleChildren(std::move(children))
+        , join(*join)
         , parent(*parent)
         , child(*child)
-        , children(std::move(children))
     {
-        M_insist(this->children.size() == 2);
+        M_insist(children.size() == 2);
     }
 
     void execute(setup_t setup, pipeline_t pipeline, teardown_t teardown) const override {
@@ -957,17 +961,14 @@ struct Match<wasm::SortMergeJoin<SortLeft, SortRight, Predicated, CmpPredicated>
 };
 
 template<>
-struct Match<wasm::Limit> : MatchBase
+struct Match<wasm::Limit> : wasm::MatchSingleChild
 {
     const LimitOperator &limit;
-    unsharable_shared_ptr<const MatchBase> child;
 
-    Match(const LimitOperator *limit, std::vector<unsharable_shared_ptr<const MatchBase>> &&children)
-        : limit(*limit)
-        , child(std::move(children[0]))
-    {
-        M_insist(children.size() == 1);
-    }
+    Match(const LimitOperator *limit, std::vector<unsharable_shared_ptr<const m::MatchBase>> &&children)
+        : wasm::MatchSingleChild(std::move(children))
+        , limit(*limit)
+    { }
 
     void execute(setup_t setup, pipeline_t pipeline, teardown_t teardown) const override {
         wasm::Limit::execute(*this, std::move(setup), std::move(pipeline), std::move(teardown));
@@ -980,13 +981,12 @@ struct Match<wasm::Limit> : MatchBase
 };
 
 template<>
-struct Match<wasm::HashBasedGroupJoin> : MatchBase
+struct Match<wasm::HashBasedGroupJoin> : wasm::MatchMultipleChildren
 {
     const GroupingOperator &grouping;
     const JoinOperator &join;
     const Wildcard &build;
     const Wildcard &probe;
-    std::vector<unsharable_shared_ptr<const MatchBase>> children;
     bool use_open_addressing_hashing =
         bool(options::hash_table_implementation bitand option_configs::HashTableImplementation::OPEN_ADDRESSING);
     bool use_in_place_values = bool(options::hash_table_storing_strategy bitand option_configs::StoringStrategy::IN_PLACE);
@@ -1002,14 +1002,14 @@ struct Match<wasm::HashBasedGroupJoin> : MatchBase
 
     public:
     Match(const GroupingOperator* grouping, const JoinOperator *join, const Wildcard *build, const Wildcard *probe,
-          std::vector<unsharable_shared_ptr<const MatchBase>> &&children)
-        : grouping(*grouping)
+          std::vector<unsharable_shared_ptr<const m::MatchBase>> &&children)
+        : wasm::MatchMultipleChildren(std::move(children))
+        , grouping(*grouping)
         , join(*join)
         , build(*build)
         , probe(*probe)
-        , children(std::move(children))
     {
-        M_insist(this->children.size() == 2);
+        M_insist(children.size() == 2);
     }
 
     void execute(setup_t setup, pipeline_t pipeline, teardown_t teardown) const override {

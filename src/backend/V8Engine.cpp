@@ -89,8 +89,8 @@ struct V8Engine : m::WasmEngine
     }
 
     void initialize();
-    void compile(const MatchBase &plan) const override;
-    void execute(const MatchBase &plan) override;
+    void compile(const m::MatchBase &plan) const override;
+    void execute(const m::MatchBase &plan) override;
 };
 
 
@@ -663,7 +663,7 @@ void V8Engine::initialize()
     isolate_ = v8::Isolate::New(create_params);
 }
 
-void V8Engine::compile(const MatchBase &plan) const
+void V8Engine::compile(const m::MatchBase &plan) const
 {
 #if 1
     /*----- Add print function. --------------------------------------------------------------------------------------*/
@@ -724,7 +724,7 @@ void V8Engine::compile(const MatchBase &plan) const
 #endif
 }
 
-void V8Engine::execute(const MatchBase &plan)
+void V8Engine::execute(const m::MatchBase &plan)
 {
     Catalog &C = Catalog::Get();
 
@@ -909,7 +909,7 @@ v8::Local<v8::WasmModuleObject> m::wasm::detail::instantiate(v8::Isolate &isolat
                ->CallAsConstructor(Ctx, 2, instance_args).ToLocalChecked().As<v8::WasmModuleObject>();
 }
 
-v8::Local<v8::Object> m::wasm::detail::create_env(v8::Isolate &isolate, const MatchBase &plan)
+v8::Local<v8::Object> m::wasm::detail::create_env(v8::Isolate &isolate, const m::MatchBase &plan)
 {
     auto &context = WasmEngine::Get_Wasm_Context_By_ID(Module::ID());
     auto Ctx = isolate.GetCurrentContext();

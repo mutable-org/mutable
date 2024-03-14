@@ -573,7 +573,7 @@ void m::register_wasm_operators(PhysicalOptimizer &phys_opt)
  * \p window_size does not equal 0 indicating the used batch size).  To emit the code at the correct position, code
  * generation is delegated to the child physical operator \p child. */
 void write_result_set(const Schema &schema, const DataLayoutFactory &factory, uint32_t window_size,
-                      const MatchBase &child)
+                      const m::wasm::MatchBase &child)
 {
     M_insist(schema == schema.drop_constants().deduplicate(), "schema must not contain constants or duplicates");
     M_insist(CodeGenContext::Get().env().empty(), "all environment entries must be used");
@@ -5259,7 +5259,7 @@ void Match<m::wasm::NestedLoopsJoin<Predicated>>::print(std::ostream &out, unsig
     ++level;
     std::size_t i = this->children.size();
     while (i--) {
-        const MatchBase &child = *this->children[i];
+        const m::wasm::MatchBase &child = *this->children[i];
         indent(out, level) << i << ". input";
         child.print(out, level + 1);
     }
@@ -5275,8 +5275,8 @@ void Match<m::wasm::SimpleHashJoin<Unique, Predicated>>::print(std::ostream &out
     out << this->join.schema() << " (cumulative cost " << cost() << ')';
 
     ++level;
-    const MatchBase &build = *this->children[0];
-    const MatchBase &probe = *this->children[1];
+    const m::wasm::MatchBase &build = *this->children[0];
+    const m::wasm::MatchBase &probe = *this->children[1];
     indent(out, level) << "probe input";
     probe.print(out, level + 1);
     indent(out, level) << "build input";
@@ -5304,8 +5304,8 @@ void Match<m::wasm::SortMergeJoin<SortLeft, SortRight, Predicated, CmpPredicated
     out << this->join.schema() << " (cumulative cost " << cost() << ')';
 
     ++level;
-    const MatchBase &left  = *this->children[0];
-    const MatchBase &right = *this->children[1];
+    const m::wasm::MatchBase &left  = *this->children[0];
+    const m::wasm::MatchBase &right = *this->children[1];
     indent(out, level) << "right input";
     right.print(out, level + 1);
     indent(out, level) << "left input";
@@ -5326,8 +5326,8 @@ void Match<m::wasm::HashBasedGroupJoin>::print(std::ostream &out, unsigned level
     out << this->grouping.schema() << " (cumulative cost " << cost() << ')';
 
     ++level;
-    const MatchBase &build = *this->children[0];
-    const MatchBase &probe = *this->children[1];
+    const m::wasm::MatchBase &build = *this->children[0];
+    const m::wasm::MatchBase &probe = *this->children[1];
     indent(out, level) << "probe input";
     probe.print(out, level + 1);
     indent(out, level) << "build input";

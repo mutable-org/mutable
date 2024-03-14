@@ -85,7 +85,7 @@ void read_result_set(const v8::FunctionCallbackInfo<v8::Value> &info);
 
 v8::Local<v8::String> mkstr(v8::Isolate &isolate, const std::string &str);
 v8::Local<v8::WasmModuleObject> instantiate(v8::Isolate &isolate, v8::Local<v8::Object> imports);
-v8::Local<v8::Object> create_env(v8::Isolate &isolate, const MatchBase &plan);
+v8::Local<v8::Object> create_env(v8::Isolate &isolate, const m::MatchBase &plan);
 v8::Local<v8::String> to_json(v8::Isolate &isolate, v8::Local<v8::Value> val);
 std::string create_js_debug_script(v8::Isolate &isolate, v8::Local<v8::Object> env,
                                    const WasmEngine::WasmContext &wasm_context);

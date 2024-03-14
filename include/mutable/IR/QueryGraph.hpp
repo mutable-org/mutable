@@ -84,6 +84,32 @@ struct M_EXPORT DataSource
     bool operator!=(const DataSource &other) const { return not operator==(other); }
 };
 
+struct DataSourceHash
+{
+    ///> Mark this callable as *transparent*, allowing for computing the hash of various types that are interoperable.
+    ///> See https://en.cppreference.com/w/cpp/container/unordered_map/find.
+    using is_transparent = void;
+
+    template<typename U>
+    requires requires(U &&u) { static_cast<const DataSource&>(std::forward<U>(u)); }
+    std::size_t operator()(U &&u) const { return murmur3_64(static_cast<const DataSource&>(std::forward<U>(u)).id()); }
+};
+
+struct DataSourceEqualTo
+{
+    ///> Mark this callable as *transparent*, allowing for comparing various types that are interoperable. > See
+    ///https://en.cppreference.com/w/cpp/container/unordered_map/find.
+    using is_transparent = void;
+
+    template<typename U, typename V>
+    requires requires(U &&u) { static_cast<const DataSource&>(std::forward<U>(u)); } and
+             requires(V &&v) { static_cast<const DataSource&>(std::forward<V>(v)); }
+    auto operator()(U &&u, V &&v) const {
+        return static_cast<const DataSource&>(std::forward<U>(u)) == static_cast<const DataSource&>(std::forward<V>(v));
+    }
+};
+
+
 /** A `BaseTable` is a `DataSource` that is materialized and stored persistently by the database system. */
 struct M_EXPORT BaseTable : DataSource
 {
@@ -169,6 +195,35 @@ struct M_EXPORT Join
         return true;
     }
     bool operator!=(const Join &other) const { return not operator==(other); }
+};
+
+struct JoinHash
+{
+    ///> Mark this callable as *transparent*, allowing for computing the hash of various types that are interoperable.
+    ///> See https://en.cppreference.com/w/cpp/container/unordered_map/find.
+    using is_transparent = void;
+
+    template<typename U>
+    requires requires(U &&u) { static_cast<const Join&>(std::forward<U>(u)); }
+    std::size_t operator()(U &&u) const {
+        auto &j = static_cast<const Join&>(std::forward<U>(u));
+        M_insist(j.sources().size() == 2);
+        return murmur3_64(j.sources()[0].get().id() xor j.sources()[1].get().id());
+    }
+};
+
+struct JoinEqualTo
+{
+    ///> Mark this callable as *transparent*, allowing for comparing various types that are interoperable.
+    ///> See https://en.cppreference.com/w/cpp/container/unordered_map/find.
+    using is_transparent = void;
+
+    template<typename U, typename V>
+    requires requires(U &&u) { static_cast<const Join&>(std::forward<U>(u)); } and
+             requires(V &&v) { static_cast<const Join&>(std::forward<V>(v)); }
+    auto operator()(U &&u, V &&v) const {
+        return static_cast<const Join&>(std::forward<U>(u)) == static_cast<const Join&>(std::forward<V>(v));
+    }
 };
 
 /** The query graph represents all data sources and joins in a graph structure.  It is used as an intermediate

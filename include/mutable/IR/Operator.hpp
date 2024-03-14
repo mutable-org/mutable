@@ -1,5 +1,7 @@
 #pragma once
 
+#include <algorithm>
+#include <memory>
 #include <mutable/mutable-config.hpp>
 #include <mutable/catalog/Schema.hpp>
 #include <mutable/IR/CNF.hpp>
@@ -355,6 +357,94 @@ struct M_EXPORT JoinOperator : Producer, Consumer
     void accept(ConstOperatorVisitor &v) const override;
 };
 
+struct M_EXPORT SemiJoinReductionOperator : Producer, Consumer
+{
+    using projection_type = QueryGraph::projection_type;
+
+    /** Represents the order in which the semi-join between two `DataSource`s is performed. */
+    struct semi_join_order_t
+    {
+        const DataSource &lhs;
+        const DataSource &rhs;
+        semi_join_order_t(const DataSource &lhs, const DataSource &rhs) : lhs(lhs), rhs(rhs) { }
+
+        friend std::ostream & operator<<(std::ostream &out, const semi_join_order_t &order) {
+            out << '(' << order.lhs.name() << ',' << order.rhs.name() << ')';
+            return out;
+        }
+
+        void dump(std::ostream &out) const;
+        void dump() const;
+    };
+
+    private:
+    std::vector<projection_type> projections_;
+    std::vector<std::unique_ptr<DataSource>> sources_; ///< collection of all data sources
+    std::vector<std::unique_ptr<Join>> joins_; ///< collection of all joins
+    ///> contains the semi-join reduction order, by convention, the lhs is the `DataSource` ``closer'' to the root
+    std::vector<semi_join_order_t> semi_join_reduction_order_;
+
+    public:
+    SemiJoinReductionOperator(std::vector<projection_type> projections,
+                              std::vector<std::unique_ptr<DataSource>> sources,
+                              std::vector<std::unique_ptr<Join>> joins,
+                              std::vector<semi_join_order_t> semi_join_reduction_order);
+
+    /*----- Override child setters to *NOT* modify the computed schema! ----------------------------------------------*/
+    virtual void add_child(Producer *child) override {
+        if (not child)
+            throw invalid_argument("no child given");
+        children().push_back(child);
+        child->parent(this);
+
+        /* Add constraints from child to computed schema. */
+        auto &S = schema();
+        for (std::size_t i = 0; i < projections_.size(); ++i) {
+            if (auto D = cast<const ast::Designator>(projections_[i].first)) {
+                Schema::Identifier id(D->table_name.text, D->attr_name.text.assert_not_none());
+                if (auto it = child->schema().find(id); it != child->schema().end())
+                    S[i].constraints |= it->constraints;
+            }
+        }
+    }
+    virtual Producer * set_child(Producer *child, std::size_t i) override {
+        if (not child)
+            throw invalid_argument("no child given");
+        if (i >= children().size())
+            throw out_of_range("index i out of bounds");
+        auto old = children()[i];
+        children()[i] = child;
+        child->parent(this);
+
+        /* Add constraints from child to computed schema. */
+        auto &S = schema();
+        for (std::size_t i = 0; i < projections_.size(); ++i) {
+            if (auto D = cast<const ast::Designator>(projections_[i].first)) {
+                Schema::Identifier id(D->table_name.text, D->attr_name.text.assert_not_none());
+                if (auto it = child->schema().find(id); it != child->schema().end())
+                    S[i].constraints |= it->constraints;
+            }
+        }
+
+        return old;
+    }
+
+    std::vector<projection_type> & projections() { return projections_; }
+    const std::vector<projection_type> & projections() const { return projections_; }
+
+    std::vector<std::unique_ptr<DataSource>> & sources() { return sources_; }
+    const std::vector<std::unique_ptr<DataSource>> & sources() const { return sources_; }
+
+    std::vector<std::unique_ptr<Join>> & joins() { return joins_; }
+    const std::vector<std::unique_ptr<Join>> & joins() const { return joins_; }
+
+    std::vector<semi_join_order_t> & semi_join_reduction_order() { return semi_join_reduction_order_; }
+    const std::vector<semi_join_order_t> & semi_join_reduction_order() const { return semi_join_reduction_order_; }
+
+    void accept(OperatorVisitor &v) override;
+    void accept(ConstOperatorVisitor &v) const override;
+};
+
 struct M_EXPORT ProjectionOperator : Producer, Consumer
 {
     using projection_type = QueryGraph::projection_type;
@@ -565,6 +655,7 @@ struct M_EXPORT SortingOperator : Producer, Consumer
     X(FilterOperator) \
     X(DisjunctiveFilterOperator) \
     X(JoinOperator) \
+    X(SemiJoinReductionOperator) \
     X(ProjectionOperator) \
     X(LimitOperator) \
     X(GroupingOperator) \

@@ -1,5 +1,7 @@
 #include "backend/Interpreter.hpp"
 
+#include "mutable/IR/Operator.hpp"
+#include "mutable/util/macro.hpp"
 #include "util/container/RefCountingHashMap.hpp"
 #include <algorithm>
 #include <cerrno>
@@ -1138,6 +1140,11 @@ void Pipeline::operator()(const JoinOperator &op)
     }
 }
 
+void Pipeline::operator()(const SemiJoinReductionOperator &)
+{
+    M_unreachable("Pipeline in Interpreter for SemiJoinReductionOperator not supported.");
+}
+
 void Pipeline::operator()(const ProjectionOperator &op)
 {
     auto data = as<ProjectionData>(op.data());
@@ -1470,6 +1477,11 @@ void Interpreter::operator()(const JoinOperator &op)
                 return;
         }
     }
+}
+
+void Interpreter::operator()(const SemiJoinReductionOperator &)
+{
+    M_unreachable("Interpreter for SemiJoinReductionOperator not supported.");
 }
 
 void Interpreter::operator()(const ProjectionOperator &op)

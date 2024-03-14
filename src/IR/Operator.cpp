@@ -1,6 +1,15 @@
+#include "mutable/IR/QueryGraph.hpp"
+#include "mutable/catalog/Schema.hpp"
+#include "mutable/util/macro.hpp"
+#include <functional>
+#include <memory>
 #include <mutable/IR/Operator.hpp>
 
 #include <mutable/catalog/Catalog.hpp>
+#include <queue>
+#include <unordered_set>
+#include <utility>
+#include <wasm-binary.h>
 
 
 using namespace m;
@@ -52,6 +61,9 @@ std::ostream & m::operator<<(std::ostream &out, const Operator &op) {
         },
         [&out, &depth](const JoinOperator &op) {
             indent(out, op, depth).out << "JoinOperator " << op.predicate();
+        },
+        [&out, &depth](const SemiJoinReductionOperator &op) {
+            indent(out, op, depth).out << "SemiJoinReductionOperator";
         },
         [&out, &depth](const ProjectionOperator &op) { indent(out, op, depth).out << "ProjectionOperator"; },
         [&out, &depth](const LimitOperator &op) {
@@ -135,6 +147,14 @@ void Operator::dot(std::ostream &out) const
         [&out](const JoinOperator &op) {
             out << "    " << id(op) << " [label=<<B>⋈</B><SUB><FONT COLOR=\"0.0 0.0 0.25\" POINT-SIZE=\"10\">"
                 << html_escape(to_string(op.predicate()))
+                << "</FONT></SUB>>];\n";
+
+            for (auto c : op.children())
+                out << "    " << id(*c) << EDGE << id(op) << ";\n";
+        },
+        [&out](const SemiJoinReductionOperator &op) {
+            out << "    " << id(op) << " [label=<<B>⋉</B><SUB><FONT COLOR=\"0.0 0.0 0.25\" POINT-SIZE=\"10\">"
+                << "Reduction"
                 << "</FONT></SUB>>];\n";
 
             for (auto c : op.children())
@@ -248,6 +268,33 @@ Schema compute_projection_schema(std::vector<QueryGraph::projection_type> &proje
     }
     return S;
 }
+
+SemiJoinReductionOperator::SemiJoinReductionOperator(std::vector<projection_type> projections,
+                                                     std::vector<std::unique_ptr<DataSource>> sources,
+                                                     std::vector<std::unique_ptr<Join>> joins,
+                                                     std::vector<semi_join_order_t> semi_join_reduction_order)
+    : projections_(std::move(projections))
+    , sources_(std::move(sources))
+    , joins_(std::move(joins))
+    , semi_join_reduction_order_(std::move(semi_join_reduction_order))
+{
+    /* Compute the schema of the operator. */
+    auto &S = schema();
+    M_insist(S.empty());
+    S = compute_projection_schema(projections_);
+
+#ifndef NDEBUG
+    for (auto &[proj, alias] : projections_) {
+        M_insist(is<const ast::Designator>(proj), "expressions except designators not yet supported");
+        M_insist(not alias.has_value(), "alias not yet supported");
+    }
+#endif
+}
+
+M_LCOV_EXCL_START
+void SemiJoinReductionOperator::semi_join_order_t::dump(std::ostream &out) const { out << *this; out.flush(); }
+void SemiJoinReductionOperator::semi_join_order_t::dump() const { dump(std::cerr); }
+M_LCOV_EXCL_STOP
 
 ProjectionOperator::ProjectionOperator(std::vector<projection_type> projections)
     : projections_(std::move(projections))
@@ -431,6 +478,26 @@ void SchemaMinimizer::operator()(JoinOperator &op)
         required = required_from_below & c->schema(); // what we need from this child
         (*this)(*c);
         add_constraints(op.schema(), c->schema(), JoinOperator::REMOVED_CONSTRAINTS); // add constraints from child except removed ones
+    }
+}
+
+void SchemaMinimizer::operator()(SemiJoinReductionOperator &op)
+{
+    M_insist(required.empty(), "SemiJoinReductionOperator is the root -> no required schema");
+    M_insist(is_top_of_plan_, "SemiJoinReductionOperator has to be top of plan");
+
+    /* Compute operator schema *after* all children have been added. */
+    Schema required_by_op;
+    for (auto &proj : op.projections())
+        required_by_op |= proj.first.get().get_required(); // what we need for projections
+    for (auto &pred : op.joins())
+        required_by_op |= pred->condition().get_required(); // what we need for predicates
+
+    is_top_of_plan_ = false;
+    for (auto c : const_cast<const SemiJoinReductionOperator&>(op).children()) {
+        required = required_by_op & c->schema(); // what we need from this child
+        (*this)(*c);
+        add_constraints(op.schema(), op.child(0)->schema()); // add constraints from child
     }
 }
 

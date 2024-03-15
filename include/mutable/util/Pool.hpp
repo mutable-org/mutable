@@ -205,35 +205,40 @@ struct Pooled
     Pooled(const Pooled &other) : Pooled(other.pool_, other.ref_) { }
     Pooled(Pooled &&other) { swap(*this, other); }
 
-    /**
-     * Constructs an optional `Pooled` with a present value from a non-optional one. Example usecase: Assigning newly
-     * created pooled object to an optional pooled member field.
-     */
+    ///> Constructs an optional `Pooled` with a present value from a non-optional one.
     Pooled(const Pooled<T, Pool, false> &other) requires can_be_none
         : Pooled(M_notnull(other.pool_), M_notnull(other.ref_))
     { }
 
     ///> Move-constructs an optional `Pooled` with a present value from a non-optional one.
     Pooled(Pooled<T, Pool, false> &&other) requires can_be_none
-        : pool_(std::exchange(other.pool_, nullptr))
-        , ref_(std::exchange(other.ref_, nullptr))
+        : pool_(M_notnull(std::exchange(other.pool_, nullptr)))
+        , ref_(M_notnull(std::exchange(other.ref_, nullptr)))
     { }
 
     ///> Constructs a non-optional `Pooled` from an optional one. Can only be used if value is present.
     explicit Pooled(const Pooled<T, Pool, true> &other) requires (not can_be_none)
-        : Pooled(M_notnull(other.pool_), M_notnull(other.ref_))
-    { }
+        : Pooled(M_notnull(other.pool_), other.ref_)
+    {
+        if (not other.has_value())
+            throw invalid_argument("value must be present");
+    }
 
     ///> Move-constructs a non-optional `Pooled` from an optional one. Can only be used if value is present.
     explicit Pooled(Pooled<T, Pool, true> &&other) requires (not can_be_none)
-        : pool_(std::exchange(other.pool_, nullptr))
-        , ref_(std::exchange(other.ref_, nullptr))
+        : pool_(M_notnull(std::exchange(other.pool_, nullptr)))
+        , ref_([&other](){
+            if (not other.has_value())
+                throw invalid_argument("value must be present");
+            return std::exchange(other.ref_, nullptr);
+        }())
     { }
 
     bool has_value() const requires can_be_none { return ref_ != nullptr; }
 
     Pooled<T, Pool, false> assert_not_none() const requires can_be_none {
-        M_insist(has_value());
+        if (not has_value())
+            throw invalid_argument("value must be present");
         return { pool_, ref_ };
     }
 
@@ -271,7 +276,7 @@ struct Pooled
     Pooled<U, Pool, false> as() const {
         M_insist(ref_, "cannot cast empty pooled object");
         M_insist(m::is<U>(ref_->first)); // check if the cast is valid
-        return {pool_, ref_};
+        return { pool_, ref_ };
     }
 
     /**

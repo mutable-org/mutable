@@ -4,6 +4,7 @@
 #include <mutable/catalog/CostFunction.hpp>
 #include <mutable/IR/PlanEnumerator.hpp>
 #include <mutable/IR/PlanTable.hpp>
+#include <unordered_set>
 
 
 namespace m {
@@ -45,6 +46,9 @@ struct M_EXPORT Optimizer
     template<typename PlanTable>
     std::pair<std::unique_ptr<Producer>, PlanTable> optimize_with_plantable(QueryGraph &G) const;
 
+    /** Optimizes the filter \p filter by splitting it into smaller filters and ordering them. */
+    static std::vector<cnf::CNF> optimize_filter(cnf::CNF filter);
+
     private:
     /** Initializes the plan table \p PT with the data source entries contained in \p G.  Returns the
      * (potentially recursively optimized) logical plan for each data source. */
@@ -67,14 +71,39 @@ struct M_EXPORT Optimizer
     std::unique_ptr<Producer> optimize_plan(const QueryGraph &G, std::unique_ptr<Producer> plan,
                                             PlanTableEntry &entry) const;
 
-    /** Optimizes the filter \p filter by splitting it into smaller filters and ordering them. */
-    static std::vector<cnf::CNF> optimize_filter(cnf::CNF filter);
-
     /** Computes and returns a `std::vector` of additional projections required *before* evaluating the ORDER BY clause.
      * The returned `std::vector` may be empty, in which case *no* additional projection is required. */
     static std::vector<projection_type>
     compute_projections_required_for_order_by(const std::vector<projection_type> &projections,
                                               const std::vector<order_type> &order_by);
+};
+
+/** The optimizer interface for SELECT RESULTDB queries.
+ *
+ * The optimizer constructs an operator tree containing a single `SemiJoinReductionOperator' with the base tables as
+ * inputs (children).
+ */
+struct M_EXPORT Optimizer_ResultDB
+{
+    using semi_join_order_t = SemiJoinReductionOperator::semi_join_order_t;
+    using fold_t = std::unordered_set<std::size_t>;
+
+    public:
+    Optimizer_ResultDB() { }
+
+    /** Apply this optimizer to the given query graph to compute an operator tree. It computes and constructs an optimal
+     * semi-join reduction plan. In addition to the plan, a boolean value indicating if the underlying query graph is
+     * compatible is returned. In case the query is not compatible, the optimizer falls back to the standard `Optimizer`
+     * and `false` is returned. */
+    std::pair<std::unique_ptr<Producer>, bool> operator()(QueryGraph &G) const;
+
+    private:
+    std::vector<fold_t> compute_folds(const QueryGraph &G) const;
+    void fold_query_graph(QueryGraph &G, std::vector<fold_t> &folds) const;
+    void combine_joins(QueryGraph &G) const;
+
+    DataSource & choose_root_node(QueryGraph &G, SemiJoinReductionOperator &op) const;
+    void compute_semi_join_reduction_order(QueryGraph &G, SemiJoinReductionOperator &op) const;
 };
 
 }

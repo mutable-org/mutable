@@ -155,6 +155,16 @@ Optimizer::compute_projections_required_for_order_by(const std::vector<projectio
 /*======================================================================================================================
  * Optimizer_ResultDB
  *====================================================================================================================*/
+DataSource & Optimizer_ResultDB::get_data_source_with_highest_degree(QueryGraph &G) const
+{
+    auto current_highest_degree_it = G.sources().begin();
+    for (auto it = std::next(G.sources().begin()); it != G.sources().end(); ++it) {
+        if ((*it)->joins().size() > (*current_highest_degree_it)->joins().size())
+            current_highest_degree_it = it;
+    }
+    return **current_highest_degree_it;
+}
+
 /** Identifies a set of joins that have to be computed such that the join graph becomes acyclic. Currently, the
  * implementation heuristically chooses the node `x` with the highest degree first and subsequently, identifies the node
  * `y` with the highest degree from the neighbors of `x`. The rationale behind this is that nodes with a high degree are
@@ -328,35 +338,13 @@ void Optimizer_ResultDB::combine_joins(QueryGraph &G) const
     G.joins() = std::move(modified_joins);
 }
 
-/** Chooses a root node that is part of the SELECT clause, i.e. appears in the projections. If there are multiple nodes,
- * choose the one with the highest degree. */
-DataSource & Optimizer_ResultDB::choose_root_node(QueryGraph &G, SemiJoinReductionOperator &op) const
-{
-    const Schema &S = op.schema();
-    std::size_t current_root_idx = -1UL;
-    for (std::size_t idx = 0; idx < G.sources().size(); ++idx) {
-        auto intersection = S & op.child(idx)->schema();
-        if (not intersection.empty()) { // contained in projections
-            if (current_root_idx == -1UL or (G.sources()[idx]->joins().size() > G.sources()[current_root_idx]->joins().size()))
-                current_root_idx = idx;
-        }
-    }
-    if (current_root_idx == -1UL) { // no relation found that is part of the projections (likely SELECT *)
-        current_root_idx = 0;
-        for (std::size_t idx = 1; idx < G.sources().size(); ++idx) { // fallback to highest degree
-            if (G.sources()[idx]->joins().size() > G.sources()[current_root_idx]->joins().size())
-                current_root_idx = idx;
-        }
-    }
-    return *G.sources()[current_root_idx];
-}
-
-void Optimizer_ResultDB::compute_semi_join_reduction_order(QueryGraph &G, SemiJoinReductionOperator &op) const
+std::vector<Optimizer_ResultDB::semi_join_order_t>
+Optimizer_ResultDB::compute_semi_join_reduction_order(QueryGraph &G) const
 {
     std::vector<semi_join_order_t> semi_join_reduction_order;
 
-    /*----- Choose root node that is part of the projections and has the highest degree. -----*/
-    auto &root = choose_root_node(G, op);
+    /*----- Choose node with highest degree as root. -----*/
+    auto &root = get_data_source_with_highest_degree(G);
 
     /*----- Compute BFS ordering starting at `root`. -----*/
     auto &mat = G.adjacency_matrix();
@@ -400,7 +388,7 @@ void Optimizer_ResultDB::compute_semi_join_reduction_order(QueryGraph &G, SemiJo
             }
         }
     }
-    op.semi_join_reduction_order() = std::move(semi_join_reduction_order);
+    return semi_join_reduction_order;
 }
 
 std::pair<std::unique_ptr<Producer>, bool>
@@ -444,6 +432,7 @@ Optimizer_ResultDB::operator()(QueryGraph &G) const
         std::vector<fold_t> folds = compute_folds(G);
         fold_query_graph(G, folds);
     }
+    std::vector<semi_join_order_t> semi_join_reduction_order = compute_semi_join_reduction_order(G);
 
     /*----- Compute plans for data sources. -----*/
     const auto num_sources = G.sources().size();
@@ -519,15 +508,14 @@ Optimizer_ResultDB::operator()(QueryGraph &G) const
     }
 
     /* Construct a semi join reduction operator with all necessary information requried by the code generation. */
-    auto semi_join_reduction_op = std::make_unique<SemiJoinReductionOperator>(std::move(G.projections()));
+    auto semi_join_reduction_op = std::make_unique<SemiJoinReductionOperator>(std::move(G.projections()),
+                                                                              std::move(G.sources()),
+                                                                              std::move(G.joins()),
+                                                                              std::move(semi_join_reduction_order));
 
     /* Add source plans as children. */
     for (std::size_t i = 0; i < num_sources; ++i)
         semi_join_reduction_op->add_child(source_plans[i]);
-
-    compute_semi_join_reduction_order(G, *semi_join_reduction_op);
-    semi_join_reduction_op->sources() = std::move(G.sources());
-    semi_join_reduction_op->joins() = std::move(G.joins());
 
     delete[] source_plans;
     return { std::move(semi_join_reduction_op), true };

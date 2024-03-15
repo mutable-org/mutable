@@ -69,7 +69,8 @@ struct M_EXPORT Optimizer
 
     /** Optimizes and constructs an operator tree given a join operator tree \p plan and the final plan table entry
      * \p entry for the query graph \p G. */
-    std::unique_ptr<Producer> optimize_plan(QueryGraph &G, std::unique_ptr<Producer> plan, PlanTableEntry &entry) const;
+    std::unique_ptr<Producer> optimize_plan(const QueryGraph &G, std::unique_ptr<Producer> plan,
+                                            PlanTableEntry &entry) const;
 
     /** Computes and returns a `std::vector` of additional projections required *before* evaluating the ORDER BY clause.
      * The returned `std::vector` may be empty, in which case *no* additional projection is required. */
@@ -98,12 +99,13 @@ struct M_EXPORT Optimizer_ResultDB
     std::pair<std::unique_ptr<Producer>, bool> operator()(QueryGraph &G) const;
 
     private:
+    DataSource & get_data_source_with_highest_degree(QueryGraph &G) const;
+
     std::vector<fold_t> compute_folds(const QueryGraph &G) const;
     void fold_query_graph(QueryGraph &G, std::vector<fold_t> &folds) const;
     void combine_joins(QueryGraph &G) const;
 
-    DataSource & choose_root_node(QueryGraph &G, SemiJoinReductionOperator &op) const;
-    void compute_semi_join_reduction_order(QueryGraph &G, SemiJoinReductionOperator &op) const;
+    std::vector<semi_join_order_t> compute_semi_join_reduction_order(QueryGraph &G) const;
 };
 
 }

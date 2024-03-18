@@ -229,41 +229,41 @@ namespace m {
     M_WASM_OPERATOR_LIST_TEMPLATED(X)
 
 
-#define MAKE_MATCH_(OP) Match<wasm::OP>
+#define MAKE_MATCH_(OP) m::Match<m::wasm::OP>
 #define M_WASM_MATCH_LIST_NON_TEMPLATED(X) M_TRANSFORM_X_MACRO(X, M_WASM_OPERATOR_LIST_NON_TEMPLATED, MAKE_MATCH_)
 #define M_WASM_MATCH_LIST_TEMPLATED(X) \
-    X(Match<wasm::Callback<false>>) \
-    X(Match<wasm::Callback<true>>) \
-    X(Match<wasm::Print<false>>) \
-    X(Match<wasm::Print<true>>) \
-    X(Match<wasm::Scan<false>>) \
-    X(Match<wasm::Scan<true>>) \
-    X(Match<wasm::Filter<false>>) \
-    X(Match<wasm::Filter<true>>) \
-    X(Match<wasm::Quicksort<false>>) \
-    X(Match<wasm::Quicksort<true>>) \
-    X(Match<wasm::NestedLoopsJoin<false>>) \
-    X(Match<wasm::NestedLoopsJoin<true>>) \
-    X(Match<wasm::SimpleHashJoin<M_COMMA(false) false>>) \
-    X(Match<wasm::SimpleHashJoin<M_COMMA(false) true>>) \
-    X(Match<wasm::SimpleHashJoin<M_COMMA(true) false>>) \
-    X(Match<wasm::SimpleHashJoin<M_COMMA(true) true>>) \
-    X(Match<wasm::SortMergeJoin<M_COMMA(false) M_COMMA(false) M_COMMA(false) false>>) \
-    X(Match<wasm::SortMergeJoin<M_COMMA(false) M_COMMA(false) M_COMMA(false) true>>) \
-    X(Match<wasm::SortMergeJoin<M_COMMA(false) M_COMMA(false) M_COMMA(true)  false>>) \
-    X(Match<wasm::SortMergeJoin<M_COMMA(false) M_COMMA(false) M_COMMA(true)  true>>) \
-    X(Match<wasm::SortMergeJoin<M_COMMA(false) M_COMMA(true)  M_COMMA(false) false>>) \
-    X(Match<wasm::SortMergeJoin<M_COMMA(false) M_COMMA(true)  M_COMMA(false) true>>) \
-    X(Match<wasm::SortMergeJoin<M_COMMA(false) M_COMMA(true)  M_COMMA(true)  false>>) \
-    X(Match<wasm::SortMergeJoin<M_COMMA(false) M_COMMA(true)  M_COMMA(true)  true>>) \
-    X(Match<wasm::SortMergeJoin<M_COMMA(true)  M_COMMA(false) M_COMMA(false) false>>) \
-    X(Match<wasm::SortMergeJoin<M_COMMA(true)  M_COMMA(false) M_COMMA(false) true>>) \
-    X(Match<wasm::SortMergeJoin<M_COMMA(true)  M_COMMA(false) M_COMMA(true)  false>>) \
-    X(Match<wasm::SortMergeJoin<M_COMMA(true)  M_COMMA(false) M_COMMA(true)  true>>) \
-    X(Match<wasm::SortMergeJoin<M_COMMA(true)  M_COMMA(true)  M_COMMA(false) false>>) \
-    X(Match<wasm::SortMergeJoin<M_COMMA(true)  M_COMMA(true)  M_COMMA(false) true>>) \
-    X(Match<wasm::SortMergeJoin<M_COMMA(true)  M_COMMA(true)  M_COMMA(true)  false>>) \
-    X(Match<wasm::SortMergeJoin<M_COMMA(true)  M_COMMA(true)  M_COMMA(true)  true>>)
+    X(m::Match<m::wasm::Callback<false>>) \
+    X(m::Match<m::wasm::Callback<true>>) \
+    X(m::Match<m::wasm::Print<false>>) \
+    X(m::Match<m::wasm::Print<true>>) \
+    X(m::Match<m::wasm::Scan<false>>) \
+    X(m::Match<m::wasm::Scan<true>>) \
+    X(m::Match<m::wasm::Filter<false>>) \
+    X(m::Match<m::wasm::Filter<true>>) \
+    X(m::Match<m::wasm::Quicksort<false>>) \
+    X(m::Match<m::wasm::Quicksort<true>>) \
+    X(m::Match<m::wasm::NestedLoopsJoin<false>>) \
+    X(m::Match<m::wasm::NestedLoopsJoin<true>>) \
+    X(m::Match<m::wasm::SimpleHashJoin<M_COMMA(false) false>>) \
+    X(m::Match<m::wasm::SimpleHashJoin<M_COMMA(false) true>>) \
+    X(m::Match<m::wasm::SimpleHashJoin<M_COMMA(true) false>>) \
+    X(m::Match<m::wasm::SimpleHashJoin<M_COMMA(true) true>>) \
+    X(m::Match<m::wasm::SortMergeJoin<M_COMMA(false) M_COMMA(false) M_COMMA(false) false>>) \
+    X(m::Match<m::wasm::SortMergeJoin<M_COMMA(false) M_COMMA(false) M_COMMA(false) true>>) \
+    X(m::Match<m::wasm::SortMergeJoin<M_COMMA(false) M_COMMA(false) M_COMMA(true)  false>>) \
+    X(m::Match<m::wasm::SortMergeJoin<M_COMMA(false) M_COMMA(false) M_COMMA(true)  true>>) \
+    X(m::Match<m::wasm::SortMergeJoin<M_COMMA(false) M_COMMA(true)  M_COMMA(false) false>>) \
+    X(m::Match<m::wasm::SortMergeJoin<M_COMMA(false) M_COMMA(true)  M_COMMA(false) true>>) \
+    X(m::Match<m::wasm::SortMergeJoin<M_COMMA(false) M_COMMA(true)  M_COMMA(true)  false>>) \
+    X(m::Match<m::wasm::SortMergeJoin<M_COMMA(false) M_COMMA(true)  M_COMMA(true)  true>>) \
+    X(m::Match<m::wasm::SortMergeJoin<M_COMMA(true)  M_COMMA(false) M_COMMA(false) false>>) \
+    X(m::Match<m::wasm::SortMergeJoin<M_COMMA(true)  M_COMMA(false) M_COMMA(false) true>>) \
+    X(m::Match<m::wasm::SortMergeJoin<M_COMMA(true)  M_COMMA(false) M_COMMA(true)  false>>) \
+    X(m::Match<m::wasm::SortMergeJoin<M_COMMA(true)  M_COMMA(false) M_COMMA(true)  true>>) \
+    X(m::Match<m::wasm::SortMergeJoin<M_COMMA(true)  M_COMMA(true)  M_COMMA(false) false>>) \
+    X(m::Match<m::wasm::SortMergeJoin<M_COMMA(true)  M_COMMA(true)  M_COMMA(false) true>>) \
+    X(m::Match<m::wasm::SortMergeJoin<M_COMMA(true)  M_COMMA(true)  M_COMMA(true)  false>>) \
+    X(m::Match<m::wasm::SortMergeJoin<M_COMMA(true)  M_COMMA(true)  M_COMMA(true)  true>>)
 #define M_WASM_MATCH_LIST(X) \
     M_WASM_MATCH_LIST_NON_TEMPLATED(X) \
     M_WASM_MATCH_LIST_TEMPLATED(X)
@@ -1133,7 +1133,8 @@ struct TheRecursiveMatchBaseVisitorBase : std::conditional_t<C, ConstMatchBaseVi
 
     virtual ~TheRecursiveMatchBaseVisitorBase() { }
 
-    using super::operator();
+    /* omit using super::operator() to convert to intermediate match classes and call recursive implementation */
+    void operator()(Const<MatchBase> &M) override { super::operator()(M); }
     void operator()(Const<MatchLeaf>&) override { /* nothing to be done */ }
     void operator()(Const<MatchSingleChild> &M) override { (*this)(*M.child); }
     void operator()(Const<Match<Projection>> &M) override { if (M.child) (*this)(**M.child); }
@@ -1141,6 +1142,34 @@ struct TheRecursiveMatchBaseVisitorBase : std::conditional_t<C, ConstMatchBaseVi
 };
 
 using RecursiveConstMatchBaseVisitorBase = TheRecursiveMatchBaseVisitorBase<true>;
+
+template<bool C>
+struct M_EXPORT ThePreOrderMatchBaseVisitor : std::conditional_t<C, ConstMatchBaseVisitor, MatchBaseVisitor>
+{
+    using super = std::conditional_t<C, ConstMatchBaseVisitor, MatchBaseVisitor>;
+    template<typename T> using Const = typename super::template Const<T>;
+
+    virtual ~ThePreOrderMatchBaseVisitor() { }
+
+    void operator()(Const<MatchBase>&);
+};
+
+template<bool C>
+struct M_EXPORT ThePostOrderMatchBaseVisitor : std::conditional_t<C, ConstMatchBaseVisitor, MatchBaseVisitor>
+{
+    using super = std::conditional_t<C, ConstMatchBaseVisitor, MatchBaseVisitor>;
+    template<typename T> using Const = typename super::template Const<T>;
+
+    virtual ~ThePostOrderMatchBaseVisitor() { }
+
+    void operator()(Const<MatchBase>&);
+};
+
+using ConstPreOrderMatchBaseVisitor = ThePreOrderMatchBaseVisitor<true>;
+using ConstPostOrderMatchBaseVisitor = ThePostOrderMatchBaseVisitor<true>;
+
+M_MAKE_STL_VISITABLE(ConstPreOrderMatchBaseVisitor, const MatchBase, M_WASM_VISITABLE_MATCH_LIST)
+M_MAKE_STL_VISITABLE(ConstPostOrderMatchBaseVisitor, const MatchBase, M_WASM_VISITABLE_MATCH_LIST)
 
 #undef M_WASM_VISITABLE_MATCH_LIST
 

@@ -1126,12 +1126,12 @@ M_DECLARE_VISITOR(ConstMatchBaseVisitor, const MatchBase, M_WASM_VISITABLE_MATCH
 
 /** A generic base class for implementing recursive `wasm::MatchBase` visitors. */
 template<bool C>
-struct TheRecursiveMatchBaseVisitor : std::conditional_t<C, ConstMatchBaseVisitor, MatchBaseVisitor>
+struct TheRecursiveMatchBaseVisitorBase : std::conditional_t<C, ConstMatchBaseVisitor, MatchBaseVisitor>
 {
     using super = std::conditional_t<C, ConstMatchBaseVisitor, MatchBaseVisitor>;
     template<typename T> using Const = typename super::template Const<T>;
 
-    virtual ~TheRecursiveMatchBaseVisitor() { }
+    virtual ~TheRecursiveMatchBaseVisitorBase() { }
 
     using super::operator();
     void operator()(Const<MatchLeaf>&) override { /* nothing to be done */ }
@@ -1140,9 +1140,7 @@ struct TheRecursiveMatchBaseVisitor : std::conditional_t<C, ConstMatchBaseVisito
     void operator()(Const<MatchMultipleChildren> &M) override { for (auto &c : M.children) (*this)(*c); }
 };
 
-using RecursiveConstMatchBaseVisitor = TheRecursiveMatchBaseVisitor<true>;
-
-M_MAKE_STL_VISITABLE(RecursiveConstMatchBaseVisitor, const MatchBase, M_WASM_VISITABLE_MATCH_LIST)
+using RecursiveConstMatchBaseVisitorBase = TheRecursiveMatchBaseVisitorBase<true>;
 
 #undef M_WASM_VISITABLE_MATCH_LIST
 

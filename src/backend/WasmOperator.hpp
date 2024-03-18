@@ -1140,10 +1140,8 @@ struct TheRecursiveMatchBaseVisitor : std::conditional_t<C, ConstMatchBaseVisito
     void operator()(Const<MatchMultipleChildren> &M) override { for (auto &c : M.children) (*this)(*c); }
 };
 
-using RecursiveMatchBaseVisitor = TheRecursiveMatchBaseVisitor<false>;
 using RecursiveConstMatchBaseVisitor = TheRecursiveMatchBaseVisitor<true>;
 
-M_MAKE_STL_VISITABLE(RecursiveMatchBaseVisitor, MatchBase, M_WASM_VISITABLE_MATCH_LIST)
 M_MAKE_STL_VISITABLE(RecursiveConstMatchBaseVisitor, const MatchBase, M_WASM_VISITABLE_MATCH_LIST)
 
 #undef M_WASM_VISITABLE_MATCH_LIST

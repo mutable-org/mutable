@@ -326,11 +326,14 @@ struct M_EXPORT Catalog
     using TableFactoryDecoratorCallback = std::function<std::unique_ptr<TableFactory>(std::unique_ptr<TableFactory>)>;
     ComponentSet<TableFactoryDecoratorCallback> table_properties_; // stores callback functions that decorate a table with the given decorator
 
-    using PreOptimizationCallback = std::function<void(QueryGraph &)>;
+    using PreOptimizationCallback = std::function<void(QueryGraph&)>;
     ComponentSet<PreOptimizationCallback> pre_optimizations_;
 
-    using PostOptimizationCallback = std::function<std::unique_ptr<Producer>(std::unique_ptr<Producer>)>;
-    ComponentSet<PostOptimizationCallback> post_optimizations_;
+    using LogicalPostOptimizationCallback = std::function<std::unique_ptr<Producer>(std::unique_ptr<Producer>)>;
+    ComponentSet<LogicalPostOptimizationCallback> logical_post_optimizations_;
+
+    using PhysicalPostOptimizationCallback = std::function<std::unique_ptr<MatchBase>(std::unique_ptr<MatchBase>)>;
+    ComponentSet<PhysicalPostOptimizationCallback> physical_post_optimizations_;
 
     public:
     /*===== Stores ===================================================================================================*/
@@ -513,8 +516,7 @@ struct M_EXPORT Catalog
     /** Registers a new `DatabaseInstruction` with the given `name`. */
     template<typename T>
     requires std::derived_from<T, m::DatabaseInstruction>
-    void register_instruction(ThreadSafePooledString name, const char *description = nullptr)
-    {
+    void register_instruction(ThreadSafePooledString name, const char *description = nullptr) {
         auto I = Component<DatabaseInstructionFactory>(
             description,
             std::make_unique<ConcreteDatabaseInstructionFactory<T>>()
@@ -539,7 +541,8 @@ struct M_EXPORT Catalog
     /*===== Schedulers =================================================================================================*/
     /** Registers a new `Scheduler` with the given `name`. */
     void register_scheduler(ThreadSafePooledString name, std::unique_ptr<Scheduler> scheduler,
-                            const char *description = nullptr) {
+                            const char *description = nullptr)
+    {
         schedulers_.add(std::move(name), Component<Scheduler>(description, std::move(scheduler)));
     }
     /** Sets the default `Scheduler` to use. */
@@ -576,17 +579,16 @@ struct M_EXPORT Catalog
      * The `name` will be used as the property name of the decorator in `--table-properties`. */
     template<class T>
     requires std::derived_from<T, TableFactoryDecorator>
-    void register_table_property(ThreadSafePooledString name, const char *description = nullptr)
-    {
+    void register_table_property(ThreadSafePooledString name, const char *description = nullptr) {
         table_properties_.add(
-                std::move(name),
-                Component<TableFactoryDecoratorCallback>(
-                        description,
-                        std::make_unique<TableFactoryDecoratorCallback>([](std::unique_ptr<TableFactory> table_factory)
-                        {
-                            return std::make_unique<T>(std::move(table_factory));
-                        })
-                ));
+            std::move(name),
+            Component<TableFactoryDecoratorCallback>(
+                description,
+                std::make_unique<TableFactoryDecoratorCallback>([](std::unique_ptr<TableFactory> table_factory){
+                    return std::make_unique<T>(std::move(table_factory));
+                })
+            )
+        );
     }
     /** Applies the `TableFactoryDecorator` corresponding to `name` to `table_factory`.
      * Returns the decorated `TableFactory`. */
@@ -609,8 +611,11 @@ struct M_EXPORT Catalog
                                    const char *description = nullptr)
     {
         pre_optimizations_.add(
-                std::move(name),
-                Component<PreOptimizationCallback>(description, std::make_unique<PreOptimizationCallback>(std::move(optimization)))
+            std::move(name),
+            Component<PreOptimizationCallback>(
+                description,
+                std::make_unique<PreOptimizationCallback>(std::move(optimization))
+            )
         );
     }
 
@@ -622,24 +627,53 @@ struct M_EXPORT Catalog
     auto pre_optimizations_cbegin() const { return pre_optimizations_begin(); }
     auto pre_optimizations_cend()   const { return pre_optimizations_end(); }
 
-    /*===== Post-Optimizations ========================================================================================*/
-    /** Registers a new post-optimization with the given `name`. */
-    void register_post_optimization(ThreadSafePooledString name, PostOptimizationCallback optimization,
-                                    const char *description = nullptr)
+    /*===== Logical Post-Optimizations ===============================================================================*/
+    /** Registers a new logical post-optimization with the given `name`. */
+    void register_logical_post_optimization(ThreadSafePooledString name, LogicalPostOptimizationCallback optimization,
+                                            const char *description = nullptr)
     {
-        post_optimizations_.add(
-                std::move(name),
-                Component<PostOptimizationCallback>(description, std::make_unique<PostOptimizationCallback>(std::move(optimization)))
+        logical_post_optimizations_.add(
+            std::move(name),
+            Component<LogicalPostOptimizationCallback>(
+                description,
+                std::make_unique<LogicalPostOptimizationCallback>(std::move(optimization))
+            )
         );
     }
 
-    auto post_optimizations()              { return range(post_optimizations_.begin(), post_optimizations_.end()); }
-    auto post_optimizations_begin()        { return post_optimizations_.begin(); }
-    auto post_optimizations_end()          { return post_optimizations_.end(); }
-    auto post_optimizations_begin()  const { return post_optimizations_.begin(); }
-    auto post_optimizations_end()    const { return post_optimizations_.end(); }
-    auto post_optimizations_cbegin() const { return post_optimizations_begin(); }
-    auto post_optimizations_cend()   const { return post_optimizations_end(); }
+    auto logical_post_optimizations() {
+        return range(logical_post_optimizations_.begin(), logical_post_optimizations_.end());
+    }
+    auto logical_post_optimizations_begin()        { return logical_post_optimizations_.begin(); }
+    auto logical_post_optimizations_end()          { return logical_post_optimizations_.end(); }
+    auto logical_post_optimizations_begin()  const { return logical_post_optimizations_.begin(); }
+    auto logical_post_optimizations_end()    const { return logical_post_optimizations_.end(); }
+    auto logical_post_optimizations_cbegin() const { return logical_post_optimizations_begin(); }
+    auto logical_post_optimizations_cend()   const { return logical_post_optimizations_end(); }
+
+    /*===== Physical Post-Optimizations ===============================================================================*/
+    /** Registers a new physical post-optimization with the given `name`. */
+    void register_physical_post_optimization(const char *name, PhysicalPostOptimizationCallback optimization,
+                                             const char *description = nullptr)
+    {
+        physical_post_optimizations_.add(
+            pool(name),
+            Component<PhysicalPostOptimizationCallback>(
+                description,
+                std::make_unique<PhysicalPostOptimizationCallback>(std::move(optimization))
+            )
+        );
+    }
+
+    auto physical_post_optimizations() {
+        return range(physical_post_optimizations_.begin(), physical_post_optimizations_.end());
+    }
+    auto physical_post_optimizations_begin()        { return physical_post_optimizations_.begin(); }
+    auto physical_post_optimizations_end()          { return physical_post_optimizations_.end(); }
+    auto physical_post_optimizations_begin()  const { return physical_post_optimizations_.begin(); }
+    auto physical_post_optimizations_end()    const { return physical_post_optimizations_.end(); }
+    auto physical_post_optimizations_cbegin() const { return physical_post_optimizations_begin(); }
+    auto physical_post_optimizations_cend()   const { return physical_post_optimizations_end(); }
 };
 
 }

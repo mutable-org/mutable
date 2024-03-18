@@ -64,8 +64,12 @@ void QueryDatabase::execute(Diagnostic &diag)
         }
     }
 
-    graph_ = M_TIME_EXPR(QueryGraph::Build(ast<ast::SelectStmt>()), "Construct the query graph", C.timer());
+    auto graph_construction = C.timer().create_timing("Construct the query graph");
+    graph_ = QueryGraph::Build(ast<ast::SelectStmt>());
     graph_->transaction(this->transaction());
+    for (auto &pre_opt : C.pre_optimizations())
+        (*pre_opt.second).operator()(*graph_);
+    graph_construction.stop();
 
     if (Options::Get().graph)
         graph_->dump(std::cout);
@@ -79,8 +83,13 @@ void QueryDatabase::execute(Diagnostic &diag)
         std::cout.flush();
     }
 
+    auto logical_plan_computation = C.timer().create_timing("Compute the logical query plan");
     Optimizer Opt(C.plan_enumerator(), C.cost_function());
-    std::unique_ptr<Producer> producer = M_TIME_EXPR(Opt(*graph_), "Compute the logical query plan", C.timer());
+    std::unique_ptr<Producer> producer = Opt(*graph_);
+    for (auto &post_opt : C.logical_post_optimizations())
+        producer = (*post_opt.second).operator()(std::move(producer));
+    logical_plan_computation.stop();
+    M_insist(bool(producer), "logical plan must have been computed");
 
     if (Options::Get().plan)
         producer->dump(diag.out());
@@ -90,7 +99,6 @@ void QueryDatabase::execute(Diagnostic &diag)
         dot.show("logical_plan", false, "dot");
     }
 
-    M_insist(bool(producer), "logical plan must have been computed");
     if (Options::Get().benchmark)
         logical_plan_ = std::make_unique<NoOpOperator>(std::cout);
     else
@@ -101,10 +109,14 @@ void QueryDatabase::execute(Diagnostic &diag)
     if (not backend)
         backend = M_TIME_EXPR(C.create_backend(), "Create backend", C.timer());
 
+    auto physical_plan_computation = C.timer().create_timing("Compute the physical query plan");
     PhysicalOptimizerImpl<ConcretePhysicalPlanTable> PhysOpt;
     backend->register_operators(PhysOpt);
-    M_TIME_EXPR(PhysOpt.cover(*logical_plan_), "Compute the physical query plan", C.timer());
+    PhysOpt.cover(*logical_plan_);
     physical_plan_ = PhysOpt.extract_plan();
+    for (auto &post_opt : C.physical_post_optimizations())
+        physical_plan_ = (*post_opt.second).operator()(std::move(physical_plan_));
+    physical_plan_computation.stop();
 
     if (Options::Get().physplan)
         physical_plan_->dump(std::cout);

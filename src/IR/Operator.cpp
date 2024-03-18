@@ -566,8 +566,13 @@ void register_post_optimization()
 {
     Catalog &C = Catalog::Get();
 
-    C.register_post_optimization(C.pool("minimize schema"), [](std::unique_ptr<Producer> plan) {
+    C.register_logical_post_optimization(C.pool("minimize schema"), [](std::unique_ptr<Producer> plan) {
         plan->minimize_schema();
+        return plan;
+    }, "minimizes the schema of an operator tree");
+
+    C.register_physical_post_optimization("minimize schema", [](std::unique_ptr<MatchBase> plan) {
+        const_cast<Operator*>(&plan->get_matched_root())->minimize_schema();
         return plan;
     }, "minimizes the schema of an operator tree");
 }

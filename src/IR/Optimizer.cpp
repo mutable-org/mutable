@@ -195,10 +195,6 @@ std::pair<std::unique_ptr<Producer>, PlanTable> Optimizer::optimize_with_plantab
         return { std::make_unique<ProjectionOperator>(G.projections()), std::move(PT) };
     }
 
-    /*----- Perform pre-optimizations on the query graph. -----*/
-    for (auto &pre_opt : C.pre_optimizations())
-        (*pre_opt.second).operator()(G);
-
     /*----- Initialize plan table and compute plans for data sources. -----*/
     auto source_plans = optimize_source_plans(G, PT);
 
@@ -209,10 +205,6 @@ std::pair<std::unique_ptr<Producer>, PlanTable> Optimizer::optimize_with_plantab
 
     /*----- Construct plan for remaining operations. -----*/
     plan = optimize_plan(G, std::move(plan), entry);
-
-    /*----- Perform post-optimizations on the operator tree. -----*/
-    for (auto &post_opt : C.post_optimizations())
-        plan = (*post_opt.second).operator()(std::move(plan)); // TODO add PT to post-optimizations
 
     return { std::move(plan), std::move(PT) };
 }

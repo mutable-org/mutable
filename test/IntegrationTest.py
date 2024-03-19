@@ -354,9 +354,12 @@ def end2end_command(test_case):
     if test_case.cli_args:
         command.extend(test_case.cli_args.split())
     configurations = list()
-    data_layout_options = enumerate_feature_options('data-layout')
-    backend_options = enumerate_feature_options('backend')
-    table_property_options = enumerate_feature_options('table-properties', 'table-properties', True)
+    data_layout_options = [[]] if '--data-layout' in command else enumerate_feature_options('data-layout')
+    backend_options = [[]] if '--backend' in command else enumerate_feature_options('backend')
+    table_property_options = (
+        [[]]
+        if '--table-properties' in command
+        else enumerate_feature_options('table-properties', 'table-properties', True))
     for combination in itertools.product(data_layout_options, backend_options, table_property_options):
         configurations.append(list(itertools.chain.from_iterable(combination)))
     if 'join' in test_case.filename:

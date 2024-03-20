@@ -115,6 +115,41 @@ template<typename T>
 using get_nodes_t = typename get_nodes<T>::type;
 
 
+template<typename>
+struct is_singleton_pattern : std::false_type {};
+
+template<logical_operator Op>
+struct is_singleton_pattern<Op> : std::true_type {};
+
+template<logical_operator Op>
+struct is_singleton_pattern<pattern_t<Op, Wildcard>> : std::true_type {};
+
+template<logical_operator Op>
+struct is_singleton_pattern<pattern_t<Op, Wildcard, Wildcard>> : std::true_type {};
+
+template<typename T>
+concept singleton_pattern = is_singleton_pattern<T>::value;
+
+
+template<typename>
+struct get_singleton_operator;
+
+template<logical_operator Op>
+struct get_singleton_operator<Op>
+{ using type = Op; };
+
+template<logical_operator Op>
+struct get_singleton_operator<pattern_t<Op, Wildcard>>
+{ using type = Op; };
+
+template<logical_operator Op>
+struct get_singleton_operator<pattern_t<Op, Wildcard, Wildcard>>
+{ using type = Op; };
+
+template<singleton_pattern T>
+using get_singleton_operator_t = typename get_singleton_operator<T>::type;
+
+
 /*======================================================================================================================
  * MatchBase
  *====================================================================================================================*/

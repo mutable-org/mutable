@@ -205,7 +205,7 @@ struct M_EXPORT CallbackOperator : Consumer
     callback_type callback_;
 
     public:
-    CallbackOperator(callback_type callback) : callback_(callback) { }
+    CallbackOperator(callback_type callback) : callback_(std::move(callback)) { }
 
     const auto & callback() const { return callback_; }
 

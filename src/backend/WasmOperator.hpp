@@ -229,8 +229,8 @@ namespace m {
     M_WASM_OPERATOR_LIST_TEMPLATED(X)
 
 
-#define MAKE_MATCH_(OP) m::Match<m::wasm::OP>
-#define M_WASM_MATCH_LIST_NON_TEMPLATED(X) M_TRANSFORM_X_MACRO(X, M_WASM_OPERATOR_LIST_NON_TEMPLATED, MAKE_MATCH_)
+#define MAKE_WASM_MATCH_(OP) m::Match<m::wasm::OP>
+#define M_WASM_MATCH_LIST_NON_TEMPLATED(X) M_TRANSFORM_X_MACRO(X, M_WASM_OPERATOR_LIST_NON_TEMPLATED, MAKE_WASM_MATCH_)
 #define M_WASM_MATCH_LIST_TEMPLATED(X) \
     X(m::Match<m::wasm::Callback<false>>) \
     X(m::Match<m::wasm::Callback<true>>) \

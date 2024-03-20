@@ -3703,7 +3703,7 @@ ConditionSet NestedLoopsJoin<Predicated>::pre_condition(std::size_t, const std::
 
 template<bool Predicated>
 ConditionSet NestedLoopsJoin<Predicated>::adapt_post_conditions(
-    const Match<NestedLoopsJoin> &M,
+    const Match<NestedLoopsJoin>&,
     std::vector<std::reference_wrapper<const ConditionSet>> &&post_cond_children)
 {
     M_insist(post_cond_children.size() >= 2);

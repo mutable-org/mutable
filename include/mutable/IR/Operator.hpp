@@ -207,6 +207,10 @@ struct M_EXPORT CallbackOperator : Consumer
     public:
     CallbackOperator(callback_type callback) : callback_(std::move(callback)) { }
 
+    /** Creates and returns a copy of this single operator node, i.e. only copies this operator without adding any
+     * inherited member fields like the parent or children nodes in the returned copy. */
+    CallbackOperator clone_node() const { return CallbackOperator(callback_); }
+
     const auto & callback() const { return callback_; }
 
     void accept(OperatorVisitor &v) override;
@@ -220,6 +224,10 @@ struct M_EXPORT PrintOperator : Consumer
 
     PrintOperator(std::ostream &out) : out(out) { }
 
+    /** Creates and returns a copy of this single operator node, i.e. only copies this operator without adding any
+     * inherited member fields like the parent or children nodes in the returned copy. */
+    PrintOperator clone_node() const { return PrintOperator(out); }
+
     void accept(OperatorVisitor &v) override;
     void accept(ConstOperatorVisitor &v) const override;
 };
@@ -230,6 +238,10 @@ struct M_EXPORT NoOpOperator : Consumer
     std::ostream &out;
 
     NoOpOperator(std::ostream &out) : out(out) { }
+
+    /** Creates and returns a copy of this single operator node, i.e. only copies this operator without adding any
+     * inherited member fields like the parent or children nodes in the returned copy. */
+    NoOpOperator clone_node() const { return NoOpOperator(out); }
 
     void accept(OperatorVisitor &v) override;
     void accept(ConstOperatorVisitor &v) const override;
@@ -251,6 +263,10 @@ struct M_EXPORT ScanOperator : Producer
             S.add({alias_, e.id.name}, e.type, e.constraints);
     }
 
+    /** Creates and returns a copy of this single operator node, i.e. only copies this operator without adding any
+     * inherited member fields like the parent or children nodes in the returned copy. */
+    ScanOperator clone_node() const { return ScanOperator(store_, alias_); }
+
     const Store & store() const { return store_; }
     const ThreadSafePooledString & alias() const { return alias_; }
 
@@ -260,11 +276,15 @@ struct M_EXPORT ScanOperator : Producer
 
 struct M_EXPORT FilterOperator : Producer, Consumer
 {
-    private:
+    protected:
     cnf::CNF filter_;
 
     public:
     FilterOperator(cnf::CNF filter) : filter_(std::move(filter)) { }
+
+    /** Creates and returns a copy of this single operator node, i.e. only copies this operator without adding any
+     * inherited member fields like the parent or children nodes in the returned copy. */
+    FilterOperator clone_node() const { return FilterOperator(filter_); }
 
     const cnf::CNF & filter() const { return filter_; }
     const cnf::CNF filter(cnf::CNF f) {
@@ -286,6 +306,10 @@ struct M_EXPORT DisjunctiveFilterOperator : FilterOperator
         M_insist(this->filter()[0].size() >= 2, "a disjunctive filter must have at least two predicates ");
     }
 
+    /** Creates and returns a copy of this single operator node, i.e. only copies this operator without adding any
+     * inherited member fields like the parent or children nodes in the returned copy. */
+    DisjunctiveFilterOperator clone_node() const { return DisjunctiveFilterOperator(filter_); }
+
     void accept(OperatorVisitor &v) override;
     void accept(ConstOperatorVisitor &v) const override;
 };
@@ -297,6 +321,10 @@ struct M_EXPORT JoinOperator : Producer, Consumer
 
     public:
     JoinOperator(cnf::CNF predicate) : predicate_(std::move(predicate)) { }
+
+    /** Creates and returns a copy of this single operator node, i.e. only copies this operator without adding any
+     * inherited member fields like the parent or children nodes in the returned copy. */
+    JoinOperator clone_node() const { return JoinOperator(predicate_); }
 
     const cnf::CNF & predicate() const { return predicate_; }
 
@@ -313,6 +341,10 @@ struct M_EXPORT ProjectionOperator : Producer, Consumer
 
     public:
     ProjectionOperator(std::vector<projection_type> projections);
+
+    /** Creates and returns a copy of this single operator node, i.e. only copies this operator without adding any
+     * inherited member fields like the parent or children nodes in the returned copy. */
+    ProjectionOperator clone_node() const { return ProjectionOperator(projections_); }
 
     /*----- Override child setters to *NOT* modify the computed schema! ----------------------------------------------*/
     virtual void add_child(Producer *child) override {
@@ -373,6 +405,10 @@ struct M_EXPORT LimitOperator : Producer, Consumer
         , offset_(offset)
     { }
 
+    /** Creates and returns a copy of this single operator node, i.e. only copies this operator without adding any
+     * inherited member fields like the parent or children nodes in the returned copy. */
+    LimitOperator clone_node() const { return LimitOperator(limit_, offset_); }
+
     std::size_t limit() const { return limit_; }
     std::size_t offset() const { return offset_; }
 
@@ -391,6 +427,10 @@ struct M_EXPORT GroupingOperator : Producer, Consumer
     public:
     GroupingOperator(std::vector<group_type> group_by,
                      std::vector<std::reference_wrapper<const ast::FnApplicationExpr>> aggregates);
+
+    /** Creates and returns a copy of this single operator node, i.e. only copies this operator without adding any
+     * inherited member fields like the parent or children nodes in the returned copy. */
+    GroupingOperator clone_node() const { return GroupingOperator(group_by_, aggregates_); }
 
     /*----- Override child setters to *NOT* modify the computed schema! ----------------------------------------------*/
     virtual void add_child(Producer *child) override {
@@ -445,6 +485,10 @@ struct M_EXPORT AggregationOperator : Producer, Consumer
     public:
     AggregationOperator(std::vector<std::reference_wrapper<const ast::FnApplicationExpr>> aggregates);
 
+    /** Creates and returns a copy of this single operator node, i.e. only copies this operator without adding any
+     * inherited member fields like the parent or children nodes in the returned copy. */
+    AggregationOperator clone_node() const { return AggregationOperator(aggregates_); }
+
     /*----- Override child setters to *NOT* modify the computed schema! ----------------------------------------------*/
     virtual void add_child(Producer *child) override {
         if (not child)
@@ -479,6 +523,10 @@ struct M_EXPORT SortingOperator : Producer, Consumer
 
     public:
     SortingOperator(std::vector<order_type> order_by) : order_by_(std::move(order_by)) { }
+
+    /** Creates and returns a copy of this single operator node, i.e. only copies this operator without adding any
+     * inherited member fields like the parent or children nodes in the returned copy. */
+    SortingOperator clone_node() const { return SortingOperator(order_by_); }
 
     const auto & order_by() const { return order_by_; }
 

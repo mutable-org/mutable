@@ -204,4 +204,14 @@ TEST_CASE("unsharable_shared_ptr/cast", "[core][util]")
         CHECK(sp2.use_count() == 0);
         CHECK(sp2.get() == nullptr);
     }
+
+    SECTION("unsharable_shared_ptr<Foo>(unsharable_shared_ptr<Bar>) and convert to unique pointer")
+    {
+        unsharable_shared_ptr<Foo> sp1 = make_unsharable_shared<Bar>();
+        CHECK(sp1.use_count() == 1);
+
+        auto uptr = sp1.exclusive_shared_to_unique();
+        CHECK(sp1.use_count() == 0);
+        CHECK(sp1.get() == nullptr);
+    }
 }

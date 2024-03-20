@@ -30,12 +30,12 @@ struct unsharable_shared_ptr : public std::shared_ptr<T>
      * implement the desired methods by delegating to the superclass and delete the undesired methods. */
 
     private:
-    ///> custom deleter type; use function pointer instead of reference due to clang-17 issue and add `const` to enable
-    ///> accessing the custom deleter even if the `this` was constructed/assigned from another `unsharable_shared_ptr`
-    ///> of a *compatible* type, e.g. qualified without `const`
-    using deleter_func_type = void(*)(const T*);
-    static void default_deleter(const T *ptr) { delete ptr; }
-    static void noop_deleter(const T*) { }
+    ///> custom deleter type; use function pointer instead of reference due to clang-17 issue; use `const void*` as
+    ///> parameter type to enable accessing the custom deleter even if the `this` was constructed/assigned from another
+    ///> `unsharable_shared_ptr` of a *compatible* type, e.g. qualified without `const` or a derived class
+    using deleter_func_type = void(*)(const void*);
+    static void default_deleter(const void *ptr) { delete (T*) ptr; }
+    static void noop_deleter(const void*) { }
 
     public:
     template<typename Y>

@@ -543,7 +543,7 @@ void execute_buffered(const Match<T> &M, const Schema &schema,
 
 namespace wasm {
 
-/** An abstract `MatchBase` for the `WasmV8` backend.  Adds accept methods for repsective visitor.  */
+/** An abstract `MatchBase` for the `WasmV8` backend.  Adds accept methods for respective visitor.  */
 struct MatchBase : m::MatchBase
 {
     virtual void accept(MatchBaseVisitor &v) = 0;
@@ -1121,8 +1121,8 @@ namespace wasm {
     X(MatchSingleChild) \
     X(MatchMultipleChildren)
 
-M_DECLARE_VISITOR(MatchBaseVisitor, MatchBase, M_WASM_VISITABLE_MATCH_LIST)
-M_DECLARE_VISITOR(ConstMatchBaseVisitor, const MatchBase, M_WASM_VISITABLE_MATCH_LIST)
+M_DECLARE_VISITOR(MatchBaseVisitor, wasm::MatchBase, M_WASM_VISITABLE_MATCH_LIST)
+M_DECLARE_VISITOR(ConstMatchBaseVisitor, const wasm::MatchBase, M_WASM_VISITABLE_MATCH_LIST)
 
 /** A generic base class for implementing recursive `wasm::MatchBase` visitors. */
 template<bool C>
@@ -1144,7 +1144,7 @@ struct TheRecursiveMatchBaseVisitorBase : std::conditional_t<C, ConstMatchBaseVi
 using RecursiveConstMatchBaseVisitorBase = TheRecursiveMatchBaseVisitorBase<true>;
 
 template<bool C>
-struct M_EXPORT ThePreOrderMatchBaseVisitor : std::conditional_t<C, ConstMatchBaseVisitor, MatchBaseVisitor>
+struct ThePreOrderMatchBaseVisitor : std::conditional_t<C, ConstMatchBaseVisitor, MatchBaseVisitor>
 {
     using super = std::conditional_t<C, ConstMatchBaseVisitor, MatchBaseVisitor>;
     template<typename T> using Const = typename super::template Const<T>;
@@ -1155,7 +1155,7 @@ struct M_EXPORT ThePreOrderMatchBaseVisitor : std::conditional_t<C, ConstMatchBa
 };
 
 template<bool C>
-struct M_EXPORT ThePostOrderMatchBaseVisitor : std::conditional_t<C, ConstMatchBaseVisitor, MatchBaseVisitor>
+struct ThePostOrderMatchBaseVisitor : std::conditional_t<C, ConstMatchBaseVisitor, MatchBaseVisitor>
 {
     using super = std::conditional_t<C, ConstMatchBaseVisitor, MatchBaseVisitor>;
     template<typename T> using Const = typename super::template Const<T>;
@@ -1168,8 +1168,8 @@ struct M_EXPORT ThePostOrderMatchBaseVisitor : std::conditional_t<C, ConstMatchB
 using ConstPreOrderMatchBaseVisitor = ThePreOrderMatchBaseVisitor<true>;
 using ConstPostOrderMatchBaseVisitor = ThePostOrderMatchBaseVisitor<true>;
 
-M_MAKE_STL_VISITABLE(ConstPreOrderMatchBaseVisitor, const MatchBase, M_WASM_VISITABLE_MATCH_LIST)
-M_MAKE_STL_VISITABLE(ConstPostOrderMatchBaseVisitor, const MatchBase, M_WASM_VISITABLE_MATCH_LIST)
+M_MAKE_STL_VISITABLE(ConstPreOrderMatchBaseVisitor, const wasm::MatchBase, M_WASM_VISITABLE_MATCH_LIST)
+M_MAKE_STL_VISITABLE(ConstPostOrderMatchBaseVisitor, const wasm::MatchBase, M_WASM_VISITABLE_MATCH_LIST)
 
 #undef M_WASM_VISITABLE_MATCH_LIST
 

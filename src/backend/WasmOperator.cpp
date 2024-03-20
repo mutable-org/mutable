@@ -3635,7 +3635,7 @@ void Quicksort<CmpPredicated>::execute(const Match<Quicksort> &M, setup_t setup,
 {
     /*----- Create infinite buffer to materialize the current results but resume the pipeline later. -----*/
     M_insist(bool(M.materializing_factory), "`wasm::Quicksort` must have a factory for the materialized child");
-    const auto buffer_schema = M.sorting.child(0)->schema().drop_constants().deduplicate();
+    const auto buffer_schema = M.child->get_matched_root().schema().drop_constants().deduplicate();
     const auto sorting_schema = M.sorting.schema().drop_constants().deduplicate();
     GlobalBuffer buffer(
         buffer_schema, *M.materializing_factory, false, 0, std::move(setup), std::move(pipeline), std::move(teardown)
@@ -3722,8 +3722,8 @@ template<bool Predicated>
 double NestedLoopsJoin<Predicated>::cost(const Match<NestedLoopsJoin> &M)
 {
     double cost = 1;
-    for (auto &child : M.join.children())
-        cost *= child->info().estimated_cardinality;
+    for (auto &child : M.children)
+        cost *= child->get_matched_root().info().estimated_cardinality;
     return cost;
 }
 
@@ -3748,7 +3748,9 @@ void NestedLoopsJoin<Predicated>::execute(const Match<NestedLoopsJoin> &M, setup
             /*----- Create infinite buffer to materialize the current results. -----*/
             M_insist(bool(M.materializing_factories_[i]),
                      "`wasm::NestedLoopsJoin` must have a factory for each materialized child");
-            const auto &schema = schemas.emplace_back(M.join.child(i)->schema().drop_constants().deduplicate());
+            const auto &schema = schemas.emplace_back(
+                M.children[i]->get_matched_root().schema().drop_constants().deduplicate()
+            );
             if (i == 0) {
                 /*----- Exactly one child (here left-most one) checks join predicate and resumes pipeline. -----*/
                 buffers.emplace_back(
@@ -3871,9 +3873,9 @@ template<bool UniqueBuild, bool Predicated>
 double SimpleHashJoin<UniqueBuild, Predicated>::cost(const Match<SimpleHashJoin> &M)
 {
     if (options::simple_hash_join_ordering_strategy == option_configs::OrderingStrategy::BUILD_ON_LEFT)
-        return (M.build.id() == M.join.child(0)->id() ? 1.0 : 2.0) + (UniqueBuild ? 0.0 : 0.1);
+        return (M.build.id() == M.children[0]->get_matched_root().id() ? 1.0 : 2.0) + (UniqueBuild ? 0.0 : 0.1);
     else if (options::simple_hash_join_ordering_strategy == option_configs::OrderingStrategy::BUILD_ON_RIGHT)
-        return M.build.id() == M.join.child(1)->id() ? 1.0 : 2.0 + (UniqueBuild ? 0.0 : 0.1);
+        return M.build.id() == M.children[1]->get_matched_root().id() ? 1.0 : 2.0 + (UniqueBuild ? 0.0 : 0.1);
     else
         return 1.3 * M.build.info().estimated_cardinality +
             (UniqueBuild ? 1.0 : 1.1) * M.probe.info().estimated_cardinality;

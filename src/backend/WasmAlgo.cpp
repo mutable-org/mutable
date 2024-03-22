@@ -1788,7 +1788,8 @@ std::pair<HashTable::entry_t, Boolx1> OpenAddressingHashTable<IsGlobal, ValueInP
     /*----- Probe slots, abort if end of bucket is reached or key already exists. -----*/
     Var<Ptr<void>> slot(bucket);
     Var<PrimitiveExpr<ref_t>> steps(0);
-    WHILE (steps != refs and reference_count(slot) != ref_t(0)) {
+    WHILE (steps != refs) {
+        Wasm_insist(reference_count(slot) != ref_t(0), "slot in bucket list must be occupied");
         BREAK(equal_key(slot, std::move(key))); // move key at last use
         steps += ref_t(1);
         Wasm_insist(steps <= *num_entries_, "probing strategy has to find unoccupied slot if there is one");
@@ -1796,8 +1797,8 @@ std::pair<HashTable::entry_t, Boolx1> OpenAddressingHashTable<IsGlobal, ValueInP
         Wasm_insist(begin() <= slot and slot < end(), "slot out-of-bounds");
     }
 
-    /*----- Key is found iff current slot is occupied. -----*/
-    const Var<Boolx1> key_found(reference_count(slot) != ref_t(0)); // create constant variable since `slot` may change
+    /*----- Key is found iff end of bucket is reached. -----*/
+    Boolx1 key_found = steps != refs;
 
     if constexpr (not ValueInPlace) {
         /*----- Set slot pointer to out-of-place values. -----*/
@@ -1839,7 +1840,8 @@ void OpenAddressingHashTable<IsGlobal, ValueInPlace>::for_each_in_equal_range(st
     /*----- Iterate over slots and call pipeline (with entry handle argument) on matches with the given key. -----*/
     Var<Ptr<void>> slot(bucket);
     Var<PrimitiveExpr<ref_t>> steps(0);
-    WHILE (steps != refs and reference_count(slot) != ref_t(0)) { // end of bucket not reached and slot occupied
+    WHILE (steps != refs) { // end of bucket not reached
+        Wasm_insist(reference_count(slot) != ref_t(0), "slot in bucket list must be occupied");
         if (predicated) {
             CodeGenContext::Get().env().add_predicate(equal_key(slot, std::move(key)));
             Pipeline(entry(slot));

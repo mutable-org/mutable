@@ -69,7 +69,8 @@ struct M_EXPORT Operator
     const Schema & schema() const { return schema_; }
 
     bool has_info() const { return bool(info_); }
-    const OperatorInformation & info() const { M_insist(bool(info_)); return *info_; }
+    OperatorInformation & info() { M_insist(bool(info_)); return *info_; }
+    const OperatorInformation & info() const { return const_cast<Operator*>(this)->info(); }
     std::unique_ptr<OperatorInformation> info(std::unique_ptr<OperatorInformation> new_info) {
         using std::swap;
         swap(new_info, info_);

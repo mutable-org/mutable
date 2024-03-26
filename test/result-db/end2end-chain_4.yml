@@ -1,0 +1,87 @@
+description: chain topology with four relations
+db: result-db
+query: |
+  SELECT *
+  FROM R,S,T,U
+  WHERE R.s = S.r AND
+        S.t = T.s AND
+        T.u = U.t;
+required: YES
+
+stages:
+    lexer:
+        out: |
+            -:1:1: SELECT TK_Select
+            -:1:8: * TK_ASTERISK
+            -:2:1: FROM TK_From
+            -:2:6: R TK_IDENTIFIER
+            -:2:7: , TK_COMMA
+            -:2:8: S TK_IDENTIFIER
+            -:2:9: , TK_COMMA
+            -:2:10: T TK_IDENTIFIER
+            -:2:11: , TK_COMMA
+            -:2:12: U TK_IDENTIFIER
+            -:3:1: WHERE TK_Where
+            -:3:7: R TK_IDENTIFIER
+            -:3:8: . TK_DOT
+            -:3:9: s TK_IDENTIFIER
+            -:3:11: = TK_EQUAL
+            -:3:13: S TK_IDENTIFIER
+            -:3:14: . TK_DOT
+            -:3:15: r TK_IDENTIFIER
+            -:3:17: AND TK_And
+            -:4:7: S TK_IDENTIFIER
+            -:4:8: . TK_DOT
+            -:4:9: t TK_IDENTIFIER
+            -:4:11: = TK_EQUAL
+            -:4:13: T TK_IDENTIFIER
+            -:4:14: . TK_DOT
+            -:4:15: s TK_IDENTIFIER
+            -:4:17: AND TK_And
+            -:5:7: T TK_IDENTIFIER
+            -:5:8: . TK_DOT
+            -:5:9: u TK_IDENTIFIER
+            -:5:11: = TK_EQUAL
+            -:5:13: U TK_IDENTIFIER
+            -:5:14: . TK_DOT
+            -:5:15: t TK_IDENTIFIER
+            -:5:16: ; TK_SEMICOL
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    parser:
+        out: |
+            SELECT *
+            FROM R, S, T, U
+            WHERE (((R.s = S.r) AND (S.t = T.s)) AND (T.u = U.t));
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    sema:
+        out: NULL
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    end2end:
+        cli_args: --insist-no-ternary-logic --result-db --backend WasmV8
+        out: |
+            Result set for R:
+            0,0,0,3,0
+            1,0,0,4,3
+            3,2,0,3,0
+            4,2,0,3,3
+            Result set for S:
+            0,0,0,4,0
+            2,2,1,1,0
+            Result set for T:
+            0,0,1,1,0
+            3,0,0,3,0
+            Result set for U:
+            0,3,0,3,0
+            4,0,1,1,0
+        err: NULL
+        num_err: 0
+        returncode: 0

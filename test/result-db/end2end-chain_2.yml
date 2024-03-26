@@ -1,0 +1,58 @@
+description: chain topology with two relations
+db: result-db
+query: |
+       SELECT * FROM R, S WHERE R.s = S.r;
+required: YES
+
+stages:
+    lexer:
+        out: |
+            -:1:1: SELECT TK_Select
+            -:1:8: * TK_ASTERISK
+            -:1:10: FROM TK_From
+            -:1:15: R TK_IDENTIFIER
+            -:1:16: , TK_COMMA
+            -:1:18: S TK_IDENTIFIER
+            -:1:20: WHERE TK_Where
+            -:1:26: R TK_IDENTIFIER
+            -:1:27: . TK_DOT
+            -:1:28: s TK_IDENTIFIER
+            -:1:30: = TK_EQUAL
+            -:1:32: S TK_IDENTIFIER
+            -:1:33: . TK_DOT
+            -:1:34: r TK_IDENTIFIER
+            -:1:35: ; TK_SEMICOL
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    parser:
+        out: |
+            SELECT *
+            FROM R, S
+            WHERE (R.s = S.r);
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    sema:
+        out: NULL
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    end2end:
+        cli_args: --insist-no-ternary-logic --result-db --backend WasmV8
+        out: |
+            Result set for R:
+            0,0,0,3,0
+            1,0,0,4,3
+            3,2,0,3,0
+            4,2,0,3,3
+            Result set for S:
+            0,0,0,4,0
+            1,2,4,0,1
+            2,2,1,1,0
+        err: NULL
+        num_err: 0
+        returncode: 0

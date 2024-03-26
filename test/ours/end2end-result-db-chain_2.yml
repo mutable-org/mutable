@@ -1,0 +1,145 @@
+description: chain topology with two relations
+db: ours
+query: |
+  SELECT R.key, S.key
+  FROM R,S
+  WHERE R.key = S.fkey AND
+        S.fkey < 50;
+required: YES
+
+stages:
+    lexer:
+        out: |
+            -:1:1: SELECT TK_Select
+            -:1:8: R TK_IDENTIFIER
+            -:1:9: . TK_DOT
+            -:1:10: key TK_IDENTIFIER
+            -:1:13: , TK_COMMA
+            -:1:15: S TK_IDENTIFIER
+            -:1:16: . TK_DOT
+            -:1:17: key TK_IDENTIFIER
+            -:2:1: FROM TK_From
+            -:2:6: R TK_IDENTIFIER
+            -:2:7: , TK_COMMA
+            -:2:8: S TK_IDENTIFIER
+            -:3:1: WHERE TK_Where
+            -:3:7: R TK_IDENTIFIER
+            -:3:8: . TK_DOT
+            -:3:9: key TK_IDENTIFIER
+            -:3:13: = TK_EQUAL
+            -:3:15: S TK_IDENTIFIER
+            -:3:16: . TK_DOT
+            -:3:17: fkey TK_IDENTIFIER
+            -:3:22: AND TK_And
+            -:4:7: S TK_IDENTIFIER
+            -:4:8: . TK_DOT
+            -:4:9: fkey TK_IDENTIFIER
+            -:4:14: < TK_LESS
+            -:4:16: 50 TK_DEC_INT
+            -:4:18: ; TK_SEMICOL
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    parser:
+        out: |
+            SELECT R.key, S.key
+            FROM R, S
+            WHERE ((R.key = S.fkey) AND (S.fkey < 50));
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    sema:
+        out: NULL
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    end2end:
+        cli_args: --insist-no-ternary-logic --result-db --backend WasmV8
+        out: |
+            Result set for R:
+            2
+            3
+            5
+            6
+            7
+            8
+            11
+            12
+            13
+            16
+            17
+            19
+            20
+            21
+            22
+            24
+            25
+            26
+            27
+            28
+            29
+            30
+            31
+            33
+            36
+            37
+            39
+            40
+            41
+            42
+            43
+            44
+            48
+            49
+            Result set for S:
+            2
+            4
+            10
+            11
+            15
+            18
+            19
+            21
+            25
+            26
+            27
+            32
+            35
+            38
+            40
+            42
+            43
+            44
+            48
+            49
+            50
+            51
+            55
+            56
+            57
+            61
+            63
+            64
+            66
+            67
+            69
+            70
+            71
+            74
+            75
+            77
+            81
+            82
+            84
+            86
+            89
+            92
+            93
+            94
+            95
+        err: NULL
+        num_err: 0
+        returncode: 0

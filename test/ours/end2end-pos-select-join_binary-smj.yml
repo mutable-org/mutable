@@ -1,4 +1,4 @@
-description: binary join
+description: binary join using SMJ
 db: ours
 query: |
     SELECT R.key, S.key FROM R, S WHERE R.key = S.fkey;
@@ -48,7 +48,7 @@ stages:
         returncode: 0
 
     end2end:
-        cli_args: --insist-no-ternary-logic
+        cli_args: --insist-no-ternary-logic --join-implementations SortMerge
         out: |
             74,0
             70,1

@@ -3,28 +3,28 @@ CREATE DATABASE ours;
 USE ours;
 
 CREATE TABLE R (
-    key INT(2) NOT NULL,
+    key INT(2) NOT NULL PRIMARY KEY,
     fkey INT(2) NOT NULL,
     rfloat FLOAT NOT NULL,
     rstring CHAR(15) NOT NULL
 );
 
 CREATE TABLE S (
-    key INT(2) NOT NULL,
+    key INT(2) NOT NULL PRIMARY KEY,
     fkey INT(2) NOT NULL,
     rfloat FLOAT NOT NULL,
     rstring CHAR(15) NOT NULL
 );
 
 CREATE TABLE T (
-    key INT(2) NOT NULL,
+    key INT(2) NOT NULL PRIMARY KEY,
     fkey INT(2) NOT NULL,
     rfloat FLOAT NOT NULL,
     rstring CHAR(15) NOT NULL
 );
 
 CREATE TABLE D (
-    key INT(2) NOT NULL,
+    key INT(2) NOT NULL PRIMARY KEY,
     rdate DATE NOT NULL,
     rdatetime DATETIME NOT NULL
 );

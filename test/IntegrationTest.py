@@ -389,8 +389,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="""Run integration tests on mutable. Note that the
                                                     build direcory is assumed to be build/debug.""")
     parser.add_argument('path', nargs='*', help='Path to a directory containing tests or path to single test to be run.'
-                                                'Should be in the \'test\' directory. If not specified, all tests in the'
-                                                '\'test\' directory will be considered.')
+                                                'If not specified, all tests in the \'test\' directory will be considered.')
     parser.add_argument('-a', '--all', help='require optional tests to pass', action='store_true')
     parser.add_argument('-r', '--required-only', help='run only required tests', action='store_true')
     parser.add_argument('-v', '--verbose', help='increase output verbosity', action='store_true')
@@ -425,11 +424,10 @@ if __name__ == '__main__':
     else:
         test_files = []
         for path in sorted(set(args.path)):
-            path = 'test/' + path   # Search only in directory 'test/'
             if os.path.isfile(path):  # path is an experiment file
                 test_files.append(path)
             else:  # path is a directory containing multiple experiment files
-                test_files.extend(glob.glob(os.path.join('test', path, '**', '[!_]*.yml'), recursive=True))
+                test_files.extend(glob.glob(os.path.join(path, '**', '[!_]*.yml'), recursive=True))
 
     test_files = sorted(list(set(test_files)))
 

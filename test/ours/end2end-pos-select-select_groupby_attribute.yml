@@ -25,7 +25,6 @@ stages:
         returncode: 0
 
     parser:
-        cli_args: --insist-no-ternary-logic
         out: |
             SELECT key
             FROM R
@@ -42,6 +41,7 @@ stages:
         returncode: 0
 
     end2end:
+        cli_args: --insist-no-ternary-logic
         out: |
             0
             1

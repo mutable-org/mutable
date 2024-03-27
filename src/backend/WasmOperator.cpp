@@ -2662,7 +2662,8 @@ void OrderedGrouping::execute(const Match<OrderedGrouping> &M, setup_t setup, pi
 
             /*----- Resume pipeline with computed group iff new one starts and emit code to reset aggregates. ---*/
             M_insist(bool(first_iteration));
-            IF (*first_iteration or *group_differs) { // `group_differs` defaulted in first iteration but overruled anyway
+            Boolx1 cond = *first_iteration or *group_differs; // `group_differs` defaulted in first iteration but overruled anyway
+            IF (pred ? Select(*pred, cond, false) : cond) { // ignore entries for which predication predicate is not fulfilled
                 IF (not *first_iteration) {
                     store_locals_to_globals();
                     emit_group_and_resume_pipeline();

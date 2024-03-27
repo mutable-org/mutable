@@ -367,7 +367,7 @@ struct Projection : PhysicalOperator<Projection, ProjectionOperator>
 struct HashBasedGrouping : PhysicalOperator<HashBasedGrouping, GroupingOperator>
 {
     static void execute(const Match<HashBasedGrouping> &M, setup_t setup, pipeline_t pipeline, teardown_t teardown);
-    static double cost(const Match<HashBasedGrouping>&) { return 2.0; }
+    static double cost(const Match<HashBasedGrouping>&);
     static ConditionSet pre_condition(std::size_t child_idx,
                                       const std::tuple<const GroupingOperator*> &partial_inner_nodes);
     static ConditionSet post_condition(const Match<HashBasedGrouping> &M);
@@ -402,7 +402,7 @@ struct OrderedGrouping : PhysicalOperator<OrderedGrouping, GroupingOperator>
 
     public:
     static void execute(const Match<OrderedGrouping> &M, setup_t setup, pipeline_t pipeline, teardown_t teardown);
-    static double cost(const Match<OrderedGrouping>&) { return 1.0; }
+    static double cost(const Match<OrderedGrouping>&);
     static ConditionSet pre_condition(std::size_t child_idx,
                                       const std::tuple<const GroupingOperator*> &partial_inner_nodes);
     static ConditionSet adapt_post_condition(const Match<OrderedGrouping> &M, const ConditionSet &post_cond_child);
@@ -502,7 +502,7 @@ struct HashBasedGroupJoin
     : PhysicalOperator<HashBasedGroupJoin, pattern_t<GroupingOperator, pattern_t<JoinOperator, Wildcard, Wildcard>>>
 {
     static void execute(const Match<HashBasedGroupJoin> &M, setup_t setup, pipeline_t pipeline, teardown_t teardown);
-    static double cost(const Match<HashBasedGroupJoin>&) { return 1.0; }
+    static double cost(const Match<HashBasedGroupJoin>&);
     static ConditionSet
     pre_condition(std::size_t child_idx,
                   const std::tuple<const GroupingOperator*, const JoinOperator*, const Wildcard*, const Wildcard*>

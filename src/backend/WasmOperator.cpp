@@ -1396,6 +1396,11 @@ ConditionSet HashBasedGrouping::pre_condition(std::size_t child_idx, const std::
     return pre_cond;
 }
 
+double HashBasedGrouping::cost(const Match<HashBasedGrouping> &M)
+{
+    return 1.5 * M.child->get_matched_root().info().estimated_cardinality;
+}
+
 ConditionSet HashBasedGrouping::post_condition(const Match<HashBasedGrouping>&)
 {
     ConditionSet post_cond;
@@ -1863,6 +1868,11 @@ ConditionSet OrderedGrouping::pre_condition(
     pre_cond.add_condition(NoSIMD());
 
     return pre_cond;
+}
+
+double OrderedGrouping::cost(const Match<OrderedGrouping> &M)
+{
+    return 1.0 * M.child->get_matched_root().info().estimated_cardinality;
 }
 
 ConditionSet OrderedGrouping::adapt_post_condition(const Match<OrderedGrouping> &M, const ConditionSet &post_cond_child)
@@ -3878,7 +3888,7 @@ double SimpleHashJoin<UniqueBuild, Predicated>::cost(const Match<SimpleHashJoin>
     else if (options::simple_hash_join_ordering_strategy == option_configs::OrderingStrategy::BUILD_ON_RIGHT)
         return M.build.id() == M.children[1]->get_matched_root().id() ? 1.0 : 2.0 + (UniqueBuild ? 0.0 : 0.1);
     else
-        return 1.3 * M.build.info().estimated_cardinality +
+        return 1.5 * M.build.info().estimated_cardinality +
             (UniqueBuild ? 1.0 : 1.1) * M.probe.info().estimated_cardinality;
 }
 
@@ -4429,6 +4439,12 @@ ConditionSet HashBasedGroupJoin::pre_condition(
     pre_cond.add_condition(NoSIMD());
 
     return pre_cond;
+}
+
+double HashBasedGroupJoin::cost(const Match<HashBasedGroupJoin> &M)
+{
+    return 1.5 * M.build.info().estimated_cardinality + 1.0 * M.probe.info().estimated_cardinality +
+        1.0 * M.join.info().estimated_cardinality;
 }
 
 ConditionSet HashBasedGroupJoin::post_condition(const Match<HashBasedGroupJoin>&)

@@ -85,6 +85,8 @@ void set_wasm_instance_raw_memory(const v8::FunctionCallbackInfo<v8::Value> &inf
 void read_result_set(const v8::FunctionCallbackInfo<v8::Value> &info);
 template<typename Index, typename V8ValueT, bool IsLower>
 void index_seek(const v8::FunctionCallbackInfo<v8::Value> &info);
+template<typename Index>
+void index_sequential_scan(const v8::FunctionCallbackInfo<v8::Value> &info);
 
 v8::Local<v8::String> mkstr(v8::Isolate &isolate, const std::string &str);
 v8::Local<v8::WasmModuleObject> instantiate(v8::Isolate &isolate, v8::Local<v8::Object> imports);

@@ -45,14 +45,15 @@ enum class JoinImplementation : uint64_t {
 };
 
 enum class SoftPipelineBreakerStrategy : uint64_t {
-    AFTER_ALL                   = 0b111111,
-    AFTER_SCAN                  = 0b000001,
-    AFTER_FILTER                = 0b000010,
-    AFTER_PROJECTION            = 0b000100,
-    AFTER_NESTED_LOOPS_JOIN     = 0b001000,
-    AFTER_SIMPLE_HASH_JOIN      = 0b010000,
-    AFTER_HASH_BASED_GROUP_JOIN = 0b100000,
-    NONE                        = 0b000000,
+    AFTER_ALL                   = 0b1111111,
+    AFTER_SCAN                  = 0b0000001,
+    AFTER_FILTER                = 0b0000010,
+    AFTER_INDEX_SCAN            = 0b0000100,
+    AFTER_PROJECTION            = 0b0001000,
+    AFTER_NESTED_LOOPS_JOIN     = 0b0010000,
+    AFTER_SIMPLE_HASH_JOIN      = 0b0100000,
+    AFTER_HASH_BASED_GROUP_JOIN = 0b1000000,
+    NONE                        = 0b0000000,
 };
 
 /*----- implementation decisions -------------------------------------------------------------------------------------*/
@@ -769,6 +770,12 @@ struct Match<wasm::IndexScan<IndexMethod>> : wasm::MatchLeaf
     const ScanOperator &scan;
     const FilterOperator &filter;
     std::size_t batch_size = options::index_sequential_scan_batch_size;
+    private:
+    std::unique_ptr<const storage::DataLayoutFactory> buffer_factory_ =
+        bool(options::soft_pipeline_breaker bitand option_configs::SoftPipelineBreakerStrategy::AFTER_INDEX_SCAN)
+            ? M_notnull(options::soft_pipeline_breaker_layout.get())->clone()
+            : std::unique_ptr<storage::DataLayoutFactory>();
+    std::size_t buffer_num_tuples_ = options::soft_pipeline_breaker_num_tuples;
 
     public:
     Match(const FilterOperator *filter, const ScanOperator *scan,
@@ -780,7 +787,8 @@ struct Match<wasm::IndexScan<IndexMethod>> : wasm::MatchLeaf
     }
 
     void execute(setup_t setup, pipeline_t pipeline, teardown_t teardown) const override {
-        wasm::IndexScan<IndexMethod>::execute(*this, std::move(setup), std::move(pipeline), std::move(teardown));
+        execute_buffered(*this, filter.schema(), buffer_factory_, buffer_num_tuples_,
+                         std::move(setup), std::move(pipeline), std::move(teardown));
     }
 
     const Operator & get_matched_root() const override { return filter; }

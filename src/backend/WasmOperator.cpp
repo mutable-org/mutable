@@ -371,6 +371,8 @@ static void add_wasm_operator_args()
                     options::soft_pipeline_breaker |= option_configs::SoftPipelineBreakerStrategy::AFTER_SCAN;
                 else if (strneq(elem.data(), "AfterFilter", elem.size()))
                     options::soft_pipeline_breaker |= option_configs::SoftPipelineBreakerStrategy::AFTER_FILTER;
+                else if (strneq(elem.data(), "AfterIndexScan", elem.size()))
+                    options::soft_pipeline_breaker |= option_configs::SoftPipelineBreakerStrategy::AFTER_INDEX_SCAN;
                 else if (strneq(elem.data(), "AfterProjection", elem.size()))
                     options::soft_pipeline_breaker |= option_configs::SoftPipelineBreakerStrategy::AFTER_PROJECTION;
                 else if (strneq(elem.data(), "AfterNestedLoopsJoin", elem.size()))
@@ -6081,8 +6083,10 @@ void Match<m::wasm::IndexScan<IndexMethod>>::print(std::ostream &out, unsigned l
         M_unreachable("unknown strategy");
     }
 
-    out << "], " << this->scan.alias() << ", " << this->filter.filter() << ") "
-        << this->scan.schema() << print_info(this->scan) << " (cumulative cost " << cost() << ')';
+    out << "], " << this->scan.alias() << ", " << this->filter.filter() << ") ";
+    if (this->buffer_factory_ and this->scan.schema().drop_constants().deduplicate().num_entries())
+        out << "with " << this->buffer_num_tuples_ << " tuples output buffer ";
+    out << this->scan.schema() << print_info(this->scan) << " (cumulative cost " << cost() << ')';
 }
 
 template<bool Predicated>

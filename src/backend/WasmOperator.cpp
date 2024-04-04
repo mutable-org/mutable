@@ -100,6 +100,24 @@ static void add_wasm_operator_args()
             }
         }
     );
+    C.arg_parser().add<std::vector<std::string_view>>(
+        /* group=       */ "Wasm",
+        /* short=       */ nullptr,
+        /* long=        */ "--index-implementations",
+        /* description= */ "a comma separated list of index implementations to consider for index scans (`Array`, or"
+                           " `Rmi`)",
+        /* callback=    */ [](std::vector<std::string_view> impls){
+            options::index_implementations = option_configs::IndexImplementation(0UL);
+            for (const auto &elem : impls) {
+                if (strneq(elem.data(), "Array", elem.size()))
+                    options::index_implementations |= option_configs::IndexImplementation::ARRAY;
+                else if (strneq(elem.data(), "Rmi", elem.size()))
+                    options::index_implementations |= option_configs::IndexImplementation::RMI;
+                else
+                    std::cerr << "warning: ignore invalid index implementation " << elem << std::endl;
+            }
+        }
+    );
     C.arg_parser().add<const char*>(
         /* group=       */ "Wasm",
         /* short=       */ nullptr,
@@ -534,8 +552,10 @@ void m::register_wasm_operators(PhysicalOptimizer &phys_opt)
             phys_opt.register_operator<Scan<true>>();
     }
     if (bool(options::scan_implementations bitand option_configs::ScanImplementation::INDEX_SCAN)) {
-        phys_opt.register_operator<IndexScan<idx::IndexMethod::Array>>();
-        phys_opt.register_operator<IndexScan<idx::IndexMethod::Rmi>>();
+        if (bool(options::index_implementations bitand option_configs::IndexImplementation::ARRAY))
+            phys_opt.register_operator<IndexScan<idx::IndexMethod::Array>>();
+        if (bool(options::index_implementations bitand option_configs::IndexImplementation::RMI))
+            phys_opt.register_operator<IndexScan<idx::IndexMethod::Rmi>>();
     }
     if (bool(options::filter_selection_strategy bitand option_configs::SelectionStrategy::BRANCHING))
         phys_opt.register_operator<Filter<false>>();

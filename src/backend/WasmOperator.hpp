@@ -44,6 +44,12 @@ enum class JoinImplementation : uint64_t {
     SORT_MERGE   = 0b100,
 };
 
+enum class IndexImplementation : uint64_t {
+    ALL   = 0b11,
+    ARRAY = 0b01,
+    RMI   = 0b10,
+};
+
 enum class SoftPipelineBreakerStrategy : uint64_t {
     AFTER_ALL                   = 0b1111111,
     AFTER_SCAN                  = 0b0000001,
@@ -119,6 +125,9 @@ inline option_configs::SortingImplementation sorting_implementations = option_co
 
 /** Which implementations should be considered for a `JoinOperator`. */
 inline option_configs::JoinImplementation join_implementations = option_configs::JoinImplementation::ALL;
+
+/** Which index implementations should be considered for an `IndexScan`. */
+inline option_configs::IndexImplementation index_implementations = option_configs::IndexImplementation::ALL;
 
 /** Which index scan strategy should be used for `wasm::IndexScan`. */
 inline option_configs::IndexScanStrategy index_scan_strategy = option_configs::IndexScanStrategy::INTERPRETATION;

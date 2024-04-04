@@ -240,6 +240,7 @@ namespace m {
     X(Scan<false>) \
     X(Scan<true>) \
     X(IndexScan<m::idx::IndexMethod::Array>) \
+    X(IndexScan<m::idx::IndexMethod::Rmi>) \
     X(Filter<false>) \
     X(Filter<true>) \
     X(Quicksort<false>) \
@@ -281,6 +282,7 @@ namespace m {
     X(m::Match<m::wasm::Scan<false>>) \
     X(m::Match<m::wasm::Scan<true>>) \
     X(m::Match<m::wasm::IndexScan<m::idx::IndexMethod::Array>>) \
+    X(m::Match<m::wasm::IndexScan<m::idx::IndexMethod::Rmi>>) \
     X(m::Match<m::wasm::Filter<false>>) \
     X(m::Match<m::wasm::Filter<true>>) \
     X(m::Match<m::wasm::Quicksort<false>>) \

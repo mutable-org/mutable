@@ -891,6 +891,12 @@ void V8Engine::execute(const m::MatchBase &plan)
         CREATE_TEMPLATES(idx::ArrayIndex, float,       v8::Number,  array, f);
         CREATE_TEMPLATES(idx::ArrayIndex, double,      v8::Number,  array, d);
         CREATE_TEMPLATES(idx::ArrayIndex, const char*, v8::String,  array, p);
+        CREATE_TEMPLATES(idx::RecursiveModelIndex, int8_t,      v8::Int32,  rmi, i1);
+        CREATE_TEMPLATES(idx::RecursiveModelIndex, int16_t,     v8::Int32,  rmi, i2);
+        CREATE_TEMPLATES(idx::RecursiveModelIndex, int32_t,     v8::Int32,  rmi, i4);
+        CREATE_TEMPLATES(idx::RecursiveModelIndex, int64_t,     v8::BigInt, rmi, i8);
+        CREATE_TEMPLATES(idx::RecursiveModelIndex, float,       v8::Number, rmi, f);
+        CREATE_TEMPLATES(idx::RecursiveModelIndex, double,      v8::Number, rmi, d);
 #undef CREATE_TEMPLATES
 
         v8::Local<v8::Context> context = v8::Context::New(isolate_, /* extensions= */ nullptr, global);
@@ -1126,6 +1132,12 @@ v8::Local<v8::Object> m::wasm::detail::create_env(v8::Isolate &isolate, const m:
     EMIT_FUNC_IMPORTS(float,       array, f);
     EMIT_FUNC_IMPORTS(double,      array, d);
     EMIT_FUNC_IMPORTS(const char*, array, p);
+    EMIT_FUNC_IMPORTS(int8_t,      rmi, i1);
+    EMIT_FUNC_IMPORTS(int16_t,     rmi, i2);
+    EMIT_FUNC_IMPORTS(int32_t,     rmi, i4);
+    EMIT_FUNC_IMPORTS(int64_t,     rmi, i8);
+    EMIT_FUNC_IMPORTS(float,       rmi, f);
+    EMIT_FUNC_IMPORTS(double,      rmi, d);
 #undef EMIT_FUNC_IMPORTS
 
 #define ADD_FUNC(FUNC, NAME) { \
@@ -1152,6 +1164,12 @@ v8::Local<v8::Object> m::wasm::detail::create_env(v8::Isolate &isolate, const m:
     ADD_FUNCS(idx::ArrayIndex,          float,       v8::Number,  array, f);
     ADD_FUNCS(idx::ArrayIndex,          double,      v8::Number,  array, d);
     ADD_FUNCS(idx::ArrayIndex,          const char*, v8::String,  array, p);
+    ADD_FUNCS(idx::RecursiveModelIndex, int8_t,      v8::Int32,   rmi, i1);
+    ADD_FUNCS(idx::RecursiveModelIndex, int16_t,     v8::Int32,   rmi, i2);
+    ADD_FUNCS(idx::RecursiveModelIndex, int32_t,     v8::Int32,   rmi, i4);
+    ADD_FUNCS(idx::RecursiveModelIndex, int64_t,     v8::BigInt,  rmi, i8);
+    ADD_FUNCS(idx::RecursiveModelIndex, float,       v8::Number,  rmi, f);
+    ADD_FUNCS(idx::RecursiveModelIndex, double,      v8::Number,  rmi, d);
 #undef ADD_FUNCS
 #undef ADD_FUNC_
 #undef ADD_FUNC

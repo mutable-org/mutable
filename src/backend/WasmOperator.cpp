@@ -533,8 +533,10 @@ void m::register_wasm_operators(PhysicalOptimizer &phys_opt)
         if (options::simd)
             phys_opt.register_operator<Scan<true>>();
     }
-    if (bool(options::scan_implementations bitand option_configs::ScanImplementation::INDEX_SCAN))
+    if (bool(options::scan_implementations bitand option_configs::ScanImplementation::INDEX_SCAN)) {
         phys_opt.register_operator<IndexScan<idx::IndexMethod::Array>>();
+        phys_opt.register_operator<IndexScan<idx::IndexMethod::Rmi>>();
+    }
     if (bool(options::filter_selection_strategy bitand option_configs::SelectionStrategy::BRANCHING))
         phys_opt.register_operator<Filter<false>>();
     if (bool(options::filter_selection_strategy bitand option_configs::SelectionStrategy::PREDICATED))
@@ -1477,6 +1479,8 @@ void index_scan_codegen_compilation(const Index &index, const index_scan_bounds_
         }
         if constexpr(is_specialization<Index, idx::ArrayIndex>) {
             RESOLVE_KEYTYPE(array)
+        } else if constexpr(is_specialization<Index, idx::RecursiveModelIndex>) {
+            RESOLVE_KEYTYPE(rmi)
         } else {
             M_unreachable("unknown index type");
         }
@@ -1712,6 +1716,8 @@ void index_scan_codegen_hybrid(const Index &index, const index_scan_bounds_t &bo
     }
     if constexpr(is_specialization<Index, idx::ArrayIndex>) {
         RESOLVE_KEYTYPE(array)
+    } else if constexpr(is_specialization<Index, idx::RecursiveModelIndex>) {
+        RESOLVE_KEYTYPE(rmi)
     } else {
         M_unreachable("unknown index type");
     }
@@ -1875,6 +1881,11 @@ void index_scan_resolve_index_method(const index_scan_bounds_t &bounds, const Ma
     if constexpr(IndexMethod == idx::IndexMethod::Array and requires { typename idx::ArrayIndex<AttrT>; }) {
         auto &index = as<const idx::ArrayIndex<AttrT>>(index_base);
         index_scan_resolve_strategy<IndexMethod, const idx::ArrayIndex<AttrT>, SqlT>(
+            index, bounds, M, std::move(setup), std::move(pipeline), std::move(teardown)
+        );
+    } else if constexpr(IndexMethod == idx::IndexMethod::Rmi and requires { typename idx::RecursiveModelIndex<AttrT>; }) {
+        auto &index = as<const idx::RecursiveModelIndex<AttrT>>(index_base);
+        index_scan_resolve_strategy<IndexMethod, const idx::RecursiveModelIndex<AttrT>, SqlT>(
             index, bounds, M, std::move(setup), std::move(pipeline), std::move(teardown)
         );
     } else {
@@ -6046,6 +6057,8 @@ void Match<m::wasm::IndexScan<IndexMethod>>::print(std::ostream &out, unsigned l
 {
     if (IndexMethod == idx::IndexMethod::Array)
         indent(out, level) << "wasm::ArrayIndexScan(";
+    else if (IndexMethod == idx::IndexMethod::Rmi)
+        indent(out, level) << "wasm::RecursiveModelIndexScan(";
     else
         M_unreachable("unknown index");
 

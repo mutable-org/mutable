@@ -13,7 +13,7 @@ requires std::is_enum_v<T> and
              { x | x } -> std::same_as<std::underlying_type_t<T>>;
              T(x);
          }
-T operator|(T left, T right)
+constexpr T operator|(T left, T right)
 {
     using U = std::underlying_type_t<T>;
     return T( U(left) | U(right) );
@@ -25,7 +25,7 @@ requires std::is_enum_v<T> and
              { x | x } -> std::same_as<std::underlying_type_t<T>>;
              T(x);
          }
-T operator&(T left, T right)
+constexpr T operator&(T left, T right)
 {
     using U = std::underlying_type_t<T>;
     return T( U(left) & U(right) );
@@ -38,7 +38,7 @@ requires std::is_enum_v<T> and
              { x & x } -> std::same_as<std::underlying_type_t<T>>;
              T(x);
          }
-T operator-(T left, T right)
+constexpr T operator-(T left, T right)
 {
     using U = std::underlying_type_t<T>;
     return T( U(left) & ~U(right) );
@@ -50,7 +50,7 @@ requires std::is_enum_v<T> and
              { ~x } -> std::same_as<std::underlying_type_t<T>>;
              T(x);
          }
-T operator~(T t)
+constexpr T operator~(T t)
 {
     using U = std::underlying_type_t<T>;
     return T( ~U(t) );
@@ -58,21 +58,21 @@ T operator~(T t)
 
 template<typename T>
 requires std::is_enum_v<T> and requires (T x) { { x | x } -> std::same_as<T>; }
-T & operator|=(T &left, T right)
+constexpr T & operator|=(T &left, T right)
 {
     return left = left | right;
 }
 
 template<typename T>
 requires std::is_enum_v<T> and requires (T x) { { x & x } -> std::same_as<T>; }
-T & operator&=(T &left, T right)
+constexpr T & operator&=(T &left, T right)
 {
     return left = left & right;
 }
 
 template<typename T>
 requires std::is_enum_v<T> and requires (T x) { { x - x } -> std::same_as<T>; }
-T & operator-=(T &left, T right)
+constexpr T & operator-=(T &left, T right)
 {
     return left = left - right;
 }

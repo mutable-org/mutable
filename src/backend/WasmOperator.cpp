@@ -4045,7 +4045,8 @@ void SimpleHashJoin<UniqueBuild, Predicated>::execute(const Match<SimpleHashJoin
                      ++build_it, ++probe_it)
                 {
                     M_insist(probe_it != probe_keys.cend());
-                    env.add(*build_it, env.get(*probe_it)); // since build and probe keys match for join partners
+                    if (not env.has(*build_it)) // skip duplicated build keys and only add first occurrence
+                        env.add(*build_it, env.get(*probe_it)); // since build and probe keys match for join partners
                 }
 
                 /*----- Try to find the *single* possible join partner. -----*/

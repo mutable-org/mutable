@@ -419,7 +419,7 @@ void SchemaMinimizer::operator()(JoinOperator &op)
     for (auto c : const_cast<const JoinOperator&>(op).children()) {
         required = required_from_below & c->schema(); // what we need from this child
         (*this)(*c);
-        add_constraints(op.schema(), op.child(0)->schema()); // add constraints from child
+        add_constraints(op.schema(), c->schema()); // add constraints from child
     }
 }
 

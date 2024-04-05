@@ -317,11 +317,33 @@ struct M_EXPORT DisjunctiveFilterOperator : FilterOperator
 
 struct M_EXPORT JoinOperator : Producer, Consumer
 {
+    static constexpr Schema::entry_type::constraints_t REMOVED_CONSTRAINTS =
+        Schema::entry_type::UNIQUE | Schema::entry_type::REFERENCES_UNIQUE; // FIXME: still unique for 1:1 joins and depends on what was referenced
+
     private:
     cnf::CNF predicate_;
 
     public:
     JoinOperator(cnf::CNF predicate) : predicate_(std::move(predicate)) { }
+
+    /*----- Override child setters to correctly adapt the constraints of the computed schema! ------------------------*/
+    virtual void add_child(Producer *child) override {
+        const auto old_num_entries = schema().num_entries();
+        Consumer::add_child(child); // delegate to inherited method
+
+        /* Remove uniqueness constraints (in added schema part) due to denormalization. */
+        for (auto i = old_num_entries; i != schema().num_entries(); ++i)
+            schema()[i].constraints &= ~REMOVED_CONSTRAINTS;
+    }
+    virtual Producer * set_child(Producer *child, std::size_t i) override {
+        auto old = Consumer::set_child(child, i); // delegate to inherited method
+
+        /* Remove uniqueness constraints (in entire schema because of recomputation) due to denormalization. */
+        for (auto &e : schema())
+            e.constraints &= ~REMOVED_CONSTRAINTS;
+
+        return old;
+    }
 
     /** Creates and returns a copy of this single operator node, i.e. only copies this operator without adding any
      * inherited member fields like the parent or children nodes in the returned copy. */

@@ -342,19 +342,23 @@ struct SchemaMinimizer : OperatorVisitor
 #undef DECLARE
 
     private:
-    /** Add the constraints of entries from \p constraints to matching entries in \p schema.  Adapts only the first
-     * \p n entries of \p schema. */
-    void add_constraints(Schema &schema, const Schema &constraints, std::size_t n) {
+    /** Add the constraints of entries from \p constraints to matching entries in \p schema except the
+     * \p excluded_constraints.  Adapts only the first \p n entries of \p schema. */
+    void add_constraints(Schema &schema, const Schema &constraints, std::size_t n,
+                         Schema::entry_type::constraints_t excluded_constraints = Schema::entry_type::constraints_t{0})
+    {
         M_insist(n <= schema.num_entries(), "invalid length");
         for (std::size_t idx = 0; idx < n; ++idx) {
             auto &e = schema[idx];
             auto it = constraints.find(e.id);
             if (it != constraints.end())
-                e.constraints |= it->constraints; // merge constraints
+                e.constraints |= it->constraints & ~excluded_constraints; // merge constraints except excluded ones
         }
     }
-    void add_constraints(Schema &schema, const Schema &constraints) {
-        add_constraints(schema, constraints, schema.num_entries());
+    void add_constraints(Schema &schema, const Schema &constraints,
+                         Schema::entry_type::constraints_t excluded_constraints = Schema::entry_type::constraints_t{0})
+    {
+        add_constraints(schema, constraints, schema.num_entries(), excluded_constraints);
     }
 };
 
@@ -419,7 +423,7 @@ void SchemaMinimizer::operator()(JoinOperator &op)
     for (auto c : const_cast<const JoinOperator&>(op).children()) {
         required = required_from_below & c->schema(); // what we need from this child
         (*this)(*c);
-        add_constraints(op.schema(), c->schema()); // add constraints from child
+        add_constraints(op.schema(), c->schema(), JoinOperator::REMOVED_CONSTRAINTS); // add constraints from child except removed ones
     }
 }
 

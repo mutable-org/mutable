@@ -1,0 +1,9 @@
+benchmark,query,resultdb,size_MiB
+job,q1a,0,18606.1
+job,q1a,1,20126.1
+job,q3b,0,96.0952
+job,q3b,1,285.171
+job,q4a,0,97.0551
+job,q4a,1,699.136
+job,q7b,0,1036.69
+job,q7b,1,1101.86

@@ -1,0 +1,7 @@
+{
+	"result_db": [
+		{"relations": ["f"], "size": 10000},
+		{"relations": ["d1"], "size": 10},
+		{"relations": ["f", "d1"], "size": 10000}
+	]
+}

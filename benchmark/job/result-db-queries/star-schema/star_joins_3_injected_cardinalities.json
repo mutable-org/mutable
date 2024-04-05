@@ -1,0 +1,15 @@
+{
+	"result_db": [
+		{"relations": ["f"], "size": 10000},
+		{"relations": ["d1"], "size": 10},
+		{"relations": ["d2"], "size": 10},
+		{"relations": ["d3"], "size": 10},
+		{"relations": ["f", "d1"], "size": 10000},
+		{"relations": ["f", "d2"], "size": 10000},
+		{"relations": ["f", "d3"], "size": 10000},
+		{"relations": ["f", "d1", "d2"], "size": 10000},
+		{"relations": ["f", "d1", "d3"], "size": 10000},
+		{"relations": ["f", "d2", "d3"], "size": 10000},
+		{"relations": ["f", "d1", "d2", "d3"], "size": 10000}
+	]
+}

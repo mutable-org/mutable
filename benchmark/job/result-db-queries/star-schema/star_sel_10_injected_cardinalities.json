@@ -1,0 +1,24 @@
+{
+	"result_db": [
+		{"relations": ["f"], "size": 10000},
+		{"relations": ["d1"], "size": 6},
+		{"relations": ["d2"], "size": 6},
+		{"relations": ["d3"], "size": 6},
+		{"relations": ["d4"], "size": 6},
+		{"relations": ["f", "d1"], "size": 6000},
+		{"relations": ["f", "d2"], "size": 6000},
+		{"relations": ["f", "d3"], "size": 6000},
+		{"relations": ["f", "d4"], "size": 6000},
+		{"relations": ["f", "d1", "d2"], "size": 3600},
+		{"relations": ["f", "d1", "d3"], "size": 3600},
+		{"relations": ["f", "d1", "d4"], "size": 3600},
+		{"relations": ["f", "d2", "d3"], "size": 3600},
+		{"relations": ["f", "d2", "d4"], "size": 3600},
+		{"relations": ["f", "d3", "d4"], "size": 3600},
+		{"relations": ["f", "d1", "d2", "d3"], "size": 2160},
+		{"relations": ["f", "d1", "d2", "d4"], "size": 2160},
+		{"relations": ["f", "d1", "d3", "d4"], "size": 2160},
+		{"relations": ["f", "d2", "d3", "d4"], "size": 2160},
+		{"relations": ["f", "d1", "d4", "d2", "d3"], "size": 1296}
+	]
+}

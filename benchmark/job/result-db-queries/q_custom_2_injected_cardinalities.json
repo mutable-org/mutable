@@ -1,0 +1,14 @@
+{
+	"result_db": [
+		{"relations": ["t"], "size": 2032439},
+		{"relations": ["mi"], "size": 782326},
+		{"relations": ["mi_idx"], "size": 1380035},
+		{"relations": ["it"], "size": 64},
+		{"relations": ["mi", "t"], "size": 605474},
+		{"relations": ["mi_idx", "mi"], "size": 810780},
+		{"relations": ["it", "mi_idx"], "size": 1380035},
+		{"relations": ["mi_idx", "mi", "t"], "size": 653924},
+		{"relations": ["it", "mi_idx", "mi"], "size": 810780},
+		{"relations": ["it", "mi_idx", "mi", "t"], "size": 653924}
+	]
+}

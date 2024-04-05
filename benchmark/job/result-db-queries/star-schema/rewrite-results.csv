@@ -1,0 +1,2384 @@
+database,system,query,method,data_transfer,run,num_query_internal,time
+star,postgres,star_sel_10,RM1. Dynamic SELECT DISTINCT,False,0,0,438.260
+star,postgres,star_sel_10,RM1. Dynamic SELECT DISTINCT,False,0,1,419.946
+star,postgres,star_sel_10,RM1. Dynamic SELECT DISTINCT,False,0,2,419.608
+star,postgres,star_sel_10,RM1. Dynamic SELECT DISTINCT,False,0,3,415.043
+star,postgres,star_sel_10,RM1. Dynamic SELECT DISTINCT,False,0,4,418.412
+star,postgres,star_sel_10,RM1. Dynamic SELECT DISTINCT,False,1,0,451.640
+star,postgres,star_sel_10,RM1. Dynamic SELECT DISTINCT,False,1,1,412.814
+star,postgres,star_sel_10,RM1. Dynamic SELECT DISTINCT,False,1,2,414.865
+star,postgres,star_sel_10,RM1. Dynamic SELECT DISTINCT,False,1,3,412.685
+star,postgres,star_sel_10,RM1. Dynamic SELECT DISTINCT,False,1,4,411.051
+star,postgres,star_sel_10,RM1. Dynamic SELECT DISTINCT,False,2,0,434.774
+star,postgres,star_sel_10,RM1. Dynamic SELECT DISTINCT,False,2,1,419.771
+star,postgres,star_sel_10,RM1. Dynamic SELECT DISTINCT,False,2,2,417.275
+star,postgres,star_sel_10,RM1. Dynamic SELECT DISTINCT,False,2,3,417.201
+star,postgres,star_sel_10,RM1. Dynamic SELECT DISTINCT,False,2,4,420.936
+star,postgres,star_sel_10,RM1. Dynamic SELECT DISTINCT,False,3,0,439.849
+star,postgres,star_sel_10,RM1. Dynamic SELECT DISTINCT,False,3,1,418.978
+star,postgres,star_sel_10,RM1. Dynamic SELECT DISTINCT,False,3,2,410.578
+star,postgres,star_sel_10,RM1. Dynamic SELECT DISTINCT,False,3,3,410.726
+star,postgres,star_sel_10,RM1. Dynamic SELECT DISTINCT,False,3,4,409.501
+star,postgres,star_sel_10,RM1. Dynamic SELECT DISTINCT,False,4,0,442.880
+star,postgres,star_sel_10,RM1. Dynamic SELECT DISTINCT,False,4,1,417.087
+star,postgres,star_sel_10,RM1. Dynamic SELECT DISTINCT,False,4,2,416.121
+star,postgres,star_sel_10,RM1. Dynamic SELECT DISTINCT,False,4,3,423.712
+star,postgres,star_sel_10,RM1. Dynamic SELECT DISTINCT,False,4,4,409.112
+star,postgres,star_sel_10,RM2. Materialized SELECT DISTINCT,False,0,0,474.894
+star,postgres,star_sel_10,RM2. Materialized SELECT DISTINCT,False,0,1,3.726
+star,postgres,star_sel_10,RM2. Materialized SELECT DISTINCT,False,0,2,1.252
+star,postgres,star_sel_10,RM2. Materialized SELECT DISTINCT,False,0,3,1.183
+star,postgres,star_sel_10,RM2. Materialized SELECT DISTINCT,False,0,4,1.133
+star,postgres,star_sel_10,RM2. Materialized SELECT DISTINCT,False,0,5,1.209
+star,postgres,star_sel_10,RM2. Materialized SELECT DISTINCT,False,1,0,471.041
+star,postgres,star_sel_10,RM2. Materialized SELECT DISTINCT,False,1,1,3.739
+star,postgres,star_sel_10,RM2. Materialized SELECT DISTINCT,False,1,2,1.266
+star,postgres,star_sel_10,RM2. Materialized SELECT DISTINCT,False,1,3,1.212
+star,postgres,star_sel_10,RM2. Materialized SELECT DISTINCT,False,1,4,1.150
+star,postgres,star_sel_10,RM2. Materialized SELECT DISTINCT,False,1,5,1.222
+star,postgres,star_sel_10,RM2. Materialized SELECT DISTINCT,False,2,0,467.189
+star,postgres,star_sel_10,RM2. Materialized SELECT DISTINCT,False,2,1,3.731
+star,postgres,star_sel_10,RM2. Materialized SELECT DISTINCT,False,2,2,1.210
+star,postgres,star_sel_10,RM2. Materialized SELECT DISTINCT,False,2,3,1.151
+star,postgres,star_sel_10,RM2. Materialized SELECT DISTINCT,False,2,4,1.138
+star,postgres,star_sel_10,RM2. Materialized SELECT DISTINCT,False,2,5,1.171
+star,postgres,star_sel_10,RM2. Materialized SELECT DISTINCT,False,3,0,469.447
+star,postgres,star_sel_10,RM2. Materialized SELECT DISTINCT,False,3,1,3.763
+star,postgres,star_sel_10,RM2. Materialized SELECT DISTINCT,False,3,2,1.264
+star,postgres,star_sel_10,RM2. Materialized SELECT DISTINCT,False,3,3,1.240
+star,postgres,star_sel_10,RM2. Materialized SELECT DISTINCT,False,3,4,1.206
+star,postgres,star_sel_10,RM2. Materialized SELECT DISTINCT,False,3,5,1.228
+star,postgres,star_sel_10,RM2. Materialized SELECT DISTINCT,False,4,0,468.311
+star,postgres,star_sel_10,RM2. Materialized SELECT DISTINCT,False,4,1,3.741
+star,postgres,star_sel_10,RM2. Materialized SELECT DISTINCT,False,4,2,1.213
+star,postgres,star_sel_10,RM2. Materialized SELECT DISTINCT,False,4,3,1.134
+star,postgres,star_sel_10,RM2. Materialized SELECT DISTINCT,False,4,4,1.133
+star,postgres,star_sel_10,RM2. Materialized SELECT DISTINCT,False,4,5,1.172
+star,postgres,star_sel_10,RM3. Dynamic Subquery,False,0,0,449.607
+star,postgres,star_sel_10,RM3. Dynamic Subquery,False,0,1,78.887
+star,postgres,star_sel_10,RM3. Dynamic Subquery,False,0,2,51.217
+star,postgres,star_sel_10,RM3. Dynamic Subquery,False,0,3,47.264
+star,postgres,star_sel_10,RM3. Dynamic Subquery,False,0,4,52.503
+star,postgres,star_sel_10,RM3. Dynamic Subquery,False,1,0,445.301
+star,postgres,star_sel_10,RM3. Dynamic Subquery,False,1,1,79.102
+star,postgres,star_sel_10,RM3. Dynamic Subquery,False,1,2,47.936
+star,postgres,star_sel_10,RM3. Dynamic Subquery,False,1,3,47.288
+star,postgres,star_sel_10,RM3. Dynamic Subquery,False,1,4,47.451
+star,postgres,star_sel_10,RM3. Dynamic Subquery,False,2,0,444.095
+star,postgres,star_sel_10,RM3. Dynamic Subquery,False,2,1,78.699
+star,postgres,star_sel_10,RM3. Dynamic Subquery,False,2,2,46.629
+star,postgres,star_sel_10,RM3. Dynamic Subquery,False,2,3,52.733
+star,postgres,star_sel_10,RM3. Dynamic Subquery,False,2,4,49.730
+star,postgres,star_sel_10,RM3. Dynamic Subquery,False,3,0,443.820
+star,postgres,star_sel_10,RM3. Dynamic Subquery,False,3,1,78.433
+star,postgres,star_sel_10,RM3. Dynamic Subquery,False,3,2,53.114
+star,postgres,star_sel_10,RM3. Dynamic Subquery,False,3,3,46.967
+star,postgres,star_sel_10,RM3. Dynamic Subquery,False,3,4,46.610
+star,postgres,star_sel_10,RM3. Dynamic Subquery,False,4,0,442.559
+star,postgres,star_sel_10,RM3. Dynamic Subquery,False,4,1,78.537
+star,postgres,star_sel_10,RM3. Dynamic Subquery,False,4,2,46.577
+star,postgres,star_sel_10,RM3. Dynamic Subquery,False,4,3,46.646
+star,postgres,star_sel_10,RM3. Dynamic Subquery,False,4,4,47.788
+star,postgres,star_sel_10,RM4. Materialized Subquery,False,0,0,439.377
+star,postgres,star_sel_10,RM4. Materialized Subquery,False,0,1,6.737
+star,postgres,star_sel_10,RM4. Materialized Subquery,False,0,2,0.344
+star,postgres,star_sel_10,RM4. Materialized Subquery,False,0,3,0.308
+star,postgres,star_sel_10,RM4. Materialized Subquery,False,0,4,0.306
+star,postgres,star_sel_10,RM4. Materialized Subquery,False,0,5,0.306
+star,postgres,star_sel_10,RM4. Materialized Subquery,False,1,0,439.384
+star,postgres,star_sel_10,RM4. Materialized Subquery,False,1,1,6.766
+star,postgres,star_sel_10,RM4. Materialized Subquery,False,1,2,0.350
+star,postgres,star_sel_10,RM4. Materialized Subquery,False,1,3,0.307
+star,postgres,star_sel_10,RM4. Materialized Subquery,False,1,4,0.300
+star,postgres,star_sel_10,RM4. Materialized Subquery,False,1,5,0.308
+star,postgres,star_sel_10,RM4. Materialized Subquery,False,2,0,435.541
+star,postgres,star_sel_10,RM4. Materialized Subquery,False,2,1,6.642
+star,postgres,star_sel_10,RM4. Materialized Subquery,False,2,2,0.348
+star,postgres,star_sel_10,RM4. Materialized Subquery,False,2,3,0.308
+star,postgres,star_sel_10,RM4. Materialized Subquery,False,2,4,0.300
+star,postgres,star_sel_10,RM4. Materialized Subquery,False,2,5,0.308
+star,postgres,star_sel_10,RM4. Materialized Subquery,False,3,0,435.702
+star,postgres,star_sel_10,RM4. Materialized Subquery,False,3,1,6.855
+star,postgres,star_sel_10,RM4. Materialized Subquery,False,3,2,0.346
+star,postgres,star_sel_10,RM4. Materialized Subquery,False,3,3,0.309
+star,postgres,star_sel_10,RM4. Materialized Subquery,False,3,4,0.300
+star,postgres,star_sel_10,RM4. Materialized Subquery,False,3,5,0.318
+star,postgres,star_sel_10,RM4. Materialized Subquery,False,4,0,442.622
+star,postgres,star_sel_10,RM4. Materialized Subquery,False,4,1,6.621
+star,postgres,star_sel_10,RM4. Materialized Subquery,False,4,2,0.335
+star,postgres,star_sel_10,RM4. Materialized Subquery,False,4,3,0.303
+star,postgres,star_sel_10,RM4. Materialized Subquery,False,4,4,0.294
+star,postgres,star_sel_10,RM4. Materialized Subquery,False,4,5,0.314
+star,postgres,star_sel_10,0. Single Table,False,0,0,429.622
+star,postgres,star_sel_10,0. Single Table,False,1,0,429.190
+star,postgres,star_sel_10,0. Single Table,False,2,0,430.139
+star,postgres,star_sel_10,0. Single Table,False,3,0,431.912
+star,postgres,star_sel_10,0. Single Table,False,4,0,431.127
+star,postgres,star_sel_20,RM1. Dynamic SELECT DISTINCT,False,0,0,530.243
+star,postgres,star_sel_20,RM1. Dynamic SELECT DISTINCT,False,0,1,500.631
+star,postgres,star_sel_20,RM1. Dynamic SELECT DISTINCT,False,0,2,492.717
+star,postgres,star_sel_20,RM1. Dynamic SELECT DISTINCT,False,0,3,490.782
+star,postgres,star_sel_20,RM1. Dynamic SELECT DISTINCT,False,0,4,485.062
+star,postgres,star_sel_20,RM1. Dynamic SELECT DISTINCT,False,1,0,524.077
+star,postgres,star_sel_20,RM1. Dynamic SELECT DISTINCT,False,1,1,497.340
+star,postgres,star_sel_20,RM1. Dynamic SELECT DISTINCT,False,1,2,494.981
+star,postgres,star_sel_20,RM1. Dynamic SELECT DISTINCT,False,1,3,489.446
+star,postgres,star_sel_20,RM1. Dynamic SELECT DISTINCT,False,1,4,484.218
+star,postgres,star_sel_20,RM1. Dynamic SELECT DISTINCT,False,2,0,531.483
+star,postgres,star_sel_20,RM1. Dynamic SELECT DISTINCT,False,2,1,499.344
+star,postgres,star_sel_20,RM1. Dynamic SELECT DISTINCT,False,2,2,495.165
+star,postgres,star_sel_20,RM1. Dynamic SELECT DISTINCT,False,2,3,491.750
+star,postgres,star_sel_20,RM1. Dynamic SELECT DISTINCT,False,2,4,488.740
+star,postgres,star_sel_20,RM1. Dynamic SELECT DISTINCT,False,3,0,526.922
+star,postgres,star_sel_20,RM1. Dynamic SELECT DISTINCT,False,3,1,494.763
+star,postgres,star_sel_20,RM1. Dynamic SELECT DISTINCT,False,3,2,491.043
+star,postgres,star_sel_20,RM1. Dynamic SELECT DISTINCT,False,3,3,487.660
+star,postgres,star_sel_20,RM1. Dynamic SELECT DISTINCT,False,3,4,487.794
+star,postgres,star_sel_20,RM1. Dynamic SELECT DISTINCT,False,4,0,520.525
+star,postgres,star_sel_20,RM1. Dynamic SELECT DISTINCT,False,4,1,497.634
+star,postgres,star_sel_20,RM1. Dynamic SELECT DISTINCT,False,4,2,489.546
+star,postgres,star_sel_20,RM1. Dynamic SELECT DISTINCT,False,4,3,492.810
+star,postgres,star_sel_20,RM1. Dynamic SELECT DISTINCT,False,4,4,487.698
+star,postgres,star_sel_20,RM2. Materialized SELECT DISTINCT,False,0,0,572.440
+star,postgres,star_sel_20,RM2. Materialized SELECT DISTINCT,False,0,1,57.090
+star,postgres,star_sel_20,RM2. Materialized SELECT DISTINCT,False,0,2,20.895
+star,postgres,star_sel_20,RM2. Materialized SELECT DISTINCT,False,0,3,19.924
+star,postgres,star_sel_20,RM2. Materialized SELECT DISTINCT,False,0,4,19.997
+star,postgres,star_sel_20,RM2. Materialized SELECT DISTINCT,False,0,5,20.606
+star,postgres,star_sel_20,RM2. Materialized SELECT DISTINCT,False,1,0,593.348
+star,postgres,star_sel_20,RM2. Materialized SELECT DISTINCT,False,1,1,55.638
+star,postgres,star_sel_20,RM2. Materialized SELECT DISTINCT,False,1,2,20.645
+star,postgres,star_sel_20,RM2. Materialized SELECT DISTINCT,False,1,3,19.016
+star,postgres,star_sel_20,RM2. Materialized SELECT DISTINCT,False,1,4,19.650
+star,postgres,star_sel_20,RM2. Materialized SELECT DISTINCT,False,1,5,20.005
+star,postgres,star_sel_20,RM2. Materialized SELECT DISTINCT,False,2,0,553.179
+star,postgres,star_sel_20,RM2. Materialized SELECT DISTINCT,False,2,1,56.912
+star,postgres,star_sel_20,RM2. Materialized SELECT DISTINCT,False,2,2,20.610
+star,postgres,star_sel_20,RM2. Materialized SELECT DISTINCT,False,2,3,19.508
+star,postgres,star_sel_20,RM2. Materialized SELECT DISTINCT,False,2,4,20.649
+star,postgres,star_sel_20,RM2. Materialized SELECT DISTINCT,False,2,5,20.028
+star,postgres,star_sel_20,RM2. Materialized SELECT DISTINCT,False,3,0,582.753
+star,postgres,star_sel_20,RM2. Materialized SELECT DISTINCT,False,3,1,55.971
+star,postgres,star_sel_20,RM2. Materialized SELECT DISTINCT,False,3,2,20.402
+star,postgres,star_sel_20,RM2. Materialized SELECT DISTINCT,False,3,3,19.279
+star,postgres,star_sel_20,RM2. Materialized SELECT DISTINCT,False,3,4,19.844
+star,postgres,star_sel_20,RM2. Materialized SELECT DISTINCT,False,3,5,20.576
+star,postgres,star_sel_20,RM2. Materialized SELECT DISTINCT,False,4,0,583.275
+star,postgres,star_sel_20,RM2. Materialized SELECT DISTINCT,False,4,1,55.096
+star,postgres,star_sel_20,RM2. Materialized SELECT DISTINCT,False,4,2,20.160
+star,postgres,star_sel_20,RM2. Materialized SELECT DISTINCT,False,4,3,19.658
+star,postgres,star_sel_20,RM2. Materialized SELECT DISTINCT,False,4,4,19.689
+star,postgres,star_sel_20,RM2. Materialized SELECT DISTINCT,False,4,5,19.786
+star,postgres,star_sel_20,RM3. Dynamic Subquery,False,0,0,529.571
+star,postgres,star_sel_20,RM3. Dynamic Subquery,False,0,1,134.061
+star,postgres,star_sel_20,RM3. Dynamic Subquery,False,0,2,48.058
+star,postgres,star_sel_20,RM3. Dynamic Subquery,False,0,3,46.479
+star,postgres,star_sel_20,RM3. Dynamic Subquery,False,0,4,47.677
+star,postgres,star_sel_20,RM3. Dynamic Subquery,False,1,0,529.499
+star,postgres,star_sel_20,RM3. Dynamic Subquery,False,1,1,133.516
+star,postgres,star_sel_20,RM3. Dynamic Subquery,False,1,2,46.958
+star,postgres,star_sel_20,RM3. Dynamic Subquery,False,1,3,46.913
+star,postgres,star_sel_20,RM3. Dynamic Subquery,False,1,4,47.325
+star,postgres,star_sel_20,RM3. Dynamic Subquery,False,2,0,530.104
+star,postgres,star_sel_20,RM3. Dynamic Subquery,False,2,1,133.938
+star,postgres,star_sel_20,RM3. Dynamic Subquery,False,2,2,46.861
+star,postgres,star_sel_20,RM3. Dynamic Subquery,False,2,3,46.844
+star,postgres,star_sel_20,RM3. Dynamic Subquery,False,2,4,52.288
+star,postgres,star_sel_20,RM3. Dynamic Subquery,False,3,0,528.600
+star,postgres,star_sel_20,RM3. Dynamic Subquery,False,3,1,132.581
+star,postgres,star_sel_20,RM3. Dynamic Subquery,False,3,2,48.109
+star,postgres,star_sel_20,RM3. Dynamic Subquery,False,3,3,46.637
+star,postgres,star_sel_20,RM3. Dynamic Subquery,False,3,4,51.235
+star,postgres,star_sel_20,RM3. Dynamic Subquery,False,4,0,528.063
+star,postgres,star_sel_20,RM3. Dynamic Subquery,False,4,1,134.917
+star,postgres,star_sel_20,RM3. Dynamic Subquery,False,4,2,48.471
+star,postgres,star_sel_20,RM3. Dynamic Subquery,False,4,3,46.716
+star,postgres,star_sel_20,RM3. Dynamic Subquery,False,4,4,46.836
+star,postgres,star_sel_20,RM4. Materialized Subquery,False,0,0,508.445
+star,postgres,star_sel_20,RM4. Materialized Subquery,False,0,1,100.371
+star,postgres,star_sel_20,RM4. Materialized Subquery,False,0,2,2.746
+star,postgres,star_sel_20,RM4. Materialized Subquery,False,0,3,2.481
+star,postgres,star_sel_20,RM4. Materialized Subquery,False,0,4,2.514
+star,postgres,star_sel_20,RM4. Materialized Subquery,False,0,5,2.589
+star,postgres,star_sel_20,RM4. Materialized Subquery,False,1,0,512.279
+star,postgres,star_sel_20,RM4. Materialized Subquery,False,1,1,102.623
+star,postgres,star_sel_20,RM4. Materialized Subquery,False,1,2,2.794
+star,postgres,star_sel_20,RM4. Materialized Subquery,False,1,3,2.540
+star,postgres,star_sel_20,RM4. Materialized Subquery,False,1,4,2.570
+star,postgres,star_sel_20,RM4. Materialized Subquery,False,1,5,2.644
+star,postgres,star_sel_20,RM4. Materialized Subquery,False,2,0,507.440
+star,postgres,star_sel_20,RM4. Materialized Subquery,False,2,1,100.373
+star,postgres,star_sel_20,RM4. Materialized Subquery,False,2,2,2.732
+star,postgres,star_sel_20,RM4. Materialized Subquery,False,2,3,2.485
+star,postgres,star_sel_20,RM4. Materialized Subquery,False,2,4,2.529
+star,postgres,star_sel_20,RM4. Materialized Subquery,False,2,5,2.590
+star,postgres,star_sel_20,RM4. Materialized Subquery,False,3,0,511.304
+star,postgres,star_sel_20,RM4. Materialized Subquery,False,3,1,102.961
+star,postgres,star_sel_20,RM4. Materialized Subquery,False,3,2,2.784
+star,postgres,star_sel_20,RM4. Materialized Subquery,False,3,3,2.499
+star,postgres,star_sel_20,RM4. Materialized Subquery,False,3,4,2.565
+star,postgres,star_sel_20,RM4. Materialized Subquery,False,3,5,2.619
+star,postgres,star_sel_20,RM4. Materialized Subquery,False,4,0,518.102
+star,postgres,star_sel_20,RM4. Materialized Subquery,False,4,1,100.657
+star,postgres,star_sel_20,RM4. Materialized Subquery,False,4,2,2.737
+star,postgres,star_sel_20,RM4. Materialized Subquery,False,4,3,2.521
+star,postgres,star_sel_20,RM4. Materialized Subquery,False,4,4,2.535
+star,postgres,star_sel_20,RM4. Materialized Subquery,False,4,5,2.581
+star,postgres,star_sel_20,0. Single Table,False,0,0,484.808
+star,postgres,star_sel_20,0. Single Table,False,1,0,485.556
+star,postgres,star_sel_20,0. Single Table,False,2,0,492.894
+star,postgres,star_sel_20,0. Single Table,False,3,0,485.578
+star,postgres,star_sel_20,0. Single Table,False,4,0,492.990
+star,postgres,star_sel_30,RM1. Dynamic SELECT DISTINCT,False,0,0,680.110
+star,postgres,star_sel_30,RM1. Dynamic SELECT DISTINCT,False,0,1,638.522
+star,postgres,star_sel_30,RM1. Dynamic SELECT DISTINCT,False,0,2,638.561
+star,postgres,star_sel_30,RM1. Dynamic SELECT DISTINCT,False,0,3,637.067
+star,postgres,star_sel_30,RM1. Dynamic SELECT DISTINCT,False,0,4,630.149
+star,postgres,star_sel_30,RM1. Dynamic SELECT DISTINCT,False,1,0,682.158
+star,postgres,star_sel_30,RM1. Dynamic SELECT DISTINCT,False,1,1,648.189
+star,postgres,star_sel_30,RM1. Dynamic SELECT DISTINCT,False,1,2,651.753
+star,postgres,star_sel_30,RM1. Dynamic SELECT DISTINCT,False,1,3,644.614
+star,postgres,star_sel_30,RM1. Dynamic SELECT DISTINCT,False,1,4,645.033
+star,postgres,star_sel_30,RM1. Dynamic SELECT DISTINCT,False,2,0,695.140
+star,postgres,star_sel_30,RM1. Dynamic SELECT DISTINCT,False,2,1,640.041
+star,postgres,star_sel_30,RM1. Dynamic SELECT DISTINCT,False,2,2,627.996
+star,postgres,star_sel_30,RM1. Dynamic SELECT DISTINCT,False,2,3,634.195
+star,postgres,star_sel_30,RM1. Dynamic SELECT DISTINCT,False,2,4,628.312
+star,postgres,star_sel_30,RM1. Dynamic SELECT DISTINCT,False,3,0,685.376
+star,postgres,star_sel_30,RM1. Dynamic SELECT DISTINCT,False,3,1,648.004
+star,postgres,star_sel_30,RM1. Dynamic SELECT DISTINCT,False,3,2,654.049
+star,postgres,star_sel_30,RM1. Dynamic SELECT DISTINCT,False,3,3,641.366
+star,postgres,star_sel_30,RM1. Dynamic SELECT DISTINCT,False,3,4,639.297
+star,postgres,star_sel_30,RM1. Dynamic SELECT DISTINCT,False,4,0,698.609
+star,postgres,star_sel_30,RM1. Dynamic SELECT DISTINCT,False,4,1,640.556
+star,postgres,star_sel_30,RM1. Dynamic SELECT DISTINCT,False,4,2,643.470
+star,postgres,star_sel_30,RM1. Dynamic SELECT DISTINCT,False,4,3,634.966
+star,postgres,star_sel_30,RM1. Dynamic SELECT DISTINCT,False,4,4,627.682
+star,postgres,star_sel_30,RM2. Materialized SELECT DISTINCT,False,0,0,787.127
+star,postgres,star_sel_30,RM2. Materialized SELECT DISTINCT,False,0,1,315.943
+star,postgres,star_sel_30,RM2. Materialized SELECT DISTINCT,False,0,2,108.523
+star,postgres,star_sel_30,RM2. Materialized SELECT DISTINCT,False,0,3,115.326
+star,postgres,star_sel_30,RM2. Materialized SELECT DISTINCT,False,0,4,114.512
+star,postgres,star_sel_30,RM2. Materialized SELECT DISTINCT,False,0,5,125.182
+star,postgres,star_sel_30,RM2. Materialized SELECT DISTINCT,False,1,0,1271.119
+star,postgres,star_sel_30,RM2. Materialized SELECT DISTINCT,False,1,1,303.139
+star,postgres,star_sel_30,RM2. Materialized SELECT DISTINCT,False,1,2,107.476
+star,postgres,star_sel_30,RM2. Materialized SELECT DISTINCT,False,1,3,110.414
+star,postgres,star_sel_30,RM2. Materialized SELECT DISTINCT,False,1,4,111.661
+star,postgres,star_sel_30,RM2. Materialized SELECT DISTINCT,False,1,5,122.527
+star,postgres,star_sel_30,RM2. Materialized SELECT DISTINCT,False,2,0,863.680
+star,postgres,star_sel_30,RM2. Materialized SELECT DISTINCT,False,2,1,315.744
+star,postgres,star_sel_30,RM2. Materialized SELECT DISTINCT,False,2,2,106.107
+star,postgres,star_sel_30,RM2. Materialized SELECT DISTINCT,False,2,3,109.359
+star,postgres,star_sel_30,RM2. Materialized SELECT DISTINCT,False,2,4,111.602
+star,postgres,star_sel_30,RM2. Materialized SELECT DISTINCT,False,2,5,128.887
+star,postgres,star_sel_30,RM2. Materialized SELECT DISTINCT,False,3,0,849.438
+star,postgres,star_sel_30,RM2. Materialized SELECT DISTINCT,False,3,1,306.228
+star,postgres,star_sel_30,RM2. Materialized SELECT DISTINCT,False,3,2,105.303
+star,postgres,star_sel_30,RM2. Materialized SELECT DISTINCT,False,3,3,109.147
+star,postgres,star_sel_30,RM2. Materialized SELECT DISTINCT,False,3,4,115.499
+star,postgres,star_sel_30,RM2. Materialized SELECT DISTINCT,False,3,5,122.475
+star,postgres,star_sel_30,RM2. Materialized SELECT DISTINCT,False,4,0,744.459
+star,postgres,star_sel_30,RM2. Materialized SELECT DISTINCT,False,4,1,314.663
+star,postgres,star_sel_30,RM2. Materialized SELECT DISTINCT,False,4,2,109.462
+star,postgres,star_sel_30,RM2. Materialized SELECT DISTINCT,False,4,3,114.637
+star,postgres,star_sel_30,RM2. Materialized SELECT DISTINCT,False,4,4,115.476
+star,postgres,star_sel_30,RM2. Materialized SELECT DISTINCT,False,4,5,126.804
+star,postgres,star_sel_30,RM3. Dynamic Subquery,False,0,0,686.250
+star,postgres,star_sel_30,RM3. Dynamic Subquery,False,0,1,216.588
+star,postgres,star_sel_30,RM3. Dynamic Subquery,False,0,2,46.683
+star,postgres,star_sel_30,RM3. Dynamic Subquery,False,0,3,46.680
+star,postgres,star_sel_30,RM3. Dynamic Subquery,False,0,4,48.553
+star,postgres,star_sel_30,RM3. Dynamic Subquery,False,1,0,695.391
+star,postgres,star_sel_30,RM3. Dynamic Subquery,False,1,1,217.648
+star,postgres,star_sel_30,RM3. Dynamic Subquery,False,1,2,48.059
+star,postgres,star_sel_30,RM3. Dynamic Subquery,False,1,3,47.568
+star,postgres,star_sel_30,RM3. Dynamic Subquery,False,1,4,47.298
+star,postgres,star_sel_30,RM3. Dynamic Subquery,False,2,0,695.060
+star,postgres,star_sel_30,RM3. Dynamic Subquery,False,2,1,218.436
+star,postgres,star_sel_30,RM3. Dynamic Subquery,False,2,2,45.124
+star,postgres,star_sel_30,RM3. Dynamic Subquery,False,2,3,46.803
+star,postgres,star_sel_30,RM3. Dynamic Subquery,False,2,4,46.682
+star,postgres,star_sel_30,RM3. Dynamic Subquery,False,3,0,690.182
+star,postgres,star_sel_30,RM3. Dynamic Subquery,False,3,1,219.785
+star,postgres,star_sel_30,RM3. Dynamic Subquery,False,3,2,48.752
+star,postgres,star_sel_30,RM3. Dynamic Subquery,False,3,3,47.503
+star,postgres,star_sel_30,RM3. Dynamic Subquery,False,3,4,52.112
+star,postgres,star_sel_30,RM3. Dynamic Subquery,False,4,0,690.538
+star,postgres,star_sel_30,RM3. Dynamic Subquery,False,4,1,214.960
+star,postgres,star_sel_30,RM3. Dynamic Subquery,False,4,2,45.318
+star,postgres,star_sel_30,RM3. Dynamic Subquery,False,4,3,48.880
+star,postgres,star_sel_30,RM3. Dynamic Subquery,False,4,4,47.189
+star,postgres,star_sel_30,RM4. Materialized Subquery,False,0,0,622.767
+star,postgres,star_sel_30,RM4. Materialized Subquery,False,0,1,631.653
+star,postgres,star_sel_30,RM4. Materialized Subquery,False,0,2,12.424
+star,postgres,star_sel_30,RM4. Materialized Subquery,False,0,3,12.271
+star,postgres,star_sel_30,RM4. Materialized Subquery,False,0,4,12.446
+star,postgres,star_sel_30,RM4. Materialized Subquery,False,0,5,12.803
+star,postgres,star_sel_30,RM4. Materialized Subquery,False,1,0,625.259
+star,postgres,star_sel_30,RM4. Materialized Subquery,False,1,1,608.799
+star,postgres,star_sel_30,RM4. Materialized Subquery,False,1,2,12.053
+star,postgres,star_sel_30,RM4. Materialized Subquery,False,1,3,11.964
+star,postgres,star_sel_30,RM4. Materialized Subquery,False,1,4,12.157
+star,postgres,star_sel_30,RM4. Materialized Subquery,False,1,5,12.572
+star,postgres,star_sel_30,RM4. Materialized Subquery,False,2,0,605.680
+star,postgres,star_sel_30,RM4. Materialized Subquery,False,2,1,629.339
+star,postgres,star_sel_30,RM4. Materialized Subquery,False,2,2,12.091
+star,postgres,star_sel_30,RM4. Materialized Subquery,False,2,3,11.849
+star,postgres,star_sel_30,RM4. Materialized Subquery,False,2,4,12.376
+star,postgres,star_sel_30,RM4. Materialized Subquery,False,2,5,12.606
+star,postgres,star_sel_30,RM4. Materialized Subquery,False,3,0,610.387
+star,postgres,star_sel_30,RM4. Materialized Subquery,False,3,1,608.672
+star,postgres,star_sel_30,RM4. Materialized Subquery,False,3,2,12.169
+star,postgres,star_sel_30,RM4. Materialized Subquery,False,3,3,11.920
+star,postgres,star_sel_30,RM4. Materialized Subquery,False,3,4,12.262
+star,postgres,star_sel_30,RM4. Materialized Subquery,False,3,5,12.671
+star,postgres,star_sel_30,RM4. Materialized Subquery,False,4,0,604.937
+star,postgres,star_sel_30,RM4. Materialized Subquery,False,4,1,635.191
+star,postgres,star_sel_30,RM4. Materialized Subquery,False,4,2,12.045
+star,postgres,star_sel_30,RM4. Materialized Subquery,False,4,3,12.110
+star,postgres,star_sel_30,RM4. Materialized Subquery,False,4,4,12.218
+star,postgres,star_sel_30,RM4. Materialized Subquery,False,4,5,12.702
+star,postgres,star_sel_30,0. Single Table,False,0,0,554.539
+star,postgres,star_sel_30,0. Single Table,False,1,0,562.837
+star,postgres,star_sel_30,0. Single Table,False,2,0,557.085
+star,postgres,star_sel_30,0. Single Table,False,3,0,557.892
+star,postgres,star_sel_30,0. Single Table,False,4,0,556.190
+star,postgres,star_sel_40,RM1. Dynamic SELECT DISTINCT,False,0,0,984.880
+star,postgres,star_sel_40,RM1. Dynamic SELECT DISTINCT,False,0,1,923.170
+star,postgres,star_sel_40,RM1. Dynamic SELECT DISTINCT,False,0,2,933.947
+star,postgres,star_sel_40,RM1. Dynamic SELECT DISTINCT,False,0,3,941.881
+star,postgres,star_sel_40,RM1. Dynamic SELECT DISTINCT,False,0,4,954.707
+star,postgres,star_sel_40,RM1. Dynamic SELECT DISTINCT,False,1,0,997.064
+star,postgres,star_sel_40,RM1. Dynamic SELECT DISTINCT,False,1,1,908.336
+star,postgres,star_sel_40,RM1. Dynamic SELECT DISTINCT,False,1,2,936.849
+star,postgres,star_sel_40,RM1. Dynamic SELECT DISTINCT,False,1,3,926.747
+star,postgres,star_sel_40,RM1. Dynamic SELECT DISTINCT,False,1,4,933.912
+star,postgres,star_sel_40,RM1. Dynamic SELECT DISTINCT,False,2,0,992.557
+star,postgres,star_sel_40,RM1. Dynamic SELECT DISTINCT,False,2,1,931.284
+star,postgres,star_sel_40,RM1. Dynamic SELECT DISTINCT,False,2,2,956.863
+star,postgres,star_sel_40,RM1. Dynamic SELECT DISTINCT,False,2,3,945.279
+star,postgres,star_sel_40,RM1. Dynamic SELECT DISTINCT,False,2,4,959.597
+star,postgres,star_sel_40,RM1. Dynamic SELECT DISTINCT,False,3,0,989.415
+star,postgres,star_sel_40,RM1. Dynamic SELECT DISTINCT,False,3,1,908.122
+star,postgres,star_sel_40,RM1. Dynamic SELECT DISTINCT,False,3,2,940.550
+star,postgres,star_sel_40,RM1. Dynamic SELECT DISTINCT,False,3,3,927.019
+star,postgres,star_sel_40,RM1. Dynamic SELECT DISTINCT,False,3,4,933.632
+star,postgres,star_sel_40,RM1. Dynamic SELECT DISTINCT,False,4,0,985.703
+star,postgres,star_sel_40,RM1. Dynamic SELECT DISTINCT,False,4,1,919.285
+star,postgres,star_sel_40,RM1. Dynamic SELECT DISTINCT,False,4,2,943.606
+star,postgres,star_sel_40,RM1. Dynamic SELECT DISTINCT,False,4,3,935.855
+star,postgres,star_sel_40,RM1. Dynamic SELECT DISTINCT,False,4,4,932.541
+star,postgres,star_sel_40,RM2. Materialized SELECT DISTINCT,False,0,0,1675.901
+star,postgres,star_sel_40,RM2. Materialized SELECT DISTINCT,False,0,1,1066.572
+star,postgres,star_sel_40,RM2. Materialized SELECT DISTINCT,False,0,2,342.376
+star,postgres,star_sel_40,RM2. Materialized SELECT DISTINCT,False,0,3,379.473
+star,postgres,star_sel_40,RM2. Materialized SELECT DISTINCT,False,0,4,361.715
+star,postgres,star_sel_40,RM2. Materialized SELECT DISTINCT,False,0,5,426.001
+star,postgres,star_sel_40,RM2. Materialized SELECT DISTINCT,False,1,0,1552.717
+star,postgres,star_sel_40,RM2. Materialized SELECT DISTINCT,False,1,1,1075.394
+star,postgres,star_sel_40,RM2. Materialized SELECT DISTINCT,False,1,2,348.521
+star,postgres,star_sel_40,RM2. Materialized SELECT DISTINCT,False,1,3,396.147
+star,postgres,star_sel_40,RM2. Materialized SELECT DISTINCT,False,1,4,397.468
+star,postgres,star_sel_40,RM2. Materialized SELECT DISTINCT,False,1,5,449.613
+star,postgres,star_sel_40,RM2. Materialized SELECT DISTINCT,False,2,0,1540.879
+star,postgres,star_sel_40,RM2. Materialized SELECT DISTINCT,False,2,1,1065.006
+star,postgres,star_sel_40,RM2. Materialized SELECT DISTINCT,False,2,2,338.042
+star,postgres,star_sel_40,RM2. Materialized SELECT DISTINCT,False,2,3,375.878
+star,postgres,star_sel_40,RM2. Materialized SELECT DISTINCT,False,2,4,373.993
+star,postgres,star_sel_40,RM2. Materialized SELECT DISTINCT,False,2,5,419.528
+star,postgres,star_sel_40,RM2. Materialized SELECT DISTINCT,False,3,0,2021.486
+star,postgres,star_sel_40,RM2. Materialized SELECT DISTINCT,False,3,1,1079.511
+star,postgres,star_sel_40,RM2. Materialized SELECT DISTINCT,False,3,2,348.260
+star,postgres,star_sel_40,RM2. Materialized SELECT DISTINCT,False,3,3,386.087
+star,postgres,star_sel_40,RM2. Materialized SELECT DISTINCT,False,3,4,378.290
+star,postgres,star_sel_40,RM2. Materialized SELECT DISTINCT,False,3,5,438.497
+star,postgres,star_sel_40,RM2. Materialized SELECT DISTINCT,False,4,0,2083.950
+star,postgres,star_sel_40,RM2. Materialized SELECT DISTINCT,False,4,1,1047.772
+star,postgres,star_sel_40,RM2. Materialized SELECT DISTINCT,False,4,2,343.905
+star,postgres,star_sel_40,RM2. Materialized SELECT DISTINCT,False,4,3,371.296
+star,postgres,star_sel_40,RM2. Materialized SELECT DISTINCT,False,4,4,367.726
+star,postgres,star_sel_40,RM2. Materialized SELECT DISTINCT,False,4,5,429.257
+star,postgres,star_sel_40,RM3. Dynamic Subquery,False,0,0,993.031
+star,postgres,star_sel_40,RM3. Dynamic Subquery,False,0,1,412.097
+star,postgres,star_sel_40,RM3. Dynamic Subquery,False,0,2,46.323
+star,postgres,star_sel_40,RM3. Dynamic Subquery,False,0,3,47.069
+star,postgres,star_sel_40,RM3. Dynamic Subquery,False,0,4,49.964
+star,postgres,star_sel_40,RM3. Dynamic Subquery,False,1,0,983.230
+star,postgres,star_sel_40,RM3. Dynamic Subquery,False,1,1,411.522
+star,postgres,star_sel_40,RM3. Dynamic Subquery,False,1,2,48.203
+star,postgres,star_sel_40,RM3. Dynamic Subquery,False,1,3,48.317
+star,postgres,star_sel_40,RM3. Dynamic Subquery,False,1,4,47.110
+star,postgres,star_sel_40,RM3. Dynamic Subquery,False,2,0,983.426
+star,postgres,star_sel_40,RM3. Dynamic Subquery,False,2,1,414.013
+star,postgres,star_sel_40,RM3. Dynamic Subquery,False,2,2,48.187
+star,postgres,star_sel_40,RM3. Dynamic Subquery,False,2,3,46.239
+star,postgres,star_sel_40,RM3. Dynamic Subquery,False,2,4,46.370
+star,postgres,star_sel_40,RM3. Dynamic Subquery,False,3,0,987.563
+star,postgres,star_sel_40,RM3. Dynamic Subquery,False,3,1,414.666
+star,postgres,star_sel_40,RM3. Dynamic Subquery,False,3,2,46.393
+star,postgres,star_sel_40,RM3. Dynamic Subquery,False,3,3,46.624
+star,postgres,star_sel_40,RM3. Dynamic Subquery,False,3,4,53.105
+star,postgres,star_sel_40,RM3. Dynamic Subquery,False,4,0,985.512
+star,postgres,star_sel_40,RM3. Dynamic Subquery,False,4,1,394.348
+star,postgres,star_sel_40,RM3. Dynamic Subquery,False,4,2,47.312
+star,postgres,star_sel_40,RM3. Dynamic Subquery,False,4,3,45.649
+star,postgres,star_sel_40,RM3. Dynamic Subquery,False,4,4,45.953
+star,postgres,star_sel_40,RM4. Materialized Subquery,False,0,0,1208.766
+star,postgres,star_sel_40,RM4. Materialized Subquery,False,0,1,2233.068
+star,postgres,star_sel_40,RM4. Materialized Subquery,False,0,2,37.738
+star,postgres,star_sel_40,RM4. Materialized Subquery,False,0,3,38.011
+star,postgres,star_sel_40,RM4. Materialized Subquery,False,0,4,39.283
+star,postgres,star_sel_40,RM4. Materialized Subquery,False,0,5,40.039
+star,postgres,star_sel_40,RM4. Materialized Subquery,False,1,0,1139.726
+star,postgres,star_sel_40,RM4. Materialized Subquery,False,1,1,2349.372
+star,postgres,star_sel_40,RM4. Materialized Subquery,False,1,2,38.206
+star,postgres,star_sel_40,RM4. Materialized Subquery,False,1,3,38.391
+star,postgres,star_sel_40,RM4. Materialized Subquery,False,1,4,38.740
+star,postgres,star_sel_40,RM4. Materialized Subquery,False,1,5,39.618
+star,postgres,star_sel_40,RM4. Materialized Subquery,False,2,0,1168.216
+star,postgres,star_sel_40,RM4. Materialized Subquery,False,2,1,2245.665
+star,postgres,star_sel_40,RM4. Materialized Subquery,False,2,2,37.050
+star,postgres,star_sel_40,RM4. Materialized Subquery,False,2,3,37.662
+star,postgres,star_sel_40,RM4. Materialized Subquery,False,2,4,38.599
+star,postgres,star_sel_40,RM4. Materialized Subquery,False,2,5,39.469
+star,postgres,star_sel_40,RM4. Materialized Subquery,False,3,0,1039.511
+star,postgres,star_sel_40,RM4. Materialized Subquery,False,3,1,2307.426
+star,postgres,star_sel_40,RM4. Materialized Subquery,False,3,2,37.464
+star,postgres,star_sel_40,RM4. Materialized Subquery,False,3,3,37.854
+star,postgres,star_sel_40,RM4. Materialized Subquery,False,3,4,38.562
+star,postgres,star_sel_40,RM4. Materialized Subquery,False,3,5,39.846
+star,postgres,star_sel_40,RM4. Materialized Subquery,False,4,0,989.428
+star,postgres,star_sel_40,RM4. Materialized Subquery,False,4,1,2250.030
+star,postgres,star_sel_40,RM4. Materialized Subquery,False,4,2,37.430
+star,postgres,star_sel_40,RM4. Materialized Subquery,False,4,3,37.958
+star,postgres,star_sel_40,RM4. Materialized Subquery,False,4,4,38.766
+star,postgres,star_sel_40,RM4. Materialized Subquery,False,4,5,39.890
+star,postgres,star_sel_40,0. Single Table,False,0,0,653.241
+star,postgres,star_sel_40,0. Single Table,False,1,0,642.349
+star,postgres,star_sel_40,0. Single Table,False,2,0,647.390
+star,postgres,star_sel_40,0. Single Table,False,3,0,648.955
+star,postgres,star_sel_40,0. Single Table,False,4,0,640.551
+star,postgres,star_sel_50,RM1. Dynamic SELECT DISTINCT,False,0,0,1520.864
+star,postgres,star_sel_50,RM1. Dynamic SELECT DISTINCT,False,0,1,1380.270
+star,postgres,star_sel_50,RM1. Dynamic SELECT DISTINCT,False,0,2,1504.776
+star,postgres,star_sel_50,RM1. Dynamic SELECT DISTINCT,False,0,3,1476.169
+star,postgres,star_sel_50,RM1. Dynamic SELECT DISTINCT,False,0,4,1525.555
+star,postgres,star_sel_50,RM1. Dynamic SELECT DISTINCT,False,1,0,1543.257
+star,postgres,star_sel_50,RM1. Dynamic SELECT DISTINCT,False,1,1,1395.253
+star,postgres,star_sel_50,RM1. Dynamic SELECT DISTINCT,False,1,2,1500.649
+star,postgres,star_sel_50,RM1. Dynamic SELECT DISTINCT,False,1,3,1491.039
+star,postgres,star_sel_50,RM1. Dynamic SELECT DISTINCT,False,1,4,1518.607
+star,postgres,star_sel_50,RM1. Dynamic SELECT DISTINCT,False,2,0,1519.464
+star,postgres,star_sel_50,RM1. Dynamic SELECT DISTINCT,False,2,1,1415.116
+star,postgres,star_sel_50,RM1. Dynamic SELECT DISTINCT,False,2,2,1503.397
+star,postgres,star_sel_50,RM1. Dynamic SELECT DISTINCT,False,2,3,1482.042
+star,postgres,star_sel_50,RM1. Dynamic SELECT DISTINCT,False,2,4,1535.268
+star,postgres,star_sel_50,RM1. Dynamic SELECT DISTINCT,False,3,0,1546.066
+star,postgres,star_sel_50,RM1. Dynamic SELECT DISTINCT,False,3,1,1393.118
+star,postgres,star_sel_50,RM1. Dynamic SELECT DISTINCT,False,3,2,1523.788
+star,postgres,star_sel_50,RM1. Dynamic SELECT DISTINCT,False,3,3,1467.611
+star,postgres,star_sel_50,RM1. Dynamic SELECT DISTINCT,False,3,4,1513.313
+star,postgres,star_sel_50,RM1. Dynamic SELECT DISTINCT,False,4,0,1521.267
+star,postgres,star_sel_50,RM1. Dynamic SELECT DISTINCT,False,4,1,1393.258
+star,postgres,star_sel_50,RM1. Dynamic SELECT DISTINCT,False,4,2,1508.780
+star,postgres,star_sel_50,RM1. Dynamic SELECT DISTINCT,False,4,3,1473.076
+star,postgres,star_sel_50,RM1. Dynamic SELECT DISTINCT,False,4,4,1553.468
+star,postgres,star_sel_50,RM2. Materialized SELECT DISTINCT,False,0,0,4642.556
+star,postgres,star_sel_50,RM2. Materialized SELECT DISTINCT,False,0,1,2794.184
+star,postgres,star_sel_50,RM2. Materialized SELECT DISTINCT,False,0,2,863.612
+star,postgres,star_sel_50,RM2. Materialized SELECT DISTINCT,False,0,3,929.975
+star,postgres,star_sel_50,RM2. Materialized SELECT DISTINCT,False,0,4,964.761
+star,postgres,star_sel_50,RM2. Materialized SELECT DISTINCT,False,0,5,1120.031
+star,postgres,star_sel_50,RM2. Materialized SELECT DISTINCT,False,1,0,5101.072
+star,postgres,star_sel_50,RM2. Materialized SELECT DISTINCT,False,1,1,2784.701
+star,postgres,star_sel_50,RM2. Materialized SELECT DISTINCT,False,1,2,842.645
+star,postgres,star_sel_50,RM2. Materialized SELECT DISTINCT,False,1,3,883.883
+star,postgres,star_sel_50,RM2. Materialized SELECT DISTINCT,False,1,4,921.131
+star,postgres,star_sel_50,RM2. Materialized SELECT DISTINCT,False,1,5,1115.310
+star,postgres,star_sel_50,RM2. Materialized SELECT DISTINCT,False,2,0,7540.807
+star,postgres,star_sel_50,RM2. Materialized SELECT DISTINCT,False,2,1,2799.777
+star,postgres,star_sel_50,RM2. Materialized SELECT DISTINCT,False,2,2,859.963
+star,postgres,star_sel_50,RM2. Materialized SELECT DISTINCT,False,2,3,891.704
+star,postgres,star_sel_50,RM2. Materialized SELECT DISTINCT,False,2,4,936.691
+star,postgres,star_sel_50,RM2. Materialized SELECT DISTINCT,False,2,5,1136.596
+star,postgres,star_sel_50,RM2. Materialized SELECT DISTINCT,False,3,0,5577.437
+star,postgres,star_sel_50,RM2. Materialized SELECT DISTINCT,False,3,1,2779.876
+star,postgres,star_sel_50,RM2. Materialized SELECT DISTINCT,False,3,2,849.437
+star,postgres,star_sel_50,RM2. Materialized SELECT DISTINCT,False,3,3,887.006
+star,postgres,star_sel_50,RM2. Materialized SELECT DISTINCT,False,3,4,907.623
+star,postgres,star_sel_50,RM2. Materialized SELECT DISTINCT,False,3,5,1107.077
+star,postgres,star_sel_50,RM2. Materialized SELECT DISTINCT,False,4,0,4817.691
+star,postgres,star_sel_50,RM2. Materialized SELECT DISTINCT,False,4,1,2722.153
+star,postgres,star_sel_50,RM2. Materialized SELECT DISTINCT,False,4,2,856.265
+star,postgres,star_sel_50,RM2. Materialized SELECT DISTINCT,False,4,3,928.685
+star,postgres,star_sel_50,RM2. Materialized SELECT DISTINCT,False,4,4,988.174
+star,postgres,star_sel_50,RM2. Materialized SELECT DISTINCT,False,4,5,1129.731
+star,postgres,star_sel_50,RM3. Dynamic Subquery,False,0,0,1520.651
+star,postgres,star_sel_50,RM3. Dynamic Subquery,False,0,1,14889.082
+star,postgres,star_sel_50,RM3. Dynamic Subquery,False,0,2,266.647
+star,postgres,star_sel_50,RM3. Dynamic Subquery,False,0,3,18.623
+star,postgres,star_sel_50,RM3. Dynamic Subquery,False,0,4,12.855
+star,postgres,star_sel_50,RM3. Dynamic Subquery,False,1,0,1534.460
+star,postgres,star_sel_50,RM3. Dynamic Subquery,False,1,1,15041.155
+star,postgres,star_sel_50,RM3. Dynamic Subquery,False,1,2,269.455
+star,postgres,star_sel_50,RM3. Dynamic Subquery,False,1,3,18.675
+star,postgres,star_sel_50,RM3. Dynamic Subquery,False,1,4,12.934
+star,postgres,star_sel_50,RM3. Dynamic Subquery,False,2,0,1533.090
+star,postgres,star_sel_50,RM3. Dynamic Subquery,False,2,1,14882.528
+star,postgres,star_sel_50,RM3. Dynamic Subquery,False,2,2,265.895
+star,postgres,star_sel_50,RM3. Dynamic Subquery,False,2,3,18.652
+star,postgres,star_sel_50,RM3. Dynamic Subquery,False,2,4,12.726
+star,postgres,star_sel_50,RM3. Dynamic Subquery,False,3,0,1520.017
+star,postgres,star_sel_50,RM3. Dynamic Subquery,False,3,1,14730.890
+star,postgres,star_sel_50,RM3. Dynamic Subquery,False,3,2,262.731
+star,postgres,star_sel_50,RM3. Dynamic Subquery,False,3,3,18.386
+star,postgres,star_sel_50,RM3. Dynamic Subquery,False,3,4,12.612
+star,postgres,star_sel_50,RM3. Dynamic Subquery,False,4,0,1538.005
+star,postgres,star_sel_50,RM3. Dynamic Subquery,False,4,1,14946.259
+star,postgres,star_sel_50,RM3. Dynamic Subquery,False,4,2,270.253
+star,postgres,star_sel_50,RM3. Dynamic Subquery,False,4,3,18.848
+star,postgres,star_sel_50,RM3. Dynamic Subquery,False,4,4,12.843
+star,postgres,star_sel_50,RM4. Materialized Subquery,False,0,0,2231.310
+star,postgres,star_sel_50,RM4. Materialized Subquery,False,0,1,6115.174
+star,postgres,star_sel_50,RM4. Materialized Subquery,False,0,2,90.740
+star,postgres,star_sel_50,RM4. Materialized Subquery,False,0,3,91.760
+star,postgres,star_sel_50,RM4. Materialized Subquery,False,0,4,94.370
+star,postgres,star_sel_50,RM4. Materialized Subquery,False,0,5,96.366
+star,postgres,star_sel_50,RM4. Materialized Subquery,False,1,0,2183.412
+star,postgres,star_sel_50,RM4. Materialized Subquery,False,1,1,6352.526
+star,postgres,star_sel_50,RM4. Materialized Subquery,False,1,2,93.855
+star,postgres,star_sel_50,RM4. Materialized Subquery,False,1,3,91.381
+star,postgres,star_sel_50,RM4. Materialized Subquery,False,1,4,96.872
+star,postgres,star_sel_50,RM4. Materialized Subquery,False,1,5,98.426
+star,postgres,star_sel_50,RM4. Materialized Subquery,False,2,0,2125.157
+star,postgres,star_sel_50,RM4. Materialized Subquery,False,2,1,6074.167
+star,postgres,star_sel_50,RM4. Materialized Subquery,False,2,2,87.577
+star,postgres,star_sel_50,RM4. Materialized Subquery,False,2,3,90.638
+star,postgres,star_sel_50,RM4. Materialized Subquery,False,2,4,91.999
+star,postgres,star_sel_50,RM4. Materialized Subquery,False,2,5,96.408
+star,postgres,star_sel_50,RM4. Materialized Subquery,False,3,0,2328.907
+star,postgres,star_sel_50,RM4. Materialized Subquery,False,3,1,6230.825
+star,postgres,star_sel_50,RM4. Materialized Subquery,False,3,2,93.393
+star,postgres,star_sel_50,RM4. Materialized Subquery,False,3,3,92.946
+star,postgres,star_sel_50,RM4. Materialized Subquery,False,3,4,95.985
+star,postgres,star_sel_50,RM4. Materialized Subquery,False,3,5,98.741
+star,postgres,star_sel_50,RM4. Materialized Subquery,False,4,0,2112.581
+star,postgres,star_sel_50,RM4. Materialized Subquery,False,4,1,6036.510
+star,postgres,star_sel_50,RM4. Materialized Subquery,False,4,2,90.454
+star,postgres,star_sel_50,RM4. Materialized Subquery,False,4,3,89.339
+star,postgres,star_sel_50,RM4. Materialized Subquery,False,4,4,92.988
+star,postgres,star_sel_50,RM4. Materialized Subquery,False,4,5,95.561
+star,postgres,star_sel_50,0. Single Table,False,0,0,764.916
+star,postgres,star_sel_50,0. Single Table,False,1,0,758.603
+star,postgres,star_sel_50,0. Single Table,False,2,0,759.145
+star,postgres,star_sel_50,0. Single Table,False,3,0,761.658
+star,postgres,star_sel_50,0. Single Table,False,4,0,759.931
+star,postgres,star_sel_60,RM1. Dynamic SELECT DISTINCT,False,0,0,2429.700
+star,postgres,star_sel_60,RM1. Dynamic SELECT DISTINCT,False,0,1,2188.675
+star,postgres,star_sel_60,RM1. Dynamic SELECT DISTINCT,False,0,2,2402.579
+star,postgres,star_sel_60,RM1. Dynamic SELECT DISTINCT,False,0,3,2396.822
+star,postgres,star_sel_60,RM1. Dynamic SELECT DISTINCT,False,0,4,2539.714
+star,postgres,star_sel_60,RM1. Dynamic SELECT DISTINCT,False,1,0,2408.456
+star,postgres,star_sel_60,RM1. Dynamic SELECT DISTINCT,False,1,1,2212.478
+star,postgres,star_sel_60,RM1. Dynamic SELECT DISTINCT,False,1,2,2445.011
+star,postgres,star_sel_60,RM1. Dynamic SELECT DISTINCT,False,1,3,2400.316
+star,postgres,star_sel_60,RM1. Dynamic SELECT DISTINCT,False,1,4,2515.723
+star,postgres,star_sel_60,RM1. Dynamic SELECT DISTINCT,False,2,0,2444.574
+star,postgres,star_sel_60,RM1. Dynamic SELECT DISTINCT,False,2,1,2173.070
+star,postgres,star_sel_60,RM1. Dynamic SELECT DISTINCT,False,2,2,2409.575
+star,postgres,star_sel_60,RM1. Dynamic SELECT DISTINCT,False,2,3,2420.504
+star,postgres,star_sel_60,RM1. Dynamic SELECT DISTINCT,False,2,4,2533.577
+star,postgres,star_sel_60,RM1. Dynamic SELECT DISTINCT,False,3,0,2440.268
+star,postgres,star_sel_60,RM1. Dynamic SELECT DISTINCT,False,3,1,2206.252
+star,postgres,star_sel_60,RM1. Dynamic SELECT DISTINCT,False,3,2,2416.031
+star,postgres,star_sel_60,RM1. Dynamic SELECT DISTINCT,False,3,3,2444.627
+star,postgres,star_sel_60,RM1. Dynamic SELECT DISTINCT,False,3,4,2528.483
+star,postgres,star_sel_60,RM1. Dynamic SELECT DISTINCT,False,4,0,2400.884
+star,postgres,star_sel_60,RM1. Dynamic SELECT DISTINCT,False,4,1,2166.732
+star,postgres,star_sel_60,RM1. Dynamic SELECT DISTINCT,False,4,2,2391.208
+star,postgres,star_sel_60,RM1. Dynamic SELECT DISTINCT,False,4,3,2399.900
+star,postgres,star_sel_60,RM1. Dynamic SELECT DISTINCT,False,4,4,2517.854
+star,postgres,star_sel_60,RM2. Materialized SELECT DISTINCT,False,0,0,11543.844
+star,postgres,star_sel_60,RM2. Materialized SELECT DISTINCT,False,0,1,1525.679
+star,postgres,star_sel_60,RM2. Materialized SELECT DISTINCT,False,0,2,1210.325
+star,postgres,star_sel_60,RM2. Materialized SELECT DISTINCT,False,0,3,2120.187
+star,postgres,star_sel_60,RM2. Materialized SELECT DISTINCT,False,0,4,2318.835
+star,postgres,star_sel_60,RM2. Materialized SELECT DISTINCT,False,0,5,2854.398
+star,postgres,star_sel_60,RM2. Materialized SELECT DISTINCT,False,1,0,13338.182
+star,postgres,star_sel_60,RM2. Materialized SELECT DISTINCT,False,1,1,1494.152
+star,postgres,star_sel_60,RM2. Materialized SELECT DISTINCT,False,1,2,1197.495
+star,postgres,star_sel_60,RM2. Materialized SELECT DISTINCT,False,1,3,2087.065
+star,postgres,star_sel_60,RM2. Materialized SELECT DISTINCT,False,1,4,2252.876
+star,postgres,star_sel_60,RM2. Materialized SELECT DISTINCT,False,1,5,2766.133
+star,postgres,star_sel_60,RM2. Materialized SELECT DISTINCT,False,2,0,18907.528
+star,postgres,star_sel_60,RM2. Materialized SELECT DISTINCT,False,2,1,1557.017
+star,postgres,star_sel_60,RM2. Materialized SELECT DISTINCT,False,2,2,1229.495
+star,postgres,star_sel_60,RM2. Materialized SELECT DISTINCT,False,2,3,2137.259
+star,postgres,star_sel_60,RM2. Materialized SELECT DISTINCT,False,2,4,2319.590
+star,postgres,star_sel_60,RM2. Materialized SELECT DISTINCT,False,2,5,2837.880
+star,postgres,star_sel_60,RM2. Materialized SELECT DISTINCT,False,3,0,12635.740
+star,postgres,star_sel_60,RM2. Materialized SELECT DISTINCT,False,3,1,1509.517
+star,postgres,star_sel_60,RM2. Materialized SELECT DISTINCT,False,3,2,1236.693
+star,postgres,star_sel_60,RM2. Materialized SELECT DISTINCT,False,3,3,2114.260
+star,postgres,star_sel_60,RM2. Materialized SELECT DISTINCT,False,3,4,2303.555
+star,postgres,star_sel_60,RM2. Materialized SELECT DISTINCT,False,3,5,2834.942
+star,postgres,star_sel_60,RM2. Materialized SELECT DISTINCT,False,4,0,17901.388
+star,postgres,star_sel_60,RM2. Materialized SELECT DISTINCT,False,4,1,1538.433
+star,postgres,star_sel_60,RM2. Materialized SELECT DISTINCT,False,4,2,1220.411
+star,postgres,star_sel_60,RM2. Materialized SELECT DISTINCT,False,4,3,2138.466
+star,postgres,star_sel_60,RM2. Materialized SELECT DISTINCT,False,4,4,2339.109
+star,postgres,star_sel_60,RM2. Materialized SELECT DISTINCT,False,4,5,2863.139
+star,postgres,star_sel_60,RM3. Dynamic Subquery,False,0,0,2407.293
+star,postgres,star_sel_60,RM3. Dynamic Subquery,False,0,1,25069.157
+star,postgres,star_sel_60,RM3. Dynamic Subquery,False,0,2,435.310
+star,postgres,star_sel_60,RM3. Dynamic Subquery,False,0,3,21.919
+star,postgres,star_sel_60,RM3. Dynamic Subquery,False,0,4,12.831
+star,postgres,star_sel_60,RM3. Dynamic Subquery,False,1,0,2439.311
+star,postgres,star_sel_60,RM3. Dynamic Subquery,False,1,1,24801.755
+star,postgres,star_sel_60,RM3. Dynamic Subquery,False,1,2,440.943
+star,postgres,star_sel_60,RM3. Dynamic Subquery,False,1,3,22.314
+star,postgres,star_sel_60,RM3. Dynamic Subquery,False,1,4,13.101
+star,postgres,star_sel_60,RM3. Dynamic Subquery,False,2,0,2417.880
+star,postgres,star_sel_60,RM3. Dynamic Subquery,False,2,1,24782.419
+star,postgres,star_sel_60,RM3. Dynamic Subquery,False,2,2,434.450
+star,postgres,star_sel_60,RM3. Dynamic Subquery,False,2,3,21.723
+star,postgres,star_sel_60,RM3. Dynamic Subquery,False,2,4,12.721
+star,postgres,star_sel_60,RM3. Dynamic Subquery,False,3,0,2417.524
+star,postgres,star_sel_60,RM3. Dynamic Subquery,False,3,1,25296.660
+star,postgres,star_sel_60,RM3. Dynamic Subquery,False,3,2,443.627
+star,postgres,star_sel_60,RM3. Dynamic Subquery,False,3,3,22.271
+star,postgres,star_sel_60,RM3. Dynamic Subquery,False,3,4,13.066
+star,postgres,star_sel_60,RM3. Dynamic Subquery,False,4,0,2438.011
+star,postgres,star_sel_60,RM3. Dynamic Subquery,False,4,1,25427.063
+star,postgres,star_sel_60,RM3. Dynamic Subquery,False,4,2,445.085
+star,postgres,star_sel_60,RM3. Dynamic Subquery,False,4,3,22.248
+star,postgres,star_sel_60,RM3. Dynamic Subquery,False,4,4,13.001
+star,postgres,star_sel_60,RM4. Materialized Subquery,False,0,0,5678.305
+star,postgres,star_sel_60,RM4. Materialized Subquery,False,0,1,14185.262
+star,postgres,star_sel_60,RM4. Materialized Subquery,False,0,2,192.556
+star,postgres,star_sel_60,RM4. Materialized Subquery,False,0,3,196.779
+star,postgres,star_sel_60,RM4. Materialized Subquery,False,0,4,200.358
+star,postgres,star_sel_60,RM4. Materialized Subquery,False,0,5,217.568
+star,postgres,star_sel_60,RM4. Materialized Subquery,False,1,0,6009.548
+star,postgres,star_sel_60,RM4. Materialized Subquery,False,1,1,14433.533
+star,postgres,star_sel_60,RM4. Materialized Subquery,False,1,2,185.405
+star,postgres,star_sel_60,RM4. Materialized Subquery,False,1,3,189.911
+star,postgres,star_sel_60,RM4. Materialized Subquery,False,1,4,193.985
+star,postgres,star_sel_60,RM4. Materialized Subquery,False,1,5,196.762
+star,postgres,star_sel_60,RM4. Materialized Subquery,False,2,0,6000.308
+star,postgres,star_sel_60,RM4. Materialized Subquery,False,2,1,14118.423
+star,postgres,star_sel_60,RM4. Materialized Subquery,False,2,2,185.262
+star,postgres,star_sel_60,RM4. Materialized Subquery,False,2,3,189.283
+star,postgres,star_sel_60,RM4. Materialized Subquery,False,2,4,194.387
+star,postgres,star_sel_60,RM4. Materialized Subquery,False,2,5,195.395
+star,postgres,star_sel_60,RM4. Materialized Subquery,False,3,0,5525.391
+star,postgres,star_sel_60,RM4. Materialized Subquery,False,3,1,14552.465
+star,postgres,star_sel_60,RM4. Materialized Subquery,False,3,2,199.246
+star,postgres,star_sel_60,RM4. Materialized Subquery,False,3,3,203.349
+star,postgres,star_sel_60,RM4. Materialized Subquery,False,3,4,201.069
+star,postgres,star_sel_60,RM4. Materialized Subquery,False,3,5,221.513
+star,postgres,star_sel_60,RM4. Materialized Subquery,False,4,0,5706.355
+star,postgres,star_sel_60,RM4. Materialized Subquery,False,4,1,14420.233
+star,postgres,star_sel_60,RM4. Materialized Subquery,False,4,2,187.143
+star,postgres,star_sel_60,RM4. Materialized Subquery,False,4,3,189.473
+star,postgres,star_sel_60,RM4. Materialized Subquery,False,4,4,187.912
+star,postgres,star_sel_60,RM4. Materialized Subquery,False,4,5,198.623
+star,postgres,star_sel_60,0. Single Table,False,0,0,906.140
+star,postgres,star_sel_60,0. Single Table,False,1,0,903.578
+star,postgres,star_sel_60,0. Single Table,False,2,0,898.919
+star,postgres,star_sel_60,0. Single Table,False,3,0,900.308
+star,postgres,star_sel_60,0. Single Table,False,4,0,926.375
+star,postgres,star_sel_70,RM1. Dynamic SELECT DISTINCT,False,0,0,4838.587
+star,postgres,star_sel_70,RM1. Dynamic SELECT DISTINCT,False,0,1,4513.536
+star,postgres,star_sel_70,RM1. Dynamic SELECT DISTINCT,False,0,2,6281.955
+star,postgres,star_sel_70,RM1. Dynamic SELECT DISTINCT,False,0,3,6103.262
+star,postgres,star_sel_70,RM1. Dynamic SELECT DISTINCT,False,0,4,7421.324
+star,postgres,star_sel_70,RM1. Dynamic SELECT DISTINCT,False,1,0,4898.742
+star,postgres,star_sel_70,RM1. Dynamic SELECT DISTINCT,False,1,1,4541.241
+star,postgres,star_sel_70,RM1. Dynamic SELECT DISTINCT,False,1,2,6392.206
+star,postgres,star_sel_70,RM1. Dynamic SELECT DISTINCT,False,1,3,6246.840
+star,postgres,star_sel_70,RM1. Dynamic SELECT DISTINCT,False,1,4,7619.499
+star,postgres,star_sel_70,RM1. Dynamic SELECT DISTINCT,False,2,0,4796.580
+star,postgres,star_sel_70,RM1. Dynamic SELECT DISTINCT,False,2,1,4520.517
+star,postgres,star_sel_70,RM1. Dynamic SELECT DISTINCT,False,2,2,6265.829
+star,postgres,star_sel_70,RM1. Dynamic SELECT DISTINCT,False,2,3,6155.307
+star,postgres,star_sel_70,RM1. Dynamic SELECT DISTINCT,False,2,4,7387.486
+star,postgres,star_sel_70,RM1. Dynamic SELECT DISTINCT,False,3,0,4855.422
+star,postgres,star_sel_70,RM1. Dynamic SELECT DISTINCT,False,3,1,4492.640
+star,postgres,star_sel_70,RM1. Dynamic SELECT DISTINCT,False,3,2,6366.506
+star,postgres,star_sel_70,RM1. Dynamic SELECT DISTINCT,False,3,3,6154.480
+star,postgres,star_sel_70,RM1. Dynamic SELECT DISTINCT,False,3,4,7480.927
+star,postgres,star_sel_70,RM1. Dynamic SELECT DISTINCT,False,4,0,4796.153
+star,postgres,star_sel_70,RM1. Dynamic SELECT DISTINCT,False,4,1,4501.027
+star,postgres,star_sel_70,RM1. Dynamic SELECT DISTINCT,False,4,2,6396.923
+star,postgres,star_sel_70,RM1. Dynamic SELECT DISTINCT,False,4,3,6099.580
+star,postgres,star_sel_70,RM1. Dynamic SELECT DISTINCT,False,4,4,7403.709
+star,postgres,star_sel_70,RM2. Materialized SELECT DISTINCT,False,0,0,21248.464
+star,postgres,star_sel_70,RM2. Materialized SELECT DISTINCT,False,0,1,2911.464
+star,postgres,star_sel_70,RM2. Materialized SELECT DISTINCT,False,0,2,2254.772
+star,postgres,star_sel_70,RM2. Materialized SELECT DISTINCT,False,0,3,4152.110
+star,postgres,star_sel_70,RM2. Materialized SELECT DISTINCT,False,0,4,4081.970
+star,postgres,star_sel_70,RM2. Materialized SELECT DISTINCT,False,0,5,5416.480
+star,postgres,star_sel_70,RM2. Materialized SELECT DISTINCT,False,1,0,27026.126
+star,postgres,star_sel_70,RM2. Materialized SELECT DISTINCT,False,1,1,2790.044
+star,postgres,star_sel_70,RM2. Materialized SELECT DISTINCT,False,1,2,2223.283
+star,postgres,star_sel_70,RM2. Materialized SELECT DISTINCT,False,1,3,4089.973
+star,postgres,star_sel_70,RM2. Materialized SELECT DISTINCT,False,1,4,4051.615
+star,postgres,star_sel_70,RM2. Materialized SELECT DISTINCT,False,1,5,5304.561
+star,postgres,star_sel_70,RM2. Materialized SELECT DISTINCT,False,2,0,28262.986
+star,postgres,star_sel_70,RM2. Materialized SELECT DISTINCT,False,2,1,2858.219
+star,postgres,star_sel_70,RM2. Materialized SELECT DISTINCT,False,2,2,2236.612
+star,postgres,star_sel_70,RM2. Materialized SELECT DISTINCT,False,2,3,4069.574
+star,postgres,star_sel_70,RM2. Materialized SELECT DISTINCT,False,2,4,4038.944
+star,postgres,star_sel_70,RM2. Materialized SELECT DISTINCT,False,2,5,5334.097
+star,postgres,star_sel_70,RM2. Materialized SELECT DISTINCT,False,3,0,25226.234
+star,postgres,star_sel_70,RM2. Materialized SELECT DISTINCT,False,3,1,2778.536
+star,postgres,star_sel_70,RM2. Materialized SELECT DISTINCT,False,3,2,2233.869
+star,postgres,star_sel_70,RM2. Materialized SELECT DISTINCT,False,3,3,4054.101
+star,postgres,star_sel_70,RM2. Materialized SELECT DISTINCT,False,3,4,4002.145
+star,postgres,star_sel_70,RM2. Materialized SELECT DISTINCT,False,3,5,5368.421
+star,postgres,star_sel_70,RM2. Materialized SELECT DISTINCT,False,4,0,34937.513
+star,postgres,star_sel_70,RM2. Materialized SELECT DISTINCT,False,4,1,2856.250
+star,postgres,star_sel_70,RM2. Materialized SELECT DISTINCT,False,4,2,2291.460
+star,postgres,star_sel_70,RM2. Materialized SELECT DISTINCT,False,4,3,4109.905
+star,postgres,star_sel_70,RM2. Materialized SELECT DISTINCT,False,4,4,4062.431
+star,postgres,star_sel_70,RM2. Materialized SELECT DISTINCT,False,4,5,5390.163
+star,postgres,star_sel_70,RM3. Dynamic Subquery,False,0,0,4832.116
+star,postgres,star_sel_70,RM3. Dynamic Subquery,False,0,1,39795.938
+star,postgres,star_sel_70,RM3. Dynamic Subquery,False,0,2,698.531
+star,postgres,star_sel_70,RM3. Dynamic Subquery,False,0,3,26.534
+star,postgres,star_sel_70,RM3. Dynamic Subquery,False,0,4,13.083
+star,postgres,star_sel_70,RM3. Dynamic Subquery,False,1,0,4801.311
+star,postgres,star_sel_70,RM3. Dynamic Subquery,False,1,1,39536.634
+star,postgres,star_sel_70,RM3. Dynamic Subquery,False,1,2,683.799
+star,postgres,star_sel_70,RM3. Dynamic Subquery,False,1,3,26.289
+star,postgres,star_sel_70,RM3. Dynamic Subquery,False,1,4,12.912
+star,postgres,star_sel_70,RM3. Dynamic Subquery,False,2,0,4934.474
+star,postgres,star_sel_70,RM3. Dynamic Subquery,False,2,1,40647.648
+star,postgres,star_sel_70,RM3. Dynamic Subquery,False,2,2,702.043
+star,postgres,star_sel_70,RM3. Dynamic Subquery,False,2,3,26.740
+star,postgres,star_sel_70,RM3. Dynamic Subquery,False,2,4,13.266
+star,postgres,star_sel_70,RM3. Dynamic Subquery,False,3,0,4809.145
+star,postgres,star_sel_70,RM3. Dynamic Subquery,False,3,1,39454.816
+star,postgres,star_sel_70,RM3. Dynamic Subquery,False,3,2,683.199
+star,postgres,star_sel_70,RM3. Dynamic Subquery,False,3,3,26.113
+star,postgres,star_sel_70,RM3. Dynamic Subquery,False,3,4,12.920
+star,postgres,star_sel_70,RM3. Dynamic Subquery,False,4,0,4905.831
+star,postgres,star_sel_70,RM3. Dynamic Subquery,False,4,1,40556.653
+star,postgres,star_sel_70,RM3. Dynamic Subquery,False,4,2,702.308
+star,postgres,star_sel_70,RM3. Dynamic Subquery,False,4,3,26.854
+star,postgres,star_sel_70,RM3. Dynamic Subquery,False,4,4,13.214
+star,postgres,star_sel_70,RM4. Materialized Subquery,False,0,0,9993.566
+star,postgres,star_sel_70,RM4. Materialized Subquery,False,0,1,27532.901
+star,postgres,star_sel_70,RM4. Materialized Subquery,False,0,2,355.004
+star,postgres,star_sel_70,RM4. Materialized Subquery,False,0,3,364.444
+star,postgres,star_sel_70,RM4. Materialized Subquery,False,0,4,366.918
+star,postgres,star_sel_70,RM4. Materialized Subquery,False,0,5,408.259
+star,postgres,star_sel_70,RM4. Materialized Subquery,False,1,0,10019.192
+star,postgres,star_sel_70,RM4. Materialized Subquery,False,1,1,27839.979
+star,postgres,star_sel_70,RM4. Materialized Subquery,False,1,2,348.395
+star,postgres,star_sel_70,RM4. Materialized Subquery,False,1,3,353.549
+star,postgres,star_sel_70,RM4. Materialized Subquery,False,1,4,366.009
+star,postgres,star_sel_70,RM4. Materialized Subquery,False,1,5,379.948
+star,postgres,star_sel_70,RM4. Materialized Subquery,False,2,0,9075.169
+star,postgres,star_sel_70,RM4. Materialized Subquery,False,2,1,27651.673
+star,postgres,star_sel_70,RM4. Materialized Subquery,False,2,2,344.581
+star,postgres,star_sel_70,RM4. Materialized Subquery,False,2,3,351.458
+star,postgres,star_sel_70,RM4. Materialized Subquery,False,2,4,357.302
+star,postgres,star_sel_70,RM4. Materialized Subquery,False,2,5,372.044
+star,postgres,star_sel_70,RM4. Materialized Subquery,False,3,0,10380.776
+star,postgres,star_sel_70,RM4. Materialized Subquery,False,3,1,27727.520
+star,postgres,star_sel_70,RM4. Materialized Subquery,False,3,2,359.113
+star,postgres,star_sel_70,RM4. Materialized Subquery,False,3,3,368.448
+star,postgres,star_sel_70,RM4. Materialized Subquery,False,3,4,371.534
+star,postgres,star_sel_70,RM4. Materialized Subquery,False,3,5,414.479
+star,postgres,star_sel_70,RM4. Materialized Subquery,False,4,0,9729.918
+star,postgres,star_sel_70,RM4. Materialized Subquery,False,4,1,27507.703
+star,postgres,star_sel_70,RM4. Materialized Subquery,False,4,2,338.620
+star,postgres,star_sel_70,RM4. Materialized Subquery,False,4,3,348.256
+star,postgres,star_sel_70,RM4. Materialized Subquery,False,4,4,357.606
+star,postgres,star_sel_70,RM4. Materialized Subquery,False,4,5,362.550
+star,postgres,star_sel_70,0. Single Table,False,0,0,1085.491
+star,postgres,star_sel_70,0. Single Table,False,1,0,1079.416
+star,postgres,star_sel_70,0. Single Table,False,2,0,1084.127
+star,postgres,star_sel_70,0. Single Table,False,3,0,1116.021
+star,postgres,star_sel_70,0. Single Table,False,4,0,1086.902
+star,postgres,star_sel_80,RM1. Dynamic SELECT DISTINCT,False,0,0,6684.177
+star,postgres,star_sel_80,RM1. Dynamic SELECT DISTINCT,False,0,1,6293.014
+star,postgres,star_sel_80,RM1. Dynamic SELECT DISTINCT,False,0,2,9602.552
+star,postgres,star_sel_80,RM1. Dynamic SELECT DISTINCT,False,0,3,9943.309
+star,postgres,star_sel_80,RM1. Dynamic SELECT DISTINCT,False,0,4,11666.576
+star,postgres,star_sel_80,RM1. Dynamic SELECT DISTINCT,False,1,0,6849.747
+star,postgres,star_sel_80,RM1. Dynamic SELECT DISTINCT,False,1,1,6385.142
+star,postgres,star_sel_80,RM1. Dynamic SELECT DISTINCT,False,1,2,9765.125
+star,postgres,star_sel_80,RM1. Dynamic SELECT DISTINCT,False,1,3,10277.062
+star,postgres,star_sel_80,RM1. Dynamic SELECT DISTINCT,False,1,4,11932.751
+star,postgres,star_sel_80,RM1. Dynamic SELECT DISTINCT,False,2,0,6717.006
+star,postgres,star_sel_80,RM1. Dynamic SELECT DISTINCT,False,2,1,6273.007
+star,postgres,star_sel_80,RM1. Dynamic SELECT DISTINCT,False,2,2,9563.263
+star,postgres,star_sel_80,RM1. Dynamic SELECT DISTINCT,False,2,3,9995.154
+star,postgres,star_sel_80,RM1. Dynamic SELECT DISTINCT,False,2,4,11563.712
+star,postgres,star_sel_80,RM1. Dynamic SELECT DISTINCT,False,3,0,6827.815
+star,postgres,star_sel_80,RM1. Dynamic SELECT DISTINCT,False,3,1,6468.152
+star,postgres,star_sel_80,RM1. Dynamic SELECT DISTINCT,False,3,2,9955.539
+star,postgres,star_sel_80,RM1. Dynamic SELECT DISTINCT,False,3,3,10219.025
+star,postgres,star_sel_80,RM1. Dynamic SELECT DISTINCT,False,3,4,11891.528
+star,postgres,star_sel_80,RM1. Dynamic SELECT DISTINCT,False,4,0,6710.220
+star,postgres,star_sel_80,RM1. Dynamic SELECT DISTINCT,False,4,1,6241.063
+star,postgres,star_sel_80,RM1. Dynamic SELECT DISTINCT,False,4,2,9662.924
+star,postgres,star_sel_80,RM1. Dynamic SELECT DISTINCT,False,4,3,10040.447
+star,postgres,star_sel_80,RM1. Dynamic SELECT DISTINCT,False,4,4,11690.624
+star,postgres,star_sel_80,RM2. Materialized SELECT DISTINCT,False,0,0,56129.402
+star,postgres,star_sel_80,RM2. Materialized SELECT DISTINCT,False,0,1,4955.779
+star,postgres,star_sel_80,RM2. Materialized SELECT DISTINCT,False,0,2,3822.326
+star,postgres,star_sel_80,RM2. Materialized SELECT DISTINCT,False,0,3,7419.990
+star,postgres,star_sel_80,RM2. Materialized SELECT DISTINCT,False,0,4,7940.158
+star,postgres,star_sel_80,RM2. Materialized SELECT DISTINCT,False,0,5,9106.011
+star,postgres,star_sel_80,RM2. Materialized SELECT DISTINCT,False,1,0,63632.984
+star,postgres,star_sel_80,RM2. Materialized SELECT DISTINCT,False,1,1,4756.222
+star,postgres,star_sel_80,RM2. Materialized SELECT DISTINCT,False,1,2,3816.120
+star,postgres,star_sel_80,RM2. Materialized SELECT DISTINCT,False,1,3,7213.054
+star,postgres,star_sel_80,RM2. Materialized SELECT DISTINCT,False,1,4,7742.753
+star,postgres,star_sel_80,RM2. Materialized SELECT DISTINCT,False,1,5,9413.916
+star,postgres,star_sel_80,RM2. Materialized SELECT DISTINCT,False,2,0,53565.126
+star,postgres,star_sel_80,RM2. Materialized SELECT DISTINCT,False,2,1,4866.453
+star,postgres,star_sel_80,RM2. Materialized SELECT DISTINCT,False,2,2,3859.861
+star,postgres,star_sel_80,RM2. Materialized SELECT DISTINCT,False,2,3,7433.558
+star,postgres,star_sel_80,RM2. Materialized SELECT DISTINCT,False,2,4,7895.679
+star,postgres,star_sel_80,RM2. Materialized SELECT DISTINCT,False,2,5,9095.935
+star,postgres,star_sel_80,RM2. Materialized SELECT DISTINCT,False,3,0,54368.773
+star,postgres,star_sel_80,RM2. Materialized SELECT DISTINCT,False,3,1,4750.952
+star,postgres,star_sel_80,RM2. Materialized SELECT DISTINCT,False,3,2,3807.254
+star,postgres,star_sel_80,RM2. Materialized SELECT DISTINCT,False,3,3,7221.236
+star,postgres,star_sel_80,RM2. Materialized SELECT DISTINCT,False,3,4,7733.822
+star,postgres,star_sel_80,RM2. Materialized SELECT DISTINCT,False,3,5,9443.692
+star,postgres,star_sel_80,RM2. Materialized SELECT DISTINCT,False,4,0,61045.269
+star,postgres,star_sel_80,RM2. Materialized SELECT DISTINCT,False,4,1,4875.636
+star,postgres,star_sel_80,RM2. Materialized SELECT DISTINCT,False,4,2,3905.425
+star,postgres,star_sel_80,RM2. Materialized SELECT DISTINCT,False,4,3,7539.302
+star,postgres,star_sel_80,RM2. Materialized SELECT DISTINCT,False,4,4,7577.964
+star,postgres,star_sel_80,RM2. Materialized SELECT DISTINCT,False,4,5,9032.496
+star,postgres,star_sel_80,RM3. Dynamic Subquery,False,0,0,6750.927
+star,postgres,star_sel_80,RM3. Dynamic Subquery,False,0,1,60917.680
+star,postgres,star_sel_80,RM3. Dynamic Subquery,False,0,2,1024.731
+star,postgres,star_sel_80,RM3. Dynamic Subquery,False,0,3,31.888
+star,postgres,star_sel_80,RM3. Dynamic Subquery,False,0,4,12.998
+star,postgres,star_sel_80,RM3. Dynamic Subquery,False,1,0,6893.253
+star,postgres,star_sel_80,RM3. Dynamic Subquery,False,1,1,62025.220
+star,postgres,star_sel_80,RM3. Dynamic Subquery,False,1,2,1050.914
+star,postgres,star_sel_80,RM3. Dynamic Subquery,False,1,3,32.705
+star,postgres,star_sel_80,RM3. Dynamic Subquery,False,1,4,13.325
+star,postgres,star_sel_80,RM3. Dynamic Subquery,False,2,0,6747.248
+star,postgres,star_sel_80,RM3. Dynamic Subquery,False,2,1,60280.973
+star,postgres,star_sel_80,RM3. Dynamic Subquery,False,2,2,1028.498
+star,postgres,star_sel_80,RM3. Dynamic Subquery,False,2,3,31.921
+star,postgres,star_sel_80,RM3. Dynamic Subquery,False,2,4,13.010
+star,postgres,star_sel_80,RM3. Dynamic Subquery,False,3,0,6808.185
+star,postgres,star_sel_80,RM3. Dynamic Subquery,False,3,1,62088.852
+star,postgres,star_sel_80,RM3. Dynamic Subquery,False,3,2,1065.700
+star,postgres,star_sel_80,RM3. Dynamic Subquery,False,3,3,33.122
+star,postgres,star_sel_80,RM3. Dynamic Subquery,False,3,4,13.628
+star,postgres,star_sel_80,RM3. Dynamic Subquery,False,4,0,6728.077
+star,postgres,star_sel_80,RM3. Dynamic Subquery,False,4,1,60274.564
+star,postgres,star_sel_80,RM3. Dynamic Subquery,False,4,2,1026.538
+star,postgres,star_sel_80,RM3. Dynamic Subquery,False,4,3,32.126
+star,postgres,star_sel_80,RM3. Dynamic Subquery,False,4,4,12.998
+star,postgres,star_sel_80,RM4. Materialized Subquery,False,0,0,16267.377
+star,postgres,star_sel_80,RM4. Materialized Subquery,False,0,1,48921.624
+star,postgres,star_sel_80,RM4. Materialized Subquery,False,0,2,581.670
+star,postgres,star_sel_80,RM4. Materialized Subquery,False,0,3,644.988
+star,postgres,star_sel_80,RM4. Materialized Subquery,False,0,4,652.968
+star,postgres,star_sel_80,RM4. Materialized Subquery,False,0,5,760.034
+star,postgres,star_sel_80,RM4. Materialized Subquery,False,1,0,20436.721
+star,postgres,star_sel_80,RM4. Materialized Subquery,False,1,1,48469.434
+star,postgres,star_sel_80,RM4. Materialized Subquery,False,1,2,570.297
+star,postgres,star_sel_80,RM4. Materialized Subquery,False,1,3,614.270
+star,postgres,star_sel_80,RM4. Materialized Subquery,False,1,4,631.212
+star,postgres,star_sel_80,RM4. Materialized Subquery,False,1,5,723.540
+star,postgres,star_sel_80,RM4. Materialized Subquery,False,2,0,15501.544
+star,postgres,star_sel_80,RM4. Materialized Subquery,False,2,1,48812.297
+star,postgres,star_sel_80,RM4. Materialized Subquery,False,2,2,566.307
+star,postgres,star_sel_80,RM4. Materialized Subquery,False,2,3,603.441
+star,postgres,star_sel_80,RM4. Materialized Subquery,False,2,4,640.495
+star,postgres,star_sel_80,RM4. Materialized Subquery,False,2,5,751.049
+star,postgres,star_sel_80,RM4. Materialized Subquery,False,3,0,16182.154
+star,postgres,star_sel_80,RM4. Materialized Subquery,False,3,1,48634.462
+star,postgres,star_sel_80,RM4. Materialized Subquery,False,3,2,564.501
+star,postgres,star_sel_80,RM4. Materialized Subquery,False,3,3,603.854
+star,postgres,star_sel_80,RM4. Materialized Subquery,False,3,4,630.034
+star,postgres,star_sel_80,RM4. Materialized Subquery,False,3,5,741.409
+star,postgres,star_sel_80,RM4. Materialized Subquery,False,4,0,18815.758
+star,postgres,star_sel_80,RM4. Materialized Subquery,False,4,1,48715.878
+star,postgres,star_sel_80,RM4. Materialized Subquery,False,4,2,567.426
+star,postgres,star_sel_80,RM4. Materialized Subquery,False,4,3,627.184
+star,postgres,star_sel_80,RM4. Materialized Subquery,False,4,4,648.552
+star,postgres,star_sel_80,RM4. Materialized Subquery,False,4,5,772.775
+star,postgres,star_sel_80,0. Single Table,False,0,0,1288.270
+star,postgres,star_sel_80,0. Single Table,False,1,0,1295.785
+star,postgres,star_sel_80,0. Single Table,False,2,0,1295.796
+star,postgres,star_sel_80,0. Single Table,False,3,0,1294.192
+star,postgres,star_sel_80,0. Single Table,False,4,0,1356.322
+star,postgres,star_sel_90,RM1. Dynamic SELECT DISTINCT,False,0,0,12766.080
+star,postgres,star_sel_90,RM1. Dynamic SELECT DISTINCT,False,0,1,8905.744
+star,postgres,star_sel_90,RM1. Dynamic SELECT DISTINCT,False,0,2,13808.090
+star,postgres,star_sel_90,RM1. Dynamic SELECT DISTINCT,False,0,3,13861.610
+star,postgres,star_sel_90,RM1. Dynamic SELECT DISTINCT,False,0,4,17974.092
+star,postgres,star_sel_90,RM1. Dynamic SELECT DISTINCT,False,1,0,12557.735
+star,postgres,star_sel_90,RM1. Dynamic SELECT DISTINCT,False,1,1,8766.378
+star,postgres,star_sel_90,RM1. Dynamic SELECT DISTINCT,False,1,2,13763.913
+star,postgres,star_sel_90,RM1. Dynamic SELECT DISTINCT,False,1,3,13678.084
+star,postgres,star_sel_90,RM1. Dynamic SELECT DISTINCT,False,1,4,17494.510
+star,postgres,star_sel_90,RM1. Dynamic SELECT DISTINCT,False,2,0,12753.702
+star,postgres,star_sel_90,RM1. Dynamic SELECT DISTINCT,False,2,1,8765.986
+star,postgres,star_sel_90,RM1. Dynamic SELECT DISTINCT,False,2,2,13601.200
+star,postgres,star_sel_90,RM1. Dynamic SELECT DISTINCT,False,2,3,13625.686
+star,postgres,star_sel_90,RM1. Dynamic SELECT DISTINCT,False,2,4,17428.549
+star,postgres,star_sel_90,RM1. Dynamic SELECT DISTINCT,False,3,0,12861.220
+star,postgres,star_sel_90,RM1. Dynamic SELECT DISTINCT,False,3,1,9025.851
+star,postgres,star_sel_90,RM1. Dynamic SELECT DISTINCT,False,3,2,13983.407
+star,postgres,star_sel_90,RM1. Dynamic SELECT DISTINCT,False,3,3,13763.552
+star,postgres,star_sel_90,RM1. Dynamic SELECT DISTINCT,False,3,4,17565.111
+star,postgres,star_sel_90,RM1. Dynamic SELECT DISTINCT,False,4,0,12467.944
+star,postgres,star_sel_90,RM1. Dynamic SELECT DISTINCT,False,4,1,8685.944
+star,postgres,star_sel_90,RM1. Dynamic SELECT DISTINCT,False,4,2,13575.524
+star,postgres,star_sel_90,RM1. Dynamic SELECT DISTINCT,False,4,3,13631.305
+star,postgres,star_sel_90,RM1. Dynamic SELECT DISTINCT,False,4,4,17339.086
+star,postgres,star_sel_90,RM2. Materialized SELECT DISTINCT,False,0,0,106707.298
+star,postgres,star_sel_90,RM2. Materialized SELECT DISTINCT,False,0,1,10572.251
+star,postgres,star_sel_90,RM2. Materialized SELECT DISTINCT,False,0,2,5699.847
+star,postgres,star_sel_90,RM2. Materialized SELECT DISTINCT,False,0,3,10494.056
+star,postgres,star_sel_90,RM2. Materialized SELECT DISTINCT,False,0,4,10773.885
+star,postgres,star_sel_90,RM2. Materialized SELECT DISTINCT,False,0,5,14359.324
+star,postgres,star_sel_90,RM2. Materialized SELECT DISTINCT,False,1,0,100167.586
+star,postgres,star_sel_90,RM2. Materialized SELECT DISTINCT,False,1,1,10307.423
+star,postgres,star_sel_90,RM2. Materialized SELECT DISTINCT,False,1,2,5681.031
+star,postgres,star_sel_90,RM2. Materialized SELECT DISTINCT,False,1,3,10517.550
+star,postgres,star_sel_90,RM2. Materialized SELECT DISTINCT,False,1,4,10761.663
+star,postgres,star_sel_90,RM2. Materialized SELECT DISTINCT,False,1,5,14235.670
+star,postgres,star_sel_90,RM2. Materialized SELECT DISTINCT,False,2,0,99196.469
+star,postgres,star_sel_90,RM2. Materialized SELECT DISTINCT,False,2,1,10096.116
+star,postgres,star_sel_90,RM2. Materialized SELECT DISTINCT,False,2,2,5537.892
+star,postgres,star_sel_90,RM2. Materialized SELECT DISTINCT,False,2,3,10444.546
+star,postgres,star_sel_90,RM2. Materialized SELECT DISTINCT,False,2,4,10394.802
+star,postgres,star_sel_90,RM2. Materialized SELECT DISTINCT,False,2,5,14331.354
+star,postgres,star_sel_90,RM2. Materialized SELECT DISTINCT,False,3,0,108580.240
+star,postgres,star_sel_90,RM2. Materialized SELECT DISTINCT,False,3,1,10273.527
+star,postgres,star_sel_90,RM2. Materialized SELECT DISTINCT,False,3,2,5633.504
+star,postgres,star_sel_90,RM2. Materialized SELECT DISTINCT,False,3,3,10561.171
+star,postgres,star_sel_90,RM2. Materialized SELECT DISTINCT,False,3,4,10638.144
+star,postgres,star_sel_90,RM2. Materialized SELECT DISTINCT,False,3,5,14118.779
+star,postgres,star_sel_90,RM2. Materialized SELECT DISTINCT,False,4,0,99613.064
+star,postgres,star_sel_90,RM2. Materialized SELECT DISTINCT,False,4,1,10254.173
+star,postgres,star_sel_90,RM2. Materialized SELECT DISTINCT,False,4,2,5714.564
+star,postgres,star_sel_90,RM2. Materialized SELECT DISTINCT,False,4,3,10603.471
+star,postgres,star_sel_90,RM2. Materialized SELECT DISTINCT,False,4,4,10787.311
+star,postgres,star_sel_90,RM2. Materialized SELECT DISTINCT,False,4,5,14512.839
+star,postgres,star_sel_90,RM3. Dynamic Subquery,False,0,0,12745.779
+star,postgres,star_sel_90,RM3. Dynamic Subquery,False,0,1,90931.811
+star,postgres,star_sel_90,RM3. Dynamic Subquery,False,0,2,1536.181
+star,postgres,star_sel_90,RM3. Dynamic Subquery,False,0,3,39.961
+star,postgres,star_sel_90,RM3. Dynamic Subquery,False,0,4,13.464
+star,postgres,star_sel_90,RM3. Dynamic Subquery,False,1,0,13069.861
+star,postgres,star_sel_90,RM3. Dynamic Subquery,False,1,1,90029.128
+star,postgres,star_sel_90,RM3. Dynamic Subquery,False,1,2,1530.443
+star,postgres,star_sel_90,RM3. Dynamic Subquery,False,1,3,40.459
+star,postgres,star_sel_90,RM3. Dynamic Subquery,False,1,4,13.631
+star,postgres,star_sel_90,RM3. Dynamic Subquery,False,2,0,12757.285
+star,postgres,star_sel_90,RM3. Dynamic Subquery,False,2,1,90418.812
+star,postgres,star_sel_90,RM3. Dynamic Subquery,False,2,2,1511.730
+star,postgres,star_sel_90,RM3. Dynamic Subquery,False,2,3,39.710
+star,postgres,star_sel_90,RM3. Dynamic Subquery,False,2,4,13.246
+star,postgres,star_sel_90,RM3. Dynamic Subquery,False,3,0,12943.548
+star,postgres,star_sel_90,RM3. Dynamic Subquery,False,3,1,91279.960
+star,postgres,star_sel_90,RM3. Dynamic Subquery,False,3,2,1511.916
+star,postgres,star_sel_90,RM3. Dynamic Subquery,False,3,3,40.471
+star,postgres,star_sel_90,RM3. Dynamic Subquery,False,3,4,13.500
+star,postgres,star_sel_90,RM3. Dynamic Subquery,False,4,0,12773.074
+star,postgres,star_sel_90,RM3. Dynamic Subquery,False,4,1,91271.177
+star,postgres,star_sel_90,RM3. Dynamic Subquery,False,4,2,1515.870
+star,postgres,star_sel_90,RM3. Dynamic Subquery,False,4,3,40.364
+star,postgres,star_sel_90,RM3. Dynamic Subquery,False,4,4,13.528
+star,postgres,star_sel_90,RM4. Materialized Subquery,False,0,0,28740.272
+star,postgres,star_sel_90,RM4. Materialized Subquery,False,0,1,82062.110
+star,postgres,star_sel_90,RM4. Materialized Subquery,False,0,2,899.050
+star,postgres,star_sel_90,RM4. Materialized Subquery,False,0,3,1012.629
+star,postgres,star_sel_90,RM4. Materialized Subquery,False,0,4,1033.360
+star,postgres,star_sel_90,RM4. Materialized Subquery,False,0,5,1174.792
+star,postgres,star_sel_90,RM4. Materialized Subquery,False,1,0,34834.846
+star,postgres,star_sel_90,RM4. Materialized Subquery,False,1,1,81741.817
+star,postgres,star_sel_90,RM4. Materialized Subquery,False,1,2,906.870
+star,postgres,star_sel_90,RM4. Materialized Subquery,False,1,3,979.674
+star,postgres,star_sel_90,RM4. Materialized Subquery,False,1,4,1022.592
+star,postgres,star_sel_90,RM4. Materialized Subquery,False,1,5,1203.203
+star,postgres,star_sel_90,RM4. Materialized Subquery,False,2,0,34848.529
+star,postgres,star_sel_90,RM4. Materialized Subquery,False,2,1,81165.840
+star,postgres,star_sel_90,RM4. Materialized Subquery,False,2,2,941.182
+star,postgres,star_sel_90,RM4. Materialized Subquery,False,2,3,1003.349
+star,postgres,star_sel_90,RM4. Materialized Subquery,False,2,4,1047.060
+star,postgres,star_sel_90,RM4. Materialized Subquery,False,2,5,1242.758
+star,postgres,star_sel_90,RM4. Materialized Subquery,False,3,0,34440.291
+star,postgres,star_sel_90,RM4. Materialized Subquery,False,3,1,82866.932
+star,postgres,star_sel_90,RM4. Materialized Subquery,False,3,2,917.511
+star,postgres,star_sel_90,RM4. Materialized Subquery,False,3,3,990.468
+star,postgres,star_sel_90,RM4. Materialized Subquery,False,3,4,1037.471
+star,postgres,star_sel_90,RM4. Materialized Subquery,False,3,5,1235.625
+star,postgres,star_sel_90,RM4. Materialized Subquery,False,4,0,33996.113
+star,postgres,star_sel_90,RM4. Materialized Subquery,False,4,1,80887.231
+star,postgres,star_sel_90,RM4. Materialized Subquery,False,4,2,911.395
+star,postgres,star_sel_90,RM4. Materialized Subquery,False,4,3,989.020
+star,postgres,star_sel_90,RM4. Materialized Subquery,False,4,4,1042.448
+star,postgres,star_sel_90,RM4. Materialized Subquery,False,4,5,1209.623
+star,postgres,star_sel_90,0. Single Table,False,0,0,1570.873
+star,postgres,star_sel_90,0. Single Table,False,1,0,1561.197
+star,postgres,star_sel_90,0. Single Table,False,2,0,1562.161
+star,postgres,star_sel_90,0. Single Table,False,3,0,1559.649
+star,postgres,star_sel_90,0. Single Table,False,4,0,1575.129
+star,postgres,star_sel_100,RM1. Dynamic SELECT DISTINCT,False,0,0,17127.072
+star,postgres,star_sel_100,RM1. Dynamic SELECT DISTINCT,False,0,1,15703.735
+star,postgres,star_sel_100,RM1. Dynamic SELECT DISTINCT,False,0,2,25004.547
+star,postgres,star_sel_100,RM1. Dynamic SELECT DISTINCT,False,0,3,24960.206
+star,postgres,star_sel_100,RM1. Dynamic SELECT DISTINCT,False,0,4,29115.319
+star,postgres,star_sel_100,RM1. Dynamic SELECT DISTINCT,False,1,0,17308.805
+star,postgres,star_sel_100,RM1. Dynamic SELECT DISTINCT,False,1,1,15593.726
+star,postgres,star_sel_100,RM1. Dynamic SELECT DISTINCT,False,1,2,24350.263
+star,postgres,star_sel_100,RM1. Dynamic SELECT DISTINCT,False,1,3,24236.305
+star,postgres,star_sel_100,RM1. Dynamic SELECT DISTINCT,False,1,4,28557.923
+star,postgres,star_sel_100,RM1. Dynamic SELECT DISTINCT,False,2,0,17314.465
+star,postgres,star_sel_100,RM1. Dynamic SELECT DISTINCT,False,2,1,16092.073
+star,postgres,star_sel_100,RM1. Dynamic SELECT DISTINCT,False,2,2,24881.716
+star,postgres,star_sel_100,RM1. Dynamic SELECT DISTINCT,False,2,3,24704.804
+star,postgres,star_sel_100,RM1. Dynamic SELECT DISTINCT,False,2,4,28771.929
+star,postgres,star_sel_100,RM1. Dynamic SELECT DISTINCT,False,3,0,17442.583
+star,postgres,star_sel_100,RM1. Dynamic SELECT DISTINCT,False,3,1,15844.350
+star,postgres,star_sel_100,RM1. Dynamic SELECT DISTINCT,False,3,2,24886.769
+star,postgres,star_sel_100,RM1. Dynamic SELECT DISTINCT,False,3,3,24835.104
+star,postgres,star_sel_100,RM1. Dynamic SELECT DISTINCT,False,3,4,29037.906
+star,postgres,star_sel_100,RM1. Dynamic SELECT DISTINCT,False,4,0,17946.220
+star,postgres,star_sel_100,RM1. Dynamic SELECT DISTINCT,False,4,1,16025.371
+star,postgres,star_sel_100,RM1. Dynamic SELECT DISTINCT,False,4,2,25153.433
+star,postgres,star_sel_100,RM1. Dynamic SELECT DISTINCT,False,4,3,24720.476
+star,postgres,star_sel_100,RM1. Dynamic SELECT DISTINCT,False,4,4,29017.437
+star,postgres,star_sel_100,RM2. Materialized SELECT DISTINCT,False,0,0,150712.095
+star,postgres,star_sel_100,RM2. Materialized SELECT DISTINCT,False,0,1,15472.474
+star,postgres,star_sel_100,RM2. Materialized SELECT DISTINCT,False,0,2,12218.904
+star,postgres,star_sel_100,RM2. Materialized SELECT DISTINCT,False,0,3,21070.342
+star,postgres,star_sel_100,RM2. Materialized SELECT DISTINCT,False,0,4,20806.580
+star,postgres,star_sel_100,RM2. Materialized SELECT DISTINCT,False,0,5,25076.402
+star,postgres,star_sel_100,RM2. Materialized SELECT DISTINCT,False,1,0,155306.853
+star,postgres,star_sel_100,RM2. Materialized SELECT DISTINCT,False,1,1,14851.429
+star,postgres,star_sel_100,RM2. Materialized SELECT DISTINCT,False,1,2,11961.046
+star,postgres,star_sel_100,RM2. Materialized SELECT DISTINCT,False,1,3,21043.160
+star,postgres,star_sel_100,RM2. Materialized SELECT DISTINCT,False,1,4,20760.559
+star,postgres,star_sel_100,RM2. Materialized SELECT DISTINCT,False,1,5,24748.688
+star,postgres,star_sel_100,RM2. Materialized SELECT DISTINCT,False,2,0,163986.573
+star,postgres,star_sel_100,RM2. Materialized SELECT DISTINCT,False,2,1,15136.558
+star,postgres,star_sel_100,RM2. Materialized SELECT DISTINCT,False,2,2,12232.549
+star,postgres,star_sel_100,RM2. Materialized SELECT DISTINCT,False,2,3,21098.882
+star,postgres,star_sel_100,RM2. Materialized SELECT DISTINCT,False,2,4,20852.129
+star,postgres,star_sel_100,RM2. Materialized SELECT DISTINCT,False,2,5,25071.140
+star,postgres,star_sel_100,RM2. Materialized SELECT DISTINCT,False,3,0,178491.911
+star,postgres,star_sel_100,RM2. Materialized SELECT DISTINCT,False,3,1,14932.858
+star,postgres,star_sel_100,RM2. Materialized SELECT DISTINCT,False,3,2,12115.738
+star,postgres,star_sel_100,RM2. Materialized SELECT DISTINCT,False,3,3,20785.312
+star,postgres,star_sel_100,RM2. Materialized SELECT DISTINCT,False,3,4,20515.896
+star,postgres,star_sel_100,RM2. Materialized SELECT DISTINCT,False,3,5,24953.491
+star,postgres,star_sel_100,RM2. Materialized SELECT DISTINCT,False,4,0,174281.405
+star,postgres,star_sel_100,RM2. Materialized SELECT DISTINCT,False,4,1,15256.146
+star,postgres,star_sel_100,RM2. Materialized SELECT DISTINCT,False,4,2,12382.723
+star,postgres,star_sel_100,RM2. Materialized SELECT DISTINCT,False,4,3,21329.774
+star,postgres,star_sel_100,RM2. Materialized SELECT DISTINCT,False,4,4,20892.085
+star,postgres,star_sel_100,RM2. Materialized SELECT DISTINCT,False,4,5,25256.755
+star,postgres,star_sel_100,RM3. Dynamic Subquery,False,0,0,17161.800
+star,postgres,star_sel_100,RM3. Dynamic Subquery,False,0,1,128539.392
+star,postgres,star_sel_100,RM3. Dynamic Subquery,False,0,2,2126.810
+star,postgres,star_sel_100,RM3. Dynamic Subquery,False,0,3,48.646
+star,postgres,star_sel_100,RM3. Dynamic Subquery,False,0,4,13.510
+star,postgres,star_sel_100,RM3. Dynamic Subquery,False,1,0,17579.346
+star,postgres,star_sel_100,RM3. Dynamic Subquery,False,1,1,129381.467
+star,postgres,star_sel_100,RM3. Dynamic Subquery,False,1,2,2161.643
+star,postgres,star_sel_100,RM3. Dynamic Subquery,False,1,3,49.643
+star,postgres,star_sel_100,RM3. Dynamic Subquery,False,1,4,13.572
+star,postgres,star_sel_100,RM3. Dynamic Subquery,False,2,0,17578.185
+star,postgres,star_sel_100,RM3. Dynamic Subquery,False,2,1,128439.606
+star,postgres,star_sel_100,RM3. Dynamic Subquery,False,2,2,2161.470
+star,postgres,star_sel_100,RM3. Dynamic Subquery,False,2,3,48.570
+star,postgres,star_sel_100,RM3. Dynamic Subquery,False,2,4,13.353
+star,postgres,star_sel_100,RM3. Dynamic Subquery,False,3,0,17557.264
+star,postgres,star_sel_100,RM3. Dynamic Subquery,False,3,1,128251.013
+star,postgres,star_sel_100,RM3. Dynamic Subquery,False,3,2,2147.815
+star,postgres,star_sel_100,RM3. Dynamic Subquery,False,3,3,49.319
+star,postgres,star_sel_100,RM3. Dynamic Subquery,False,3,4,13.652
+star,postgres,star_sel_100,RM3. Dynamic Subquery,False,4,0,17475.913
+star,postgres,star_sel_100,RM3. Dynamic Subquery,False,4,1,130063.054
+star,postgres,star_sel_100,RM3. Dynamic Subquery,False,4,2,2162.228
+star,postgres,star_sel_100,RM3. Dynamic Subquery,False,4,3,49.581
+star,postgres,star_sel_100,RM3. Dynamic Subquery,False,4,4,13.712
+star,postgres,star_sel_100,RM4. Materialized Subquery,False,0,0,54363.772
+star,postgres,star_sel_100,RM4. Materialized Subquery,False,0,1,127010.838
+star,postgres,star_sel_100,RM4. Materialized Subquery,False,0,2,18904.505
+star,postgres,star_sel_100,RM4. Materialized Subquery,False,0,3,354.782
+star,postgres,star_sel_100,RM4. Materialized Subquery,False,0,4,11.443
+star,postgres,star_sel_100,RM4. Materialized Subquery,False,0,5,5.120
+star,postgres,star_sel_100,RM4. Materialized Subquery,False,1,0,50146.869
+star,postgres,star_sel_100,RM4. Materialized Subquery,False,1,1,125300.321
+star,postgres,star_sel_100,RM4. Materialized Subquery,False,1,2,18520.992
+star,postgres,star_sel_100,RM4. Materialized Subquery,False,1,3,346.410
+star,postgres,star_sel_100,RM4. Materialized Subquery,False,1,4,11.250
+star,postgres,star_sel_100,RM4. Materialized Subquery,False,1,5,5.023
+star,postgres,star_sel_100,RM4. Materialized Subquery,False,2,0,51889.285
+star,postgres,star_sel_100,RM4. Materialized Subquery,False,2,1,128034.559
+star,postgres,star_sel_100,RM4. Materialized Subquery,False,2,2,18900.279
+star,postgres,star_sel_100,RM4. Materialized Subquery,False,2,3,343.375
+star,postgres,star_sel_100,RM4. Materialized Subquery,False,2,4,11.341
+star,postgres,star_sel_100,RM4. Materialized Subquery,False,2,5,5.125
+star,postgres,star_sel_100,RM4. Materialized Subquery,False,3,0,53684.908
+star,postgres,star_sel_100,RM4. Materialized Subquery,False,3,1,126454.451
+star,postgres,star_sel_100,RM4. Materialized Subquery,False,3,2,18501.857
+star,postgres,star_sel_100,RM4. Materialized Subquery,False,3,3,347.335
+star,postgres,star_sel_100,RM4. Materialized Subquery,False,3,4,11.219
+star,postgres,star_sel_100,RM4. Materialized Subquery,False,3,5,4.951
+star,postgres,star_sel_100,RM4. Materialized Subquery,False,4,0,56191.496
+star,postgres,star_sel_100,RM4. Materialized Subquery,False,4,1,127552.542
+star,postgres,star_sel_100,RM4. Materialized Subquery,False,4,2,18721.669
+star,postgres,star_sel_100,RM4. Materialized Subquery,False,4,3,353.467
+star,postgres,star_sel_100,RM4. Materialized Subquery,False,4,4,11.455
+star,postgres,star_sel_100,RM4. Materialized Subquery,False,4,5,5.116
+star,postgres,star_sel_100,0. Single Table,False,0,0,1881.315
+star,postgres,star_sel_100,0. Single Table,False,1,0,1886.324
+star,postgres,star_sel_100,0. Single Table,False,2,0,1870.695
+star,postgres,star_sel_100,0. Single Table,False,3,0,1876.272
+star,postgres,star_sel_100,0. Single Table,False,4,0,1884.704
+star,postgres,star_joins_1,RM1. Dynamic SELECT DISTINCT,True,0,0,12172.489
+star,postgres,star_joins_1,RM1. Dynamic SELECT DISTINCT,True,0,1,1116.221
+star,postgres,star_joins_1,RM1. Dynamic SELECT DISTINCT,True,1,0,12234.219
+star,postgres,star_joins_1,RM1. Dynamic SELECT DISTINCT,True,1,1,1126.969
+star,postgres,star_joins_1,RM1. Dynamic SELECT DISTINCT,True,2,0,12352.454
+star,postgres,star_joins_1,RM1. Dynamic SELECT DISTINCT,True,2,1,1145.293
+star,postgres,star_joins_1,RM2. Materialized SELECT DISTINCT,True,0,0,94164.766
+star,postgres,star_joins_1,RM2. Materialized SELECT DISTINCT,True,0,1,12950.276
+star,postgres,star_joins_1,RM2. Materialized SELECT DISTINCT,True,0,2,861.490
+star,postgres,star_joins_1,RM2. Materialized SELECT DISTINCT,True,1,0,90271.717
+star,postgres,star_joins_1,RM2. Materialized SELECT DISTINCT,True,1,1,12891.446
+star,postgres,star_joins_1,RM2. Materialized SELECT DISTINCT,True,1,2,858.030
+star,postgres,star_joins_1,RM2. Materialized SELECT DISTINCT,True,2,0,84655.381
+star,postgres,star_joins_1,RM2. Materialized SELECT DISTINCT,True,2,1,12928.392
+star,postgres,star_joins_1,RM2. Materialized SELECT DISTINCT,True,2,2,852.950
+star,postgres,star_joins_1,RM3. Dynamic Subquery,True,0,0,12348.353
+star,postgres,star_joins_1,RM3. Dynamic Subquery,True,0,1,18335.372
+star,postgres,star_joins_1,RM3. Dynamic Subquery,True,1,0,12230.647
+star,postgres,star_joins_1,RM3. Dynamic Subquery,True,1,1,18348.674
+star,postgres,star_joins_1,RM3. Dynamic Subquery,True,2,0,12259.479
+star,postgres,star_joins_1,RM3. Dynamic Subquery,True,2,1,18633.031
+star,postgres,star_joins_1,RM4. Materialized Subquery,True,0,0,38515.901
+star,postgres,star_joins_1,RM4. Materialized Subquery,True,0,1,64993.210
+star,postgres,star_joins_1,RM4. Materialized Subquery,True,0,2,17674.714
+star,postgres,star_joins_1,RM4. Materialized Subquery,True,1,0,30879.406
+star,postgres,star_joins_1,RM4. Materialized Subquery,True,1,1,66228.826
+star,postgres,star_joins_1,RM4. Materialized Subquery,True,1,2,17741.911
+star,postgres,star_joins_1,RM4. Materialized Subquery,True,2,0,31267.149
+star,postgres,star_joins_1,RM4. Materialized Subquery,True,2,1,66062.526
+star,postgres,star_joins_1,RM4. Materialized Subquery,True,2,2,17776.726
+star,postgres,star_joins_1,0. Single Table,True,0,0,7022.225
+star,postgres,star_joins_1,0. Single Table,True,1,0,7026.965
+star,postgres,star_joins_1,0. Single Table,True,2,0,7007.087
+star,postgres,star_joins_2,RM1. Dynamic SELECT DISTINCT,True,0,0,13305.245
+star,postgres,star_joins_2,RM1. Dynamic SELECT DISTINCT,True,0,1,1526.697
+star,postgres,star_joins_2,RM1. Dynamic SELECT DISTINCT,True,0,2,1550.973
+star,postgres,star_joins_2,RM1. Dynamic SELECT DISTINCT,True,1,0,13325.052
+star,postgres,star_joins_2,RM1. Dynamic SELECT DISTINCT,True,1,1,1519.070
+star,postgres,star_joins_2,RM1. Dynamic SELECT DISTINCT,True,1,2,1552.647
+star,postgres,star_joins_2,RM1. Dynamic SELECT DISTINCT,True,2,0,13291.562
+star,postgres,star_joins_2,RM1. Dynamic SELECT DISTINCT,True,2,1,1508.050
+star,postgres,star_joins_2,RM1. Dynamic SELECT DISTINCT,True,2,2,1553.641
+star,postgres,star_joins_2,RM2. Materialized SELECT DISTINCT,True,0,0,103944.348
+star,postgres,star_joins_2,RM2. Materialized SELECT DISTINCT,True,0,1,13315.319
+star,postgres,star_joins_2,RM2. Materialized SELECT DISTINCT,True,0,2,1022.980
+star,postgres,star_joins_2,RM2. Materialized SELECT DISTINCT,True,0,3,1099.729
+star,postgres,star_joins_2,RM2. Materialized SELECT DISTINCT,True,1,0,110453.181
+star,postgres,star_joins_2,RM2. Materialized SELECT DISTINCT,True,1,1,13233.184
+star,postgres,star_joins_2,RM2. Materialized SELECT DISTINCT,True,1,2,2593.696
+star,postgres,star_joins_2,RM2. Materialized SELECT DISTINCT,True,1,3,2782.255
+star,postgres,star_joins_2,RM2. Materialized SELECT DISTINCT,True,2,0,110097.867
+star,postgres,star_joins_2,RM2. Materialized SELECT DISTINCT,True,2,1,13248.605
+star,postgres,star_joins_2,RM2. Materialized SELECT DISTINCT,True,2,2,1036.696
+star,postgres,star_joins_2,RM2. Materialized SELECT DISTINCT,True,2,3,1145.080
+star,postgres,star_joins_2,RM3. Dynamic Subquery,True,0,0,13355.906
+star,postgres,star_joins_2,RM3. Dynamic Subquery,True,0,1,46008.099
+star,postgres,star_joins_2,RM3. Dynamic Subquery,True,0,2,781.238
+star,postgres,star_joins_2,RM3. Dynamic Subquery,True,1,0,13500.842
+star,postgres,star_joins_2,RM3. Dynamic Subquery,True,1,1,46235.002
+star,postgres,star_joins_2,RM3. Dynamic Subquery,True,1,2,785.409
+star,postgres,star_joins_2,RM3. Dynamic Subquery,True,2,0,13326.101
+star,postgres,star_joins_2,RM3. Dynamic Subquery,True,2,1,46064.158
+star,postgres,star_joins_2,RM3. Dynamic Subquery,True,2,2,778.474
+star,postgres,star_joins_2,RM4. Materialized Subquery,True,0,0,37347.336
+star,postgres,star_joins_2,RM4. Materialized Subquery,True,0,1,65098.005
+star,postgres,star_joins_2,RM4. Materialized Subquery,True,0,2,17992.034
+star,postgres,star_joins_2,RM4. Materialized Subquery,True,0,3,338.212
+star,postgres,star_joins_2,RM4. Materialized Subquery,True,1,0,42971.902
+star,postgres,star_joins_2,RM4. Materialized Subquery,True,1,1,66076.009
+star,postgres,star_joins_2,RM4. Materialized Subquery,True,1,2,17833.176
+star,postgres,star_joins_2,RM4. Materialized Subquery,True,1,3,334.371
+star,postgres,star_joins_2,RM4. Materialized Subquery,True,2,0,44872.098
+star,postgres,star_joins_2,RM4. Materialized Subquery,True,2,1,65027.333
+star,postgres,star_joins_2,RM4. Materialized Subquery,True,2,2,18009.493
+star,postgres,star_joins_2,RM4. Materialized Subquery,True,2,3,338.864
+star,postgres,star_joins_2,0. Single Table,True,0,0,9871.305
+star,postgres,star_joins_2,0. Single Table,True,1,0,9867.779
+star,postgres,star_joins_2,0. Single Table,True,2,0,9866.650
+star,postgres,star_joins_3,RM1. Dynamic SELECT DISTINCT,True,0,0,14504.450
+star,postgres,star_joins_3,RM1. Dynamic SELECT DISTINCT,True,0,1,2075.674
+star,postgres,star_joins_3,RM1. Dynamic SELECT DISTINCT,True,0,2,2093.999
+star,postgres,star_joins_3,RM1. Dynamic SELECT DISTINCT,True,0,3,2093.615
+star,postgres,star_joins_3,RM1. Dynamic SELECT DISTINCT,True,1,0,14644.526
+star,postgres,star_joins_3,RM1. Dynamic SELECT DISTINCT,True,1,1,2097.021
+star,postgres,star_joins_3,RM1. Dynamic SELECT DISTINCT,True,1,2,2098.691
+star,postgres,star_joins_3,RM1. Dynamic SELECT DISTINCT,True,1,3,2103.350
+star,postgres,star_joins_3,RM1. Dynamic SELECT DISTINCT,True,2,0,14530.243
+star,postgres,star_joins_3,RM1. Dynamic SELECT DISTINCT,True,2,1,2086.475
+star,postgres,star_joins_3,RM1. Dynamic SELECT DISTINCT,True,2,2,2080.389
+star,postgres,star_joins_3,RM1. Dynamic SELECT DISTINCT,True,2,3,2087.257
+star,postgres,star_joins_3,RM2. Materialized SELECT DISTINCT,True,0,0,114451.199
+star,postgres,star_joins_3,RM2. Materialized SELECT DISTINCT,True,0,1,13498.609
+star,postgres,star_joins_3,RM2. Materialized SELECT DISTINCT,True,0,2,2699.459
+star,postgres,star_joins_3,RM2. Materialized SELECT DISTINCT,True,0,3,2845.029
+star,postgres,star_joins_3,RM2. Materialized SELECT DISTINCT,True,0,4,3107.482
+star,postgres,star_joins_3,RM2. Materialized SELECT DISTINCT,True,1,0,134612.077
+star,postgres,star_joins_3,RM2. Materialized SELECT DISTINCT,True,1,1,13405.076
+star,postgres,star_joins_3,RM2. Materialized SELECT DISTINCT,True,1,2,2639.981
+star,postgres,star_joins_3,RM2. Materialized SELECT DISTINCT,True,1,3,2786.739
+star,postgres,star_joins_3,RM2. Materialized SELECT DISTINCT,True,1,4,3004.310
+star,postgres,star_joins_3,RM2. Materialized SELECT DISTINCT,True,2,0,140727.020
+star,postgres,star_joins_3,RM2. Materialized SELECT DISTINCT,True,2,1,13408.365
+star,postgres,star_joins_3,RM2. Materialized SELECT DISTINCT,True,2,2,2691.227
+star,postgres,star_joins_3,RM2. Materialized SELECT DISTINCT,True,2,3,2834.504
+star,postgres,star_joins_3,RM2. Materialized SELECT DISTINCT,True,2,4,2801.896
+star,postgres,star_joins_3,RM3. Dynamic Subquery,True,0,0,14569.158
+star,postgres,star_joins_3,RM3. Dynamic Subquery,True,0,1,82076.131
+star,postgres,star_joins_3,RM3. Dynamic Subquery,True,0,2,1326.549
+star,postgres,star_joins_3,RM3. Dynamic Subquery,True,0,3,31.439
+star,postgres,star_joins_3,RM3. Dynamic Subquery,True,1,0,14576.318
+star,postgres,star_joins_3,RM3. Dynamic Subquery,True,1,1,81358.142
+star,postgres,star_joins_3,RM3. Dynamic Subquery,True,1,2,1306.453
+star,postgres,star_joins_3,RM3. Dynamic Subquery,True,1,3,31.022
+star,postgres,star_joins_3,RM3. Dynamic Subquery,True,2,0,14662.616
+star,postgres,star_joins_3,RM3. Dynamic Subquery,True,2,1,81452.585
+star,postgres,star_joins_3,RM3. Dynamic Subquery,True,2,2,1308.799
+star,postgres,star_joins_3,RM3. Dynamic Subquery,True,2,3,30.921
+star,postgres,star_joins_3,RM4. Materialized Subquery,True,0,0,48804.429
+star,postgres,star_joins_3,RM4. Materialized Subquery,True,0,1,65200.641
+star,postgres,star_joins_3,RM4. Materialized Subquery,True,0,2,17742.955
+star,postgres,star_joins_3,RM4. Materialized Subquery,True,0,3,334.285
+star,postgres,star_joins_3,RM4. Materialized Subquery,True,0,4,10.229
+star,postgres,star_joins_3,RM4. Materialized Subquery,True,1,0,42804.594
+star,postgres,star_joins_3,RM4. Materialized Subquery,True,1,1,65248.913
+star,postgres,star_joins_3,RM4. Materialized Subquery,True,1,2,17728.046
+star,postgres,star_joins_3,RM4. Materialized Subquery,True,1,3,334.541
+star,postgres,star_joins_3,RM4. Materialized Subquery,True,1,4,10.167
+star,postgres,star_joins_3,RM4. Materialized Subquery,True,2,0,46630.565
+star,postgres,star_joins_3,RM4. Materialized Subquery,True,2,1,65083.903
+star,postgres,star_joins_3,RM4. Materialized Subquery,True,2,2,17926.495
+star,postgres,star_joins_3,RM4. Materialized Subquery,True,2,3,338.139
+star,postgres,star_joins_3,RM4. Materialized Subquery,True,2,4,10.382
+star,postgres,star_joins_3,0. Single Table,True,0,0,13027.722
+star,postgres,star_joins_3,0. Single Table,True,1,0,13004.845
+star,postgres,star_joins_3,0. Single Table,True,2,0,13048.750
+star,postgres,star_joins_4,RM1. Dynamic SELECT DISTINCT,True,0,0,15785.573
+star,postgres,star_joins_4,RM1. Dynamic SELECT DISTINCT,True,0,1,2487.856
+star,postgres,star_joins_4,RM1. Dynamic SELECT DISTINCT,True,0,2,2487.786
+star,postgres,star_joins_4,RM1. Dynamic SELECT DISTINCT,True,0,3,2504.420
+star,postgres,star_joins_4,RM1. Dynamic SELECT DISTINCT,True,0,4,2486.859
+star,postgres,star_joins_4,RM1. Dynamic SELECT DISTINCT,True,1,0,15682.199
+star,postgres,star_joins_4,RM1. Dynamic SELECT DISTINCT,True,1,1,2512.252
+star,postgres,star_joins_4,RM1. Dynamic SELECT DISTINCT,True,1,2,2512.792
+star,postgres,star_joins_4,RM1. Dynamic SELECT DISTINCT,True,1,3,2500.972
+star,postgres,star_joins_4,RM1. Dynamic SELECT DISTINCT,True,1,4,2519.376
+star,postgres,star_joins_4,RM1. Dynamic SELECT DISTINCT,True,2,0,15695.988
+star,postgres,star_joins_4,RM1. Dynamic SELECT DISTINCT,True,2,1,2479.703
+star,postgres,star_joins_4,RM1. Dynamic SELECT DISTINCT,True,2,2,2520.797
+star,postgres,star_joins_4,RM1. Dynamic SELECT DISTINCT,True,2,3,2486.322
+star,postgres,star_joins_4,RM1. Dynamic SELECT DISTINCT,True,2,4,2500.408
+star,postgres,star_joins_4,RM2. Materialized SELECT DISTINCT,True,0,0,167607.695
+star,postgres,star_joins_4,RM2. Materialized SELECT DISTINCT,True,0,1,13793.021
+star,postgres,star_joins_4,RM2. Materialized SELECT DISTINCT,True,0,2,974.842
+star,postgres,star_joins_4,RM2. Materialized SELECT DISTINCT,True,0,3,1023.316
+star,postgres,star_joins_4,RM2. Materialized SELECT DISTINCT,True,0,4,1089.171
+star,postgres,star_joins_4,RM2. Materialized SELECT DISTINCT,True,0,5,1118.124
+star,postgres,star_joins_4,RM2. Materialized SELECT DISTINCT,True,1,0,164418.962
+star,postgres,star_joins_4,RM2. Materialized SELECT DISTINCT,True,1,1,13768.754
+star,postgres,star_joins_4,RM2. Materialized SELECT DISTINCT,True,1,2,2818.491
+star,postgres,star_joins_4,RM2. Materialized SELECT DISTINCT,True,1,3,2988.079
+star,postgres,star_joins_4,RM2. Materialized SELECT DISTINCT,True,1,4,3180.795
+star,postgres,star_joins_4,RM2. Materialized SELECT DISTINCT,True,1,5,3255.326
+star,postgres,star_joins_4,RM2. Materialized SELECT DISTINCT,True,2,0,163574.510
+star,postgres,star_joins_4,RM2. Materialized SELECT DISTINCT,True,2,1,13691.088
+star,postgres,star_joins_4,RM2. Materialized SELECT DISTINCT,True,2,2,962.667
+star,postgres,star_joins_4,RM2. Materialized SELECT DISTINCT,True,2,3,1021.147
+star,postgres,star_joins_4,RM2. Materialized SELECT DISTINCT,True,2,4,1081.486
+star,postgres,star_joins_4,RM2. Materialized SELECT DISTINCT,True,2,5,1079.851
+star,postgres,star_joins_4,RM3. Dynamic Subquery,True,0,0,15662.154
+star,postgres,star_joins_4,RM3. Dynamic Subquery,True,0,1,126697.216
+star,postgres,star_joins_4,RM3. Dynamic Subquery,True,0,2,2087.977
+star,postgres,star_joins_4,RM3. Dynamic Subquery,True,0,3,45.191
+star,postgres,star_joins_4,RM3. Dynamic Subquery,True,0,4,10.360
+star,postgres,star_joins_4,RM3. Dynamic Subquery,True,1,0,15518.523
+star,postgres,star_joins_4,RM3. Dynamic Subquery,True,1,1,125193.281
+star,postgres,star_joins_4,RM3. Dynamic Subquery,True,1,2,2081.967
+star,postgres,star_joins_4,RM3. Dynamic Subquery,True,1,3,45.014
+star,postgres,star_joins_4,RM3. Dynamic Subquery,True,1,4,10.412
+star,postgres,star_joins_4,RM3. Dynamic Subquery,True,2,0,15599.010
+star,postgres,star_joins_4,RM3. Dynamic Subquery,True,2,1,126316.960
+star,postgres,star_joins_4,RM3. Dynamic Subquery,True,2,2,2088.714
+star,postgres,star_joins_4,RM3. Dynamic Subquery,True,2,3,45.480
+star,postgres,star_joins_4,RM3. Dynamic Subquery,True,2,4,10.574
+star,postgres,star_joins_4,RM4. Materialized Subquery,True,0,0,52237.887
+star,postgres,star_joins_4,RM4. Materialized Subquery,True,0,1,65375.973
+star,postgres,star_joins_4,RM4. Materialized Subquery,True,0,2,18070.211
+star,postgres,star_joins_4,RM4. Materialized Subquery,True,0,3,339.495
+star,postgres,star_joins_4,RM4. Materialized Subquery,True,0,4,10.254
+star,postgres,star_joins_4,RM4. Materialized Subquery,True,0,5,4.049
+star,postgres,star_joins_4,RM4. Materialized Subquery,True,1,0,55286.852
+star,postgres,star_joins_4,RM4. Materialized Subquery,True,1,1,65125.592
+star,postgres,star_joins_4,RM4. Materialized Subquery,True,1,2,18085.081
+star,postgres,star_joins_4,RM4. Materialized Subquery,True,1,3,338.209
+star,postgres,star_joins_4,RM4. Materialized Subquery,True,1,4,10.283
+star,postgres,star_joins_4,RM4. Materialized Subquery,True,1,5,4.145
+star,postgres,star_joins_4,RM4. Materialized Subquery,True,2,0,58143.889
+star,postgres,star_joins_4,RM4. Materialized Subquery,True,2,1,65094.970
+star,postgres,star_joins_4,RM4. Materialized Subquery,True,2,2,18093.660
+star,postgres,star_joins_4,RM4. Materialized Subquery,True,2,3,338.918
+star,postgres,star_joins_4,RM4. Materialized Subquery,True,2,4,10.257
+star,postgres,star_joins_4,RM4. Materialized Subquery,True,2,5,3.991
+star,postgres,star_joins_4,0. Single Table,True,0,0,16007.057
+star,postgres,star_joins_4,0. Single Table,True,1,0,15973.271
+star,postgres,star_joins_4,0. Single Table,True,2,0,16140.676
+star,postgres,star_proj_2_dim,RM1. Dynamic SELECT DISTINCT,True,0,0,2504.299
+star,postgres,star_proj_2_dim,RM1. Dynamic SELECT DISTINCT,True,0,1,2511.002
+star,postgres,star_proj_2_dim,RM1. Dynamic SELECT DISTINCT,True,1,0,2513.988
+star,postgres,star_proj_2_dim,RM1. Dynamic SELECT DISTINCT,True,1,1,2522.308
+star,postgres,star_proj_2_dim,RM1. Dynamic SELECT DISTINCT,True,2,0,2499.603
+star,postgres,star_proj_2_dim,RM1. Dynamic SELECT DISTINCT,True,2,1,2513.968
+star,postgres,star_proj_2_dim,RM2. Materialized SELECT DISTINCT,True,0,0,100374.596
+star,postgres,star_proj_2_dim,RM2. Materialized SELECT DISTINCT,True,0,1,3272.033
+star,postgres,star_proj_2_dim,RM2. Materialized SELECT DISTINCT,True,0,2,2453.445
+star,postgres,star_proj_2_dim,RM2. Materialized SELECT DISTINCT,True,1,0,97248.623
+star,postgres,star_proj_2_dim,RM2. Materialized SELECT DISTINCT,True,1,1,3238.373
+star,postgres,star_proj_2_dim,RM2. Materialized SELECT DISTINCT,True,1,2,2456.417
+star,postgres,star_proj_2_dim,RM2. Materialized SELECT DISTINCT,True,2,0,94212.529
+star,postgres,star_proj_2_dim,RM2. Materialized SELECT DISTINCT,True,2,1,3221.616
+star,postgres,star_proj_2_dim,RM2. Materialized SELECT DISTINCT,True,2,2,2428.184
+star,postgres,star_proj_2_dim,RM3. Dynamic Subquery,True,0,0,128647.369
+star,postgres,star_proj_2_dim,RM3. Dynamic Subquery,True,0,1,2065.159
+star,postgres,star_proj_2_dim,RM3. Dynamic Subquery,True,1,0,128217.921
+star,postgres,star_proj_2_dim,RM3. Dynamic Subquery,True,1,1,2069.415
+star,postgres,star_proj_2_dim,RM3. Dynamic Subquery,True,2,0,128668.782
+star,postgres,star_proj_2_dim,RM3. Dynamic Subquery,True,2,1,2064.844
+star,postgres,star_proj_2_dim,RM4. Materialized Subquery,True,0,0,38890.232
+star,postgres,star_proj_2_dim,RM4. Materialized Subquery,True,0,1,1767.712
+star,postgres,star_proj_2_dim,RM4. Materialized Subquery,True,0,2,1384.501
+star,postgres,star_proj_2_dim,RM4. Materialized Subquery,True,1,0,40700.206
+star,postgres,star_proj_2_dim,RM4. Materialized Subquery,True,1,1,1773.474
+star,postgres,star_proj_2_dim,RM4. Materialized Subquery,True,1,2,1369.473
+star,postgres,star_proj_2_dim,RM4. Materialized Subquery,True,2,0,41549.084
+star,postgres,star_proj_2_dim,RM4. Materialized Subquery,True,2,1,1765.829
+star,postgres,star_proj_2_dim,RM4. Materialized Subquery,True,2,2,1374.165
+star,postgres,star_proj_2_dim,0. Single Table,True,0,0,9600.539
+star,postgres,star_proj_2_dim,0. Single Table,True,1,0,9756.852
+star,postgres,star_proj_2_dim,0. Single Table,True,2,0,9663.759
+star,postgres,star_proj_3_dim,RM1. Dynamic SELECT DISTINCT,True,0,0,2529.479
+star,postgres,star_proj_3_dim,RM1. Dynamic SELECT DISTINCT,True,0,1,2512.308
+star,postgres,star_proj_3_dim,RM1. Dynamic SELECT DISTINCT,True,0,2,2506.733
+star,postgres,star_proj_3_dim,RM1. Dynamic SELECT DISTINCT,True,1,0,2520.071
+star,postgres,star_proj_3_dim,RM1. Dynamic SELECT DISTINCT,True,1,1,2525.693
+star,postgres,star_proj_3_dim,RM1. Dynamic SELECT DISTINCT,True,1,2,2489.825
+star,postgres,star_proj_3_dim,RM1. Dynamic SELECT DISTINCT,True,2,0,2494.383
+star,postgres,star_proj_3_dim,RM1. Dynamic SELECT DISTINCT,True,2,1,2503.586
+star,postgres,star_proj_3_dim,RM1. Dynamic SELECT DISTINCT,True,2,2,2503.067
+star,postgres,star_proj_3_dim,RM2. Materialized SELECT DISTINCT,True,0,0,117104.157
+star,postgres,star_proj_3_dim,RM2. Materialized SELECT DISTINCT,True,0,1,3484.496
+star,postgres,star_proj_3_dim,RM2. Materialized SELECT DISTINCT,True,0,2,2697.128
+star,postgres,star_proj_3_dim,RM2. Materialized SELECT DISTINCT,True,0,3,2887.588
+star,postgres,star_proj_3_dim,RM2. Materialized SELECT DISTINCT,True,1,0,122238.790
+star,postgres,star_proj_3_dim,RM2. Materialized SELECT DISTINCT,True,1,1,3415.529
+star,postgres,star_proj_3_dim,RM2. Materialized SELECT DISTINCT,True,1,2,2566.007
+star,postgres,star_proj_3_dim,RM2. Materialized SELECT DISTINCT,True,1,3,2781.532
+star,postgres,star_proj_3_dim,RM2. Materialized SELECT DISTINCT,True,2,0,127719.523
+star,postgres,star_proj_3_dim,RM2. Materialized SELECT DISTINCT,True,2,1,3426.315
+star,postgres,star_proj_3_dim,RM2. Materialized SELECT DISTINCT,True,2,2,2674.193
+star,postgres,star_proj_3_dim,RM2. Materialized SELECT DISTINCT,True,2,3,2940.149
+star,postgres,star_proj_3_dim,RM3. Dynamic Subquery,True,0,0,125962.642
+star,postgres,star_proj_3_dim,RM3. Dynamic Subquery,True,0,1,2087.141
+star,postgres,star_proj_3_dim,RM3. Dynamic Subquery,True,0,2,45.176
+star,postgres,star_proj_3_dim,RM3. Dynamic Subquery,True,1,0,128261.164
+star,postgres,star_proj_3_dim,RM3. Dynamic Subquery,True,1,1,2064.538
+star,postgres,star_proj_3_dim,RM3. Dynamic Subquery,True,1,2,45.005
+star,postgres,star_proj_3_dim,RM3. Dynamic Subquery,True,2,0,129007.082
+star,postgres,star_proj_3_dim,RM3. Dynamic Subquery,True,2,1,2078.713
+star,postgres,star_proj_3_dim,RM3. Dynamic Subquery,True,2,2,45.222
+star,postgres,star_proj_3_dim,RM4. Materialized Subquery,True,0,0,34874.957
+star,postgres,star_proj_3_dim,RM4. Materialized Subquery,True,0,1,1862.261
+star,postgres,star_proj_3_dim,RM4. Materialized Subquery,True,0,2,1378.691
+star,postgres,star_proj_3_dim,RM4. Materialized Subquery,True,0,3,1473.514
+star,postgres,star_proj_3_dim,RM4. Materialized Subquery,True,1,0,50862.266
+star,postgres,star_proj_3_dim,RM4. Materialized Subquery,True,1,1,1847.163
+star,postgres,star_proj_3_dim,RM4. Materialized Subquery,True,1,2,1395.555
+star,postgres,star_proj_3_dim,RM4. Materialized Subquery,True,1,3,1477.422
+star,postgres,star_proj_3_dim,RM4. Materialized Subquery,True,2,0,48437.922
+star,postgres,star_proj_3_dim,RM4. Materialized Subquery,True,2,1,1849.789
+star,postgres,star_proj_3_dim,RM4. Materialized Subquery,True,2,2,1359.431
+star,postgres,star_proj_3_dim,RM4. Materialized Subquery,True,2,3,1405.938
+star,postgres,star_proj_3_dim,0. Single Table,True,0,0,11370.155
+star,postgres,star_proj_3_dim,0. Single Table,True,1,0,11329.969
+star,postgres,star_proj_3_dim,0. Single Table,True,2,0,11411.191
+star,postgres,star_proj_4_dim,RM1. Dynamic SELECT DISTINCT,True,0,0,2503.732
+star,postgres,star_proj_4_dim,RM1. Dynamic SELECT DISTINCT,True,0,1,2509.032
+star,postgres,star_proj_4_dim,RM1. Dynamic SELECT DISTINCT,True,0,2,2495.476
+star,postgres,star_proj_4_dim,RM1. Dynamic SELECT DISTINCT,True,0,3,2528.251
+star,postgres,star_proj_4_dim,RM1. Dynamic SELECT DISTINCT,True,1,0,2527.518
+star,postgres,star_proj_4_dim,RM1. Dynamic SELECT DISTINCT,True,1,1,2511.676
+star,postgres,star_proj_4_dim,RM1. Dynamic SELECT DISTINCT,True,1,2,2503.667
+star,postgres,star_proj_4_dim,RM1. Dynamic SELECT DISTINCT,True,1,3,2527.706
+star,postgres,star_proj_4_dim,RM1. Dynamic SELECT DISTINCT,True,2,0,2512.633
+star,postgres,star_proj_4_dim,RM1. Dynamic SELECT DISTINCT,True,2,1,2514.738
+star,postgres,star_proj_4_dim,RM1. Dynamic SELECT DISTINCT,True,2,2,2497.958
+star,postgres,star_proj_4_dim,RM1. Dynamic SELECT DISTINCT,True,2,3,2529.194
+star,postgres,star_proj_4_dim,RM2. Materialized SELECT DISTINCT,True,0,0,130199.087
+star,postgres,star_proj_4_dim,RM2. Materialized SELECT DISTINCT,True,0,1,3649.325
+star,postgres,star_proj_4_dim,RM2. Materialized SELECT DISTINCT,True,0,2,2615.894
+star,postgres,star_proj_4_dim,RM2. Materialized SELECT DISTINCT,True,0,3,2823.588
+star,postgres,star_proj_4_dim,RM2. Materialized SELECT DISTINCT,True,0,4,3008.103
+star,postgres,star_proj_4_dim,RM2. Materialized SELECT DISTINCT,True,1,0,145102.495
+star,postgres,star_proj_4_dim,RM2. Materialized SELECT DISTINCT,True,1,1,3595.257
+star,postgres,star_proj_4_dim,RM2. Materialized SELECT DISTINCT,True,1,2,2559.829
+star,postgres,star_proj_4_dim,RM2. Materialized SELECT DISTINCT,True,1,3,2906.535
+star,postgres,star_proj_4_dim,RM2. Materialized SELECT DISTINCT,True,1,4,2710.779
+star,postgres,star_proj_4_dim,RM2. Materialized SELECT DISTINCT,True,2,0,148323.390
+star,postgres,star_proj_4_dim,RM2. Materialized SELECT DISTINCT,True,2,1,3607.698
+star,postgres,star_proj_4_dim,RM2. Materialized SELECT DISTINCT,True,2,2,2646.626
+star,postgres,star_proj_4_dim,RM2. Materialized SELECT DISTINCT,True,2,3,2803.637
+star,postgres,star_proj_4_dim,RM2. Materialized SELECT DISTINCT,True,2,4,2988.939
+star,postgres,star_proj_4_dim,RM3. Dynamic Subquery,True,0,0,129229.994
+star,postgres,star_proj_4_dim,RM3. Dynamic Subquery,True,0,1,2095.523
+star,postgres,star_proj_4_dim,RM3. Dynamic Subquery,True,0,2,45.637
+star,postgres,star_proj_4_dim,RM3. Dynamic Subquery,True,0,3,10.409
+star,postgres,star_proj_4_dim,RM3. Dynamic Subquery,True,1,0,128130.389
+star,postgres,star_proj_4_dim,RM3. Dynamic Subquery,True,1,1,2064.824
+star,postgres,star_proj_4_dim,RM3. Dynamic Subquery,True,1,2,45.158
+star,postgres,star_proj_4_dim,RM3. Dynamic Subquery,True,1,3,10.341
+star,postgres,star_proj_4_dim,RM3. Dynamic Subquery,True,2,0,128073.323
+star,postgres,star_proj_4_dim,RM3. Dynamic Subquery,True,2,1,2071.832
+star,postgres,star_proj_4_dim,RM3. Dynamic Subquery,True,2,2,45.189
+star,postgres,star_proj_4_dim,RM3. Dynamic Subquery,True,2,3,10.269
+star,postgres,star_proj_4_dim,RM4. Materialized Subquery,True,0,0,35063.214
+star,postgres,star_proj_4_dim,RM4. Materialized Subquery,True,0,1,1847.135
+star,postgres,star_proj_4_dim,RM4. Materialized Subquery,True,0,2,1414.274
+star,postgres,star_proj_4_dim,RM4. Materialized Subquery,True,0,3,1468.257
+star,postgres,star_proj_4_dim,RM4. Materialized Subquery,True,0,4,1563.134
+star,postgres,star_proj_4_dim,RM4. Materialized Subquery,True,1,0,49771.253
+star,postgres,star_proj_4_dim,RM4. Materialized Subquery,True,1,1,1876.165
+star,postgres,star_proj_4_dim,RM4. Materialized Subquery,True,1,2,1441.518
+star,postgres,star_proj_4_dim,RM4. Materialized Subquery,True,1,3,1490.863
+star,postgres,star_proj_4_dim,RM4. Materialized Subquery,True,1,4,1593.911
+star,postgres,star_proj_4_dim,RM4. Materialized Subquery,True,2,0,50712.664
+star,postgres,star_proj_4_dim,RM4. Materialized Subquery,True,2,1,1848.026
+star,postgres,star_proj_4_dim,RM4. Materialized Subquery,True,2,2,1399.208
+star,postgres,star_proj_4_dim,RM4. Materialized Subquery,True,2,3,1473.125
+star,postgres,star_proj_4_dim,RM4. Materialized Subquery,True,2,4,1573.937
+star,postgres,star_proj_4_dim,0. Single Table,True,0,0,12974.649
+star,postgres,star_proj_4_dim,0. Single Table,True,1,0,12869.515
+star,postgres,star_proj_4_dim,0. Single Table,True,2,0,12806.680
+star,postgres,star_proj_fact_1_dim,RM1. Dynamic SELECT DISTINCT,True,0,0,15681.202
+star,postgres,star_proj_fact_1_dim,RM1. Dynamic SELECT DISTINCT,True,0,1,2511.289
+star,postgres,star_proj_fact_1_dim,RM1. Dynamic SELECT DISTINCT,True,1,0,15733.785
+star,postgres,star_proj_fact_1_dim,RM1. Dynamic SELECT DISTINCT,True,1,1,2529.846
+star,postgres,star_proj_fact_1_dim,RM1. Dynamic SELECT DISTINCT,True,2,0,15671.843
+star,postgres,star_proj_fact_1_dim,RM1. Dynamic SELECT DISTINCT,True,2,1,2511.604
+star,postgres,star_proj_fact_1_dim,RM2. Materialized SELECT DISTINCT,True,0,0,101199.035
+star,postgres,star_proj_fact_1_dim,RM2. Materialized SELECT DISTINCT,True,0,1,13119.725
+star,postgres,star_proj_fact_1_dim,RM2. Materialized SELECT DISTINCT,True,0,2,2545.272
+star,postgres,star_proj_fact_1_dim,RM2. Materialized SELECT DISTINCT,True,1,0,107160.188
+star,postgres,star_proj_fact_1_dim,RM2. Materialized SELECT DISTINCT,True,1,1,13010.923
+star,postgres,star_proj_fact_1_dim,RM2. Materialized SELECT DISTINCT,True,1,2,859.663
+star,postgres,star_proj_fact_1_dim,RM2. Materialized SELECT DISTINCT,True,2,0,115981.407
+star,postgres,star_proj_fact_1_dim,RM2. Materialized SELECT DISTINCT,True,2,1,13003.536
+star,postgres,star_proj_fact_1_dim,RM2. Materialized SELECT DISTINCT,True,2,2,2530.495
+star,postgres,star_proj_fact_1_dim,RM3. Dynamic Subquery,True,0,0,15524.733
+star,postgres,star_proj_fact_1_dim,RM3. Dynamic Subquery,True,0,1,125192.085
+star,postgres,star_proj_fact_1_dim,RM3. Dynamic Subquery,True,1,0,15555.147
+star,postgres,star_proj_fact_1_dim,RM3. Dynamic Subquery,True,1,1,125242.914
+star,postgres,star_proj_fact_1_dim,RM3. Dynamic Subquery,True,2,0,15667.055
+star,postgres,star_proj_fact_1_dim,RM3. Dynamic Subquery,True,2,1,126064.019
+star,postgres,star_proj_fact_1_dim,RM4. Materialized Subquery,True,0,0,30351.666
+star,postgres,star_proj_fact_1_dim,RM4. Materialized Subquery,True,0,1,65177.648
+star,postgres,star_proj_fact_1_dim,RM4. Materialized Subquery,True,0,2,17597.214
+star,postgres,star_proj_fact_1_dim,RM4. Materialized Subquery,True,1,0,39158.871
+star,postgres,star_proj_fact_1_dim,RM4. Materialized Subquery,True,1,1,64929.989
+star,postgres,star_proj_fact_1_dim,RM4. Materialized Subquery,True,1,2,17573.389
+star,postgres,star_proj_fact_1_dim,RM4. Materialized Subquery,True,2,0,40703.259
+star,postgres,star_proj_fact_1_dim,RM4. Materialized Subquery,True,2,1,65355.749
+star,postgres,star_proj_fact_1_dim,RM4. Materialized Subquery,True,2,2,17560.268
+star,postgres,star_proj_fact_1_dim,0. Single Table,True,0,0,11241.148
+star,postgres,star_proj_fact_1_dim,0. Single Table,True,1,0,11434.523
+star,postgres,star_proj_fact_1_dim,0. Single Table,True,2,0,11265.402
+star,postgres,star_proj_fact_2_dim,RM1. Dynamic SELECT DISTINCT,True,0,0,15671.174
+star,postgres,star_proj_fact_2_dim,RM1. Dynamic SELECT DISTINCT,True,0,1,2536.636
+star,postgres,star_proj_fact_2_dim,RM1. Dynamic SELECT DISTINCT,True,0,2,2526.981
+star,postgres,star_proj_fact_2_dim,RM1. Dynamic SELECT DISTINCT,True,1,0,16018.802
+star,postgres,star_proj_fact_2_dim,RM1. Dynamic SELECT DISTINCT,True,1,1,2526.377
+star,postgres,star_proj_fact_2_dim,RM1. Dynamic SELECT DISTINCT,True,1,2,2672.068
+star,postgres,star_proj_fact_2_dim,RM1. Dynamic SELECT DISTINCT,True,2,0,15673.054
+star,postgres,star_proj_fact_2_dim,RM1. Dynamic SELECT DISTINCT,True,2,1,2523.576
+star,postgres,star_proj_fact_2_dim,RM1. Dynamic SELECT DISTINCT,True,2,2,2519.528
+star,postgres,star_proj_fact_2_dim,RM2. Materialized SELECT DISTINCT,True,0,0,118329.914
+star,postgres,star_proj_fact_2_dim,RM2. Materialized SELECT DISTINCT,True,0,1,13244.095
+star,postgres,star_proj_fact_2_dim,RM2. Materialized SELECT DISTINCT,True,0,2,879.781
+star,postgres,star_proj_fact_2_dim,RM2. Materialized SELECT DISTINCT,True,0,3,991.260
+star,postgres,star_proj_fact_2_dim,RM2. Materialized SELECT DISTINCT,True,1,0,140039.306
+star,postgres,star_proj_fact_2_dim,RM2. Materialized SELECT DISTINCT,True,1,1,13196.684
+star,postgres,star_proj_fact_2_dim,RM2. Materialized SELECT DISTINCT,True,1,2,881.795
+star,postgres,star_proj_fact_2_dim,RM2. Materialized SELECT DISTINCT,True,1,3,968.577
+star,postgres,star_proj_fact_2_dim,RM2. Materialized SELECT DISTINCT,True,2,0,135419.202
+star,postgres,star_proj_fact_2_dim,RM2. Materialized SELECT DISTINCT,True,2,1,13258.777
+star,postgres,star_proj_fact_2_dim,RM2. Materialized SELECT DISTINCT,True,2,2,879.738
+star,postgres,star_proj_fact_2_dim,RM2. Materialized SELECT DISTINCT,True,2,3,961.991
+star,postgres,star_proj_fact_2_dim,RM3. Dynamic Subquery,True,0,0,15613.029
+star,postgres,star_proj_fact_2_dim,RM3. Dynamic Subquery,True,0,1,125208.141
+star,postgres,star_proj_fact_2_dim,RM3. Dynamic Subquery,True,0,2,2065.816
+star,postgres,star_proj_fact_2_dim,RM3. Dynamic Subquery,True,1,0,15604.108
+star,postgres,star_proj_fact_2_dim,RM3. Dynamic Subquery,True,1,1,125612.618
+star,postgres,star_proj_fact_2_dim,RM3. Dynamic Subquery,True,1,2,2155.676
+star,postgres,star_proj_fact_2_dim,RM3. Dynamic Subquery,True,2,0,15517.675
+star,postgres,star_proj_fact_2_dim,RM3. Dynamic Subquery,True,2,1,126285.873
+star,postgres,star_proj_fact_2_dim,RM3. Dynamic Subquery,True,2,2,2083.280
+star,postgres,star_proj_fact_2_dim,RM4. Materialized Subquery,True,0,0,50235.066
+star,postgres,star_proj_fact_2_dim,RM4. Materialized Subquery,True,0,1,65217.140
+star,postgres,star_proj_fact_2_dim,RM4. Materialized Subquery,True,0,2,17769.570
+star,postgres,star_proj_fact_2_dim,RM4. Materialized Subquery,True,0,3,334.593
+star,postgres,star_proj_fact_2_dim,RM4. Materialized Subquery,True,1,0,46257.861
+star,postgres,star_proj_fact_2_dim,RM4. Materialized Subquery,True,1,1,65890.319
+star,postgres,star_proj_fact_2_dim,RM4. Materialized Subquery,True,1,2,17795.006
+star,postgres,star_proj_fact_2_dim,RM4. Materialized Subquery,True,1,3,335.872
+star,postgres,star_proj_fact_2_dim,RM4. Materialized Subquery,True,2,0,50531.247
+star,postgres,star_proj_fact_2_dim,RM4. Materialized Subquery,True,2,1,65902.386
+star,postgres,star_proj_fact_2_dim,RM4. Materialized Subquery,True,2,2,17818.567
+star,postgres,star_proj_fact_2_dim,RM4. Materialized Subquery,True,2,3,334.636
+star,postgres,star_proj_fact_2_dim,0. Single Table,True,0,0,12972.688
+star,postgres,star_proj_fact_2_dim,0. Single Table,True,1,0,12936.380
+star,postgres,star_proj_fact_2_dim,0. Single Table,True,2,0,12903.952
+star,postgres,star_proj_fact_3_dim,RM1. Dynamic SELECT DISTINCT,True,0,0,15692.197
+star,postgres,star_proj_fact_3_dim,RM1. Dynamic SELECT DISTINCT,True,0,1,2522.232
+star,postgres,star_proj_fact_3_dim,RM1. Dynamic SELECT DISTINCT,True,0,2,2530.331
+star,postgres,star_proj_fact_3_dim,RM1. Dynamic SELECT DISTINCT,True,0,3,2519.910
+star,postgres,star_proj_fact_3_dim,RM1. Dynamic SELECT DISTINCT,True,1,0,15714.927
+star,postgres,star_proj_fact_3_dim,RM1. Dynamic SELECT DISTINCT,True,1,1,2525.382
+star,postgres,star_proj_fact_3_dim,RM1. Dynamic SELECT DISTINCT,True,1,2,2531.780
+star,postgres,star_proj_fact_3_dim,RM1. Dynamic SELECT DISTINCT,True,1,3,2514.033
+star,postgres,star_proj_fact_3_dim,RM1. Dynamic SELECT DISTINCT,True,2,0,15724.849
+star,postgres,star_proj_fact_3_dim,RM1. Dynamic SELECT DISTINCT,True,2,1,2514.690
+star,postgres,star_proj_fact_3_dim,RM1. Dynamic SELECT DISTINCT,True,2,2,2524.503
+star,postgres,star_proj_fact_3_dim,RM1. Dynamic SELECT DISTINCT,True,2,3,2511.987
+star,postgres,star_proj_fact_3_dim,RM2. Materialized SELECT DISTINCT,True,0,0,147636.542
+star,postgres,star_proj_fact_3_dim,RM2. Materialized SELECT DISTINCT,True,0,1,13558.162
+star,postgres,star_proj_fact_3_dim,RM2. Materialized SELECT DISTINCT,True,0,2,3273.407
+star,postgres,star_proj_fact_3_dim,RM2. Materialized SELECT DISTINCT,True,0,3,4042.127
+star,postgres,star_proj_fact_3_dim,RM2. Materialized SELECT DISTINCT,True,0,4,1538.604
+star,postgres,star_proj_fact_3_dim,RM2. Materialized SELECT DISTINCT,True,1,0,152998.330
+star,postgres,star_proj_fact_3_dim,RM2. Materialized SELECT DISTINCT,True,1,1,13488.653
+star,postgres,star_proj_fact_3_dim,RM2. Materialized SELECT DISTINCT,True,1,2,1302.995
+star,postgres,star_proj_fact_3_dim,RM2. Materialized SELECT DISTINCT,True,1,3,1427.745
+star,postgres,star_proj_fact_3_dim,RM2. Materialized SELECT DISTINCT,True,1,4,1237.566
+star,postgres,star_proj_fact_3_dim,RM2. Materialized SELECT DISTINCT,True,2,0,142798.647
+star,postgres,star_proj_fact_3_dim,RM2. Materialized SELECT DISTINCT,True,2,1,13497.682
+star,postgres,star_proj_fact_3_dim,RM2. Materialized SELECT DISTINCT,True,2,2,1272.076
+star,postgres,star_proj_fact_3_dim,RM2. Materialized SELECT DISTINCT,True,2,3,1458.287
+star,postgres,star_proj_fact_3_dim,RM2. Materialized SELECT DISTINCT,True,2,4,1322.286
+star,postgres,star_proj_fact_3_dim,RM3. Dynamic Subquery,True,0,0,15530.344
+star,postgres,star_proj_fact_3_dim,RM3. Dynamic Subquery,True,0,1,125327.310
+star,postgres,star_proj_fact_3_dim,RM3. Dynamic Subquery,True,0,2,2062.812
+star,postgres,star_proj_fact_3_dim,RM3. Dynamic Subquery,True,0,3,44.816
+star,postgres,star_proj_fact_3_dim,RM3. Dynamic Subquery,True,1,0,15613.124
+star,postgres,star_proj_fact_3_dim,RM3. Dynamic Subquery,True,1,1,125285.718
+star,postgres,star_proj_fact_3_dim,RM3. Dynamic Subquery,True,1,2,2062.231
+star,postgres,star_proj_fact_3_dim,RM3. Dynamic Subquery,True,1,3,44.668
+star,postgres,star_proj_fact_3_dim,RM3. Dynamic Subquery,True,2,0,15709.632
+star,postgres,star_proj_fact_3_dim,RM3. Dynamic Subquery,True,2,1,125699.437
+star,postgres,star_proj_fact_3_dim,RM3. Dynamic Subquery,True,2,2,2064.586
+star,postgres,star_proj_fact_3_dim,RM3. Dynamic Subquery,True,2,3,44.877
+star,postgres,star_proj_fact_3_dim,RM4. Materialized Subquery,True,0,0,35332.830
+star,postgres,star_proj_fact_3_dim,RM4. Materialized Subquery,True,0,1,65714.971
+star,postgres,star_proj_fact_3_dim,RM4. Materialized Subquery,True,0,2,17892.907
+star,postgres,star_proj_fact_3_dim,RM4. Materialized Subquery,True,0,3,335.101
+star,postgres,star_proj_fact_3_dim,RM4. Materialized Subquery,True,0,4,10.266
+star,postgres,star_proj_fact_3_dim,RM4. Materialized Subquery,True,1,0,44391.540
+star,postgres,star_proj_fact_3_dim,RM4. Materialized Subquery,True,1,1,64977.244
+star,postgres,star_proj_fact_3_dim,RM4. Materialized Subquery,True,1,2,17949.745
+star,postgres,star_proj_fact_3_dim,RM4. Materialized Subquery,True,1,3,335.691
+star,postgres,star_proj_fact_3_dim,RM4. Materialized Subquery,True,1,4,10.199
+star,postgres,star_proj_fact_3_dim,RM4. Materialized Subquery,True,2,0,51553.345
+star,postgres,star_proj_fact_3_dim,RM4. Materialized Subquery,True,2,1,65404.447
+star,postgres,star_proj_fact_3_dim,RM4. Materialized Subquery,True,2,2,17941.275
+star,postgres,star_proj_fact_3_dim,RM4. Materialized Subquery,True,2,3,335.340
+star,postgres,star_proj_fact_3_dim,RM4. Materialized Subquery,True,2,4,10.206
+star,postgres,star_proj_fact_3_dim,0. Single Table,True,0,0,14537.296
+star,postgres,star_proj_fact_3_dim,0. Single Table,True,1,0,14276.117
+star,postgres,star_proj_fact_3_dim,0. Single Table,True,2,0,14310.710
+star,postgres,star_proj_fact_4_dim,RM1. Dynamic SELECT DISTINCT,True,0,0,15710.770
+star,postgres,star_proj_fact_4_dim,RM1. Dynamic SELECT DISTINCT,True,0,1,2534.901
+star,postgres,star_proj_fact_4_dim,RM1. Dynamic SELECT DISTINCT,True,0,2,2507.818
+star,postgres,star_proj_fact_4_dim,RM1. Dynamic SELECT DISTINCT,True,0,3,2498.343
+star,postgres,star_proj_fact_4_dim,RM1. Dynamic SELECT DISTINCT,True,0,4,2523.340
+star,postgres,star_proj_fact_4_dim,RM1. Dynamic SELECT DISTINCT,True,1,0,15712.281
+star,postgres,star_proj_fact_4_dim,RM1. Dynamic SELECT DISTINCT,True,1,1,2513.251
+star,postgres,star_proj_fact_4_dim,RM1. Dynamic SELECT DISTINCT,True,1,2,2520.740
+star,postgres,star_proj_fact_4_dim,RM1. Dynamic SELECT DISTINCT,True,1,3,2517.346
+star,postgres,star_proj_fact_4_dim,RM1. Dynamic SELECT DISTINCT,True,1,4,2533.956
+star,postgres,star_proj_fact_4_dim,RM1. Dynamic SELECT DISTINCT,True,2,0,15816.299
+star,postgres,star_proj_fact_4_dim,RM1. Dynamic SELECT DISTINCT,True,2,1,2521.408
+star,postgres,star_proj_fact_4_dim,RM1. Dynamic SELECT DISTINCT,True,2,2,2528.480
+star,postgres,star_proj_fact_4_dim,RM1. Dynamic SELECT DISTINCT,True,2,3,2520.454
+star,postgres,star_proj_fact_4_dim,RM1. Dynamic SELECT DISTINCT,True,2,4,2541.592
+star,postgres,star_proj_fact_4_dim,RM2. Materialized SELECT DISTINCT,True,0,0,161534.441
+star,postgres,star_proj_fact_4_dim,RM2. Materialized SELECT DISTINCT,True,0,1,13702.234
+star,postgres,star_proj_fact_4_dim,RM2. Materialized SELECT DISTINCT,True,0,2,2810.138
+star,postgres,star_proj_fact_4_dim,RM2. Materialized SELECT DISTINCT,True,0,3,2966.789
+star,postgres,star_proj_fact_4_dim,RM2. Materialized SELECT DISTINCT,True,0,4,2959.129
+star,postgres,star_proj_fact_4_dim,RM2. Materialized SELECT DISTINCT,True,0,5,2951.800
+star,postgres,star_proj_fact_4_dim,RM2. Materialized SELECT DISTINCT,True,1,0,191733.925
+star,postgres,star_proj_fact_4_dim,RM2. Materialized SELECT DISTINCT,True,1,1,13695.736
+star,postgres,star_proj_fact_4_dim,RM2. Materialized SELECT DISTINCT,True,1,2,2768.004
+star,postgres,star_proj_fact_4_dim,RM2. Materialized SELECT DISTINCT,True,1,3,2671.611
+star,postgres,star_proj_fact_4_dim,RM2. Materialized SELECT DISTINCT,True,1,4,3054.078
+star,postgres,star_proj_fact_4_dim,RM2. Materialized SELECT DISTINCT,True,1,5,1081.669
+star,postgres,star_proj_fact_4_dim,RM2. Materialized SELECT DISTINCT,True,2,0,180647.042
+star,postgres,star_proj_fact_4_dim,RM2. Materialized SELECT DISTINCT,True,2,1,13697.585
+star,postgres,star_proj_fact_4_dim,RM2. Materialized SELECT DISTINCT,True,2,2,2818.100
+star,postgres,star_proj_fact_4_dim,RM2. Materialized SELECT DISTINCT,True,2,3,2986.376
+star,postgres,star_proj_fact_4_dim,RM2. Materialized SELECT DISTINCT,True,2,4,3126.615
+star,postgres,star_proj_fact_4_dim,RM2. Materialized SELECT DISTINCT,True,2,5,3212.715
+star,postgres,star_proj_fact_4_dim,RM3. Dynamic Subquery,True,0,0,15619.886
+star,postgres,star_proj_fact_4_dim,RM3. Dynamic Subquery,True,0,1,125338.293
+star,postgres,star_proj_fact_4_dim,RM3. Dynamic Subquery,True,0,2,2064.064
+star,postgres,star_proj_fact_4_dim,RM3. Dynamic Subquery,True,0,3,44.700
+star,postgres,star_proj_fact_4_dim,RM3. Dynamic Subquery,True,0,4,10.210
+star,postgres,star_proj_fact_4_dim,RM3. Dynamic Subquery,True,1,0,15628.053
+star,postgres,star_proj_fact_4_dim,RM3. Dynamic Subquery,True,1,1,125162.265
+star,postgres,star_proj_fact_4_dim,RM3. Dynamic Subquery,True,1,2,2064.769
+star,postgres,star_proj_fact_4_dim,RM3. Dynamic Subquery,True,1,3,44.763
+star,postgres,star_proj_fact_4_dim,RM3. Dynamic Subquery,True,1,4,10.236
+star,postgres,star_proj_fact_4_dim,RM3. Dynamic Subquery,True,2,0,15606.617
+star,postgres,star_proj_fact_4_dim,RM3. Dynamic Subquery,True,2,1,125285.986
+star,postgres,star_proj_fact_4_dim,RM3. Dynamic Subquery,True,2,2,2061.775
+star,postgres,star_proj_fact_4_dim,RM3. Dynamic Subquery,True,2,3,44.965
+star,postgres,star_proj_fact_4_dim,RM3. Dynamic Subquery,True,2,4,10.454
+star,postgres,star_proj_fact_4_dim,RM4. Materialized Subquery,True,0,0,61688.655
+star,postgres,star_proj_fact_4_dim,RM4. Materialized Subquery,True,0,1,66359.471
+star,postgres,star_proj_fact_4_dim,RM4. Materialized Subquery,True,0,2,18097.050
+star,postgres,star_proj_fact_4_dim,RM4. Materialized Subquery,True,0,3,337.967
+star,postgres,star_proj_fact_4_dim,RM4. Materialized Subquery,True,0,4,10.250
+star,postgres,star_proj_fact_4_dim,RM4. Materialized Subquery,True,0,5,3.995
+star,postgres,star_proj_fact_4_dim,RM4. Materialized Subquery,True,1,0,65880.923
+star,postgres,star_proj_fact_4_dim,RM4. Materialized Subquery,True,1,1,66411.560
+star,postgres,star_proj_fact_4_dim,RM4. Materialized Subquery,True,1,2,18109.048
+star,postgres,star_proj_fact_4_dim,RM4. Materialized Subquery,True,1,3,338.622
+star,postgres,star_proj_fact_4_dim,RM4. Materialized Subquery,True,1,4,10.284
+star,postgres,star_proj_fact_4_dim,RM4. Materialized Subquery,True,1,5,4.052
+star,postgres,star_proj_fact_4_dim,RM4. Materialized Subquery,True,2,0,52397.952
+star,postgres,star_proj_fact_4_dim,RM4. Materialized Subquery,True,2,1,66021.729
+star,postgres,star_proj_fact_4_dim,RM4. Materialized Subquery,True,2,2,18043.715
+star,postgres,star_proj_fact_4_dim,RM4. Materialized Subquery,True,2,3,340.682
+star,postgres,star_proj_fact_4_dim,RM4. Materialized Subquery,True,2,4,10.226
+star,postgres,star_proj_fact_4_dim,RM4. Materialized Subquery,True,2,5,4.134
+star,postgres,star_proj_fact_4_dim,0. Single Table,True,0,0,15983.251
+star,postgres,star_proj_fact_4_dim,0. Single Table,True,1,0,16074.584
+star,postgres,star_proj_fact_4_dim,0. Single Table,True,2,0,15962.769
+star,postgres,star_sel_10,RM1. Dynamic SELECT DISTINCT,True,0,0,432.889
+star,postgres,star_sel_10,RM1. Dynamic SELECT DISTINCT,True,0,1,411.083
+star,postgres,star_sel_10,RM1. Dynamic SELECT DISTINCT,True,0,2,415.888
+star,postgres,star_sel_10,RM1. Dynamic SELECT DISTINCT,True,0,3,403.323
+star,postgres,star_sel_10,RM1. Dynamic SELECT DISTINCT,True,0,4,413.628
+star,postgres,star_sel_10,RM1. Dynamic SELECT DISTINCT,True,1,0,449.478
+star,postgres,star_sel_10,RM1. Dynamic SELECT DISTINCT,True,1,1,417.655
+star,postgres,star_sel_10,RM1. Dynamic SELECT DISTINCT,True,1,2,407.628
+star,postgres,star_sel_10,RM1. Dynamic SELECT DISTINCT,True,1,3,421.761
+star,postgres,star_sel_10,RM1. Dynamic SELECT DISTINCT,True,1,4,421.622
+star,postgres,star_sel_10,RM1. Dynamic SELECT DISTINCT,True,2,0,442.695
+star,postgres,star_sel_10,RM1. Dynamic SELECT DISTINCT,True,2,1,411.942
+star,postgres,star_sel_10,RM1. Dynamic SELECT DISTINCT,True,2,2,414.764
+star,postgres,star_sel_10,RM1. Dynamic SELECT DISTINCT,True,2,3,414.814
+star,postgres,star_sel_10,RM1. Dynamic SELECT DISTINCT,True,2,4,420.951
+star,postgres,star_sel_10,RM2. Materialized SELECT DISTINCT,True,0,0,461.309
+star,postgres,star_sel_10,RM2. Materialized SELECT DISTINCT,True,0,1,1.463
+star,postgres,star_sel_10,RM2. Materialized SELECT DISTINCT,True,0,2,0.359
+star,postgres,star_sel_10,RM2. Materialized SELECT DISTINCT,True,0,3,0.336
+star,postgres,star_sel_10,RM2. Materialized SELECT DISTINCT,True,0,4,0.361
+star,postgres,star_sel_10,RM2. Materialized SELECT DISTINCT,True,0,5,0.363
+star,postgres,star_sel_10,RM2. Materialized SELECT DISTINCT,True,1,0,456.169
+star,postgres,star_sel_10,RM2. Materialized SELECT DISTINCT,True,1,1,1.461
+star,postgres,star_sel_10,RM2. Materialized SELECT DISTINCT,True,1,2,0.581
+star,postgres,star_sel_10,RM2. Materialized SELECT DISTINCT,True,1,3,0.348
+star,postgres,star_sel_10,RM2. Materialized SELECT DISTINCT,True,1,4,0.367
+star,postgres,star_sel_10,RM2. Materialized SELECT DISTINCT,True,1,5,0.374
+star,postgres,star_sel_10,RM2. Materialized SELECT DISTINCT,True,2,0,461.235
+star,postgres,star_sel_10,RM2. Materialized SELECT DISTINCT,True,2,1,1.478
+star,postgres,star_sel_10,RM2. Materialized SELECT DISTINCT,True,2,2,0.455
+star,postgres,star_sel_10,RM2. Materialized SELECT DISTINCT,True,2,3,0.353
+star,postgres,star_sel_10,RM2. Materialized SELECT DISTINCT,True,2,4,0.369
+star,postgres,star_sel_10,RM2. Materialized SELECT DISTINCT,True,2,5,0.373
+star,postgres,star_sel_10,RM3. Dynamic Subquery,True,0,0,458.745
+star,postgres,star_sel_10,RM3. Dynamic Subquery,True,0,1,63.616
+star,postgres,star_sel_10,RM3. Dynamic Subquery,True,0,2,29.980
+star,postgres,star_sel_10,RM3. Dynamic Subquery,True,0,3,29.450
+star,postgres,star_sel_10,RM3. Dynamic Subquery,True,0,4,29.353
+star,postgres,star_sel_10,RM3. Dynamic Subquery,True,1,0,464.696
+star,postgres,star_sel_10,RM3. Dynamic Subquery,True,1,1,63.877
+star,postgres,star_sel_10,RM3. Dynamic Subquery,True,1,2,31.242
+star,postgres,star_sel_10,RM3. Dynamic Subquery,True,1,3,31.587
+star,postgres,star_sel_10,RM3. Dynamic Subquery,True,1,4,33.139
+star,postgres,star_sel_10,RM3. Dynamic Subquery,True,2,0,460.708
+star,postgres,star_sel_10,RM3. Dynamic Subquery,True,2,1,61.793
+star,postgres,star_sel_10,RM3. Dynamic Subquery,True,2,2,29.914
+star,postgres,star_sel_10,RM3. Dynamic Subquery,True,2,3,29.599
+star,postgres,star_sel_10,RM3. Dynamic Subquery,True,2,4,29.870
+star,postgres,star_sel_10,RM4. Materialized Subquery,True,0,0,433.536
+star,postgres,star_sel_10,RM4. Materialized Subquery,True,0,1,4.333
+star,postgres,star_sel_10,RM4. Materialized Subquery,True,0,2,0.340
+star,postgres,star_sel_10,RM4. Materialized Subquery,True,0,3,0.306
+star,postgres,star_sel_10,RM4. Materialized Subquery,True,0,4,0.299
+star,postgres,star_sel_10,RM4. Materialized Subquery,True,0,5,0.304
+star,postgres,star_sel_10,RM4. Materialized Subquery,True,1,0,434.511
+star,postgres,star_sel_10,RM4. Materialized Subquery,True,1,1,4.298
+star,postgres,star_sel_10,RM4. Materialized Subquery,True,1,2,0.534
+star,postgres,star_sel_10,RM4. Materialized Subquery,True,1,3,0.306
+star,postgres,star_sel_10,RM4. Materialized Subquery,True,1,4,0.298
+star,postgres,star_sel_10,RM4. Materialized Subquery,True,1,5,0.306
+star,postgres,star_sel_10,RM4. Materialized Subquery,True,2,0,432.266
+star,postgres,star_sel_10,RM4. Materialized Subquery,True,2,1,4.320
+star,postgres,star_sel_10,RM4. Materialized Subquery,True,2,2,0.337
+star,postgres,star_sel_10,RM4. Materialized Subquery,True,2,3,0.308
+star,postgres,star_sel_10,RM4. Materialized Subquery,True,2,4,0.300
+star,postgres,star_sel_10,RM4. Materialized Subquery,True,2,5,0.305
+star,postgres,star_sel_10,0. Single Table,True,0,0,444.943
+star,postgres,star_sel_10,0. Single Table,True,1,0,449.628
+star,postgres,star_sel_10,0. Single Table,True,2,0,448.615
+star,postgres,star_sel_20,RM1. Dynamic SELECT DISTINCT,True,0,0,518.095
+star,postgres,star_sel_20,RM1. Dynamic SELECT DISTINCT,True,0,1,484.028
+star,postgres,star_sel_20,RM1. Dynamic SELECT DISTINCT,True,0,2,472.952
+star,postgres,star_sel_20,RM1. Dynamic SELECT DISTINCT,True,0,3,469.224
+star,postgres,star_sel_20,RM1. Dynamic SELECT DISTINCT,True,0,4,469.415
+star,postgres,star_sel_20,RM1. Dynamic SELECT DISTINCT,True,1,0,516.261
+star,postgres,star_sel_20,RM1. Dynamic SELECT DISTINCT,True,1,1,478.148
+star,postgres,star_sel_20,RM1. Dynamic SELECT DISTINCT,True,1,2,472.594
+star,postgres,star_sel_20,RM1. Dynamic SELECT DISTINCT,True,1,3,466.084
+star,postgres,star_sel_20,RM1. Dynamic SELECT DISTINCT,True,1,4,470.261
+star,postgres,star_sel_20,RM1. Dynamic SELECT DISTINCT,True,2,0,514.609
+star,postgres,star_sel_20,RM1. Dynamic SELECT DISTINCT,True,2,1,479.718
+star,postgres,star_sel_20,RM1. Dynamic SELECT DISTINCT,True,2,2,469.881
+star,postgres,star_sel_20,RM1. Dynamic SELECT DISTINCT,True,2,3,467.048
+star,postgres,star_sel_20,RM1. Dynamic SELECT DISTINCT,True,2,4,473.220
+star,postgres,star_sel_20,RM2. Materialized SELECT DISTINCT,True,0,0,567.782
+star,postgres,star_sel_20,RM2. Materialized SELECT DISTINCT,True,0,1,17.259
+star,postgres,star_sel_20,RM2. Materialized SELECT DISTINCT,True,0,2,5.543
+star,postgres,star_sel_20,RM2. Materialized SELECT DISTINCT,True,0,3,4.750
+star,postgres,star_sel_20,RM2. Materialized SELECT DISTINCT,True,0,4,4.923
+star,postgres,star_sel_20,RM2. Materialized SELECT DISTINCT,True,0,5,5.085
+star,postgres,star_sel_20,RM2. Materialized SELECT DISTINCT,True,1,0,573.661
+star,postgres,star_sel_20,RM2. Materialized SELECT DISTINCT,True,1,1,17.325
+star,postgres,star_sel_20,RM2. Materialized SELECT DISTINCT,True,1,2,5.405
+star,postgres,star_sel_20,RM2. Materialized SELECT DISTINCT,True,1,3,4.787
+star,postgres,star_sel_20,RM2. Materialized SELECT DISTINCT,True,1,4,5.077
+star,postgres,star_sel_20,RM2. Materialized SELECT DISTINCT,True,1,5,5.115
+star,postgres,star_sel_20,RM2. Materialized SELECT DISTINCT,True,2,0,557.224
+star,postgres,star_sel_20,RM2. Materialized SELECT DISTINCT,True,2,1,17.812
+star,postgres,star_sel_20,RM2. Materialized SELECT DISTINCT,True,2,2,5.546
+star,postgres,star_sel_20,RM2. Materialized SELECT DISTINCT,True,2,3,4.807
+star,postgres,star_sel_20,RM2. Materialized SELECT DISTINCT,True,2,4,5.000
+star,postgres,star_sel_20,RM2. Materialized SELECT DISTINCT,True,2,5,5.031
+star,postgres,star_sel_20,RM3. Dynamic Subquery,True,0,0,533.009
+star,postgres,star_sel_20,RM3. Dynamic Subquery,True,0,1,113.248
+star,postgres,star_sel_20,RM3. Dynamic Subquery,True,0,2,30.161
+star,postgres,star_sel_20,RM3. Dynamic Subquery,True,0,3,29.791
+star,postgres,star_sel_20,RM3. Dynamic Subquery,True,0,4,32.234
+star,postgres,star_sel_20,RM3. Dynamic Subquery,True,1,0,529.826
+star,postgres,star_sel_20,RM3. Dynamic Subquery,True,1,1,115.187
+star,postgres,star_sel_20,RM3. Dynamic Subquery,True,1,2,32.343
+star,postgres,star_sel_20,RM3. Dynamic Subquery,True,1,3,31.426
+star,postgres,star_sel_20,RM3. Dynamic Subquery,True,1,4,34.077
+star,postgres,star_sel_20,RM3. Dynamic Subquery,True,2,0,528.532
+star,postgres,star_sel_20,RM3. Dynamic Subquery,True,2,1,111.571
+star,postgres,star_sel_20,RM3. Dynamic Subquery,True,2,2,31.524
+star,postgres,star_sel_20,RM3. Dynamic Subquery,True,2,3,29.648
+star,postgres,star_sel_20,RM3. Dynamic Subquery,True,2,4,29.638
+star,postgres,star_sel_20,RM4. Materialized Subquery,True,0,0,499.667
+star,postgres,star_sel_20,RM4. Materialized Subquery,True,0,1,62.111
+star,postgres,star_sel_20,RM4. Materialized Subquery,True,0,2,2.888
+star,postgres,star_sel_20,RM4. Materialized Subquery,True,0,3,2.681
+star,postgres,star_sel_20,RM4. Materialized Subquery,True,0,4,2.792
+star,postgres,star_sel_20,RM4. Materialized Subquery,True,0,5,2.753
+star,postgres,star_sel_20,RM4. Materialized Subquery,True,1,0,504.443
+star,postgres,star_sel_20,RM4. Materialized Subquery,True,1,1,61.992
+star,postgres,star_sel_20,RM4. Materialized Subquery,True,1,2,3.007
+star,postgres,star_sel_20,RM4. Materialized Subquery,True,1,3,2.666
+star,postgres,star_sel_20,RM4. Materialized Subquery,True,1,4,2.725
+star,postgres,star_sel_20,RM4. Materialized Subquery,True,1,5,2.765
+star,postgres,star_sel_20,RM4. Materialized Subquery,True,2,0,495.796
+star,postgres,star_sel_20,RM4. Materialized Subquery,True,2,1,62.604
+star,postgres,star_sel_20,RM4. Materialized Subquery,True,2,2,2.988
+star,postgres,star_sel_20,RM4. Materialized Subquery,True,2,3,2.675
+star,postgres,star_sel_20,RM4. Materialized Subquery,True,2,4,2.689
+star,postgres,star_sel_20,RM4. Materialized Subquery,True,2,5,2.724
+star,postgres,star_sel_20,0. Single Table,True,0,0,538.322
+star,postgres,star_sel_20,0. Single Table,True,1,0,532.353
+star,postgres,star_sel_20,0. Single Table,True,2,0,537.533
+star,postgres,star_sel_30,RM1. Dynamic SELECT DISTINCT,True,0,0,668.539
+star,postgres,star_sel_30,RM1. Dynamic SELECT DISTINCT,True,0,1,560.484
+star,postgres,star_sel_30,RM1. Dynamic SELECT DISTINCT,True,0,2,555.436
+star,postgres,star_sel_30,RM1. Dynamic SELECT DISTINCT,True,0,3,554.474
+star,postgres,star_sel_30,RM1. Dynamic SELECT DISTINCT,True,0,4,552.603
+star,postgres,star_sel_30,RM1. Dynamic SELECT DISTINCT,True,1,0,669.494
+star,postgres,star_sel_30,RM1. Dynamic SELECT DISTINCT,True,1,1,562.164
+star,postgres,star_sel_30,RM1. Dynamic SELECT DISTINCT,True,1,2,555.573
+star,postgres,star_sel_30,RM1. Dynamic SELECT DISTINCT,True,1,3,542.248
+star,postgres,star_sel_30,RM1. Dynamic SELECT DISTINCT,True,1,4,543.372
+star,postgres,star_sel_30,RM1. Dynamic SELECT DISTINCT,True,2,0,666.387
+star,postgres,star_sel_30,RM1. Dynamic SELECT DISTINCT,True,2,1,563.545
+star,postgres,star_sel_30,RM1. Dynamic SELECT DISTINCT,True,2,2,556.952
+star,postgres,star_sel_30,RM1. Dynamic SELECT DISTINCT,True,2,3,551.205
+star,postgres,star_sel_30,RM1. Dynamic SELECT DISTINCT,True,2,4,541.734
+star,postgres,star_sel_30,RM2. Materialized SELECT DISTINCT,True,0,0,1251.304
+star,postgres,star_sel_30,RM2. Materialized SELECT DISTINCT,True,0,1,93.673
+star,postgres,star_sel_30,RM2. Materialized SELECT DISTINCT,True,0,2,25.719
+star,postgres,star_sel_30,RM2. Materialized SELECT DISTINCT,True,0,3,26.292
+star,postgres,star_sel_30,RM2. Materialized SELECT DISTINCT,True,0,4,28.367
+star,postgres,star_sel_30,RM2. Materialized SELECT DISTINCT,True,0,5,28.817
+star,postgres,star_sel_30,RM2. Materialized SELECT DISTINCT,True,1,0,1229.451
+star,postgres,star_sel_30,RM2. Materialized SELECT DISTINCT,True,1,1,93.486
+star,postgres,star_sel_30,RM2. Materialized SELECT DISTINCT,True,1,2,25.662
+star,postgres,star_sel_30,RM2. Materialized SELECT DISTINCT,True,1,3,26.208
+star,postgres,star_sel_30,RM2. Materialized SELECT DISTINCT,True,1,4,28.409
+star,postgres,star_sel_30,RM2. Materialized SELECT DISTINCT,True,1,5,28.972
+star,postgres,star_sel_30,RM2. Materialized SELECT DISTINCT,True,2,0,1148.538
+star,postgres,star_sel_30,RM2. Materialized SELECT DISTINCT,True,2,1,93.523
+star,postgres,star_sel_30,RM2. Materialized SELECT DISTINCT,True,2,2,25.636
+star,postgres,star_sel_30,RM2. Materialized SELECT DISTINCT,True,2,3,26.220
+star,postgres,star_sel_30,RM2. Materialized SELECT DISTINCT,True,2,4,28.196
+star,postgres,star_sel_30,RM2. Materialized SELECT DISTINCT,True,2,5,28.731
+star,postgres,star_sel_30,RM3. Dynamic Subquery,True,0,0,681.288
+star,postgres,star_sel_30,RM3. Dynamic Subquery,True,0,1,190.471
+star,postgres,star_sel_30,RM3. Dynamic Subquery,True,0,2,31.921
+star,postgres,star_sel_30,RM3. Dynamic Subquery,True,0,3,31.506
+star,postgres,star_sel_30,RM3. Dynamic Subquery,True,0,4,35.235
+star,postgres,star_sel_30,RM3. Dynamic Subquery,True,1,0,676.414
+star,postgres,star_sel_30,RM3. Dynamic Subquery,True,1,1,188.940
+star,postgres,star_sel_30,RM3. Dynamic Subquery,True,1,2,30.110
+star,postgres,star_sel_30,RM3. Dynamic Subquery,True,1,3,29.586
+star,postgres,star_sel_30,RM3. Dynamic Subquery,True,1,4,29.386
+star,postgres,star_sel_30,RM3. Dynamic Subquery,True,2,0,674.372
+star,postgres,star_sel_30,RM3. Dynamic Subquery,True,2,1,188.037
+star,postgres,star_sel_30,RM3. Dynamic Subquery,True,2,2,32.074
+star,postgres,star_sel_30,RM3. Dynamic Subquery,True,2,3,32.492
+star,postgres,star_sel_30,RM3. Dynamic Subquery,True,2,4,31.814
+star,postgres,star_sel_30,RM4. Materialized Subquery,True,0,0,712.959
+star,postgres,star_sel_30,RM4. Materialized Subquery,True,0,1,370.474
+star,postgres,star_sel_30,RM4. Materialized Subquery,True,0,2,13.453
+star,postgres,star_sel_30,RM4. Materialized Subquery,True,0,3,12.993
+star,postgres,star_sel_30,RM4. Materialized Subquery,True,0,4,13.204
+star,postgres,star_sel_30,RM4. Materialized Subquery,True,0,5,13.465
+star,postgres,star_sel_30,RM4. Materialized Subquery,True,1,0,610.045
+star,postgres,star_sel_30,RM4. Materialized Subquery,True,1,1,380.041
+star,postgres,star_sel_30,RM4. Materialized Subquery,True,1,2,13.595
+star,postgres,star_sel_30,RM4. Materialized Subquery,True,1,3,13.107
+star,postgres,star_sel_30,RM4. Materialized Subquery,True,1,4,13.326
+star,postgres,star_sel_30,RM4. Materialized Subquery,True,1,5,13.661
+star,postgres,star_sel_30,RM4. Materialized Subquery,True,2,0,746.058
+star,postgres,star_sel_30,RM4. Materialized Subquery,True,2,1,370.811
+star,postgres,star_sel_30,RM4. Materialized Subquery,True,2,2,13.326
+star,postgres,star_sel_30,RM4. Materialized Subquery,True,2,3,13.013
+star,postgres,star_sel_30,RM4. Materialized Subquery,True,2,4,13.219
+star,postgres,star_sel_30,RM4. Materialized Subquery,True,2,5,13.489
+star,postgres,star_sel_30,0. Single Table,True,0,0,700.282
+star,postgres,star_sel_30,0. Single Table,True,1,0,703.747
+star,postgres,star_sel_30,0. Single Table,True,2,0,709.142
+star,postgres,star_sel_40,RM1. Dynamic SELECT DISTINCT,True,0,0,959.060
+star,postgres,star_sel_40,RM1. Dynamic SELECT DISTINCT,True,0,1,683.905
+star,postgres,star_sel_40,RM1. Dynamic SELECT DISTINCT,True,0,2,669.271
+star,postgres,star_sel_40,RM1. Dynamic SELECT DISTINCT,True,0,3,655.111
+star,postgres,star_sel_40,RM1. Dynamic SELECT DISTINCT,True,0,4,649.842
+star,postgres,star_sel_40,RM1. Dynamic SELECT DISTINCT,True,1,0,957.311
+star,postgres,star_sel_40,RM1. Dynamic SELECT DISTINCT,True,1,1,682.532
+star,postgres,star_sel_40,RM1. Dynamic SELECT DISTINCT,True,1,2,670.326
+star,postgres,star_sel_40,RM1. Dynamic SELECT DISTINCT,True,1,3,656.402
+star,postgres,star_sel_40,RM1. Dynamic SELECT DISTINCT,True,1,4,653.361
+star,postgres,star_sel_40,RM1. Dynamic SELECT DISTINCT,True,2,0,962.381
+star,postgres,star_sel_40,RM1. Dynamic SELECT DISTINCT,True,2,1,683.760
+star,postgres,star_sel_40,RM1. Dynamic SELECT DISTINCT,True,2,2,671.791
+star,postgres,star_sel_40,RM1. Dynamic SELECT DISTINCT,True,2,3,656.962
+star,postgres,star_sel_40,RM1. Dynamic SELECT DISTINCT,True,2,4,655.157
+star,postgres,star_sel_40,RM2. Materialized SELECT DISTINCT,True,0,0,2541.076
+star,postgres,star_sel_40,RM2. Materialized SELECT DISTINCT,True,0,1,309.973
+star,postgres,star_sel_40,RM2. Materialized SELECT DISTINCT,True,0,2,79.920
+star,postgres,star_sel_40,RM2. Materialized SELECT DISTINCT,True,0,3,82.403
+star,postgres,star_sel_40,RM2. Materialized SELECT DISTINCT,True,0,4,89.073
+star,postgres,star_sel_40,RM2. Materialized SELECT DISTINCT,True,0,5,89.796
+star,postgres,star_sel_40,RM2. Materialized SELECT DISTINCT,True,1,0,2238.897
+star,postgres,star_sel_40,RM2. Materialized SELECT DISTINCT,True,1,1,311.874
+star,postgres,star_sel_40,RM2. Materialized SELECT DISTINCT,True,1,2,79.672
+star,postgres,star_sel_40,RM2. Materialized SELECT DISTINCT,True,1,3,82.684
+star,postgres,star_sel_40,RM2. Materialized SELECT DISTINCT,True,1,4,88.191
+star,postgres,star_sel_40,RM2. Materialized SELECT DISTINCT,True,1,5,91.136
+star,postgres,star_sel_40,RM2. Materialized SELECT DISTINCT,True,2,0,2338.271
+star,postgres,star_sel_40,RM2. Materialized SELECT DISTINCT,True,2,1,311.008
+star,postgres,star_sel_40,RM2. Materialized SELECT DISTINCT,True,2,2,80.151
+star,postgres,star_sel_40,RM2. Materialized SELECT DISTINCT,True,2,3,82.450
+star,postgres,star_sel_40,RM2. Materialized SELECT DISTINCT,True,2,4,88.093
+star,postgres,star_sel_40,RM2. Materialized SELECT DISTINCT,True,2,5,90.865
+star,postgres,star_sel_40,RM3. Dynamic Subquery,True,0,0,974.746
+star,postgres,star_sel_40,RM3. Dynamic Subquery,True,0,1,362.848
+star,postgres,star_sel_40,RM3. Dynamic Subquery,True,0,2,35.489
+star,postgres,star_sel_40,RM3. Dynamic Subquery,True,0,3,31.114
+star,postgres,star_sel_40,RM3. Dynamic Subquery,True,0,4,31.787
+star,postgres,star_sel_40,RM3. Dynamic Subquery,True,1,0,967.731
+star,postgres,star_sel_40,RM3. Dynamic Subquery,True,1,1,362.946
+star,postgres,star_sel_40,RM3. Dynamic Subquery,True,1,2,35.290
+star,postgres,star_sel_40,RM3. Dynamic Subquery,True,1,3,29.665
+star,postgres,star_sel_40,RM3. Dynamic Subquery,True,1,4,29.503
+star,postgres,star_sel_40,RM3. Dynamic Subquery,True,2,0,972.794
+star,postgres,star_sel_40,RM3. Dynamic Subquery,True,2,1,364.290
+star,postgres,star_sel_40,RM3. Dynamic Subquery,True,2,2,34.745
+star,postgres,star_sel_40,RM3. Dynamic Subquery,True,2,3,29.524
+star,postgres,star_sel_40,RM3. Dynamic Subquery,True,2,4,30.192
+star,postgres,star_sel_40,RM4. Materialized Subquery,True,0,0,1066.400
+star,postgres,star_sel_40,RM4. Materialized Subquery,True,0,1,1343.583
+star,postgres,star_sel_40,RM4. Materialized Subquery,True,0,2,41.265
+star,postgres,star_sel_40,RM4. Materialized Subquery,True,0,3,41.567
+star,postgres,star_sel_40,RM4. Materialized Subquery,True,0,4,42.283
+star,postgres,star_sel_40,RM4. Materialized Subquery,True,0,5,42.967
+star,postgres,star_sel_40,RM4. Materialized Subquery,True,1,0,1103.959
+star,postgres,star_sel_40,RM4. Materialized Subquery,True,1,1,1379.090
+star,postgres,star_sel_40,RM4. Materialized Subquery,True,1,2,41.214
+star,postgres,star_sel_40,RM4. Materialized Subquery,True,1,3,41.609
+star,postgres,star_sel_40,RM4. Materialized Subquery,True,1,4,42.057
+star,postgres,star_sel_40,RM4. Materialized Subquery,True,1,5,43.160
+star,postgres,star_sel_40,RM4. Materialized Subquery,True,2,0,1221.975
+star,postgres,star_sel_40,RM4. Materialized Subquery,True,2,1,1340.173
+star,postgres,star_sel_40,RM4. Materialized Subquery,True,2,2,41.589
+star,postgres,star_sel_40,RM4. Materialized Subquery,True,2,3,41.771
+star,postgres,star_sel_40,RM4. Materialized Subquery,True,2,4,42.387
+star,postgres,star_sel_40,RM4. Materialized Subquery,True,2,5,43.004
+star,postgres,star_sel_40,0. Single Table,True,0,0,932.036
+star,postgres,star_sel_40,0. Single Table,True,1,0,924.893
+star,postgres,star_sel_40,0. Single Table,True,2,0,924.522
+star,postgres,star_sel_50,RM1. Dynamic SELECT DISTINCT,True,0,0,1532.325
+star,postgres,star_sel_50,RM1. Dynamic SELECT DISTINCT,True,0,1,832.236
+star,postgres,star_sel_50,RM1. Dynamic SELECT DISTINCT,True,0,2,811.427
+star,postgres,star_sel_50,RM1. Dynamic SELECT DISTINCT,True,0,3,795.996
+star,postgres,star_sel_50,RM1. Dynamic SELECT DISTINCT,True,0,4,793.811
+star,postgres,star_sel_50,RM1. Dynamic SELECT DISTINCT,True,1,0,1515.231
+star,postgres,star_sel_50,RM1. Dynamic SELECT DISTINCT,True,1,1,826.414
+star,postgres,star_sel_50,RM1. Dynamic SELECT DISTINCT,True,1,2,814.581
+star,postgres,star_sel_50,RM1. Dynamic SELECT DISTINCT,True,1,3,797.595
+star,postgres,star_sel_50,RM1. Dynamic SELECT DISTINCT,True,1,4,783.945
+star,postgres,star_sel_50,RM1. Dynamic SELECT DISTINCT,True,2,0,1525.865
+star,postgres,star_sel_50,RM1. Dynamic SELECT DISTINCT,True,2,1,828.136
+star,postgres,star_sel_50,RM1. Dynamic SELECT DISTINCT,True,2,2,814.697
+star,postgres,star_sel_50,RM1. Dynamic SELECT DISTINCT,True,2,3,792.544
+star,postgres,star_sel_50,RM1. Dynamic SELECT DISTINCT,True,2,4,788.080
+star,postgres,star_sel_50,RM2. Materialized SELECT DISTINCT,True,0,0,5061.728
+star,postgres,star_sel_50,RM2. Materialized SELECT DISTINCT,True,0,1,814.559
+star,postgres,star_sel_50,RM2. Materialized SELECT DISTINCT,True,0,2,195.349
+star,postgres,star_sel_50,RM2. Materialized SELECT DISTINCT,True,0,3,198.542
+star,postgres,star_sel_50,RM2. Materialized SELECT DISTINCT,True,0,4,214.384
+star,postgres,star_sel_50,RM2. Materialized SELECT DISTINCT,True,0,5,221.162
+star,postgres,star_sel_50,RM2. Materialized SELECT DISTINCT,True,1,0,5524.945
+star,postgres,star_sel_50,RM2. Materialized SELECT DISTINCT,True,1,1,812.514
+star,postgres,star_sel_50,RM2. Materialized SELECT DISTINCT,True,1,2,192.224
+star,postgres,star_sel_50,RM2. Materialized SELECT DISTINCT,True,1,3,199.998
+star,postgres,star_sel_50,RM2. Materialized SELECT DISTINCT,True,1,4,213.079
+star,postgres,star_sel_50,RM2. Materialized SELECT DISTINCT,True,1,5,219.571
+star,postgres,star_sel_50,RM2. Materialized SELECT DISTINCT,True,2,0,5280.055
+star,postgres,star_sel_50,RM2. Materialized SELECT DISTINCT,True,2,1,816.301
+star,postgres,star_sel_50,RM2. Materialized SELECT DISTINCT,True,2,2,194.684
+star,postgres,star_sel_50,RM2. Materialized SELECT DISTINCT,True,2,3,199.170
+star,postgres,star_sel_50,RM2. Materialized SELECT DISTINCT,True,2,4,214.626
+star,postgres,star_sel_50,RM2. Materialized SELECT DISTINCT,True,2,5,222.135
+star,postgres,star_sel_50,RM3. Dynamic Subquery,True,0,0,1520.524
+star,postgres,star_sel_50,RM3. Dynamic Subquery,True,0,1,13848.036
+star,postgres,star_sel_50,RM3. Dynamic Subquery,True,0,2,309.410
+star,postgres,star_sel_50,RM3. Dynamic Subquery,True,0,3,17.437
+star,postgres,star_sel_50,RM3. Dynamic Subquery,True,0,4,11.549
+star,postgres,star_sel_50,RM3. Dynamic Subquery,True,1,0,1554.130
+star,postgres,star_sel_50,RM3. Dynamic Subquery,True,1,1,14003.402
+star,postgres,star_sel_50,RM3. Dynamic Subquery,True,1,2,312.218
+star,postgres,star_sel_50,RM3. Dynamic Subquery,True,1,3,17.610
+star,postgres,star_sel_50,RM3. Dynamic Subquery,True,1,4,11.696
+star,postgres,star_sel_50,RM3. Dynamic Subquery,True,2,0,1525.637
+star,postgres,star_sel_50,RM3. Dynamic Subquery,True,2,1,13818.413
+star,postgres,star_sel_50,RM3. Dynamic Subquery,True,2,2,309.376
+star,postgres,star_sel_50,RM3. Dynamic Subquery,True,2,3,17.432
+star,postgres,star_sel_50,RM3. Dynamic Subquery,True,2,4,11.582
+star,postgres,star_sel_50,RM4. Materialized Subquery,True,0,0,2339.926
+star,postgres,star_sel_50,RM4. Materialized Subquery,True,0,1,3621.233
+star,postgres,star_sel_50,RM4. Materialized Subquery,True,0,2,96.920
+star,postgres,star_sel_50,RM4. Materialized Subquery,True,0,3,103.450
+star,postgres,star_sel_50,RM4. Materialized Subquery,True,0,4,102.054
+star,postgres,star_sel_50,RM4. Materialized Subquery,True,0,5,106.114
+star,postgres,star_sel_50,RM4. Materialized Subquery,True,1,0,2295.983
+star,postgres,star_sel_50,RM4. Materialized Subquery,True,1,1,3691.631
+star,postgres,star_sel_50,RM4. Materialized Subquery,True,1,2,97.608
+star,postgres,star_sel_50,RM4. Materialized Subquery,True,1,3,101.506
+star,postgres,star_sel_50,RM4. Materialized Subquery,True,1,4,103.496
+star,postgres,star_sel_50,RM4. Materialized Subquery,True,1,5,105.312
+star,postgres,star_sel_50,RM4. Materialized Subquery,True,2,0,2364.288
+star,postgres,star_sel_50,RM4. Materialized Subquery,True,2,1,3615.875
+star,postgres,star_sel_50,RM4. Materialized Subquery,True,2,2,102.256
+star,postgres,star_sel_50,RM4. Materialized Subquery,True,2,3,103.048
+star,postgres,star_sel_50,RM4. Materialized Subquery,True,2,4,105.367
+star,postgres,star_sel_50,RM4. Materialized Subquery,True,2,5,106.426
+star,postgres,star_sel_50,0. Single Table,True,0,0,1254.914
+star,postgres,star_sel_50,0. Single Table,True,1,0,1341.379
+star,postgres,star_sel_50,0. Single Table,True,2,0,1340.130
+star,postgres,star_sel_60,RM1. Dynamic SELECT DISTINCT,True,0,0,4160.309
+star,postgres,star_sel_60,RM1. Dynamic SELECT DISTINCT,True,0,1,1016.736
+star,postgres,star_sel_60,RM1. Dynamic SELECT DISTINCT,True,0,2,1014.955
+star,postgres,star_sel_60,RM1. Dynamic SELECT DISTINCT,True,0,3,983.728
+star,postgres,star_sel_60,RM1. Dynamic SELECT DISTINCT,True,0,4,980.249
+star,postgres,star_sel_60,RM1. Dynamic SELECT DISTINCT,True,1,0,4147.798
+star,postgres,star_sel_60,RM1. Dynamic SELECT DISTINCT,True,1,1,1016.688
+star,postgres,star_sel_60,RM1. Dynamic SELECT DISTINCT,True,1,2,1012.294
+star,postgres,star_sel_60,RM1. Dynamic SELECT DISTINCT,True,1,3,983.003
+star,postgres,star_sel_60,RM1. Dynamic SELECT DISTINCT,True,1,4,1008.507
+star,postgres,star_sel_60,RM1. Dynamic SELECT DISTINCT,True,2,0,4138.225
+star,postgres,star_sel_60,RM1. Dynamic SELECT DISTINCT,True,2,1,1020.174
+star,postgres,star_sel_60,RM1. Dynamic SELECT DISTINCT,True,2,2,1012.179
+star,postgres,star_sel_60,RM1. Dynamic SELECT DISTINCT,True,2,3,984.410
+star,postgres,star_sel_60,RM1. Dynamic SELECT DISTINCT,True,2,4,976.891
+star,postgres,star_sel_60,RM2. Materialized SELECT DISTINCT,True,0,0,12283.199
+star,postgres,star_sel_60,RM2. Materialized SELECT DISTINCT,True,0,1,1712.029
+star,postgres,star_sel_60,RM2. Materialized SELECT DISTINCT,True,0,2,401.942
+star,postgres,star_sel_60,RM2. Materialized SELECT DISTINCT,True,0,3,414.868
+star,postgres,star_sel_60,RM2. Materialized SELECT DISTINCT,True,0,4,445.444
+star,postgres,star_sel_60,RM2. Materialized SELECT DISTINCT,True,0,5,464.399
+star,postgres,star_sel_60,RM2. Materialized SELECT DISTINCT,True,1,0,17506.091
+star,postgres,star_sel_60,RM2. Materialized SELECT DISTINCT,True,1,1,1727.302
+star,postgres,star_sel_60,RM2. Materialized SELECT DISTINCT,True,1,2,401.716
+star,postgres,star_sel_60,RM2. Materialized SELECT DISTINCT,True,1,3,414.799
+star,postgres,star_sel_60,RM2. Materialized SELECT DISTINCT,True,1,4,445.500
+star,postgres,star_sel_60,RM2. Materialized SELECT DISTINCT,True,1,5,457.594
+star,postgres,star_sel_60,RM2. Materialized SELECT DISTINCT,True,2,0,12416.516
+star,postgres,star_sel_60,RM2. Materialized SELECT DISTINCT,True,2,1,1725.702
+star,postgres,star_sel_60,RM2. Materialized SELECT DISTINCT,True,2,2,402.968
+star,postgres,star_sel_60,RM2. Materialized SELECT DISTINCT,True,2,3,410.947
+star,postgres,star_sel_60,RM2. Materialized SELECT DISTINCT,True,2,4,444.160
+star,postgres,star_sel_60,RM2. Materialized SELECT DISTINCT,True,2,5,462.218
+star,postgres,star_sel_60,RM3. Dynamic Subquery,True,0,0,4174.218
+star,postgres,star_sel_60,RM3. Dynamic Subquery,True,0,1,23839.697
+star,postgres,star_sel_60,RM3. Dynamic Subquery,True,0,2,489.818
+star,postgres,star_sel_60,RM3. Dynamic Subquery,True,0,3,20.711
+star,postgres,star_sel_60,RM3. Dynamic Subquery,True,0,4,11.630
+star,postgres,star_sel_60,RM3. Dynamic Subquery,True,1,0,4174.601
+star,postgres,star_sel_60,RM3. Dynamic Subquery,True,1,1,23476.955
+star,postgres,star_sel_60,RM3. Dynamic Subquery,True,1,2,488.127
+star,postgres,star_sel_60,RM3. Dynamic Subquery,True,1,3,20.690
+star,postgres,star_sel_60,RM3. Dynamic Subquery,True,1,4,11.769
+star,postgres,star_sel_60,RM3. Dynamic Subquery,True,2,0,4130.988
+star,postgres,star_sel_60,RM3. Dynamic Subquery,True,2,1,23862.303
+star,postgres,star_sel_60,RM3. Dynamic Subquery,True,2,2,491.959
+star,postgres,star_sel_60,RM3. Dynamic Subquery,True,2,3,20.753
+star,postgres,star_sel_60,RM3. Dynamic Subquery,True,2,4,11.666
+star,postgres,star_sel_60,RM4. Materialized Subquery,True,0,0,5800.797
+star,postgres,star_sel_60,RM4. Materialized Subquery,True,0,1,7846.347
+star,postgres,star_sel_60,RM4. Materialized Subquery,True,0,2,205.978
+star,postgres,star_sel_60,RM4. Materialized Subquery,True,0,3,209.000
+star,postgres,star_sel_60,RM4. Materialized Subquery,True,0,4,210.949
+star,postgres,star_sel_60,RM4. Materialized Subquery,True,0,5,217.916
+star,postgres,star_sel_60,RM4. Materialized Subquery,True,1,0,5679.065
+star,postgres,star_sel_60,RM4. Materialized Subquery,True,1,1,7989.463
+star,postgres,star_sel_60,RM4. Materialized Subquery,True,1,2,205.381
+star,postgres,star_sel_60,RM4. Materialized Subquery,True,1,3,208.915
+star,postgres,star_sel_60,RM4. Materialized Subquery,True,1,4,209.985
+star,postgres,star_sel_60,RM4. Materialized Subquery,True,1,5,216.077
+star,postgres,star_sel_60,RM4. Materialized Subquery,True,2,0,5830.258
+star,postgres,star_sel_60,RM4. Materialized Subquery,True,2,1,7861.462
+star,postgres,star_sel_60,RM4. Materialized Subquery,True,2,2,196.433
+star,postgres,star_sel_60,RM4. Materialized Subquery,True,2,3,201.741
+star,postgres,star_sel_60,RM4. Materialized Subquery,True,2,4,204.558
+star,postgres,star_sel_60,RM4. Materialized Subquery,True,2,5,217.754
+star,postgres,star_sel_60,0. Single Table,True,0,0,4251.969
+star,postgres,star_sel_60,0. Single Table,True,1,0,4321.542
+star,postgres,star_sel_60,0. Single Table,True,2,0,4249.567
+star,postgres,star_sel_70,RM1. Dynamic SELECT DISTINCT,True,0,0,5991.236
+star,postgres,star_sel_70,RM1. Dynamic SELECT DISTINCT,True,0,1,1282.417
+star,postgres,star_sel_70,RM1. Dynamic SELECT DISTINCT,True,0,2,1272.219
+star,postgres,star_sel_70,RM1. Dynamic SELECT DISTINCT,True,0,3,1241.812
+star,postgres,star_sel_70,RM1. Dynamic SELECT DISTINCT,True,0,4,1229.562
+star,postgres,star_sel_70,RM1. Dynamic SELECT DISTINCT,True,1,0,5931.537
+star,postgres,star_sel_70,RM1. Dynamic SELECT DISTINCT,True,1,1,1268.669
+star,postgres,star_sel_70,RM1. Dynamic SELECT DISTINCT,True,1,2,1264.453
+star,postgres,star_sel_70,RM1. Dynamic SELECT DISTINCT,True,1,3,1233.557
+star,postgres,star_sel_70,RM1. Dynamic SELECT DISTINCT,True,1,4,1224.102
+star,postgres,star_sel_70,RM1. Dynamic SELECT DISTINCT,True,2,0,6018.943
+star,postgres,star_sel_70,RM1. Dynamic SELECT DISTINCT,True,2,1,1295.408
+star,postgres,star_sel_70,RM1. Dynamic SELECT DISTINCT,True,2,2,1272.152
+star,postgres,star_sel_70,RM1. Dynamic SELECT DISTINCT,True,2,3,1236.816
+star,postgres,star_sel_70,RM1. Dynamic SELECT DISTINCT,True,2,4,1228.192
+star,postgres,star_sel_70,RM2. Materialized SELECT DISTINCT,True,0,0,21749.830
+star,postgres,star_sel_70,RM2. Materialized SELECT DISTINCT,True,0,1,3229.569
+star,postgres,star_sel_70,RM2. Materialized SELECT DISTINCT,True,0,2,742.985
+star,postgres,star_sel_70,RM2. Materialized SELECT DISTINCT,True,0,3,757.060
+star,postgres,star_sel_70,RM2. Materialized SELECT DISTINCT,True,0,4,826.121
+star,postgres,star_sel_70,RM2. Materialized SELECT DISTINCT,True,0,5,838.996
+star,postgres,star_sel_70,RM2. Materialized SELECT DISTINCT,True,1,0,27606.110
+star,postgres,star_sel_70,RM2. Materialized SELECT DISTINCT,True,1,1,3219.306
+star,postgres,star_sel_70,RM2. Materialized SELECT DISTINCT,True,1,2,683.055
+star,postgres,star_sel_70,RM2. Materialized SELECT DISTINCT,True,1,3,637.142
+star,postgres,star_sel_70,RM2. Materialized SELECT DISTINCT,True,1,4,285.579
+star,postgres,star_sel_70,RM2. Materialized SELECT DISTINCT,True,1,5,285.971
+star,postgres,star_sel_70,RM2. Materialized SELECT DISTINCT,True,2,0,35253.435
+star,postgres,star_sel_70,RM2. Materialized SELECT DISTINCT,True,2,1,3248.647
+star,postgres,star_sel_70,RM2. Materialized SELECT DISTINCT,True,2,2,738.149
+star,postgres,star_sel_70,RM2. Materialized SELECT DISTINCT,True,2,3,761.949
+star,postgres,star_sel_70,RM2. Materialized SELECT DISTINCT,True,2,4,817.301
+star,postgres,star_sel_70,RM2. Materialized SELECT DISTINCT,True,2,5,843.914
+star,postgres,star_sel_70,RM3. Dynamic Subquery,True,0,0,5908.260
+star,postgres,star_sel_70,RM3. Dynamic Subquery,True,0,1,38308.502
+star,postgres,star_sel_70,RM3. Dynamic Subquery,True,0,2,752.372
+star,postgres,star_sel_70,RM3. Dynamic Subquery,True,0,3,25.188
+star,postgres,star_sel_70,RM3. Dynamic Subquery,True,0,4,11.694
+star,postgres,star_sel_70,RM3. Dynamic Subquery,True,1,0,5969.901
+star,postgres,star_sel_70,RM3. Dynamic Subquery,True,1,1,38136.363
+star,postgres,star_sel_70,RM3. Dynamic Subquery,True,1,2,748.443
+star,postgres,star_sel_70,RM3. Dynamic Subquery,True,1,3,25.155
+star,postgres,star_sel_70,RM3. Dynamic Subquery,True,1,4,11.739
+star,postgres,star_sel_70,RM3. Dynamic Subquery,True,2,0,5935.320
+star,postgres,star_sel_70,RM3. Dynamic Subquery,True,2,1,38463.228
+star,postgres,star_sel_70,RM3. Dynamic Subquery,True,2,2,752.293
+star,postgres,star_sel_70,RM3. Dynamic Subquery,True,2,3,25.163
+star,postgres,star_sel_70,RM3. Dynamic Subquery,True,2,4,11.731
+star,postgres,star_sel_70,RM4. Materialized Subquery,True,0,0,10381.976
+star,postgres,star_sel_70,RM4. Materialized Subquery,True,0,1,14983.115
+star,postgres,star_sel_70,RM4. Materialized Subquery,True,0,2,378.844
+star,postgres,star_sel_70,RM4. Materialized Subquery,True,0,3,390.072
+star,postgres,star_sel_70,RM4. Materialized Subquery,True,0,4,387.052
+star,postgres,star_sel_70,RM4. Materialized Subquery,True,0,5,405.995
+star,postgres,star_sel_70,RM4. Materialized Subquery,True,1,0,10570.673
+star,postgres,star_sel_70,RM4. Materialized Subquery,True,1,1,15109.948
+star,postgres,star_sel_70,RM4. Materialized Subquery,True,1,2,360.276
+star,postgres,star_sel_70,RM4. Materialized Subquery,True,1,3,368.862
+star,postgres,star_sel_70,RM4. Materialized Subquery,True,1,4,377.802
+star,postgres,star_sel_70,RM4. Materialized Subquery,True,1,5,394.497
+star,postgres,star_sel_70,RM4. Materialized Subquery,True,2,0,10262.351
+star,postgres,star_sel_70,RM4. Materialized Subquery,True,2,1,15224.786
+star,postgres,star_sel_70,RM4. Materialized Subquery,True,2,2,345.314
+star,postgres,star_sel_70,RM4. Materialized Subquery,True,2,3,355.335
+star,postgres,star_sel_70,RM4. Materialized Subquery,True,2,4,368.820
+star,postgres,star_sel_70,RM4. Materialized Subquery,True,2,5,397.951
+star,postgres,star_sel_70,0. Single Table,True,0,0,5999.658
+star,postgres,star_sel_70,0. Single Table,True,1,0,5952.072
+star,postgres,star_sel_70,0. Single Table,True,2,0,6029.570
+star,postgres,star_sel_80,RM1. Dynamic SELECT DISTINCT,True,0,0,7600.829
+star,postgres,star_sel_80,RM1. Dynamic SELECT DISTINCT,True,0,1,1605.459
+star,postgres,star_sel_80,RM1. Dynamic SELECT DISTINCT,True,0,2,1606.691
+star,postgres,star_sel_80,RM1. Dynamic SELECT DISTINCT,True,0,3,1575.461
+star,postgres,star_sel_80,RM1. Dynamic SELECT DISTINCT,True,0,4,1566.412
+star,postgres,star_sel_80,RM1. Dynamic SELECT DISTINCT,True,1,0,7696.129
+star,postgres,star_sel_80,RM1. Dynamic SELECT DISTINCT,True,1,1,1624.758
+star,postgres,star_sel_80,RM1. Dynamic SELECT DISTINCT,True,1,2,1606.500
+star,postgres,star_sel_80,RM1. Dynamic SELECT DISTINCT,True,1,3,1574.514
+star,postgres,star_sel_80,RM1. Dynamic SELECT DISTINCT,True,1,4,1562.124
+star,postgres,star_sel_80,RM1. Dynamic SELECT DISTINCT,True,2,0,7656.530
+star,postgres,star_sel_80,RM1. Dynamic SELECT DISTINCT,True,2,1,1611.710
+star,postgres,star_sel_80,RM1. Dynamic SELECT DISTINCT,True,2,2,1619.687
+star,postgres,star_sel_80,RM1. Dynamic SELECT DISTINCT,True,2,3,1579.403
+star,postgres,star_sel_80,RM1. Dynamic SELECT DISTINCT,True,2,4,1567.127
+star,postgres,star_sel_80,RM2. Materialized SELECT DISTINCT,True,0,0,65971.910
+star,postgres,star_sel_80,RM2. Materialized SELECT DISTINCT,True,0,1,5437.037
+star,postgres,star_sel_80,RM2. Materialized SELECT DISTINCT,True,0,2,1117.481
+star,postgres,star_sel_80,RM2. Materialized SELECT DISTINCT,True,0,3,1105.713
+star,postgres,star_sel_80,RM2. Materialized SELECT DISTINCT,True,0,4,1256.275
+star,postgres,star_sel_80,RM2. Materialized SELECT DISTINCT,True,0,5,459.747
+star,postgres,star_sel_80,RM2. Materialized SELECT DISTINCT,True,1,0,62667.228
+star,postgres,star_sel_80,RM2. Materialized SELECT DISTINCT,True,1,1,5434.390
+star,postgres,star_sel_80,RM2. Materialized SELECT DISTINCT,True,1,2,1153.118
+star,postgres,star_sel_80,RM2. Materialized SELECT DISTINCT,True,1,3,1217.930
+star,postgres,star_sel_80,RM2. Materialized SELECT DISTINCT,True,1,4,1285.817
+star,postgres,star_sel_80,RM2. Materialized SELECT DISTINCT,True,1,5,1327.876
+star,postgres,star_sel_80,RM2. Materialized SELECT DISTINCT,True,2,0,63009.972
+star,postgres,star_sel_80,RM2. Materialized SELECT DISTINCT,True,2,1,5430.035
+star,postgres,star_sel_80,RM2. Materialized SELECT DISTINCT,True,2,2,1165.810
+star,postgres,star_sel_80,RM2. Materialized SELECT DISTINCT,True,2,3,1211.207
+star,postgres,star_sel_80,RM2. Materialized SELECT DISTINCT,True,2,4,1298.770
+star,postgres,star_sel_80,RM2. Materialized SELECT DISTINCT,True,2,5,1329.779
+star,postgres,star_sel_80,RM3. Dynamic Subquery,True,0,0,7705.720
+star,postgres,star_sel_80,RM3. Dynamic Subquery,True,0,1,59141.401
+star,postgres,star_sel_80,RM3. Dynamic Subquery,True,0,2,1094.937
+star,postgres,star_sel_80,RM3. Dynamic Subquery,True,0,3,31.286
+star,postgres,star_sel_80,RM3. Dynamic Subquery,True,0,4,11.910
+star,postgres,star_sel_80,RM3. Dynamic Subquery,True,1,0,7736.932
+star,postgres,star_sel_80,RM3. Dynamic Subquery,True,1,1,58570.631
+star,postgres,star_sel_80,RM3. Dynamic Subquery,True,1,2,1098.971
+star,postgres,star_sel_80,RM3. Dynamic Subquery,True,1,3,31.224
+star,postgres,star_sel_80,RM3. Dynamic Subquery,True,1,4,12.122
+star,postgres,star_sel_80,RM3. Dynamic Subquery,True,2,0,7722.520
+star,postgres,star_sel_80,RM3. Dynamic Subquery,True,2,1,58671.731
+star,postgres,star_sel_80,RM3. Dynamic Subquery,True,2,2,1097.517
+star,postgres,star_sel_80,RM3. Dynamic Subquery,True,2,3,31.390
+star,postgres,star_sel_80,RM3. Dynamic Subquery,True,2,4,12.007
+star,postgres,star_sel_80,RM4. Materialized Subquery,True,0,0,17910.393
+star,postgres,star_sel_80,RM4. Materialized Subquery,True,0,1,26111.115
+star,postgres,star_sel_80,RM4. Materialized Subquery,True,0,2,573.860
+star,postgres,star_sel_80,RM4. Materialized Subquery,True,0,3,611.397
+star,postgres,star_sel_80,RM4. Materialized Subquery,True,0,4,643.340
+star,postgres,star_sel_80,RM4. Materialized Subquery,True,0,5,688.070
+star,postgres,star_sel_80,RM4. Materialized Subquery,True,1,0,24615.743
+star,postgres,star_sel_80,RM4. Materialized Subquery,True,1,1,25742.239
+star,postgres,star_sel_80,RM4. Materialized Subquery,True,1,2,574.171
+star,postgres,star_sel_80,RM4. Materialized Subquery,True,1,3,626.501
+star,postgres,star_sel_80,RM4. Materialized Subquery,True,1,4,640.592
+star,postgres,star_sel_80,RM4. Materialized Subquery,True,1,5,695.770
+star,postgres,star_sel_80,RM4. Materialized Subquery,True,2,0,23834.086
+star,postgres,star_sel_80,RM4. Materialized Subquery,True,2,1,25740.678
+star,postgres,star_sel_80,RM4. Materialized Subquery,True,2,2,574.799
+star,postgres,star_sel_80,RM4. Materialized Subquery,True,2,3,618.513
+star,postgres,star_sel_80,RM4. Materialized Subquery,True,2,4,640.822
+star,postgres,star_sel_80,RM4. Materialized Subquery,True,2,5,682.888
+star,postgres,star_sel_80,0. Single Table,True,0,0,8483.115
+star,postgres,star_sel_80,0. Single Table,True,1,0,8368.346
+star,postgres,star_sel_80,0. Single Table,True,2,0,8512.341
+star,postgres,star_sel_90,RM1. Dynamic SELECT DISTINCT,True,0,0,10820.203
+star,postgres,star_sel_90,RM1. Dynamic SELECT DISTINCT,True,0,1,2010.521
+star,postgres,star_sel_90,RM1. Dynamic SELECT DISTINCT,True,0,2,2030.271
+star,postgres,star_sel_90,RM1. Dynamic SELECT DISTINCT,True,0,3,1994.540
+star,postgres,star_sel_90,RM1. Dynamic SELECT DISTINCT,True,0,4,1990.013
+star,postgres,star_sel_90,RM1. Dynamic SELECT DISTINCT,True,1,0,10836.181
+star,postgres,star_sel_90,RM1. Dynamic SELECT DISTINCT,True,1,1,2037.744
+star,postgres,star_sel_90,RM1. Dynamic SELECT DISTINCT,True,1,2,2033.485
+star,postgres,star_sel_90,RM1. Dynamic SELECT DISTINCT,True,1,3,2009.287
+star,postgres,star_sel_90,RM1. Dynamic SELECT DISTINCT,True,1,4,2003.997
+star,postgres,star_sel_90,RM1. Dynamic SELECT DISTINCT,True,2,0,10816.427
+star,postgres,star_sel_90,RM1. Dynamic SELECT DISTINCT,True,2,1,2014.872
+star,postgres,star_sel_90,RM1. Dynamic SELECT DISTINCT,True,2,2,2027.149
+star,postgres,star_sel_90,RM1. Dynamic SELECT DISTINCT,True,2,3,1975.182
+star,postgres,star_sel_90,RM1. Dynamic SELECT DISTINCT,True,2,4,2016.649
+star,postgres,star_sel_90,RM2. Materialized SELECT DISTINCT,True,0,0,120396.905
+star,postgres,star_sel_90,RM2. Materialized SELECT DISTINCT,True,0,1,8848.300
+star,postgres,star_sel_90,RM2. Materialized SELECT DISTINCT,True,0,2,643.767
+star,postgres,star_sel_90,RM2. Materialized SELECT DISTINCT,True,0,3,678.432
+star,postgres,star_sel_90,RM2. Materialized SELECT DISTINCT,True,0,4,707.959
+star,postgres,star_sel_90,RM2. Materialized SELECT DISTINCT,True,0,5,734.929
+star,postgres,star_sel_90,RM2. Materialized SELECT DISTINCT,True,1,0,109312.313
+star,postgres,star_sel_90,RM2. Materialized SELECT DISTINCT,True,1,1,8812.936
+star,postgres,star_sel_90,RM2. Materialized SELECT DISTINCT,True,1,2,1852.945
+star,postgres,star_sel_90,RM2. Materialized SELECT DISTINCT,True,1,3,1942.755
+star,postgres,star_sel_90,RM2. Materialized SELECT DISTINCT,True,1,4,2062.424
+star,postgres,star_sel_90,RM2. Materialized SELECT DISTINCT,True,1,5,2114.083
+star,postgres,star_sel_90,RM2. Materialized SELECT DISTINCT,True,2,0,117363.458
+star,postgres,star_sel_90,RM2. Materialized SELECT DISTINCT,True,2,1,8820.812
+star,postgres,star_sel_90,RM2. Materialized SELECT DISTINCT,True,2,2,654.313
+star,postgres,star_sel_90,RM2. Materialized SELECT DISTINCT,True,2,3,662.219
+star,postgres,star_sel_90,RM2. Materialized SELECT DISTINCT,True,2,4,721.150
+star,postgres,star_sel_90,RM2. Materialized SELECT DISTINCT,True,2,5,736.633
+star,postgres,star_sel_90,RM3. Dynamic Subquery,True,0,0,10927.659
+star,postgres,star_sel_90,RM3. Dynamic Subquery,True,0,1,87401.877
+star,postgres,star_sel_90,RM3. Dynamic Subquery,True,0,2,1537.130
+star,postgres,star_sel_90,RM3. Dynamic Subquery,True,0,3,38.501
+star,postgres,star_sel_90,RM3. Dynamic Subquery,True,0,4,12.035
+star,postgres,star_sel_90,RM3. Dynamic Subquery,True,1,0,10907.450
+star,postgres,star_sel_90,RM3. Dynamic Subquery,True,1,1,86809.206
+star,postgres,star_sel_90,RM3. Dynamic Subquery,True,1,2,1779.958
+star,postgres,star_sel_90,RM3. Dynamic Subquery,True,1,3,42.597
+star,postgres,star_sel_90,RM3. Dynamic Subquery,True,1,4,12.349
+star,postgres,star_sel_90,RM3. Dynamic Subquery,True,2,0,11062.950
+star,postgres,star_sel_90,RM3. Dynamic Subquery,True,2,1,87376.855
+star,postgres,star_sel_90,RM3. Dynamic Subquery,True,2,2,1540.030
+star,postgres,star_sel_90,RM3. Dynamic Subquery,True,2,3,38.917
+star,postgres,star_sel_90,RM3. Dynamic Subquery,True,2,4,12.278
+star,postgres,star_sel_90,RM4. Materialized Subquery,True,0,0,27917.958
+star,postgres,star_sel_90,RM4. Materialized Subquery,True,0,1,42660.544
+star,postgres,star_sel_90,RM4. Materialized Subquery,True,0,2,882.162
+star,postgres,star_sel_90,RM4. Materialized Subquery,True,0,3,954.911
+star,postgres,star_sel_90,RM4. Materialized Subquery,True,0,4,996.667
+star,postgres,star_sel_90,RM4. Materialized Subquery,True,0,5,1153.568
+star,postgres,star_sel_90,RM4. Materialized Subquery,True,1,0,40539.578
+star,postgres,star_sel_90,RM4. Materialized Subquery,True,1,1,42751.213
+star,postgres,star_sel_90,RM4. Materialized Subquery,True,1,2,879.706
+star,postgres,star_sel_90,RM4. Materialized Subquery,True,1,3,949.041
+star,postgres,star_sel_90,RM4. Materialized Subquery,True,1,4,996.294
+star,postgres,star_sel_90,RM4. Materialized Subquery,True,1,5,1158.457
+star,postgres,star_sel_90,RM4. Materialized Subquery,True,2,0,34531.007
+star,postgres,star_sel_90,RM4. Materialized Subquery,True,2,1,42856.459
+star,postgres,star_sel_90,RM4. Materialized Subquery,True,2,2,879.084
+star,postgres,star_sel_90,RM4. Materialized Subquery,True,2,3,954.746
+star,postgres,star_sel_90,RM4. Materialized Subquery,True,2,4,1017.327
+star,postgres,star_sel_90,RM4. Materialized Subquery,True,2,5,1191.529
+star,postgres,star_sel_90,0. Single Table,True,0,0,11655.338
+star,postgres,star_sel_90,0. Single Table,True,1,0,11688.631
+star,postgres,star_sel_90,0. Single Table,True,2,0,11642.034
+star,postgres,star_sel_100,RM1. Dynamic SELECT DISTINCT,True,0,0,15548.108
+star,postgres,star_sel_100,RM1. Dynamic SELECT DISTINCT,True,0,1,2524.440
+star,postgres,star_sel_100,RM1. Dynamic SELECT DISTINCT,True,0,2,2566.789
+star,postgres,star_sel_100,RM1. Dynamic SELECT DISTINCT,True,0,3,2542.238
+star,postgres,star_sel_100,RM1. Dynamic SELECT DISTINCT,True,0,4,2515.234
+star,postgres,star_sel_100,RM1. Dynamic SELECT DISTINCT,True,1,0,15596.817
+star,postgres,star_sel_100,RM1. Dynamic SELECT DISTINCT,True,1,1,2558.974
+star,postgres,star_sel_100,RM1. Dynamic SELECT DISTINCT,True,1,2,2580.976
+star,postgres,star_sel_100,RM1. Dynamic SELECT DISTINCT,True,1,3,2512.997
+star,postgres,star_sel_100,RM1. Dynamic SELECT DISTINCT,True,1,4,2503.953
+star,postgres,star_sel_100,RM1. Dynamic SELECT DISTINCT,True,2,0,15550.413
+star,postgres,star_sel_100,RM1. Dynamic SELECT DISTINCT,True,2,1,2576.088
+star,postgres,star_sel_100,RM1. Dynamic SELECT DISTINCT,True,2,2,2579.247
+star,postgres,star_sel_100,RM1. Dynamic SELECT DISTINCT,True,2,3,2510.774
+star,postgres,star_sel_100,RM1. Dynamic SELECT DISTINCT,True,2,4,2514.667
+star,postgres,star_sel_100,RM2. Materialized SELECT DISTINCT,True,0,0,178867.637
+star,postgres,star_sel_100,RM2. Materialized SELECT DISTINCT,True,0,1,13647.459
+star,postgres,star_sel_100,RM2. Materialized SELECT DISTINCT,True,0,2,986.953
+star,postgres,star_sel_100,RM2. Materialized SELECT DISTINCT,True,0,3,998.971
+star,postgres,star_sel_100,RM2. Materialized SELECT DISTINCT,True,0,4,1086.029
+star,postgres,star_sel_100,RM2. Materialized SELECT DISTINCT,True,0,5,1092.844
+star,postgres,star_sel_100,RM2. Materialized SELECT DISTINCT,True,1,0,195453.126
+star,postgres,star_sel_100,RM2. Materialized SELECT DISTINCT,True,1,1,13695.333
+star,postgres,star_sel_100,RM2. Materialized SELECT DISTINCT,True,1,2,980.362
+star,postgres,star_sel_100,RM2. Materialized SELECT DISTINCT,True,1,3,1005.358
+star,postgres,star_sel_100,RM2. Materialized SELECT DISTINCT,True,1,4,1062.072
+star,postgres,star_sel_100,RM2. Materialized SELECT DISTINCT,True,1,5,1083.183
+star,postgres,star_sel_100,RM2. Materialized SELECT DISTINCT,True,2,0,188620.150
+star,postgres,star_sel_100,RM2. Materialized SELECT DISTINCT,True,2,1,13686.628
+star,postgres,star_sel_100,RM2. Materialized SELECT DISTINCT,True,2,2,960.006
+star,postgres,star_sel_100,RM2. Materialized SELECT DISTINCT,True,2,3,995.944
+star,postgres,star_sel_100,RM2. Materialized SELECT DISTINCT,True,2,4,1074.350
+star,postgres,star_sel_100,RM2. Materialized SELECT DISTINCT,True,2,5,1084.829
+star,postgres,star_sel_100,RM3. Dynamic Subquery,True,0,0,15679.889
+star,postgres,star_sel_100,RM3. Dynamic Subquery,True,0,1,123510.639
+star,postgres,star_sel_100,RM3. Dynamic Subquery,True,0,2,2078.204
+star,postgres,star_sel_100,RM3. Dynamic Subquery,True,0,3,47.384
+star,postgres,star_sel_100,RM3. Dynamic Subquery,True,0,4,12.217
+star,postgres,star_sel_100,RM3. Dynamic Subquery,True,1,0,15798.420
+star,postgres,star_sel_100,RM3. Dynamic Subquery,True,1,1,123834.220
+star,postgres,star_sel_100,RM3. Dynamic Subquery,True,1,2,2079.474
+star,postgres,star_sel_100,RM3. Dynamic Subquery,True,1,3,47.713
+star,postgres,star_sel_100,RM3. Dynamic Subquery,True,1,4,12.385
+star,postgres,star_sel_100,RM3. Dynamic Subquery,True,2,0,15858.827
+star,postgres,star_sel_100,RM3. Dynamic Subquery,True,2,1,124624.671
+star,postgres,star_sel_100,RM3. Dynamic Subquery,True,2,2,2078.795
+star,postgres,star_sel_100,RM3. Dynamic Subquery,True,2,3,47.331
+star,postgres,star_sel_100,RM3. Dynamic Subquery,True,2,4,12.220
+star,postgres,star_sel_100,RM4. Materialized Subquery,True,0,0,62129.106
+star,postgres,star_sel_100,RM4. Materialized Subquery,True,0,1,65489.975
+star,postgres,star_sel_100,RM4. Materialized Subquery,True,0,2,18045.831
+star,postgres,star_sel_100,RM4. Materialized Subquery,True,0,3,338.561
+star,postgres,star_sel_100,RM4. Materialized Subquery,True,0,4,10.229
+star,postgres,star_sel_100,RM4. Materialized Subquery,True,0,5,4.049
+star,postgres,star_sel_100,RM4. Materialized Subquery,True,1,0,49206.570
+star,postgres,star_sel_100,RM4. Materialized Subquery,True,1,1,65059.066
+star,postgres,star_sel_100,RM4. Materialized Subquery,True,1,2,18059.054
+star,postgres,star_sel_100,RM4. Materialized Subquery,True,1,3,338.715
+star,postgres,star_sel_100,RM4. Materialized Subquery,True,1,4,10.549
+star,postgres,star_sel_100,RM4. Materialized Subquery,True,1,5,4.041
+star,postgres,star_sel_100,RM4. Materialized Subquery,True,2,0,55424.226
+star,postgres,star_sel_100,RM4. Materialized Subquery,True,2,1,65343.050
+star,postgres,star_sel_100,RM4. Materialized Subquery,True,2,2,18128.885
+star,postgres,star_sel_100,RM4. Materialized Subquery,True,2,3,339.736
+star,postgres,star_sel_100,RM4. Materialized Subquery,True,2,4,10.283
+star,postgres,star_sel_100,RM4. Materialized Subquery,True,2,5,4.043
+star,postgres,star_sel_100,0. Single Table,True,0,0,16223.367
+star,postgres,star_sel_100,0. Single Table,True,1,0,16051.606
+star,postgres,star_sel_100,0. Single Table,True,2,0,16214.265

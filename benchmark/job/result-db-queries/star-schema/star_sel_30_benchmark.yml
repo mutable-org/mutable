@@ -1,0 +1,104 @@
+description: Star schema with 0.3 filter on dimension tables.    # Description of this experiment.  Mandatory.
+suite: result-db                                          # The suite this experiment belongs to.  Mandatory.
+benchmark: star                                           # The benchmark this experiment belongs to.  Mandatory.
+name: sel_30                                          # An experiment name.  Optional.  Relative path to file if not specified.
+readonly: true                                            # Whether this experiment is read-only.  Optional, defaults to false.
+chart:                                                    # Chart configuration.  Every field is optional.
+    x:                                                    # For X-axis
+        scale: linear                                     # One of "linear", "log"
+        type: O                                           # One of Q (quantitative), O (ordinal), N (nominal), or T (temporal)
+        label: q_all                                # Axis label
+    y:                                                    # For Y-axis
+        scale: linear
+        type: Q
+        label: 'Execution time [ms]'
+    # Defaults: scale is "linear", type is "Q", label is "X" or "Y"
+data:                                                     # Definition of the tables this experiment uses.
+    'fact':                                       # Name of this table.
+        file: 'benchmark/job/result-db-queries/star-schema/fact.csv'       # Relative path to the file containing the table data
+        format: 'csv'                                     # Format of the file. Optional, defaults to 'csv'.
+        delimiter: ','                                    # Delimiter of the file. Optional, defaults to ','.
+        header: 0                                         # Whether the file has a header line. 1=true, 0=false. Optional, defaults to 0.
+        attributes:                                       # Map from attribute name to its type.
+            'id': 'INT NOT NULL'
+            'fkd1': 'INT NOT NULL'
+            'fkd2': 'INT NOT NULL'
+            'fkd3': 'INT NOT NULL'
+            'fkd4': 'INT NOT NULL'
+            'a': 'INT NOT NULL'
+            'b': 'CHAR 16 NOT NULL'
+    'dim1':
+        file: 'benchmark/job/result-db-queries/star-schema/dim1.csv'
+        format: 'csv'
+        delimiter: ','
+        header: 0
+        attributes:
+            'id': 'INT NOT NULL'
+            'a': 'INT NOT NULL'
+            'b': 'CHAR 16 NOT NULL'
+    'dim2':
+        file: 'benchmark/job/result-db-queries/star-schema/dim2.csv'
+        format: 'csv'
+        delimiter: ','
+        header: 0
+        attributes:
+            'id': 'INT NOT NULL'
+            'a': 'INT NOT NULL'
+            'b': 'CHAR 16 NOT NULL'
+    'dim3':
+        file: 'benchmark/job/result-db-queries/star-schema/dim3.csv'
+        format: 'csv'
+        delimiter: ','
+        header: 0
+        attributes:
+            'id': 'INT NOT NULL'
+            'a': 'INT NOT NULL'
+            'b': 'CHAR 16 NOT NULL'
+    'dim4':
+        file: 'benchmark/job/result-db-queries/star-schema/dim4.csv'
+        format: 'csv'
+        delimiter: ','
+        header: 0
+        attributes:
+            'id': 'INT NOT NULL'
+            'a': 'INT NOT NULL'
+            'b': 'CHAR 16 NOT NULL'
+
+ # The systems this experiment should be run on. All systems are optional. Each system may have system-specific parameters/arguments.
+systems:
+    mutable:                                              # System name.
+        args: >-
+          --backend WasmV8
+          --no-simd
+          --cardinality-estimator Injected
+          --use-cardinality-file benchmark/job/result-db-queries/star-schema/star_sel_30_injected_cardinalities.json
+          --insist-no-rehashing
+          --hash-table-implementation Chained
+        configurations:                                   # Different experiment configurations.
+            'WasmV8, single-table':
+                args: ''
+                pattern: '^Execute machine code:.*'
+            'WasmV8, decompose':
+                args: --decompose
+                pattern: '^Execute machine code:.*'
+            'WasmV8, resultdb':
+                args: --result-db
+                pattern: '^Execute machine code:.*'
+        cases:                                            # The cases of this experiment: a mapping from case-name to SQL query.  Mandatory.
+            0:  SELECT
+                    *
+                FROM
+                    fact AS f,
+                    dim1 AS d1,
+                    dim2 AS d2,
+                    dim3 AS d3,
+                    dim4 AS d4
+                WHERE
+                    d1.id < 18 AND
+                    d2.id < 18 AND
+                    d3.id < 18 AND
+                    d4.id < 18 AND
+                    f.fkd1 = d1.id AND
+                    f.fkd2 = d2.id AND
+                    f.fkd3 = d3.id AND
+                    f.fkd4 = d4.id;

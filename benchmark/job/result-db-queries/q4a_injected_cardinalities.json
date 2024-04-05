@@ -1,0 +1,23 @@
+{
+	"result_db": [
+		{"relations": ["it"], "size": 1},
+		{"relations": ["k"], "size": 30},
+		{"relations": ["mi_idx"], "size": 517682},
+		{"relations": ["mk"], "size": 4523930},
+		{"relations": ["t"], "size": 1012920},
+		{"relations": ["it", "mi_idx"], "size": 352990},
+		{"relations": ["k", "mk"], "size": 12951},
+		{"relations": ["mi_idx", "mk"], "size": 3963243},
+		{"relations": ["mi_idx", "t"], "size": 159460},
+		{"relations": ["mk", "t"], "size": 1253091},
+		{"relations": ["it", "mi_idx", "mk"], "size": 2881657},
+		{"relations": ["it", "mi_idx", "t"], "size": 106021},
+		{"relations": ["k", "mi_idx", "mk"], "size": 8433},
+		{"relations": ["k", "mk", "t"], "size": 2235},
+		{"relations": ["mi_idx", "mk", "t"], "size": 967981},
+		{"relations": ["it", "k", "mi_idx", "mk"], "size": 5820},
+		{"relations": ["it", "mi_idx", "mk", "t"], "size": 697651},
+		{"relations": ["k", "mi_idx", "mk", "t"], "size": 1143},
+		{"relations": ["it", "k", "mi_idx", "mk", "t"], "size": 740}
+	]
+}

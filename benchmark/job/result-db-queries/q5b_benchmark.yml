@@ -1,0 +1,111 @@
+description: Join-Order Benchmark q5b.                    # Description of this experiment.  Mandatory.
+suite: result-db                                          # The suite this experiment belongs to.  Mandatory.
+benchmark: job                                            # The benchmark this experiment belongs to.  Mandatory.
+name: q5b                                                 # An experiment name.  Optional.  Relative path to file if not specified.
+readonly: true                                            # Whether this experiment is read-only.  Optional, defaults to false.
+chart:                                                    # Chart configuration.  Every field is optional.
+    x:                                                    # For X-axis
+        scale: linear                                     # One of "linear", "log"
+        type: O                                           # One of Q (quantitative), O (ordinal), N (nominal), or T (temporal)
+        label: JOB Queries                                # Axis label
+    y:                                                    # For Y-axis
+        scale: linear
+        type: Q
+        label: 'Execution time [ms]'
+data:
+    'company_type':                                       # Name of this table.
+        file: 'benchmark/job/data/company_type.csv'       # Relative path to the file containing the table data
+        format: 'csv'                                     # Format of the file. Optional, defaults to 'csv'.
+        delimiter: ','                                    # Delimiter of the file. Optional, defaults to ','.
+        header: 0                                         # Whether the file has a header line. 1=true, 0=false. Optional, defaults to 0.
+        attributes:                                       # Map from attribute name to its type.
+            'id': 'INT NOT NULL'
+            'kind': 'CHAR 32 NOT NULL'
+    'info_type':
+        file: 'benchmark/job/data/info_type.csv'
+        format: 'csv'
+        delimiter: ','
+        header: 0
+        attributes:
+            'id': 'INT NOT NULL'
+            'info': 'CHAR 32 NOT NULL'
+    'movie_companies':
+        file: 'benchmark/job/data/movie_companies.csv'
+        format: 'csv'
+        delimiter: ','
+        header: 0
+        attributes:
+            'id': 'INT NOT NULL'
+            'movie_id': 'INT NOT NULL'
+            'company_id': 'INT NOT NULL'
+            'company_type_id': 'INT NOT NULL'
+            'note': 'CHAR 208'
+    'movie_info':
+        file: 'benchmark/job/data/movie_info.csv'
+        format: 'csv'
+        delimiter: ','
+        header: 0
+        attributes:
+          'id': 'INT NOT NULL'
+          'movie_id': 'INT NOT NULL'
+          'info_type_id': 'INT NOT NULL'
+          'info': 'CHAR 43 NOT NULL'
+          'note': 'CHAR 19'
+    'title':
+        file: 'benchmark/job/data/title.csv'
+        format: 'csv'
+        delimiter: ','
+        header: 0
+        attributes:
+            'id': 'INT NOT NULL'
+            'title': 'CHAR 334 NOT NULL'
+            'imdb_index': 'CHAR 12'
+            'kind_id': 'INT NOT NULL'
+            'production_year': 'INT'
+            'imdb_id': 'INT'
+            'phonetic_code': 'CHAR 5'
+            'episode_of_id': 'INT'
+            'season_nr': 'INT'
+            'episode_nr': 'INT'
+            'series_years': 'CHAR 49'
+            'md5sum': 'CHAR 32'
+
+ # The systems this experiment should be run on. All systems are optional. Each system may have system-specific parameters/arguments.
+systems:
+    mutable:                                              # System name.
+        args: >-
+          --backend WasmV8
+          --no-simd
+          --cardinality-estimator Injected
+          --use-cardinality-file benchmark/job/result-db-queries/q5b_injected_cardinalities.json
+          --insist-no-rehashing
+          --hash-table-implementation Chained
+        configurations:                                   # Different experiment configurations.
+            'WasmV8, resultdb':
+                args: --result-db
+                pattern: '^Execute machine code:.*'
+            'WasmV8, decompose':
+                args: --decompose
+                pattern: '^Execute machine code:.*'
+            'WasmV8, single-table':
+                args: ''
+                pattern: '^Execute machine code:.*'
+        cases:                                            # The cases of this experiment: a mapping from case-name to SQL query.  Mandatory.
+            0:  SELECT t.title
+                FROM company_type AS ct,
+                     info_type AS it,
+                     movie_companies AS mc,
+                     movie_info AS mi,
+                     title AS t
+                WHERE ct.kind = "production companies"
+                  AND mc.note LIKE "%(VHS)%"
+                  AND mc.note LIKE "%(USA)%"
+                  AND mc.note LIKE "%(1994)%"
+                  AND (mi.info = "USA" OR
+                       mi.info = "America")
+                  AND t.production_year > 2010
+                  AND t.id = mi.movie_id
+                  AND t.id = mc.movie_id
+                  AND mc.movie_id = mi.movie_id
+                  AND ct.id = mc.company_type_id
+                  AND it.id = mi.info_type_id;

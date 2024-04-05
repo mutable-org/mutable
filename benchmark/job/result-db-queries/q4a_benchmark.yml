@@ -1,0 +1,108 @@
+description: Join-Order Benchmark q4a.                    # Description of this experiment.  Mandatory.
+suite: result-db                                          # The suite this experiment belongs to.  Mandatory.
+benchmark: job                                            # The benchmark this experiment belongs to.  Mandatory.
+name: q4a                                                 # An experiment name.  Optional.  Relative path to file if not specified.
+readonly: true                                            # Whether this experiment is read-only.  Optional, defaults to false.
+chart:                                                    # Chart configuration.  Every field is optional.
+    x:                                                    # For X-axis
+        scale: linear                                     # One of "linear", "log"
+        type: O                                           # One of Q (quantitative), O (ordinal), N (nominal), or T (temporal)
+        label: JOB Queries                                # Axis label
+    y:                                                    # For Y-axis
+        scale: linear
+        type: Q
+        label: 'Execution time [ms]'
+data:
+    'info_type':
+        file: 'benchmark/job/data/info_type.csv'
+        format: 'csv'
+        delimiter: ','
+        header: 0
+        attributes:
+            'id': 'INT NOT NULL'
+            'info': 'CHAR 32 NOT NULL'
+    'keyword':
+        file: 'benchmark/job/data/keyword.csv'
+        format: 'csv'
+        delimiter: ','
+        header: 0
+        attributes:
+          'id': 'INT NOT NULL'
+          'keyword': 'CHAR 74 NOT NULL'
+          'phonetic_code': 'CHAR 5'
+    'movie_info_idx':
+        file: 'benchmark/job/data/movie_info_idx.csv'
+        format: 'csv'
+        delimiter: ','
+        header: 0
+        attributes:
+            'id': 'INT NOT NULL'
+            'movie_id': 'INT NOT NULL'
+            'info_type_id': 'INT NOT NULL'
+            'info': 'CHAR 10 NOT NULL'
+            'note': 'CHAR 1'
+    'movie_keyword':
+        file: 'benchmark/job/data/movie_keyword.csv'
+        format: 'csv'
+        delimiter: ','
+        header: 0
+        attributes:
+          'id': 'INT NOT NULL'
+          'movie_id': 'INT NOT NULL'
+          'keyword_id': 'INT NOT NUL'
+    'title':
+        file: 'benchmark/job/data/title.csv'
+        format: 'csv'
+        delimiter: ','
+        header: 0
+        attributes:
+            'id': 'INT NOT NULL'
+            'title': 'CHAR 334 NOT NULL'
+            'imdb_index': 'CHAR 12'
+            'kind_id': 'INT NOT NULL'
+            'production_year': 'INT'
+            'imdb_id': 'INT'
+            'phonetic_code': 'CHAR 5'
+            'episode_of_id': 'INT'
+            'season_nr': 'INT'
+            'episode_nr': 'INT'
+            'series_years': 'CHAR 49'
+            'md5sum': 'CHAR 32'
+
+ # The systems this experiment should be run on. All systems are optional. Each system may have system-specific parameters/arguments.
+systems:
+    mutable:                                              # System name.
+        args: >-
+          --backend WasmV8
+          --no-simd
+          --cardinality-estimator Injected
+          --use-cardinality-file benchmark/job/result-db-queries/q4a_injected_cardinalities.json
+          --insist-no-rehashing
+          --hash-table-implementation Chained
+        configurations:                                   # Different experiment configurations.
+            'WasmV8, resultdb':
+                args: --result-db
+                pattern: '^Execute machine code:.*'
+            'WasmV8, decompose':
+                args: --decompose
+                pattern: '^Execute machine code:.*'
+            'WasmV8, single-table':
+                args: ''
+                pattern: '^Execute machine code:.*'
+        cases:                                            # The cases of this experiment: a mapping from case-name to SQL query.  Mandatory.
+            0:  SELECT mi_idx.info,
+                       t.title
+                FROM info_type AS it,
+                     keyword AS k,
+                     movie_info_idx AS mi_idx,
+                     movie_keyword AS mk,
+                     title AS t
+                WHERE it.info = "rating"
+                  AND k.keyword LIKE "%sequel%"
+                  AND mi_idx.info > "5.0"
+                  AND t.production_year > 2005
+                  AND t.id = mi_idx.movie_id
+                  AND t.id = mk.movie_id
+                  AND mk.movie_id = mi_idx.movie_id
+                  AND k.id = mk.keyword_id
+                  AND it.id = mi_idx.info_type_id;

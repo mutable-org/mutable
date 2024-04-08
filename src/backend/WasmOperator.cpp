@@ -858,9 +858,17 @@ decompose_equi_predicate(const cnf::CNF &cnf, const Schema &schema_left)
     return { std::move(ids_left), std::move(ids_right) };
 }
 
+/** Returns the number of rows of table \p table_name. */
+U32x1 get_num_rows(const ThreadSafePooledString &table_name) {
+    static std::ostringstream oss;
+    oss.str("");
+    oss << table_name << "_num_rows";
+    return Module::Get().get_global<uint32_t>(oss.str().c_str());
+}
+
 /** Returns a pointer to the beginning of table \p table_name in the WebAssembly linear memory. */
 Ptr<void> get_base_address(const ThreadSafePooledString &table_name) {
-    std::ostringstream oss;
+    static std::ostringstream oss;
     oss.str("");
     oss << table_name << "_mem";
     return Module::Get().get_global<void*>(oss.str().c_str());
@@ -1054,9 +1062,7 @@ void Scan<SIMDfied>::execute(const Match<Scan> &M, setup_t setup, pipeline_t pip
     CodeGenContext::Get().set_num_simd_lanes(num_simd_lanes);
 
     /*----- Import the number of rows of `table`. -----*/
-    std::ostringstream oss;
-    oss << table.name() << "_num_rows";
-    U32x1 num_rows = Module::Get().get_global<uint32_t>(oss.str().c_str());
+    U32x1 num_rows = get_num_rows(table.name());
 
     /*----- If no attributes must be loaded, generate a loop just executing the pipeline `num_rows`-times. -----*/
     if (schema.num_entries() == 0) {

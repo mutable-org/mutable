@@ -4281,7 +4281,7 @@ void SortMergeJoin<SortLeft, SortRight, Predicated, CmpPredicated>::execute(
 
     /*----- Create predicate to check if child co-group is smaller or equal than the one of the parent relation. -----*/
     auto child_smaller_equal = [&]() -> Boolx1 {
-        std::unique_ptr<Boolx1> child_smaller_equal_;
+        std::optional<Boolx1> child_smaller_equal_;
         for (std::size_t i = 0; i < order_child.size(); ++i) {
             auto &des_parent = as<const Designator>(order_parent[i].first);
             auto &des_child  = as<const Designator>(order_child[i].first);
@@ -4294,13 +4294,13 @@ void SortMergeJoin<SortLeft, SortRight, Predicated, CmpPredicated>::execute(
 
             auto child = env.get(Schema::Identifier(des_child));
             Boolx1 cmp = env.compile<_Boolx1>(expr).is_true_and_not_null();
-            if (auto old = child_smaller_equal_.get())
-                child_smaller_equal_ = std::make_unique<Boolx1>(*old and (is_null(child) or cmp));
+            if (child_smaller_equal_)
+                child_smaller_equal_.emplace(*child_smaller_equal_ and (is_null(child) or cmp));
             else
-                child_smaller_equal_ = std::make_unique<Boolx1>(is_null(child) or cmp);
+                child_smaller_equal_.emplace(is_null(child) or cmp);
         }
         M_insist(bool(child_smaller_equal_));
-        return *child_smaller_equal_.release();
+        return *child_smaller_equal_;
     };
 
     /*----- Compile data layouts to generate sequential loads from buffers. -----*/

@@ -45,7 +45,7 @@ table:
 sf: num(min=0, max=1)
 ---
 index:
-    attributes: any(str(), list(), required=True)     # single attribute or list of attributes
+    attributes: any(str(), list(str()))     # single attribute or list of attributes
     # Indexing method, one of
     #   - array     an index base on a sorted array
     #   - rmi       a recursive model index
@@ -54,13 +54,13 @@ index:
 ---
 config:
     args: str(required=False)
-    pattern: str(required=True)
-    variables: map(any(), key=str(), required=False)
+    pattern: str()
+    variables: map(any(), key=str(), required=False)    # environment variables
 ---
 mutable:
-    cases: any(include('cases'), include('repeat'), required=True)
+    cases: any(include('cases'), include('repeat'))
     args: str(required=False)
-    configurations: map(include('config'), key=str(), required=True)
+    configurations: map(include('config'), key=str())
 PostgreSQL:
     cases: include('cases')
 DuckDB:
@@ -70,5 +70,5 @@ HyPer:
 ---
 cases: map(str(), key=any())
 repeat:
-    n: any(int(), list(), required=True)    # either integer or list of integers to define a range
-    script: str(required=True)              # script to be executed n times using different seed
+    n: any(int(), list(int()))    # either integer or list of integers to define a range
+    script: str()                 # script to be executed n times using different seed

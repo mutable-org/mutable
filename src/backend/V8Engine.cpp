@@ -625,7 +625,7 @@ void V8Engine::initialize()
 
     /*----- Set V8 flags. --------------------------------------------------------------------------------------------*/
     /* A documentation of these flags can be found at
-     * https://chromium.googlesource.com/v8/v8/+/67180425bcecc021a3aa8df23b44afa531ab6630/src/flags/flag-definitions.h.*/
+     * https://chromium.googlesource.com/v8/v8/+/2c22fd50128ad130e9dba77fce828e5661559121/src/flags/flag-definitions.h.*/
     std::ostringstream flags;
     flags << "--stack_size 1000000 ";
     if (options::wasm_adaptive) {

@@ -290,16 +290,7 @@ def perform_experiment(
             continue
 
         columns: list[str] = ['commit', 'date', 'version', 'suite', 'benchmark', 'experiment', 'name', 'config', 'case', 'time', 'run_id']
-        config: str = config_name
-        configurations: dict[str, Any] | None = systems[system].get('configurations')
-        if configurations:
-            for name, conf in configurations.items():
-                if name in config_name:
-                    if 'args' in conf:
-                        config = conf['args']
-                    elif 'variables' in conf:
-                        config = ' '.join([f'{key}={value}' for key, value in conf['variables'].items()])
-                    break
+        config: str = ''
 
         measurements_list: list[list[str | int | float]] = list()
         for case, times in config_result.items():

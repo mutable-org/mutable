@@ -603,6 +603,60 @@ struct CollectStringLiterals : ConstOperatorVisitor, ast::ConstASTExprVisitor
     void operator()(const ast::QueryExpr&) override { /* nothing to be done */ }
 };
 
+struct CollectTables : ConstOperatorVisitor
+{
+    private:
+    struct hash
+    {
+        uint64_t operator()(const std::reference_wrapper<const Table> &r) const {
+            StrHash h;
+            return h((const char*)(r.get().name()));
+        }
+    };
+
+    struct equal
+    {
+        bool operator()(const std::reference_wrapper<const Table> &first,
+                        const std::reference_wrapper<const Table> &second) const
+        {
+            return first.get().name() == second.get().name();
+        }
+    };
+
+
+    std::unordered_set<std::reference_wrapper<const Table>, hash, equal> tables_; ///< the collected tables
+
+    public:
+    static std::vector<std::reference_wrapper<const Table>> Collect(const Operator &plan) {
+        CollectTables CT;
+        CT(plan);
+        return { CT.tables_.begin(), CT.tables_.end() };
+    }
+
+    private:
+    CollectTables() = default;
+
+    using ConstOperatorVisitor::operator();
+
+    void recurse(const Consumer &C) {
+        for (auto &c: C.children())
+            (*this)(*c);
+    }
+
+    void operator()(const ScanOperator &op) override { tables_.emplace(op.store().table()); }
+    void operator()(const CallbackOperator &op) override { recurse(op); }
+    void operator()(const PrintOperator &op) override { recurse(op); }
+    void operator()(const NoOpOperator &op) override { recurse(op); }
+    void operator()(const FilterOperator &op) override { recurse(op); }
+    void operator()(const DisjunctiveFilterOperator &op) override { recurse(op); }
+    void operator()(const JoinOperator &op) override { recurse(op); }
+    void operator()(const ProjectionOperator &op) override { recurse(op); }
+    void operator()(const LimitOperator &op) override { recurse(op); }
+    void operator()(const GroupingOperator &op) override { recurse(op); }
+    void operator()(const AggregationOperator &op) override { recurse(op); }
+    void operator()(const SortingOperator &op) override { recurse(op); }
+};
+
 
 /*======================================================================================================================
  * V8Engine implementation
@@ -928,21 +982,21 @@ v8::Local<v8::Object> m::wasm::detail::create_env(v8::Isolate &isolate, const m:
     auto Ctx = isolate.GetCurrentContext();
     auto env = v8::Object::New(&isolate);
 
-    /* Map the entire database into the Wasm module. TODO map only tables/indexes that are being accessed */
-    auto &DB = Catalog::Get().get_database_in_use();
-    for (auto it = DB.begin_tables(); it != DB.end_tables(); ++it) {
-        auto off = context.map_table(*it->second);
+    /* Map accessed tables into the Wasm module. */
+    auto tables = CollectTables::Collect(plan.get_matched_root());
+    for (auto &table : tables) {
+        auto off = context.map_table(table.get());
 
         /* Add memory address to env. */
         std::ostringstream oss;
-        oss << it->second->name() << "_mem";
+        oss << table.get().name() << "_mem";
         M_DISCARD env->Set(Ctx, to_v8_string(&isolate, oss.str()), v8::Int32::New(&isolate, off));
         Module::Get().emit_import<void*>(oss.str().c_str());
 
         /* Add table size (num_rows) to env. */
         oss.str("");
-        oss << it->second->name() << "_num_rows";
-        M_DISCARD env->Set(Ctx, to_v8_string(&isolate, oss.str()), v8::Int32::New(&isolate, it->second->store().num_rows()));
+        oss << table.get().name() << "_num_rows";
+        M_DISCARD env->Set(Ctx, to_v8_string(&isolate, oss.str()), v8::Int32::New(&isolate, table.get().store().num_rows()));
         Module::Get().emit_import<uint32_t>(oss.str().c_str());
     }
 

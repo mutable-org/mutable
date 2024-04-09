@@ -46,6 +46,8 @@ namespace options {
 int wasm_optimization_level = 0;
 /** Whether to execute Wasm adaptively. */
 bool wasm_adaptive = false;
+/** Whether compilation cache should be enabled. */
+bool wasm_compilation_cache = true;
 /** Whether to dump the generated WebAssembly code. */
 bool wasm_dump = false;
 /** Whether to dump the generated assembly code. */
@@ -638,6 +640,10 @@ void V8Engine::initialize()
         flags << "--no-liftoff "
               << "--no-wasm-lazy-compilation "; // compile code before starting execution
     }
+    if (not options::wasm_compilation_cache) {
+        flags << "--no-compilation-cache "
+              << "--no-wasm-native-module-cache-enabled ";
+    }
     if (options::asm_dump) {
         flags << "--code-comments " // include code comments
               << "--print-code ";
@@ -844,6 +850,13 @@ static void register_WasmV8()
         /* long=        */ "--wasm-adaptive",
         /* description= */ "enable adaptive execution of Wasm with Liftoff and dynamic tier-up",
                            [] (bool b) { options::wasm_adaptive = b; }
+    );
+    C.arg_parser().add<bool>(
+        /* group=       */ "WasmV8",
+        /* short=       */ nullptr,
+        /* long=        */ "--no-wasm-compilation-cache",
+        /* description= */ "disable V8's compilation cache",
+                           [] (bool) { options::wasm_compilation_cache = false; }
     );
     C.arg_parser().add<bool>(
         /* group=       */ "Wasm",

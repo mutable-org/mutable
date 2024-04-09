@@ -535,7 +535,7 @@ struct CollectStringLiterals : ConstOperatorVisitor, ast::ConstASTExprVisitor
     static std::vector<const char*> Collect(const Operator &plan) {
         CollectStringLiterals CSL;
         CSL(plan);
-        return std::vector<const char*>(CSL.literals_.begin(), CSL.literals_.end());
+        return { CSL.literals_.begin(), CSL.literals_.end() };
     }
 
     private:
@@ -550,7 +550,7 @@ struct CollectStringLiterals : ConstOperatorVisitor, ast::ConstASTExprVisitor
     }
 
     /*----- Operator -------------------------------------------------------------------------------------------------*/
-    void operator()(const ScanOperator &) override { /* nothing to be done */ }
+    void operator()(const ScanOperator&) override { /* nothing to be done */ }
     void operator()(const CallbackOperator &op) override { recurse(op); }
     void operator()(const PrintOperator &op) override { recurse(op); }
     void operator()(const NoOpOperator &op) override { recurse(op); }
@@ -562,18 +562,18 @@ struct CollectStringLiterals : ConstOperatorVisitor, ast::ConstASTExprVisitor
         (*this)(op.filter());
         recurse(op);
     }
-    void operator()(const JoinOperator & op) override {
+    void operator()(const JoinOperator &op) override {
         (*this)(op.predicate());
         recurse(op);
     }
     void operator()(const ProjectionOperator &op) override {
-        for (auto p : op.projections())
+        for (auto &p : op.projections())
             (*this)(p.first.get());
         recurse(op);
     }
     void operator()(const LimitOperator &op) override { recurse(op); }
     void operator()(const GroupingOperator &op) override {
-        for (auto [grp, alias] : op.group_by())
+        for (auto &[grp, alias] : op.group_by())
             (*this)(grp.get());
         recurse(op);
     }
@@ -589,8 +589,8 @@ struct CollectStringLiterals : ConstOperatorVisitor, ast::ConstASTExprVisitor
     }
 
     /*----- Expr -----------------------------------------------------------------------------------------------------*/
-    void operator()(const ast::ErrorExpr &) override { M_unreachable("no errors at this stage"); }
-    void operator()(const ast::Designator &) override { /* nothing to be done */ }
+    void operator()(const ast::ErrorExpr&) override { M_unreachable("no errors at this stage"); }
+    void operator()(const ast::Designator&) override { /* nothing to be done */ }
     void operator()(const ast::Constant &e) override {
         if (e.is_string()) {
             auto s = Interpreter::eval(e);

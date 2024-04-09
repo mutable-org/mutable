@@ -446,7 +446,7 @@ def run_benchmarks(args: argparse.Namespace) -> None:
                 match system:
                     case 'mutable':
                         connectors.append(mutable.Mutable(dict(
-                            path_to_binary='build/release/bin/shell',
+                            path_to_binary=os.path.join(args.builddir, 'bin', 'shell'),
                             verbose=args.verbose,
                         )))
                     case 'PostgreSQL':
@@ -518,5 +518,7 @@ if __name__ == '__main__':
     parser.add_argument('--pgsql', dest='pgsql', default=False, action='store_true',
                         help='create a .pgsql file with instructions to insert measurement results into a PostgreSQL '
                              'database')
+    parser.add_argument('-b', '--builddir', help='path to the build directory (defaults to \'build/release\')',
+                        default=os.path.join('build', 'release'), type=str, metavar='PATH')
     args = parser.parse_args()
     run_benchmarks(args)

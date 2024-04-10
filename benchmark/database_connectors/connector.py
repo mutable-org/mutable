@@ -11,8 +11,9 @@ TIMEOUT_PER_CASE: int = 10   # seconds
 
 # Type definitions used to represent connector results
 Case: TypeAlias = int | float | str
-ConfigResult: TypeAlias = dict[Case, list[float]]      # case        --> list of measurements (size = NUM_RUNS)
-ConnectorResult: TypeAlias = dict[str, ConfigResult]   # config name --> ConfigResult
+MeasurementResult: TypeAlias = dict[Case, list[float]]  # case               --> list of measurements (size = NUM_RUNS)
+ConfigResult: TypeAlias = dict[str, MeasurementResult]  # measurement label  --> MeasurementResult
+ConnectorResult: TypeAlias = dict[str, ConfigResult]    # configuration name --> ConfigResult
 
 
 #=======================================================================================================================
@@ -48,20 +49,23 @@ class Connector(ABC):
     # Result has the form:
     # results
     # └── configurations
-    #     └── cases
-    #         └── times (list)
+    #     └── measurements
+    #         └── cases
+    #             └── times (list)
     #
-    # results:          configuration name      --> configuration
-    # configuration:    case  --> times
+    # results:          configuration name  --> configuration
+    # configuration:    measurement label   --> measurement
+    # measurement:      case                --> times
     # times:            list of floats (size=n_runs)
     #
     # Example: (n_runs=2)
     #   {
     #       'PostgreSQL':
-    #           1: [1235.093, 1143.43],
-    #           2: [1033.711, 1337.37],
-    #           3: [1043.452, 1010.01],
-    #           4: [1108.702, 1234.56]
+    #           'Execution Time':
+    #               1: [1235.093, 1143.43],
+    #               2: [1033.711, 1337.37],
+    #               3: [1043.452, 1010.01],
+    #               4: [1108.702, 1234.56]
     #   }
     @abstractmethod
     def execute(self, n_runs: int, params: dict[str, Any]) -> ConnectorResult:

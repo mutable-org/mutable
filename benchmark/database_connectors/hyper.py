@@ -48,23 +48,23 @@ sys.stdout.flush()
                 verbose=self.verbose)
         except ExperimentTimeoutExpired:
             times: list[float] = [float(TIMEOUT_PER_CASE * 1000) for _ in range(n_runs)]
-            config_result: ConfigResult = {case: times for case in params['cases'].keys()}
-            result: ConnectorResult = {f'HyPer{suffix}': config_result}
+            measurement_result: MeasurementResult = {case: times for case in params['cases'].keys()}
+            result: ConnectorResult = { f'HyPer{suffix}': { 'ExecutionTime': measurement_result } }
             return result
 
         result: ConnectorResult = eval(out)
         patched_result: ConnectorResult = dict()
         for key, val in result.items():
-            patched_result[f'{key}{suffix}'] = val
+            patched_result[f'{key}{suffix}'] = { 'ExecutionTime' : val }
         return patched_result
 
     @staticmethod
     def _execute(n_runs: int, params: dict[str, Any]) -> ConnectorResult:
-        config_result: ConfigResult = dict()
+        measurement_result: MeasurementResult = dict()
 
         cases: dict[Case, Any] = params['cases']
         for case in cases.keys():
-            config_result[case] = list()
+            measurement_result[case] = list()
 
         hyperconf.init()    # prepare for measurements
 
@@ -134,7 +134,7 @@ sys.stdout.flush()
                 times = list(map(lambda t: float(f'{t:.3f}'), times))
                 times = times[ - len(cases) : ]    # get only times of this run, ignore previous runs
                 for case, time in zip(cases.keys(), times):
-                    config_result[case].append(time)
+                    measurement_result[case].append(time)
 
         else:
             # Otherwise, tables have to be created just once before the measurements
@@ -155,12 +155,12 @@ sys.stdout.flush()
                         this_run = list(zip(queries, list(map(lambda t: f'{t:.3f}', this_run))))
 
                         for case, time in this_run:
-                            config_result[case].append(float(time))
+                            measurement_result[case].append(float(time))
 
                     connection.close()
                     hyper.close()
 
-        return {'HyPer': config_result}
+        return { 'HyPer': { 'Execution Time': measurement_result } }
 
 
     # returns dict of {table_name: table_def} for each table_def

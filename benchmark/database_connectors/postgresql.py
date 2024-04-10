@@ -48,9 +48,9 @@ class PostgreSQL(Connector):
         cases: dict[Case, Any] = params['cases']
         tqdm_print(f'` Perform experiment {suite}/{benchmark}/{experiment} with configuration PostgreSQL.')
 
-        config_result: ConfigResult = dict()      # map that is returned with the measured times
+        measurement_result: MeasurementResult = dict()      # map that is returned with the measured times
         for case in cases.keys():
-            config_result[case] = list()
+            measurement_result[case] = list()
 
         # Variables
         connection: psycopg2.extensions.connection
@@ -123,11 +123,11 @@ class PostgreSQL(Connector):
                                                         verbose=self.verbose)
                         durations = self.parse_results(out)
                     except ExperimentTimeoutExpired:
-                        config_result[case].append(float(TIMEOUT_PER_CASE * 1000))
+                        measurement_result[case].append(float(TIMEOUT_PER_CASE * 1000))
                     else:
                         if len(durations) != 1:
                             raise ConnectorException(f"Expected 1 measurement but got {len(durations)}.")
-                        config_result[case].append(durations[0])
+                        measurement_result[case].append(durations[0])
 
                 self.clean_up()
 
@@ -171,18 +171,18 @@ class PostgreSQL(Connector):
             except ExperimentTimeoutExpired:
                 for _ in range(n_runs):
                     for case in cases.keys():
-                        config_result[case].append(float(TIMEOUT_PER_CASE * 1000))
+                        measurement_result[case].append(float(TIMEOUT_PER_CASE * 1000))
             else:
                 if len(durations) != n_runs * len(cases):
                     raise ConnectorException(f"Expected {n_runs * len(cases)} measurements but got {len(durations)}.")
                 for i in range(n_runs):
                     run_durations: list[float] = durations[i * len(cases) : (i + 1) * len(cases)]
                     for case, dur in zip(list(cases.keys()), run_durations):
-                        config_result[case].append(float(dur))
+                        measurement_result[case].append(float(dur))
 
         self.clean_up()
 
-        return {'PostgreSQL': config_result}
+        return { 'PostgreSQL': { 'Execution Time': measurement_result } }
 
 
     # Sets up the database

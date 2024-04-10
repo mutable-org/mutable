@@ -46,9 +46,9 @@ class DuckDB(Connector):
 
         self.clean_up()
 
-        config_result: ConfigResult = dict()
+        measurement_result: MeasurementResult = dict()
         for case in cases.keys():
-            config_result[case] = list()
+            measurement_result[case] = list()
 
         # For query execution
         command: str = f"./{self.duckdb_cli} {TMP_DB}"
@@ -121,7 +121,7 @@ class DuckDB(Connector):
                             time = durations[0]
                         except ExperimentTimeoutExpired:
                             time = float(timeout)
-                        config_result[case].append(time)
+                        measurement_result[case].append(time)
 
                     self.clean_up()
 
@@ -165,7 +165,7 @@ class DuckDB(Connector):
                 except ExperimentTimeoutExpired:
                     for _ in range(n_runs):
                         for case in cases.keys():
-                            config_result[case].append(float(TIMEOUT_PER_CASE * 1000))
+                            measurement_result[case].append(float(TIMEOUT_PER_CASE * 1000))
                 else:
                     if len(durations) != n_runs * len(cases):
                         raise ConnectorException(
@@ -173,12 +173,12 @@ class DuckDB(Connector):
                     for i in range(n_runs):
                         run_durations: list[float] = durations[i * len(cases): (i + 1) * len(cases)]
                         for case, dur in zip(list(cases.keys()), run_durations):
-                            config_result[case].append(float(dur))
+                            measurement_result[case].append(float(dur))
 
         finally:
             self.clean_up()
 
-        return { configname: config_result }
+        return { configname: { 'Execution Time': measurement_result } }
 
 
     # Deletes the used temporary database

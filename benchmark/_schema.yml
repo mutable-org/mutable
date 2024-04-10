@@ -54,7 +54,8 @@ index:
 ---
 config:
     args: str(required=False)
-    pattern: str()
+    # single regex (default label 'Execution Time') or map of labels to regexes
+    pattern: any(str(), map(str(), key=str(), min=1))
     variables: map(any(), key=str(), required=False)    # environment variables
 ---
 mutable:

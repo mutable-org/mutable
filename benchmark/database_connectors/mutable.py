@@ -86,12 +86,17 @@ class Mutable(Connector):
         # Variables
         timeout: int
         import_str: str
-        durations: list[float]
+        measurements: list[list[float]]
+
+        # Extract pattern labels
+        pattern_labels: list[str] = [ 'Execution Time' ] if isinstance(config['pattern'], str) else list(config['pattern'].keys())
 
         # Init config result
         config_result: ConfigResult = dict()
-        for case in cases.keys():
-            config_result[case] = list()
+        for label in pattern_labels:
+            config_result[label] = dict()
+            for case in cases.keys():
+                config_result[label][case] = list()
 
         if not self.check_execute_single_cases(yml):
             # All cases can be executed at once
@@ -109,20 +114,25 @@ class Mutable(Connector):
             try:
                 out: str = self.benchmark_query(command=command, query=self.prepare_query(query), timeout=timeout,
                                                 benchmark_info=path_to_file, verbose=self.verbose)
-                durations = self.parse_results(out, config['pattern'])
+                measurements = self.parse_results(out, config['pattern'])
             except ExperimentTimeoutExpired:
                 # Add timeout durations
                 for _ in range(n_runs):
-                    for case in cases.keys():
-                        config_result[case].append(float(TIMEOUT_PER_CASE * 1000))
+                    for label in pattern_labels:
+                        for case in cases.keys():
+                            config_result[label][case].append(float(TIMEOUT_PER_CASE * 1000))
             else:
-                if len(durations) != n_runs * len(cases):
-                    raise ConnectorException(f"Expected {n_runs * len(cases)} measurements but got {len(durations)}.")
-                # Add measured times
-                for i in range(n_runs):
-                    run_durations: list[float] = durations[i * len(cases) : (i+1) * len(cases)]
-                    for case, dur in zip(list(cases.keys()), run_durations):
-                        config_result[case].append(float(dur))
+                if len(measurements) != len(pattern_labels):
+                    raise ConnectorException(f"Expected {len(pattern_labels)} measured patterns but got {len(measurements)}.")
+                for label, durations in zip(pattern_labels, measurements):
+                    if len(durations) != n_runs * len(cases):
+                        raise ConnectorException(f"Expected {n_runs * len(cases)} measurements per pattern but got {len(durations)} "
+                                                 f"for pattern label '{label}'.")
+                    # Add measured times
+                    for i in range(n_runs):
+                        run_durations: list[float] = durations[i * len(cases) : (i+1) * len(cases)]
+                        for case, dur in zip(list(cases.keys()), run_durations):
+                            config_result[label][case].append(float(dur))
         else:
             # Each case has to be executed singly
             timeout = DEFAULT_TIMEOUT + TIMEOUT_PER_CASE
@@ -138,13 +148,20 @@ class Mutable(Connector):
                     try:
                         out: str = self.benchmark_query(command=command, query=self.prepare_query(query_str),
                                                         timeout=timeout, benchmark_info=path_to_file, verbose=self.verbose)
-                        durations = self.parse_results(out, config['pattern'])
+                        measurements = self.parse_results(out, config['pattern'])
                     except ExperimentTimeoutExpired:
-                        config_result[case].append(float(timeout * 1000))
+                        # Add timeout duration
+                        for label in pattern_labels:
+                            config_result[label][case].append(float(timeout * 1000))
                     else:
-                        if len(durations) != 1:
-                            raise ConnectorException(f"Expected 1 measurement but got {len(durations)}.")
-                        config_result[case].append(durations[0])
+                        if len(measurements) != len(pattern_labels):
+                            raise ConnectorException(f"Expected {len(pattern_labels)} measured patterns but got {len(measurements)}.")
+                        for label, durations in zip(pattern_labels, measurements):
+                            if len(durations) != 1:
+                                raise ConnectorException(f"Expected 1 measurement per pattern but got {len(durations)} "
+                                                         f"for pattern label '{label}'.")
+                            # Add measured time
+                            config_result[label][case].append(durations[0])
 
         return config_result
 
@@ -158,7 +175,7 @@ class Mutable(Connector):
     # @return                   a config result
     # =======================================================================================================================
     def run_repeated_case(self, n_runs: int, repeat: dict[str, Any], config: dict[str, Any], path_to_file: str) -> ConfigResult:
-        pattern: str = config['pattern']
+        pattern: str | dict[str, str] = config['pattern']
         script: str = repeat['script']
         timeout: int = DEFAULT_TIMEOUT + TIMEOUT_PER_CASE
 
@@ -178,10 +195,15 @@ class Mutable(Connector):
         else:
             raise parse_n_error
 
+        # Extract pattern labels
+        pattern_labels: list[str] = [ 'Execution Time' ] if isinstance(pattern, str) else list(pattern.keys())
+
         # Collect results in dict
         config_result: ConfigResult = dict()
-        for N in generator:
-            config_result[N] = list()
+        for label in pattern_labels:
+            config_result[label] = dict()
+            for N in generator:
+                config_result[label][N] = list()
 
         for _ in range(n_runs):
             random.seed(42)
@@ -195,13 +217,20 @@ class Mutable(Connector):
                 try:
                     out: str = self.benchmark_query(command=cmd, query=script, timeout=timeout,
                                                     benchmark_info=path_to_file, verbose=self.verbose)
-                    durations: list[float] = self.parse_results(out, pattern)
+                    measurements: list[list[float]] = self.parse_results(out, pattern)
                 except ExperimentTimeoutExpired:
-                    config_result[N].append(float(timeout * 1000))
+                    # Add timeout duration
+                    for label in pattern_labels:
+                        config_result[label][N].append(float(timeout * 1000))
                 else:
-                    if len(durations) != 1:
-                        raise ConnectorException(f"Expected 1 measurement but got {len(durations)}.")
-                    config_result[N].append(durations[0])
+                    if len(measurements) != len(pattern_labels):
+                        raise ConnectorException(f"Expected {len(pattern_labels)} measured patterns but got {len(measurements)}.")
+                    for label, durations in zip(pattern_labels, measurements):
+                        if len(durations) != 1:
+                            raise ConnectorException(f"Expected 1 measurement per pattern but got {len(durations)} "
+                                                     f"for pattern label '{label}'.")
+                        # Add measured time
+                        config_result[label][N].append(durations[0])
 
         return config_result
 
@@ -270,21 +299,24 @@ class Mutable(Connector):
         return query.strip().replace('\n', ' ') + '\n'
 
 
-    # Parse `results` for timings
+    # Parse `results` for timings and return list of durations for each pattern
     @staticmethod
-    def parse_results(results: str, pattern: str) -> list[float]:
-        durations: list[float] = list()
-        matcher: re.Pattern = re.compile(pattern)
-        for line in results.split('\n'):
-            if matcher.match(line):
-                for s in line.split():
-                    try:
-                        dur: float = float(s)
-                        durations.append(dur)
-                    except ValueError:
-                        continue
-
-        return durations
+    def parse_results(results: str, pattern: str | dict[str, str]) -> list[list[float]]:
+        measurements: list[list[float]] = list()
+        matchers: list[re.Pattern] = \
+            [ re.compile(pattern) ] if isinstance(pattern, str) else [ re.compile(p) for p in pattern.values() ]
+        for matcher in matchers:
+            durations: list[float] = list()
+            for line in results.split('\n'):
+                if matcher.match(line):
+                    for s in line.split():
+                        try:
+                            dur: float = float(s)
+                            durations.append(dur)
+                        except ValueError:
+                            continue
+            measurements.append(durations)
+        return measurements
 
 
     # Overrides `generate_create_index_stmts` from Connector ABC

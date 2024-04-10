@@ -284,18 +284,18 @@ def perform_experiment(
         raise BenchmarkError()
 
     # Add measurements to result
+    columns: list[str] = ['commit', 'date', 'version', 'suite', 'benchmark', 'experiment', 'name', 'config', 'case', 'time', 'run_id']
     for config_name, config_result in connector_result.items():
-        # Skip empty measurements
-        if not config_result:
-            continue
-
-        columns: list[str] = ['commit', 'date', 'version', 'suite', 'benchmark', 'experiment', 'name', 'config', 'case', 'time', 'run_id']
-        config: str = ''
-
+        # Create measurement list
         measurements_list: list[list[str | int | float]] = list()
-        for case, times in config_result.items():
-            for run in range(len(times)):
-                measurements_list.append([str(info.commit), info.date, info.version, info.suite_name, info.benchmark_name, info.experiment_name, config_name, config, case, times[run], run])
+        for label, measurement_result in config_result.items():
+            for case, times in measurement_result.items():
+                for run in range(len(times)):
+                    measurements_list.append([str(info.commit), info.date, info.version, info.suite_name, info.benchmark_name, info.experiment_name, config_name, label, case, times[run], run])
+
+        # Skip empty measurements
+        if not measurements_list:
+            continue
 
         # Create dataframe
         measurements: Measurements = pandas.DataFrame(measurements_list, columns=columns)

@@ -950,7 +950,8 @@ TEST_CASE("StackMachine/TupleAccess/St_Tup_s", "[core][backend]")
     Tuple *args[] = { &res };
 
     SM.emit_Push_Null();
-    SM.emit_St_Tup_s(0, 0, 4);
+    SM.add_and_emit_load(4);
+    SM.emit_St_Tup_s(0, 0);
     SM(args);
     REQUIRE(res.is_null(0));
 }
@@ -1323,7 +1324,8 @@ TEST_CASE("StackMachine/StorageAccess/Ld_s", "[core][backend]")
 
     std::string str = "sql";
     SM.add_and_emit_load(str.c_str());
-    SM.emit_Ld_s(3);
+    SM.add_and_emit_load(3);
+    SM.emit_Ld_s();
     SM.emit_Print_s(idx);
     SM(nullptr);
     CHECK(oss.str() == "\"sql\"");
@@ -1422,7 +1424,8 @@ TEST_CASE("StackMachine/StorageAccess/St_s", "[core][backend]")
     std::string str = "abcd";
     SM.add_and_emit_load(str.c_str());
     SM.add_and_emit_load("test");
-    SM.emit_St_s(4);
+    SM.add_and_emit_load(4);
+    SM.emit_St_s();
     SM(nullptr);
     CHECK(str == "test");
 }

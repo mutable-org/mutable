@@ -54,15 +54,15 @@ M_OPCODE(Ld_Tup, +1, tuple_id, index)
 /** Store NULL into a tuple. */
 M_OPCODE(St_Tup_Null, 0, tuple_id, index)
 /** Store the current top-of-stack into a tuple. */
-M_OPCODE(St_Tup_i, 0, tuple_id, index)
+M_OPCODE(St_Tup_i,  0, tuple_id, index)
 /** Store the current top-of-stack into a tuple. */
-M_OPCODE(St_Tup_f, 0, tuple_id, index)
+M_OPCODE(St_Tup_f,  0, tuple_id, index)
 /** Store the current top-of-stack into a tuple. */
-M_OPCODE(St_Tup_d, 0, tuple_id, index)
+M_OPCODE(St_Tup_d,  0, tuple_id, index)
 /** Store the current top-of-stack into a tuple. */
-M_OPCODE(St_Tup_s, 0, tuple_id, index, length)
+M_OPCODE(St_Tup_s, -1, tuple_id, index)
 /** Store the current top-of-stack into a tuple. */
-M_OPCODE(St_Tup_b, 0, tuple_id, index)
+M_OPCODE(St_Tup_b,  0, tuple_id, index)
 
 
 /*======================================================================================================================
@@ -88,14 +88,14 @@ M_OPCODE(Print_datetime, 0, index)
 
 /*----- Load from memory ---------------------------------------------------------------------------------------------*/
 
-M_OPCODE(Ld_i8,  0)
-M_OPCODE(Ld_i16, 0)
-M_OPCODE(Ld_i32, 0)
-M_OPCODE(Ld_i64, 0)
-M_OPCODE(Ld_f,   0)
-M_OPCODE(Ld_d,   0)
-M_OPCODE(Ld_s,   0, length)
-M_OPCODE(Ld_b,   0, mask)
+M_OPCODE(Ld_i8,   0)
+M_OPCODE(Ld_i16,  0)
+M_OPCODE(Ld_i32,  0)
+M_OPCODE(Ld_i64,  0)
+M_OPCODE(Ld_f,    0)
+M_OPCODE(Ld_d,    0)
+M_OPCODE(Ld_s,   -1)
+M_OPCODE(Ld_b,    0, mask)
 
 /*----- Store to memory ----------------------------------------------------------------------------------------------*/
 
@@ -105,7 +105,7 @@ M_OPCODE(St_i32, -2)
 M_OPCODE(St_i64, -2)
 M_OPCODE(St_f,   -2)
 M_OPCODE(St_d,   -2)
-M_OPCODE(St_s,   -2, length)
+M_OPCODE(St_s,   -3)
 M_OPCODE(St_b,   -2, bit_offset)
 
 

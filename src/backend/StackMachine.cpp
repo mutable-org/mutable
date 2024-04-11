@@ -644,7 +644,8 @@ void StackMachine::emit_Ld(const Type *ty)
             }
         }
     } else if (auto cs = cast<const CharacterSequence>(ty)) {
-        emit_Ld_s(cs->length);
+        add_and_emit_load(cs->length);
+        emit_Ld_s();
     } else if (auto d = cast<const Date>(ty)) {
         emit_Ld_i32();
     } else if (auto dt = cast<const DateTime>(ty)) {
@@ -681,7 +682,8 @@ void StackMachine::emit_St(const Type *ty)
             }
         }
     } else if (auto cs = cast<const CharacterSequence>(ty)) {
-        emit_St_s(cs->length + cs->is_varying);
+        add_and_emit_load(cs->length + cs->is_varying);
+        emit_St_s();
     } else if (auto d = cast<const Date>(ty)) {
         emit_St_i32();
     } else if (auto dt = cast<const DateTime>(ty)) {
@@ -696,7 +698,8 @@ void StackMachine::emit_St_Tup(std::size_t tuple_id, std::size_t index, const Ty
     if (ty->is_none()) {
         emit_St_Tup_Null(tuple_id, index);
     } else if (auto cs = cast<const CharacterSequence>(ty)) {
-        emit_St_Tup_s(tuple_id, index, cs->length);
+        add_and_emit_load(cs->length);
+        emit_St_Tup_s(tuple_id, index);
     } else {
         std::ostringstream oss;
         oss << "St_Tup" << tystr(as<const PrimitiveType>(ty));
@@ -986,7 +989,8 @@ NEXT;
 St_Tup_s: {
     std::size_t tuple_id = std::size_t(*op_++);
     std::size_t index = std::size_t(*op_++);
-    std::size_t length = std::size_t(*op_++);
+    std::size_t length = TOP.as_i();
+    POP();
     auto &t = *tuples[tuple_id];
     if (TOP_IS_NULL)
         t.null(index);
@@ -1132,7 +1136,8 @@ Ld_d:   LOAD(double,  double);
 
 Ld_s: {
     M_insist(top_ >= 1);
-    uint64_t length = uint64_t(*op_++);
+    uint64_t length = TOP.as_i();
+    POP();
     void *ptr = TOP.as_p();
     strncpy(reinterpret_cast<char*>(p_mem), reinterpret_cast<char*>(ptr), length);
     p_mem[length] = 0; // always add terminating NUL byte, no matter whether this is a CHAR or VARCHAR
@@ -1173,7 +1178,8 @@ St_d:   STORE(double,  double);
 
 St_s: {
     M_insist(top_ >= 2);
-    uint64_t length = uint64_t(*op_++);
+    uint64_t length = TOP.as_i();
+    POP();
     if (TOP_IS_NULL) { POP(); POP(); NEXT; }
 
     char *str = reinterpret_cast<char*>(TOP.as_p());

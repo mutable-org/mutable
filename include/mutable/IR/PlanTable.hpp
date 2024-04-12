@@ -187,22 +187,27 @@ struct M_EXPORT PlanTableSmallOrDense : PlanTableBase<PlanTableSmallOrDense>
     allocator_type allocator_;
     ///> the number of `DataSource`s in the query
     size_type num_sources_;
+    ///> the number of additional entries `this` should contain
+    size_type num_additional_entries_;
     ///> the table of problem plans, sizes, and costs
     std::unique_ptr<PlanTableEntry[]> table_ = nullptr;
 
     public:
     friend void swap(PlanTableSmallOrDense &first, PlanTableSmallOrDense &second) {
         using std::swap;
-        swap(first.allocator_,   second.allocator_);
-        swap(first.num_sources_, second.num_sources_);
-        swap(first.table_,       second.table_);
+        swap(first.allocator_,              second.allocator_);
+        swap(first.num_sources_,            second.num_sources_);
+        swap(first.num_additional_entries_, second.num_additional_entries_);
+        swap(first.table_,                  second.table_);
     }
 
     PlanTableSmallOrDense() = default;
-    explicit PlanTableSmallOrDense(std::size_t num_sources, allocator_type allocator = allocator_type())
+    explicit PlanTableSmallOrDense(size_type num_sources, size_type num_additional_entries = 0,
+                                   allocator_type allocator = allocator_type())
         : allocator_(std::move(allocator))
         , num_sources_(num_sources)
-        , table_(allocator_.template make_unique<PlanTableEntry[]>(1UL << num_sources))
+        , num_additional_entries_(num_additional_entries)
+        , table_(allocator_.template make_unique<PlanTableEntry[]>((1UL << num_sources) + num_additional_entries))
     {
         /*----- Initialize table. ------------------------------------------------------------------------------------*/
         for (auto ptr = &table_[0], end = &table_[size()]; ptr != end; ++ptr)
@@ -210,7 +215,7 @@ struct M_EXPORT PlanTableSmallOrDense : PlanTableBase<PlanTableSmallOrDense>
     }
 
     explicit PlanTableSmallOrDense(const QueryGraph &G, allocator_type allocator = allocator_type())
-        : PlanTableSmallOrDense(G.num_sources(), std::move(allocator))
+        : PlanTableSmallOrDense(G.num_sources(), 0, std::move(allocator))
     { }
 
     PlanTableSmallOrDense(const PlanTableSmallOrDense&) = delete;
@@ -238,7 +243,7 @@ struct M_EXPORT PlanTableSmallOrDense : PlanTableBase<PlanTableSmallOrDense>
     bool operator!=(const PlanTableSmallOrDense &other) const { return not operator==(other); }
 
     size_type num_sources() const { return num_sources_; }
-    size_type size() const { return (1UL << num_sources_); }
+    size_type size() const { return (1UL << num_sources_) + num_additional_entries_; }
 
     PlanTableEntry & at(Subproblem s) { M_insist(uint64_t(s) < size()); return table_[uint64_t(s)]; }
     const PlanTableEntry & at(Subproblem s) const { return const_cast<PlanTableSmallOrDense*>(this)->at(s); }
@@ -293,9 +298,9 @@ struct M_EXPORT PlanTableLargeAndSparse : PlanTableBase<PlanTableLargeAndSparse>
     }
 
     PlanTableLargeAndSparse() = default;
-    explicit PlanTableLargeAndSparse(std::size_t num_sources)
+    explicit PlanTableLargeAndSparse(size_type num_sources, size_type num_additional_entries = 0)
         : num_sources_(num_sources)
-        , table_(OnoLohmannCycle(num_sources_))
+        , table_(OnoLohmannCycle(num_sources_) + num_additional_entries)
     { }
     explicit PlanTableLargeAndSparse(const QueryGraph &G)
         : PlanTableLargeAndSparse(G.num_sources())

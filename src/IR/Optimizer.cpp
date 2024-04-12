@@ -231,14 +231,15 @@ std::unique_ptr<Producer*[]> Optimizer::optimize_source_plans(const QueryGraph &
             PT[s].cost = 0;
             PT[s].model = CE.estimate_scan(G, s);
             auto &store = bt->table().store();
-            auto source = new ScanOperator(store, bt->name().assert_not_none());
-            source_plans[ds->id()] = source;
+            auto source = std::make_unique<ScanOperator>(store, bt->name().assert_not_none());
 
             /* Set operator information. */
             auto source_info = std::make_unique<OperatorInformation>();
             source_info->subproblem = s;
             source_info->estimated_cardinality = CE.predict_cardinality(*PT[s].model);
             source->info(std::move(source_info));
+
+            source_plans[ds->id()] = source.release();
         } else {
             /* Recursively solve nested queries. */
             auto &Q = as<const Query>(*ds);
@@ -366,14 +367,14 @@ std::unique_ptr<Producer> Optimizer::construct_join_order(const QueryGraph &G, c
                 }
 
                 /* Construct the join. */
-                auto join = new JoinOperator(join_condition);
+                auto join = std::make_unique<JoinOperator>(join_condition);
                 for (auto sub_plan : sub_plans)
                     join->add_child(sub_plan);
                 auto join_info = std::make_unique<OperatorInformation>();
                 join_info->subproblem = s;
                 join_info->estimated_cardinality = CE.predict_cardinality(*PT[s].model);
                 join->info(std::move(join_info));
-                return join;
+                return join.release();
             }
         };
         return construct_plan_impl(s, construct_plan_impl);

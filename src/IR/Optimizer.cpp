@@ -309,9 +309,9 @@ void Optimizer::optimize_join_order(const QueryGraph &G, PlanTable &PT) const
 #ifndef NDEBUG
     if (Options::Get().statistics) {
         std::size_t num_CSGs = 0, num_CCPs = 0;
-        const SmallBitset All = SmallBitset::All(G.num_sources());
-        auto inc_CSGs = [&num_CSGs](SmallBitset) { ++num_CSGs; };
-        auto inc_CCPs = [&num_CCPs](SmallBitset, SmallBitset) { ++num_CCPs; };
+        const Subproblem All = Subproblem::All(G.num_sources());
+        auto inc_CSGs = [&num_CSGs](Subproblem) { ++num_CSGs; };
+        auto inc_CCPs = [&num_CCPs](Subproblem, Subproblem) { ++num_CCPs; };
         G.adjacency_matrix().for_each_CSG_undirected(All, inc_CSGs);
         G.adjacency_matrix().for_each_CSG_pair_undirected(All, inc_CCPs);
         std::cout << num_CSGs << " CSGs, " << num_CCPs << " CCPs" << std::endl;

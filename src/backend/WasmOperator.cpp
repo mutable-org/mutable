@@ -16,41 +16,6 @@ using namespace m::wasm;
  * CLI arguments
  *====================================================================================================================*/
 
-option_configs::GroupingImplementation options::grouping_implementations = option_configs::GroupingImplementation::ALL;
-option_configs::SortingImplementation options::sorting_implementations = option_configs::SortingImplementation::ALL;
-option_configs::JoinImplementation options::join_implementations = option_configs::JoinImplementation::ALL;
-option_configs::SelectionStrategy options::filter_selection_strategy = option_configs::SelectionStrategy::AUTO;
-option_configs::SelectionStrategy options::quicksort_cmp_selection_strategy = option_configs::SelectionStrategy::AUTO;
-option_configs::SelectionStrategy options::nested_loops_join_selection_strategy =
-    option_configs::SelectionStrategy::AUTO;
-option_configs::SelectionStrategy options::simple_hash_join_selection_strategy =
-    option_configs::SelectionStrategy::AUTO;
-option_configs::OrderingStrategy options::simple_hash_join_ordering_strategy = option_configs::OrderingStrategy::AUTO;
-option_configs::SelectionStrategy options::sort_merge_join_selection_strategy = option_configs::SelectionStrategy::AUTO;
-option_configs::SelectionStrategy options::sort_merge_join_cmp_selection_strategy =
-    option_configs::SelectionStrategy::AUTO;
-option_configs::HashTableImplementation options::hash_table_implementation =
-    option_configs::HashTableImplementation::ALL;
-option_configs::ProbingStrategy options::hash_table_probing_strategy = option_configs::ProbingStrategy::AUTO;
-option_configs::StoringStrategy options::hash_table_storing_strategy = option_configs::StoringStrategy::AUTO;
-double options::load_factor_open_addressing = 0.8;
-double options::load_factor_chained = 1.5;
-std::optional<uint32_t> options::hash_table_initial_capacity = std::optional<uint32_t>();
-bool options::hash_based_group_join = true;
-std::unique_ptr<const storage::DataLayoutFactory> options::hard_pipeline_breaker_layout =
-    std::make_unique<storage::RowLayoutFactory>();
-option_configs::SoftPipelineBreakerStrategy options::soft_pipeline_breaker =
-    option_configs::SoftPipelineBreakerStrategy::NONE;
-std::unique_ptr<const storage::DataLayoutFactory> options::soft_pipeline_breaker_layout =
-    std::make_unique<storage::RowLayoutFactory>();
-std::size_t options::soft_pipeline_breaker_num_tuples = 0;
-std::size_t options::result_set_window_size = 0;
-bool options::exploit_unique_build = true;
-bool options::simd = true;
-bool options::double_pumping = true;
-std::size_t options::simd_lanes = 1;
-std::vector<std::pair<Schema::Identifier, bool>> options::sorted_attributes = {}; // hack to assume sortedness for some benchmarks
-
 namespace {
 
 __attribute__((constructor(201)))

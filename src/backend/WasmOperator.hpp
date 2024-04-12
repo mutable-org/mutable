@@ -82,98 +82,98 @@ enum class OrderingStrategy : uint64_t {
 
 }
 
-}
-
-namespace {
-
 namespace options {
 
 /*----- options ------------------------------------------------------------------------------------------------------*/
 /** Which implementations should be considered for a `GroupingOperator`. */
-extern m::option_configs::GroupingImplementation grouping_implementations;
+inline option_configs::GroupingImplementation grouping_implementations = option_configs::GroupingImplementation::ALL;
 
 /** Which implementations should be considered for a `SortingOperator`. */
-extern m::option_configs::SortingImplementation sorting_implementations;
+inline option_configs::SortingImplementation sorting_implementations = option_configs::SortingImplementation::ALL;
 
 /** Which implementations should be considered for a `JoinOperator`. */
-extern m::option_configs::JoinImplementation join_implementations;
+inline option_configs::JoinImplementation join_implementations = option_configs::JoinImplementation::ALL;
 
 /** Which selection strategy should be used for `wasm::Filter`. */
-extern m::option_configs::SelectionStrategy filter_selection_strategy;
+inline option_configs::SelectionStrategy filter_selection_strategy = option_configs::SelectionStrategy::AUTO;
 
 /** Which selection strategy should be used for comparisons in `wasm::Quicksort`. */
-extern m::option_configs::SelectionStrategy quicksort_cmp_selection_strategy;
+inline option_configs::SelectionStrategy quicksort_cmp_selection_strategy = option_configs::SelectionStrategy::AUTO;
 
 /** Which selection strategy should be used for `wasm::NestedLoopsJoin`. */
-extern m::option_configs::SelectionStrategy nested_loops_join_selection_strategy;
+inline option_configs::SelectionStrategy nested_loops_join_selection_strategy = option_configs::SelectionStrategy::AUTO;
 
 /** Which selection strategy should be used for `wasm::SimpleHashJoin`. */
-extern m::option_configs::SelectionStrategy simple_hash_join_selection_strategy;
+inline option_configs::SelectionStrategy simple_hash_join_selection_strategy = option_configs::SelectionStrategy::AUTO;
 
 /** Which ordering strategy should be used for `wasm::SimpleHashJoin`. */
-extern m::option_configs::OrderingStrategy simple_hash_join_ordering_strategy;
+inline option_configs::OrderingStrategy simple_hash_join_ordering_strategy = option_configs::OrderingStrategy::AUTO;
 
 /** Which selection strategy should be used for `wasm::SortMergeJoin`. */
-extern m::option_configs::SelectionStrategy sort_merge_join_selection_strategy;
+inline option_configs::SelectionStrategy sort_merge_join_selection_strategy = option_configs::SelectionStrategy::AUTO;
 
 /** Which selection strategy should be used for comparisons while sorting in `wasm::SortMergeJoin`. */
-extern m::option_configs::SelectionStrategy sort_merge_join_cmp_selection_strategy;
+inline option_configs::SelectionStrategy sort_merge_join_cmp_selection_strategy =
+    option_configs::SelectionStrategy::AUTO;
 
 /** Which implementation should be used for `wasm::HashTable`s. */
-extern m::option_configs::HashTableImplementation hash_table_implementation;
+inline option_configs::HashTableImplementation hash_table_implementation = option_configs::HashTableImplementation::ALL;
 
 /** Which probing strategy should be used for `wasm::OpenAddressingHashTable`s.  Does not have any effect if
  * `wasm::ChainedHashTable`s are used. */
-extern m::option_configs::ProbingStrategy hash_table_probing_strategy;
+inline option_configs::ProbingStrategy hash_table_probing_strategy = option_configs::ProbingStrategy::AUTO;
 
 /** Which storing strategy should be used for `wasm::OpenAddressingHashTable`s.  Does not have any effect if
  * `wasm::ChainedHashTable`s are used. */
-extern m::option_configs::StoringStrategy hash_table_storing_strategy;
+inline option_configs::StoringStrategy hash_table_storing_strategy = option_configs::StoringStrategy::AUTO;
 
 /** Which maximal load factor should be used for `wasm::OpenAddressingHashTable`s.  Does not have any effect if
  * `wasm::ChainedHashTable`s are used. */
-extern double load_factor_open_addressing;
+inline double load_factor_open_addressing = 0.8;
 
 /** Which maximal load factor should be used for `wasm::ChainedHashTable`s.  Does not have any effect if
  * `wasm::OpenAddressingHashTable`s are used. */
-extern double load_factor_chained;
+inline double load_factor_chained = 1.5;
 
 /** Which initial capacity should be used for `wasm::HashTable`s. */
-extern std::optional<uint32_t> hash_table_initial_capacity;
+inline std::optional<uint32_t> hash_table_initial_capacity;
 
 /** Whether to use `wasm::HashBasedGroupJoin` if possible. */
-extern bool hash_based_group_join;
+inline bool hash_based_group_join = true;
 
 /** Which layout factory should be used for hard pipeline breakers. */
-extern std::unique_ptr<const m::storage::DataLayoutFactory> hard_pipeline_breaker_layout;
+inline std::unique_ptr<const m::storage::DataLayoutFactory> hard_pipeline_breaker_layout =
+    std::make_unique<storage::RowLayoutFactory>();
 
 /** Where soft pipeline breakers should be added. */
-extern m::option_configs::SoftPipelineBreakerStrategy soft_pipeline_breaker;
+inline option_configs::SoftPipelineBreakerStrategy soft_pipeline_breaker =
+    option_configs::SoftPipelineBreakerStrategy::NONE;
 
 /** Which layout factory should be used for soft pipeline breakers. */
-extern std::unique_ptr<const m::storage::DataLayoutFactory> soft_pipeline_breaker_layout;
+inline std::unique_ptr<const m::storage::DataLayoutFactory> soft_pipeline_breaker_layout =
+    std::make_unique<storage::RowLayoutFactory>();
 
 /** Which size in tuples should be used for soft pipeline breakers. */
-extern std::size_t soft_pipeline_breaker_num_tuples;
+inline std::size_t soft_pipeline_breaker_num_tuples = 0;
 
 /** Which window size should be used for the result set. */
-extern std::size_t result_set_window_size;
+inline std::size_t result_set_window_size = 0;
 
 /** Whether to exploit uniqueness of build key in hash joins. */
-extern bool exploit_unique_build;
+inline bool exploit_unique_build = true;
 
 /** Whether to use SIMDfication. */
-extern bool simd;
+inline bool simd = true;
 
 /** Whether to use double pumping if SIMDfication is enabled. */
-extern bool double_pumping;
+inline bool double_pumping = true;
 
 /** Which number of SIMD lanes to prefer. */
-extern std::size_t simd_lanes;
+inline std::size_t simd_lanes = 1;
 
 /** Which attributes are assumed to be sorted.  For each entry, the first element is the name of the attribute and the
  * second one is `true` iff the attribute is sorted ascending and vice versa. */
-extern std::vector<std::pair<m::Schema::Identifier, bool>> sorted_attributes;
+inline std::vector<std::pair<m::Schema::Identifier, bool>> sorted_attributes;
 
 }
 

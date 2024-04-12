@@ -173,7 +173,7 @@ struct M_EXPORT PlanTableSmallOrDense : PlanTableBase<PlanTableSmallOrDense>
     ///> the number of `DataSource`s in the query
     size_type num_sources_;
     ///> the table of problem plans, sizes, and costs
-    std::unique_ptr<PlanTableEntry[]> table_;
+    std::unique_ptr<PlanTableEntry[]> table_ = nullptr;
 
     public:
     friend void swap(PlanTableSmallOrDense &first, PlanTableSmallOrDense &second) {
@@ -190,7 +190,7 @@ struct M_EXPORT PlanTableSmallOrDense : PlanTableBase<PlanTableSmallOrDense>
         , table_(allocator_.template make_unique<PlanTableEntry[]>(1UL << num_sources))
     {
         /*----- Initialize table. ------------------------------------------------------------------------------------*/
-        for (auto ptr = &table_[0], end = &table_[1UL << num_sources]; ptr != end; ++ptr)
+        for (auto ptr = &table_[0], end = &table_[size()]; ptr != end; ++ptr)
             new (ptr) PlanTableEntry();
     }
 
@@ -203,17 +203,18 @@ struct M_EXPORT PlanTableSmallOrDense : PlanTableBase<PlanTableSmallOrDense>
 
     ~PlanTableSmallOrDense() {
         if (bool(table_)) {
-            for (auto ptr = &table_[0], end = &table_[1UL << num_sources()]; ptr != end; ++ptr)
+            for (auto ptr = &table_[0], end = &table_[size()]; ptr != end; ++ptr)
                 ptr->~PlanTableEntry();
         }
-        allocator_.dispose(std::move(table_), 1UL << num_sources());
+        allocator_.dispose(std::move(table_), size());
     }
 
     PlanTableSmallOrDense & operator=(PlanTableSmallOrDense &&other) { swap(*this, other); return *this; }
 
     bool operator==(const PlanTableSmallOrDense &other) const {
-        if (num_sources() != other.num_sources()) return false;
-        for (size_type i = 0; i < 1UL << num_sources(); ++i) {
+        if (this->num_sources() != other.num_sources()) return false;
+        if (this->size() != other.size()) return false;
+        for (size_type i = 0; i < size(); ++i) {
             Subproblem S(i);
             if ((*this)[S] != other[S]) return false;
         }
@@ -222,8 +223,9 @@ struct M_EXPORT PlanTableSmallOrDense : PlanTableBase<PlanTableSmallOrDense>
     bool operator!=(const PlanTableSmallOrDense &other) const { return not operator==(other); }
 
     size_type num_sources() const { return num_sources_; }
+    size_type size() const { return (1UL << num_sources_); }
 
-    PlanTableEntry & at(Subproblem s) { M_insist(uint64_t(s) < (1UL << num_sources())); return table_[uint64_t(s)]; }
+    PlanTableEntry & at(Subproblem s) { M_insist(uint64_t(s) < size()); return table_[uint64_t(s)]; }
     const PlanTableEntry & at(Subproblem s) const { return const_cast<PlanTableSmallOrDense*>(this)->at(s); }
 
     PlanTableEntry & operator[](Subproblem s) { return at(s); }
@@ -237,7 +239,7 @@ struct M_EXPORT PlanTableSmallOrDense : PlanTableBase<PlanTableSmallOrDense>
     }
 
     void reset_costs() {
-        for (size_type i = 0; i < 1UL << num_sources(); ++i) {
+        for (size_type i = 0; i < size(); ++i) {
             Subproblem S(i);
             if (not S.is_singleton())
                 operator[](S).cost = std::numeric_limits<decltype(PlanTableEntry::cost)>::infinity();
@@ -283,7 +285,7 @@ struct M_EXPORT PlanTableLargeAndSparse : PlanTableBase<PlanTableLargeAndSparse>
     PlanTableLargeAndSparse & operator=(PlanTableLargeAndSparse &&other) { swap(*this, other); return *this; }
 
     bool operator==(const PlanTableLargeAndSparse &other) const {
-        if (num_sources() != other.num_sources()) return false;
+        if (this->num_sources() != other.num_sources()) return false;
         if (this->table_.size() != other.table_.size()) return false;
         for (auto &this_e : this->table_) {
             auto other_it = other.table_.find(this_e.first);
@@ -297,6 +299,7 @@ struct M_EXPORT PlanTableLargeAndSparse : PlanTableBase<PlanTableLargeAndSparse>
     bool operator!=(const PlanTableLargeAndSparse &other) const { return not operator==(other); }
 
     size_type num_sources() const { return num_sources_; }
+    size_type size() const { return table_.size(); }
 
     PlanTableEntry & at(Subproblem s) { return table_.at(s); }
     const PlanTableEntry & at(Subproblem s) const { return const_cast<PlanTableLargeAndSparse*>(this)->at(s); }

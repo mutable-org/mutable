@@ -36,7 +36,7 @@ std::ostream & m::operator<<(std::ostream &out, const PlanTableSmallOrDense &PT)
     const uint64_t cost_len = std::isinf(entry.cost)
                               ? 3 // infinity will print as "inf", hence strlen("inf")
                               : std::max<uint64_t>(std::ceil(std::log10(entry.cost)), 4);
-    const uint64_t sub_len  = std::max<uint64_t>(PT.num_sources(), 5);
+    const uint64_t sub_len  = std::max<uint64_t>(num_sources, 5);
 
     out << std::left << "Plan Table:\n"
         << std::setw(num_sources) << "Sub"    << "  "
@@ -87,6 +87,7 @@ std::ostream & m::operator<<(std::ostream &out, const PlanTableLargeAndSparse &P
     auto &CE = DB.cardinality_estimator();
 
     std::size_t num_sources = PT.num_sources();
+    uint64_t n = 1UL << num_sources;
 
     /* Compute max length of columns. */
     auto &entry = PT.get_final();
@@ -95,7 +96,7 @@ std::ostream & m::operator<<(std::ostream &out, const PlanTableLargeAndSparse &P
         4
     );
     const uint64_t cost_len = std::max<uint64_t>(std::ceil(std::log10(entry.cost)), 4);
-    const uint64_t sub_len  = std::max<uint64_t>(PT.num_sources(), 5);
+    const uint64_t sub_len  = std::max<uint64_t>(num_sources, 5);
 
     out << std::left << "Plan Table:\n"
         << std::setw(num_sources) << "Sub"    << "  "
@@ -108,6 +109,9 @@ std::ostream & m::operator<<(std::ostream &out, const PlanTableLargeAndSparse &P
     sorted_entries.reserve(PT.table_.size());
 
     for (auto &e : PT.table_) {
+        if (uint64_t(e.first) > n)
+            continue; // skip additional entries
+
         auto pos = std::upper_bound(sorted_entries.begin(), sorted_entries.end(), e.first,
                                     [](Subproblem s, const std::pair<Subproblem, const PlanTableEntry*> &elem) {
                                         return uint64_t(s) < uint64_t(elem.first);

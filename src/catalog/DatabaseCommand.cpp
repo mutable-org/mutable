@@ -1,6 +1,7 @@
 #include <mutable/catalog/DatabaseCommand.hpp>
 
 #include "backend/StackMachine.hpp"
+#include "mutable/util/macro.hpp"
 #include <mutable/catalog/Catalog.hpp>
 #include <mutable/catalog/Schema.hpp>
 #include <mutable/IR/Optimizer.hpp>
@@ -83,12 +84,24 @@ void QueryDatabase::execute(Diagnostic &diag)
         std::cout.flush();
     }
 
-    auto logical_plan_computation = C.timer().create_timing("Compute the logical query plan");
-    Optimizer Opt(C.plan_enumerator(), C.cost_function());
-    std::unique_ptr<Producer> producer = Opt(*graph_);
-    for (auto &post_opt : C.logical_post_optimizations())
-        producer = (*post_opt.second).operator()(std::move(producer));
-    logical_plan_computation.stop();
+    /* Set logical optimizer to use. */
+    std::unique_ptr<Producer> producer;
+    bool result_db_compatible = true;
+    if (Options::Get().result_db) {
+        auto logical_plan_computation = C.timer().create_timing("Compute the logical semi-join reduction query plan");
+        Optimizer_ResultDB Opt;
+        std::tie(producer, result_db_compatible) = Opt(*graph_);
+        for (auto &post_opt : C.logical_post_optimizations())
+            producer = (*post_opt.second).operator()(std::move(producer));
+        logical_plan_computation.stop();
+    } else {
+        auto logical_plan_computation = C.timer().create_timing("Compute the logical query plan");
+        Optimizer Opt(C.plan_enumerator(), C.cost_function());
+        producer = Opt(*graph_);
+        for (auto &post_opt : C.logical_post_optimizations())
+            producer = (*post_opt.second).operator()(std::move(producer));
+        logical_plan_computation.stop();
+    }
     M_insist(bool(producer), "logical plan must have been computed");
 
     if (Options::Get().plan)
@@ -99,11 +112,15 @@ void QueryDatabase::execute(Diagnostic &diag)
         dot.show("logical_plan", false, "dot");
     }
 
-    if (Options::Get().benchmark)
-        logical_plan_ = std::make_unique<NoOpOperator>(std::cout);
-    else
-        logical_plan_ = std::make_unique<PrintOperator>(std::cout);
-    logical_plan_->add_child(producer.release());
+    if (Options::Get().result_db and result_db_compatible) {
+        logical_plan_ = M_notnull(cast<Consumer>(producer));
+    } else {
+        if (Options::Get().benchmark)
+            logical_plan_ = std::make_unique<NoOpOperator>(std::cout);
+        else
+            logical_plan_ = std::make_unique<PrintOperator>(std::cout);
+        logical_plan_->add_child(producer.release());
+    }
 
     static thread_local std::unique_ptr<Backend> backend;
     if (not backend)

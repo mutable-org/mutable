@@ -218,7 +218,7 @@ std::unique_ptr<Producer*[]> Optimizer::optimize_source_plans(const QueryGraph &
     auto source_plans = std::make_unique<Producer*[]>(num_sources);
     for (auto &ds : G.sources()) {
         Subproblem s = Subproblem::Singleton(ds->id());
-        if (auto bt = cast<const BaseTable>(ds.get())) {
+        if (auto bt = cast<BaseTable>(ds.get())) {
             /* Produce a scan for base tables. */
             PT[s].cost = 0;
             PT[s].model = CE.estimate_scan(G, s);
@@ -234,7 +234,7 @@ std::unique_ptr<Producer*[]> Optimizer::optimize_source_plans(const QueryGraph &
             source_plans[ds->id()] = source.release();
         } else {
             /* Recursively solve nested queries. */
-            auto &Q = as<const Query>(*ds);
+            auto &Q = as<Query>(*ds);
             const bool old = std::exchange(needs_projection_, Q.alias().has_value()); // aliased nested queries need projection
             auto [sub_plan, sub] = optimize(Q.query_graph());
             needs_projection_ = old;

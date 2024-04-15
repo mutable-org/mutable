@@ -60,18 +60,19 @@ struct M_EXPORT DataSource
      * of the referenced `Table`. Returned value might be empty for anonymous nested queries (e.g. in a WHERE clause). */
     virtual ThreadSafePooledOptionalString name() const = 0;
     /** Returns the filter of this `DataSource`.  May be empty. */
+    cnf::CNF & filter() { return filter_; }
     const cnf::CNF & filter() const { return filter_; }
     /** Adds `filter` to the current filter of this `DataSource` by logical conjunction. */
     void update_filter(cnf::CNF filter) { filter_ = filter_ and filter; }
     /** Adds `join` to the set of `Join`s of this `DataSource`. */
     void add_join(Join &join) { joins_.emplace_back(join); }
     /** Returns a reference to the `Join`s using this `DataSource`. */
+    auto & joins() { return joins_; }
     const auto & joins() const { return joins_; }
 
     /** Returns `true` iff the data source is correlated. */
     virtual bool is_correlated() const = 0;
 
-    private:
     void remove_join(Join &join) {
         auto it = std::find_if(joins_.begin(), joins_.end(), [&join](auto j) { return &j.get() == &join; });
         if (it == joins_.end())
@@ -79,7 +80,6 @@ struct M_EXPORT DataSource
         joins_.erase(it);
     }
 
-    public:
     bool operator==(const DataSource &other) const { return this->id_ == other.id_; }
     bool operator!=(const DataSource &other) const { return not operator==(other); }
 };
@@ -126,7 +126,10 @@ struct M_EXPORT Query : DataSource
 
     public:
     /** Returns a reference to the internal `QueryGraph`. */
-    QueryGraph & query_graph() const { return *query_graph_; }
+    QueryGraph & query_graph() { M_insist(bool(query_graph_)); return *query_graph_; }
+    const QueryGraph & query_graph() const { return const_cast<Query*>(this)->query_graph(); }
+
+    std::unique_ptr<QueryGraph> extract_query_graph() { return std::exchange(query_graph_, nullptr); }
 
     ThreadSafePooledOptionalString name() const override { return alias(); }
 
@@ -146,10 +149,12 @@ struct M_EXPORT Join
     Join(cnf::CNF condition, sources_t sources) : condition_(std::move(condition)) , sources_(std::move(sources)) { }
 
     /** Returns the join condition. */
+    cnf::CNF & condition() { return condition_; }
     const cnf::CNF & condition() const { return condition_; }
     /** Adds `condition` to the current condition of this `Join` by logical conjunction. */
     void update_condition(cnf::CNF update) { condition_ = condition_ and update; }
     /** Returns a reference to the joined `DataSource`s. */
+    sources_t & sources() { return sources_; }
     const sources_t & sources() const { return sources_; }
 
     bool operator==(const Join &other) const {
@@ -226,6 +231,9 @@ struct M_EXPORT QueryGraph
     /** Returns the number of `Join`s in this graph. */
     std::size_t num_joins() const { return joins_.size(); }
 
+    /** Returns true iff the `QueryGraph` is cyclic. */
+    bool is_cyclic() const { return adjacency_matrix().is_cyclic(); }
+
     void add_source(std::unique_ptr<DataSource> source) {
         source->id_ = sources_.size();
         sources_.emplace_back(source.release());
@@ -233,11 +241,13 @@ struct M_EXPORT QueryGraph
     BaseTable & add_source(ThreadSafePooledOptionalString alias, const Table &table) {
         std::unique_ptr<BaseTable> base(new BaseTable(sources_.size(), std::move(alias), table));
         auto &ref = sources_.emplace_back(std::move(base));
+        adjacency_matrix_.reset(); // reset adjacency matrix after modifying the `QueryGraph`
         return as<BaseTable>(*ref);
     }
     Query & add_source(ThreadSafePooledOptionalString alias, std::unique_ptr<QueryGraph> query_graph) {
         std::unique_ptr<Query> Q(new Query(sources_.size(), std::move(alias), std::move(query_graph)));
         auto &ref = sources_.emplace_back(std::move(Q));
+        adjacency_matrix_.reset(); // reset adjacency matrix after modifying the `QueryGraph`
         return as<Query>(*ref);
     }
 
@@ -251,23 +261,31 @@ struct M_EXPORT QueryGraph
             --(*it)->id_;
             ++it;
         }
+        adjacency_matrix_.reset(); // reset adjacency matrix after modifying the `QueryGraph`
         return ds;
     }
 
+    auto & sources() { return sources_; }
     const auto & sources() const { return sources_; }
+    auto & joins() { return joins_; }
     const auto & joins() const { return joins_; }
+    auto & group_by() { return group_by_; }
     const auto & group_by() const { return group_by_; }
+    auto & aggregates() { return aggregates_; }
     const auto & aggregates() const { return aggregates_; }
+    std::vector<projection_type> & projections() { return projections_; }
     const std::vector<projection_type> & projections() const { return projections_; }
+    auto & order_by() { return order_by_; }
     const auto & order_by() const { return order_by_; }
     auto limit() const { return limit_; }
 
     /** Returns a data souce given its id. */
-    const DataSource & operator[](uint64_t id) const {
+    DataSource & operator[](uint64_t id) {
         auto &ds = sources_[id];
         M_insist(ds->id() == id, "given id and data source id must match");
         return *ds;
     }
+    const DataSource & operator[](uint64_t id) const { return const_cast<QueryGraph*>(this)->operator[](id); }
 
     /** Returns `true` iff the graph contains a grouping. */
     bool grouping() const { return not group_by_.empty() or not aggregates_.empty(); }
@@ -279,12 +297,7 @@ struct M_EXPORT QueryGraph
             compute_adjacency_matrix();
         return *adjacency_matrix_;
     }
-
-    const AdjacencyMatrix & adjacency_matrix() const {
-        if (not adjacency_matrix_) [[unlikely]]
-            compute_adjacency_matrix();
-        return *adjacency_matrix_;
-    }
+    const AdjacencyMatrix & adjacency_matrix() const { return const_cast<QueryGraph*>(this)->adjacency_matrix(); }
 
     /** Translates the query graph to dot. */
     void dot(std::ostream &out) const;
@@ -315,6 +328,21 @@ struct M_EXPORT QueryGraph
         custom_filter_exprs_.push_back(std::move(filter_expr));
     }
 
+    Join & emplace_join(cnf::CNF condition, Join::sources_t sources) {
+        return *joins_.emplace_back(std::make_unique<Join>(std::move(condition), std::move(sources)));
+    }
+
+    std::unique_ptr<Join> extract_join(const Join &join) {
+        auto it = std::find_if(joins_.begin(), joins_.end(), [&join](auto &j) { return j.get() == &join; });
+        if (it == joins_.end())
+            throw invalid_argument("given join not found");
+        auto tmp = std::move(*it);
+        joins_.erase(it);
+        return tmp;
+    }
+
+    void remove_join(const Join &join) { extract_join(join); }
+
 
     void dump(std::ostream &out) const;
     void dump() const;
@@ -322,13 +350,6 @@ struct M_EXPORT QueryGraph
     private:
     void compute_adjacency_matrix() const;
     void dot_recursive(std::ostream &out) const;
-
-    void remove_join(Join &join) {
-        auto it = std::find_if(joins_.begin(), joins_.end(), [&join](auto &j) { return j.get() == &join; });
-        if (it == joins_.end())
-            throw invalid_argument("given join not found");
-        joins_.erase(it);
-    }
 };
 
 }

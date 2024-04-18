@@ -328,11 +328,13 @@ bool heuristic_search_helper(const char *vertex_str, const char *expand_str, con
             if (options::initialize_upper_bound) {
                 config.upper_bound = [&]() {
                     /*----- Run GOO to compute upper bound of plan cost. -----*/
+                    /* Obtain the sum of the costs of the left and the right subplan of the resulting plan. The costs
+                     * considered for the search do not include the cardinality of the result set. */
                     GOO Goo;
                     Goo(G, CF, PT);
-                    auto &plan = PT.get_final();
+                    const auto &plan = PT.get_final();
                     M_insist(not plan.left.empty() and not plan.right.empty());
-                    return plan.cost;
+                    return PT[plan.left].cost + PT[plan.right].cost;
                 }();
             }
         } else if (options::initialize_upper_bound) {

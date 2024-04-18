@@ -3400,7 +3400,8 @@ TEST_CASE("AnytimeAStar_BottomUp_and_TopDown_initial_upper_bound", "[core][IR]")
         /*----- Run GOO to compute upper bound of plan cost. -----*/
         GOO Goo;
         Goo(G, C_out, plan_table);
-        return plan_table.get_final().cost;
+        const auto &plan = plan_table.get_final();
+        return plan_table[plan.left].cost + plan_table[plan.right].cost;
     }();
 
 
@@ -3460,19 +3461,19 @@ TEST_CASE("AnytimeAStar_BottomUp_and_TopDown_initial_upper_bound", "[core][IR]")
         CHECK(State::NUM_STATES_GENERATED() == 6);
         CHECK(State::NUM_STATES_EXPANDED() == 1);
         CHECK(State::NUM_STATES_CONSTRUCTED() == 7);
-        CHECK(State::NUM_STATES_DISPOSED() == 1);
+        CHECK(State::NUM_STATES_DISPOSED() == 3);
 
         const auto &SM = S.state_manager();
 
-        CHECK(SM.num_new() == 6);
+        CHECK(SM.num_new() == 4);
         CHECK(SM.num_duplicates() == 0);
         CHECK(SM.num_discarded() == 0);
         CHECK(SM.num_cheaper() == 0);
         CHECK(SM.num_decrease_key() == 0);
-        CHECK(SM.num_pruned_by_cost() == 1);
+        CHECK(SM.num_pruned_by_cost() == 3);
 
-        CHECK(SM.num_states_seen() == 6);
-        CHECK(SM.num_states_in_regular_queue() == 5);
+        CHECK(SM.num_states_seen() == 4);
+        CHECK(SM.num_states_in_regular_queue() == 3);
         CHECK(SM.num_states_in_beam_queue() == 0);
         CHECK(S.num_cached_heuristic_value() == 0);
         CHECK(SM.num_regular_to_beam() == 0);
@@ -3528,19 +3529,19 @@ TEST_CASE("AnytimeAStar_BottomUp_and_TopDown_initial_upper_bound", "[core][IR]")
         CHECK(State::NUM_STATES_GENERATED() == 6);
         CHECK(State::NUM_STATES_EXPANDED() == 1);
         CHECK(State::NUM_STATES_CONSTRUCTED() == 7);
-        CHECK(State::NUM_STATES_DISPOSED() == 1);
+        CHECK(State::NUM_STATES_DISPOSED() == 3);
 
         const auto &SM = S.state_manager();
 
-        CHECK(SM.num_new() == 6);
+        CHECK(SM.num_new() == 4);
         CHECK(SM.num_duplicates() == 0);
         CHECK(SM.num_discarded() == 0);
         CHECK(SM.num_cheaper() == 0);
         CHECK(SM.num_decrease_key() == 0);
-        CHECK(SM.num_pruned_by_cost() == 1);
+        CHECK(SM.num_pruned_by_cost() == 3);
 
-        CHECK(SM.num_states_seen() == 6);
-        CHECK(SM.num_states_in_regular_queue() == 5);
+        CHECK(SM.num_states_seen() == 4);
+        CHECK(SM.num_states_in_regular_queue() == 3);
         CHECK(SM.num_states_in_beam_queue() == 0);
         CHECK(S.num_cached_heuristic_value() == 0);
         CHECK(SM.num_regular_to_beam() == 0);
@@ -3658,21 +3659,21 @@ TEST_CASE("AnytimeAStar_BottomUp_and_TopDown_initial_upper_bound", "[core][IR]")
         CHECK(State::NUM_STATES_GENERATED() == 11);
         CHECK(State::NUM_STATES_EXPANDED() == 4);
         CHECK(State::NUM_STATES_CONSTRUCTED() == 12);
-        CHECK(State::NUM_STATES_DISPOSED() == 3);
+        CHECK(State::NUM_STATES_DISPOSED() == 5);
 
         const auto &SM = S.state_manager();
 
-        CHECK(SM.num_new() == 9);
-        CHECK(SM.num_duplicates() == 1);
-        CHECK(SM.num_discarded() == 1);
+        CHECK(SM.num_new() == 7);
+        CHECK(SM.num_duplicates() == 0);
+        CHECK(SM.num_discarded() == 0);
         CHECK(SM.num_cheaper() == 0);
         CHECK(SM.num_decrease_key() == 0);
-        CHECK(SM.num_pruned_by_cost() == 2);
+        CHECK(SM.num_pruned_by_cost() == 5);
 
-        CHECK(SM.num_states_seen() == 9);
-        CHECK(SM.num_states_in_regular_queue() == 4);
+        CHECK(SM.num_states_seen() == 7);
+        CHECK(SM.num_states_in_regular_queue() == 2);
         CHECK(SM.num_states_in_beam_queue() == 0);
-        CHECK(S.num_cached_heuristic_value() == 1);
+        CHECK(S.num_cached_heuristic_value() == 0);
         CHECK(SM.num_regular_to_beam() == 0);
         CHECK(SM.num_none_to_beam() == 0);
     }

@@ -198,10 +198,13 @@ unittest:linux-amd64:
           artifacts: true
     script:
         - pipenv --python $PYTHON_VERSION sync
+        - env pipenv run utils/unittest-parallel.py -r --out unittest-sanity.xml build/debug/bin/unittest -t '[test-sanity]' || true
+        - head -n1 unittest-sanity.xml | perl -n -e '/errors="(\d+)" failures="(\d+)" tests="(\d+)/ && exit ($1 != 2 or $2 != 1 or $3 != 2)'  # we expect 2 errors (abort & segv), one failure (failure), and two tests run (failure & success)
         - env UBSAN_OPTIONS=print_stacktrace=1 ASAN_OPTIONS=detect_stack_use_after_return=1 pipenv run utils/unittest-parallel.py -r --out unittest-results.xml build/debug/bin/unittest
     artifacts:
         when: always
         paths:
+            - unittest-sanity.xml
             - unittest-results.xml
         reports:
             junit: unittest-results.xml
@@ -216,10 +219,13 @@ unittest:macos-amd64:
           artifacts: true
     script:
         - pipenv --python $PYTHON_VERSION sync
+        - env pipenv run utils/unittest-parallel.py -r --out unittest-sanity.xml build/debug/bin/unittest -t '[test-sanity]' || true
+        - head -n1 unittest-sanity.xml | perl -n -e '/errors="(\d+)" failures="(\d+)" tests="(\d+)/ && exit ($1 != 2 or $2 != 1 or $3 != 2)'  # we expect 2 errors (abort & segv), one failure (failure), and two tests run (failure & success)
         - env UBSAN_OPTIONS=print_stacktrace=1 ASAN_OPTIONS=detect_stack_use_after_return=1:detect_container_overflow=0 MallocNanoZone=0 pipenv run utils/unittest-parallel.py -r --out unittest-results.xml build/debug/bin/unittest
     artifacts:
         when: always
         paths:
+            - unittest-sanity.xml
             - unittest-results.xml
         reports:
             junit: unittest-results.xml

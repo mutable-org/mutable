@@ -1,0 +1,31 @@
+description: Dummy benchmark used in CI to ensure benchmarking works
+suite: dummy
+benchmark: dummy
+name: Dummy
+readonly: true
+data:
+    'Dummy':
+        attributes:
+            'id': 'INT NOT NULL'
+            'val': 'FLOAT NOT NULL'
+        file: 'benchmark/dummy/data/dummy.csv'
+        format: 'csv'
+        delimiter: ','
+        header: 1
+systems:
+    mutable:
+        configurations:
+            'WasmV8, PAX4M':
+                args: --backend WasmV8 --data-layout PAX4M
+                pattern: '^Execute query:.*'
+        cases:
+            'Dummy': SELECT * FROM Dummy;
+    PostgreSQL:
+        cases:
+            'Dummy': SELECT * FROM "Dummy";
+    DuckDB:
+        cases:
+            'Dummy': SELECT * FROM "Dummy";
+    HyPer:
+        cases:
+            'Dummy': SELECT * FROM "Dummy";

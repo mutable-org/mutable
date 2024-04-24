@@ -55,7 +55,7 @@ sys.stdout.flush()
         result: ConnectorResult = eval(out)
         patched_result: ConnectorResult = dict()
         for key, val in result.items():
-            patched_result[f'{key}{suffix}'] = { 'ExecutionTime' : val }
+            patched_result[f'{key}{suffix}'] = val
         return patched_result
 
     @staticmethod

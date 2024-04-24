@@ -384,6 +384,42 @@ ensure-exported-symbols:release:macos:
         - llvm-nm -C mutable/lib/libmutable_bundled.a | awk 'BEGIN{rc=1}; /T v8::V8::Initialize\(/{rc=0}; END{exit rc}'
         - llvm-nm -C mutable/lib/libmutable_bundled.a | awk 'BEGIN{rc=1}; /T wasm::IString::interned\(/{rc=0}; END{exit rc}'
 
+benchmark-test:release:linux-amd64:
+    stage: test:release
+    tags:
+        - linux
+        - amd64
+    extends:
+        - .release
+        - .static
+    needs:
+        - job: "build:release:linux-amd64"
+          artifacts: true
+    script:
+        # Install DuckDB
+        - wget 'https://github.com/duckdb/duckdb/releases/download/v0.10.2/duckdb_cli-linux-amd64.zip'
+        - unzip 'duckdb_cli-linux-amd64.zip' -d 'benchmark/database_connectors/'
+        # Run benchmarks
+        - pipenv --python $PYTHON_VERSION sync
+        - env pipenv run benchmark/Benchmark.py -v -b mutable -o dummy.csv benchmark/dummy
+        # Validate results
+        - cat dummy.csv | perl -n -e '/dummy,Dummy,(.*),Execution Time/ && print "$1\n"' | sort | uniq > names.txt  # collect system names
+        - |
+            diff names.txt - <<- EOF
+            DuckDB (16 cores)
+            DuckDB (single core)
+            HyPer (16 cores)
+            HyPer (single core)
+            "mutable (single core, WasmV8, PAX4M)"
+            PostgreSQL
+            EOF
+    artifacts:
+        when: always
+        paths:
+            - dummy.csv
+            - names.txt
+
+
 #-----------------------------------------------------------------------------------------------------------------------
 # REPORT
 #-----------------------------------------------------------------------------------------------------------------------
@@ -426,6 +462,7 @@ report:coverage:
           when: on_success
         - if: $CI_MERGE_REQUEST_SOURCE_BRANCH_NAME =~ /coverage/i
           when: on_success
+
 
 #-----------------------------------------------------------------------------------------------------------------------
 # UPLOAD GENERIC PACKAGE & CREATE GITLAB RELEASE

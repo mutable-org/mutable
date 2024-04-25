@@ -1135,8 +1135,9 @@ HashTable::const_entry_t ChainedHashTable<IsGlobal>::entry(Ptr<void> entry) cons
 {
     const_entry_t _entry;
 
-    for (std::size_t i = 0; i < schema_.get().num_entries(); ++i) {
-        auto &e = schema_.get()[i < key_indices_.size() ? key_indices_[i] : value_indices_[i - key_indices_.size()]];
+    for (std::size_t i = 0; i < key_indices_.size() + value_indices_.size(); ++i) {
+        const bool is_key = i < key_indices_.size();
+        auto &e = schema_.get()[is_key ? key_indices_[i] : value_indices_[i - key_indices_.size()]];
         const auto off = entry_offsets_in_bytes_[i];
         auto add = [&]<typename T>() {
             using type = typename T::type;
@@ -2088,7 +2089,7 @@ HashTable::const_entry_t OpenAddressingHashTable<IsGlobal, ValueInPlace>::entry(
     auto ptr = &slot;
     auto off_null_bitmap = M_CONSTEXPR_COND(ValueInPlace, layout_.null_bitmap_offset_in_bytes_,
                                                           layout_.keys_null_bitmap_offset_in_bytes_);
-    for (std::size_t i = 0; i < schema_.get().num_entries(); ++i) {
+    for (std::size_t i = 0; i < key_indices_.size() + value_indices_.size(); ++i) {
         if constexpr (not ValueInPlace) {
             if (i == key_indices_.size()) {
                 /* If end of key is reached, switch variables to out-of-place value entries. */
@@ -2098,17 +2099,18 @@ HashTable::const_entry_t OpenAddressingHashTable<IsGlobal, ValueInPlace>::entry(
             }
         }
 
-        auto &e = schema_.get()[i < key_indices_.size() ? key_indices_[i] : value_indices_[i - key_indices_.size()]];
+        const bool is_key = i < key_indices_.size();
+        auto &e = schema_.get()[is_key ? key_indices_[i] : value_indices_[i - key_indices_.size()]];
         const auto off =
             M_CONSTEXPR_COND(ValueInPlace,
                              layout_.entry_offsets_in_bytes_[i],
-                             i < key_indices_.size() ? layout_.key_offsets_in_bytes_[i]
-                                                     : layout_.value_offsets_in_bytes_[i - key_indices_.size()]);
+                             is_key ? layout_.key_offsets_in_bytes_[i]
+                                    : layout_.value_offsets_in_bytes_[i - key_indices_.size()]);
         auto add = [&]<typename T>() {
             using type = typename T::type;
             if (e.nullable()) { // entry may be NULL
                 const auto off_null_bit =
-                    M_CONSTEXPR_COND(ValueInPlace, i, i < key_indices_.size() ? i : i - key_indices_.size());
+                    M_CONSTEXPR_COND(ValueInPlace, i, is_key ? i : i - key_indices_.size());
                 const_reference_t<T> ref((ptr->clone() + off).template to<type*>(), ptr->clone() + off_null_bitmap,
                                          off_null_bit);
                 entry.add(e.id, std::move(ref));
@@ -2142,7 +2144,7 @@ HashTable::const_entry_t OpenAddressingHashTable<IsGlobal, ValueInPlace>::entry(
                 NChar val((ptr->clone() + off).template to<char*>(), e.nullable(), &cs);
                 if (e.nullable()) { // entry may be NULL
                     auto off_null_bit =
-                        M_CONSTEXPR_COND(ValueInPlace, i, i < key_indices_.size() ? i : i - key_indices_.size());
+                        M_CONSTEXPR_COND(ValueInPlace, i, is_key ? i : i - key_indices_.size());
                     const_reference_t<NChar> ref(val, ptr->clone() + off_null_bitmap, off_null_bit);
                     entry.add(e.id, std::move(ref));
                 } else { // entry must not be NULL

@@ -4550,8 +4550,8 @@ void HashBasedGroupJoin::execute(const Match<HashBasedGroupJoin> &M, setup_t set
     if (options::hash_table_initial_capacity) {
         initial_capacity = *options::hash_table_initial_capacity;
     } else {
-        if (M.build.has_info())
-            initial_capacity = std::ceil(M.build.info().estimated_cardinality / M.load_factor);
+        if (M.grouping.has_info())
+            initial_capacity = std::ceil(M.grouping.info().estimated_cardinality / M.load_factor);
         else
             initial_capacity = 1024; // fallback
     }

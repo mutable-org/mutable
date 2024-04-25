@@ -947,6 +947,8 @@ Boolx1 ChainedHashTable<IsGlobal>::equal_key(Ptr<void> entry, std::vector<SQL_t>
     Var<Boolx1> res(true);
 
     for (std::size_t i = 0; i < key_indices_.size(); ++i) {
+        /* do not skip duplicated comparison of the same slot since probing might need this comparison */
+
         auto &e = schema_.get()[key_indices_[i]];
         const auto off = entry_offsets_in_bytes_[key_indices_[i]];
         auto compare_equal = [&]<typename T>() {
@@ -1008,6 +1010,12 @@ template<bool IsGlobal>
 void ChainedHashTable<IsGlobal>::insert_key(Ptr<void> entry, std::vector<SQL_t> key)
 {
     for (std::size_t i = 0; i < key_indices_.size(); ++i) {
+        /* NOTE: `std::find` results in quadratic complexity but we expect rather short keys anyway */
+        if (std::find(key_indices_.begin(), key_indices_.begin() + i, key_indices_[i]) != key_indices_.begin() + i) {
+            discard(key[i]);
+            continue; // skip duplicated writing of the same slot
+        }
+
         auto &e = schema_.get()[key_indices_[i]];
         const auto off = entry_offsets_in_bytes_[key_indices_[i]];
         auto insert = [&]<typename T>() {
@@ -1069,6 +1077,8 @@ HashTable::entry_t ChainedHashTable<IsGlobal>::value_entry(Ptr<void> entry) cons
     entry_t value_entry;
 
     for (std::size_t i = 0; i < value_indices_.size(); ++i) {
+        /* there are no duplicates in the value indexes */
+
         auto &e = schema_.get()[value_indices_[i]];
         const auto off = entry_offsets_in_bytes_[value_indices_[i]];
         auto add = [&]<typename T>() {
@@ -1130,7 +1140,12 @@ HashTable::const_entry_t ChainedHashTable<IsGlobal>::entry(Ptr<void> entry) cons
     const_entry_t _entry;
 
     for (std::size_t i = 0; i < key_indices_.size() + value_indices_.size(); ++i) {
-        const auto idx = i < key_indices_.size() ? key_indices_[i] : value_indices_[i - key_indices_.size()];
+        const bool is_key = i < key_indices_.size();
+        /* NOTE: `std::find` results in quadratic complexity but we expect rather short keys anyway */
+        if (is_key and std::find(key_indices_.begin(), key_indices_.begin() + i, key_indices_[i]) != key_indices_.begin() + i)
+            continue; // skip duplicated key to the same slot
+
+        const auto idx = is_key ? key_indices_[i] : value_indices_[i - key_indices_.size()];
         auto &e = schema_.get()[idx];
         const auto off = entry_offsets_in_bytes_[idx];
         auto add = [&]<typename T>() {
@@ -1890,6 +1905,8 @@ Boolx1 OpenAddressingHashTable<IsGlobal, ValueInPlace>::equal_key(Ptr<void> slot
     const auto off_null_bitmap = M_CONSTEXPR_COND(ValueInPlace, layout_.null_bitmap_offset_in_bytes_,
                                                                 layout_.keys_null_bitmap_offset_in_bytes_);
     for (std::size_t i = 0; i < key_indices_.size(); ++i) {
+        /* do not skip duplicated comparison of the same slot since probing might need this comparison */
+
         auto &e = schema_.get()[key_indices_[i]];
         const auto idx = [&](){
             if constexpr (ValueInPlace) {
@@ -1963,6 +1980,12 @@ void OpenAddressingHashTable<IsGlobal, ValueInPlace>::insert_key(Ptr<void> slot,
     const auto off_null_bitmap = M_CONSTEXPR_COND(ValueInPlace, layout_.null_bitmap_offset_in_bytes_,
                                                                 layout_.keys_null_bitmap_offset_in_bytes_);
     for (std::size_t i = 0; i < key_indices_.size(); ++i) {
+        /* NOTE: `std::find` results in quadratic complexity but we expect rather short keys anyway */
+        if (std::find(key_indices_.begin(), key_indices_.begin() + i, key_indices_[i]) != key_indices_.begin() + i) {
+            discard(key[i]);
+            continue; // skip duplicated writing of the same slot
+        }
+
         auto &e = schema_.get()[key_indices_[i]];
         const auto idx = [&](){
             if constexpr (ValueInPlace) {
@@ -2036,6 +2059,8 @@ HashTable::entry_t OpenAddressingHashTable<IsGlobal, ValueInPlace>::value_entry(
     const auto off_null_bitmap = M_CONSTEXPR_COND(ValueInPlace, layout_.null_bitmap_offset_in_bytes_,
                                                                 layout_.values_null_bitmap_offset_in_bytes_);
     for (std::size_t i = 0; i < value_indices_.size(); ++i) {
+        /* there are no duplicates in the value indexes */
+
         auto &e = schema_.get()[value_indices_[i]];
         const auto idx = [&](){
             if constexpr (ValueInPlace) {
@@ -2126,6 +2151,10 @@ HashTable::const_entry_t OpenAddressingHashTable<IsGlobal, ValueInPlace>::entry(
         }
 
         const bool is_key = i < key_indices_.size();
+        /* NOTE: `std::find` results in quadratic complexity but we expect rather short keys anyway */
+        if (is_key and std::find(key_indices_.begin(), key_indices_.begin() + i, key_indices_[i]) != key_indices_.begin() + i)
+            continue; // skip duplicated key to the same slot
+
         const auto schema_idx = is_key ? key_indices_[i] : value_indices_[i - key_indices_.size()];
         auto &e = schema_.get()[schema_idx];
         const auto idx = [&](){

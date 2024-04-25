@@ -1456,6 +1456,9 @@ OpenAddressingHashTable<IsGlobal, ValueInPlace>::OpenAddressingHashTable(const S
     }
 
     /*----- Initialize capacity and absolute high watermark. -----*/
+    M_insist(initial_capacity < std::numeric_limits<uint32_t>::max(),
+             "incremented initial capacity would exceed data type");
+    ++initial_capacity; // since at least one entry must always be unoccupied for lookups
     /* at least capacity 4 to ensure absolute high watermark of at least 1 even for minimal percentage of 0.5 */
     const auto capacity_init = std::max<uint32_t>(4, ceil_to_pow_2(initial_capacity));
     const auto mask_init = capacity_init - 1U;

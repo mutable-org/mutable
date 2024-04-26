@@ -149,6 +149,7 @@ ceil_to_pow_2(T n)
     } else {
         static_assert(sizeof(T) > sizeof(unsigned long long), "unsupported width of integral type");
     }
+    M_insist(lz > 0, "ceiled value would exceed data type");
 
     T ceiled = T(1) << (8 * sizeof(T) - lz);
     M_insist(n <= ceiled, "the ceiled value must be greater or equal to the original value");

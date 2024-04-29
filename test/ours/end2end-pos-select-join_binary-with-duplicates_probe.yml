@@ -53,7 +53,7 @@ stages:
 
     end2end:
         cli_args: --insist-no-ternary-logic
-                  --join-implementations SimpleHash --simple-hash-join-ordering-strategy BuildOnRight
+                  --join-implementations SimpleHash --simple-hash-join-ordering-strategy BuildOnLeft
         out: |
             4
             74

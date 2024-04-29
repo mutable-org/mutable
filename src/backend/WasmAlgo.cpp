@@ -483,16 +483,10 @@ ChainedHashTable<IsGlobal>::ChainedHashTable(const Schema &schema, std::vector<H
     /*----- Add pointer to next entry in linked collision list. -----*/
     types.push_back(Type::Get_Integer(Type::TY_Vector, sizeof(uint32_t)));
 
-    /*----- Add key types. -----*/
-    for (auto k : key_indices_) {
-        types.push_back(schema[k].type);
-        has_nullable |= schema[k].nullable();
-    }
-
-    /*----- Add value types. -----*/
-    for (auto v : value_indices_) {
-        types.push_back(schema[v].type);
-        has_nullable |= schema[v].nullable();
+    /*----- Add schema types. -----*/
+    for (auto &e : schema_.get()) {
+        types.push_back(e.type);
+        has_nullable |= e.nullable();
     }
 
     if (has_nullable) {
@@ -954,13 +948,13 @@ Boolx1 ChainedHashTable<IsGlobal>::equal_key(Ptr<void> entry, std::vector<SQL_t>
 
     for (std::size_t i = 0; i < key_indices_.size(); ++i) {
         auto &e = schema_.get()[key_indices_[i]];
-        const auto off = entry_offsets_in_bytes_[i];
+        const auto off = entry_offsets_in_bytes_[key_indices_[i]];
         auto compare_equal = [&]<typename T>() {
             using type = typename T::type;
             M_insist(std::holds_alternative<T>(key[i]));
             if (e.nullable()) { // entry may be NULL
                 const_reference_t<T> ref((entry.clone() + off).template to<type*>(),
-                                         entry.clone() + null_bitmap_offset_in_bytes_, i);
+                                         entry.clone() + null_bitmap_offset_in_bytes_, key_indices_[i]);
                 res = res and ref == *std::get_if<T>(&key[i]);
             } else { // entry must not be NULL
                 const_reference_t<T> ref((entry.clone() + off).template to<type*>());
@@ -992,7 +986,7 @@ Boolx1 ChainedHashTable<IsGlobal>::equal_key(Ptr<void> entry, std::vector<SQL_t>
                 M_insist(std::holds_alternative<NChar>(key[i]));
                 NChar val((entry.clone() + off).template to<char*>(), e.nullable(), &cs);
                 if (e.nullable()) { // entry may be NULL
-                    const_reference_t<NChar> ref(val, entry.clone() + null_bitmap_offset_in_bytes_, i);
+                    const_reference_t<NChar> ref(val, entry.clone() + null_bitmap_offset_in_bytes_, key_indices_[i]);
                     res = res and ref == *std::get_if<NChar>(&key[i]);
                 } else { // entry must not be NULL
                     const_reference_t<NChar> ref(val);
@@ -1015,13 +1009,13 @@ void ChainedHashTable<IsGlobal>::insert_key(Ptr<void> entry, std::vector<SQL_t> 
 {
     for (std::size_t i = 0; i < key_indices_.size(); ++i) {
         auto &e = schema_.get()[key_indices_[i]];
-        const auto off = entry_offsets_in_bytes_[i];
+        const auto off = entry_offsets_in_bytes_[key_indices_[i]];
         auto insert = [&]<typename T>() {
             using type = typename T::type;
             M_insist(std::holds_alternative<T>(key[i]));
             if (e.nullable()) { // entry may be NULL
                 reference_t<T> ref((entry.clone() + off).template to<type*>(),
-                                   entry.clone() + null_bitmap_offset_in_bytes_, i);
+                                   entry.clone() + null_bitmap_offset_in_bytes_, key_indices_[i]);
                 ref = *std::get_if<T>(&key[i]);
             } else { // entry must not be NULL
                 reference_t<T> ref((entry.clone() + off).template to<type*>());
@@ -1053,7 +1047,7 @@ void ChainedHashTable<IsGlobal>::insert_key(Ptr<void> entry, std::vector<SQL_t> 
                 M_insist(std::holds_alternative<NChar>(key[i]));
                 NChar val((entry.clone() + off).template to<char*>(), e.nullable(), &cs);
                 if (e.nullable()) { // entry may be NULL
-                    reference_t<NChar> ref(val, entry.clone() + null_bitmap_offset_in_bytes_, i);
+                    reference_t<NChar> ref(val, entry.clone() + null_bitmap_offset_in_bytes_, key_indices_[i]);
                     ref = *std::get_if<NChar>(&key[i]);
                 } else { // entry must not be NULL
                     reference_t<NChar> ref(val);
@@ -1076,12 +1070,12 @@ HashTable::entry_t ChainedHashTable<IsGlobal>::value_entry(Ptr<void> entry) cons
 
     for (std::size_t i = 0; i < value_indices_.size(); ++i) {
         auto &e = schema_.get()[value_indices_[i]];
-        const auto off = entry_offsets_in_bytes_[i + key_indices_.size()];
+        const auto off = entry_offsets_in_bytes_[value_indices_[i]];
         auto add = [&]<typename T>() {
             using type = typename T::type;
             if (e.nullable()) { // entry may be NULL
                 reference_t<T> ref((entry.clone() + off).template to<type*>(),
-                                   entry.clone() + null_bitmap_offset_in_bytes_, i + key_indices_.size());
+                                   entry.clone() + null_bitmap_offset_in_bytes_, value_indices_[i]);
                 value_entry.add(e.id, std::move(ref));
             } else { // entry must not be NULL
                 reference_t<T> ref((entry.clone() + off).template to<type*>());
@@ -1112,7 +1106,7 @@ HashTable::entry_t ChainedHashTable<IsGlobal>::value_entry(Ptr<void> entry) cons
             [&](const CharacterSequence &cs) {
                 NChar val((entry.clone() + off).template to<char*>(), e.nullable(), &cs);
                 if (e.nullable()) { // entry may be NULL
-                    reference_t<NChar> ref(val, entry.clone() + null_bitmap_offset_in_bytes_, i + key_indices_.size());
+                    reference_t<NChar> ref(val, entry.clone() + null_bitmap_offset_in_bytes_, value_indices_[i]);
                     value_entry.add(e.id, std::move(ref));
                 } else { // entry must not be NULL
                     reference_t<NChar> ref(val);
@@ -1136,14 +1130,14 @@ HashTable::const_entry_t ChainedHashTable<IsGlobal>::entry(Ptr<void> entry) cons
     const_entry_t _entry;
 
     for (std::size_t i = 0; i < key_indices_.size() + value_indices_.size(); ++i) {
-        const bool is_key = i < key_indices_.size();
-        auto &e = schema_.get()[is_key ? key_indices_[i] : value_indices_[i - key_indices_.size()]];
-        const auto off = entry_offsets_in_bytes_[i];
+        const auto idx = i < key_indices_.size() ? key_indices_[i] : value_indices_[i - key_indices_.size()];
+        auto &e = schema_.get()[idx];
+        const auto off = entry_offsets_in_bytes_[idx];
         auto add = [&]<typename T>() {
             using type = typename T::type;
             if (e.nullable()) { // entry may be NULL
                 const_reference_t<T> ref((entry.clone() + off).template to<type*>(),
-                                         entry.clone() + null_bitmap_offset_in_bytes_, i);
+                                         entry.clone() + null_bitmap_offset_in_bytes_, idx);
                 _entry.add(e.id, std::move(ref));
             } else { // entry must not be NULL
                 const_reference_t<T> ref((entry.clone() + off).template to<type*>());
@@ -1174,7 +1168,7 @@ HashTable::const_entry_t ChainedHashTable<IsGlobal>::entry(Ptr<void> entry) cons
             [&](const CharacterSequence &cs) {
                 NChar val((entry.clone() + off).template to<char*>(), e.nullable(), &cs);
                 if (e.nullable()) { // entry may be NULL
-                    const_reference_t<NChar> ref(val, entry.clone() + null_bitmap_offset_in_bytes_, i);
+                    const_reference_t<NChar> ref(val, entry.clone() + null_bitmap_offset_in_bytes_, idx);
                     _entry.add(e.id, std::move(ref));
                 } else { // entry must not be NULL
                     const_reference_t<NChar> ref(val);
@@ -1354,17 +1348,11 @@ OpenAddressingHashTable<IsGlobal, ValueInPlace>::OpenAddressingHashTable(const S
     /*----- Add reference counter. -----*/
     types.push_back(Type::Get_Integer(Type::TY_Vector, sizeof(ref_t)));
 
-    /*----- Add key types. -----*/
-    for (auto k : key_indices_) {
-        types.push_back(schema[k].type);
-        has_nullable |= schema[k].nullable();
-    }
-
     if constexpr (ValueInPlace) {
-        /*----- Add value types. -----*/
-        for (auto v : value_indices_) {
-            types.push_back(schema[v].type);
-            has_nullable |= schema[v].nullable();
+        /*----- Add schema types. -----*/
+        for (auto &e : schema_.get()) {
+            types.push_back(e.type);
+            has_nullable |= e.nullable();
         }
 
         if (has_nullable) {
@@ -1388,6 +1376,14 @@ OpenAddressingHashTable<IsGlobal, ValueInPlace>::OpenAddressingHashTable(const S
         /*----- Set entry offset. Exclude offset for reference counter. -----*/
         layout_.entry_offsets_in_bytes_ = std::vector<HashTable::offset_t>(std::next(offsets.begin()), offsets.end());
     } else {
+        /*----- Add key types. -----*/
+        for (std::size_t i = 0; i < schema_.get().num_entries(); ++i) {
+            if (not contains(key_indices_, i))
+                continue;
+            types.push_back(schema_.get()[i].type);
+            has_nullable |= schema_.get()[i].nullable();
+        }
+
         /*----- Add type for pointer to out-of-place values. -----*/
         types.push_back(Type::Get_Integer(Type::TY_Vector, 4));
 
@@ -1417,9 +1413,11 @@ OpenAddressingHashTable<IsGlobal, ValueInPlace>::OpenAddressingHashTable(const S
         /*----- Add value types. -----*/
         types.clear();
         has_nullable = false;
-        for (auto v : value_indices_) {
-            types.push_back(schema[v].type);
-            has_nullable |= schema[v].nullable();
+        for (std::size_t i = 0; i < schema_.get().num_entries(); ++i) {
+            if (not contains(value_indices_, i))
+                continue;
+            types.push_back(schema_.get()[i].type);
+            has_nullable |= schema_.get()[i].nullable();
         }
 
         if (has_nullable) {
@@ -1893,13 +1891,23 @@ Boolx1 OpenAddressingHashTable<IsGlobal, ValueInPlace>::equal_key(Ptr<void> slot
                                                                 layout_.keys_null_bitmap_offset_in_bytes_);
     for (std::size_t i = 0; i < key_indices_.size(); ++i) {
         auto &e = schema_.get()[key_indices_[i]];
-        const auto off = M_CONSTEXPR_COND(ValueInPlace, layout_.entry_offsets_in_bytes_[i],
-                                                        layout_.key_offsets_in_bytes_[i]);
+        const auto idx = [&](){
+            if constexpr (ValueInPlace) {
+                return key_indices_[i];
+            } else { // return number of indices in [0, key_indices_[i]) that are part of key
+                std::size_t count = 0;
+                for (index_t idx = 0; idx != key_indices_[i]; ++idx)
+                    count += contains(key_indices_, idx);
+                return count;
+            }
+        }();
+        const auto off = M_CONSTEXPR_COND(ValueInPlace, layout_.entry_offsets_in_bytes_[idx],
+                                                        layout_.key_offsets_in_bytes_[idx]);
         auto compare_equal = [&]<typename T>() {
             using type = typename T::type;
             M_insist(std::holds_alternative<T>(key[i]));
             if (e.nullable()) { // entry may be NULL
-                const_reference_t<T> ref((slot.clone() + off).template to<type*>(), slot.clone() + off_null_bitmap, i);
+                const_reference_t<T> ref((slot.clone() + off).template to<type*>(), slot.clone() + off_null_bitmap, idx);
                 res = res and ref == *std::get_if<T>(&key[i]);
             } else { // entry must not be NULL
                 const_reference_t<T> ref((slot.clone() + off).template to<type*>());
@@ -1931,7 +1939,7 @@ Boolx1 OpenAddressingHashTable<IsGlobal, ValueInPlace>::equal_key(Ptr<void> slot
                 M_insist(std::holds_alternative<NChar>(key[i]));
                 NChar val((slot.clone() + off).template to<char*>(), e.nullable(), &cs);
                 if (e.nullable()) { // entry may be NULL
-                    const_reference_t<NChar> ref(val, slot.clone() + off_null_bitmap, i);
+                    const_reference_t<NChar> ref(val, slot.clone() + off_null_bitmap, idx);
                     res = res and ref == *std::get_if<NChar>(&key[i]);
                 } else { // entry must not be NULL
                     const_reference_t<NChar> ref(val);
@@ -1956,13 +1964,23 @@ void OpenAddressingHashTable<IsGlobal, ValueInPlace>::insert_key(Ptr<void> slot,
                                                                 layout_.keys_null_bitmap_offset_in_bytes_);
     for (std::size_t i = 0; i < key_indices_.size(); ++i) {
         auto &e = schema_.get()[key_indices_[i]];
-        const auto off = M_CONSTEXPR_COND(ValueInPlace, layout_.entry_offsets_in_bytes_[i],
-                                                        layout_.key_offsets_in_bytes_[i]);
+        const auto idx = [&](){
+            if constexpr (ValueInPlace) {
+                return key_indices_[i];
+            } else { // return number of indices in [0, key_indices_[i]) that are part of key
+                std::size_t count = 0;
+                for (index_t idx = 0; idx != key_indices_[i]; ++idx)
+                    count += contains(key_indices_, idx);
+                return count;
+            }
+        }();
+        const auto off = M_CONSTEXPR_COND(ValueInPlace, layout_.entry_offsets_in_bytes_[idx],
+                                                        layout_.key_offsets_in_bytes_[idx]);
         auto insert = [&]<typename T>() {
             using type = typename T::type;
             M_insist(std::holds_alternative<T>(key[i]));
             if (e.nullable()) { // entry may be NULL
-                reference_t<T> ref((slot.clone() + off).template to<type*>(), slot.clone() + off_null_bitmap, i);
+                reference_t<T> ref((slot.clone() + off).template to<type*>(), slot.clone() + off_null_bitmap, idx);
                 ref = *std::get_if<T>(&key[i]);
             } else { // entry must not be NULL
                 reference_t<T> ref((slot.clone() + off).template to<type*>());
@@ -1994,7 +2012,7 @@ void OpenAddressingHashTable<IsGlobal, ValueInPlace>::insert_key(Ptr<void> slot,
                 M_insist(std::holds_alternative<NChar>(key[i]));
                 NChar val((slot.clone() + off).template to<char*>(), e.nullable(), &cs);
                 if (e.nullable()) { // entry may be NULL
-                    reference_t<NChar> ref(val, slot.clone() + off_null_bitmap, i);
+                    reference_t<NChar> ref(val, slot.clone() + off_null_bitmap, idx);
                     ref = *std::get_if<NChar>(&key[i]);
                 } else { // entry must not be NULL
                     reference_t<NChar> ref(val);
@@ -2019,13 +2037,22 @@ HashTable::entry_t OpenAddressingHashTable<IsGlobal, ValueInPlace>::value_entry(
                                                                 layout_.values_null_bitmap_offset_in_bytes_);
     for (std::size_t i = 0; i < value_indices_.size(); ++i) {
         auto &e = schema_.get()[value_indices_[i]];
-        const auto off = M_CONSTEXPR_COND(ValueInPlace, layout_.entry_offsets_in_bytes_[i + key_indices_.size()],
-                                                        layout_.value_offsets_in_bytes_[i]);
+        const auto idx = [&](){
+            if constexpr (ValueInPlace) {
+                return value_indices_[i];
+            } else { // return number of indices in [0, value_indices_[i]) that are part of value
+                std::size_t count = 0;
+                for (index_t idx = 0; idx != value_indices_[i]; ++idx)
+                    count += contains(value_indices_, idx);
+                return count;
+            }
+        }();
+        const auto off = M_CONSTEXPR_COND(ValueInPlace, layout_.entry_offsets_in_bytes_[idx],
+                                                        layout_.value_offsets_in_bytes_[idx]);
         auto add = [&]<typename T>() {
             using type = typename T::type;
             if (e.nullable()) { // entry may be NULL
-                const auto off_null_bit = M_CONSTEXPR_COND(ValueInPlace, i + key_indices_.size(), i);
-                reference_t<T> ref((ptr.clone() + off).template to<type*>(), ptr.clone() + off_null_bitmap, off_null_bit);
+                reference_t<T> ref((ptr.clone() + off).template to<type*>(), ptr.clone() + off_null_bitmap, idx);
                 value_entry.add(e.id, std::move(ref));
             } else { // entry must not be NULL
                 reference_t<T> ref((ptr.clone() + off).template to<type*>());
@@ -2056,8 +2083,7 @@ HashTable::entry_t OpenAddressingHashTable<IsGlobal, ValueInPlace>::value_entry(
             [&](const CharacterSequence &cs) {
                 NChar val((ptr.clone() + off).template to<char*>(), e.nullable(), &cs);
                 if (e.nullable()) { // entry may be NULL
-                    const auto off_null_bit = M_CONSTEXPR_COND(ValueInPlace, i + key_indices_.size(), i);
-                    reference_t<NChar> ref(val, ptr.clone() + off_null_bitmap, off_null_bit);
+                    reference_t<NChar> ref(val, ptr.clone() + off_null_bitmap, idx);
                     value_entry.add(e.id, std::move(ref));
                 } else { // entry must not be NULL
                     reference_t<NChar> ref(val);
@@ -2100,19 +2126,26 @@ HashTable::const_entry_t OpenAddressingHashTable<IsGlobal, ValueInPlace>::entry(
         }
 
         const bool is_key = i < key_indices_.size();
-        auto &e = schema_.get()[is_key ? key_indices_[i] : value_indices_[i - key_indices_.size()]];
+        const auto schema_idx = is_key ? key_indices_[i] : value_indices_[i - key_indices_.size()];
+        auto &e = schema_.get()[schema_idx];
+        const auto idx = [&](){
+            if constexpr (ValueInPlace) {
+                return schema_idx;
+            } else { // return number of indices in [0, schema_idx) that are part of key or rather value
+                std::size_t count = 0;
+                for (index_t idx = 0; idx != schema_idx; ++idx)
+                    count += is_key ? contains(key_indices_, idx) : contains(value_indices_, idx);
+                return count;
+            }
+        }();
         const auto off =
             M_CONSTEXPR_COND(ValueInPlace,
-                             layout_.entry_offsets_in_bytes_[i],
-                             is_key ? layout_.key_offsets_in_bytes_[i]
-                                    : layout_.value_offsets_in_bytes_[i - key_indices_.size()]);
+                             layout_.entry_offsets_in_bytes_[idx],
+                             is_key ? layout_.key_offsets_in_bytes_[idx] : layout_.value_offsets_in_bytes_[idx]);
         auto add = [&]<typename T>() {
             using type = typename T::type;
             if (e.nullable()) { // entry may be NULL
-                const auto off_null_bit =
-                    M_CONSTEXPR_COND(ValueInPlace, i, is_key ? i : i - key_indices_.size());
-                const_reference_t<T> ref((ptr->clone() + off).template to<type*>(), ptr->clone() + off_null_bitmap,
-                                         off_null_bit);
+                const_reference_t<T> ref((ptr->clone() + off).template to<type*>(), ptr->clone() + off_null_bitmap, idx);
                 entry.add(e.id, std::move(ref));
             } else { // entry must not be NULL
                 const_reference_t<T> ref((ptr->clone() + off).template to<type*>());
@@ -2143,9 +2176,7 @@ HashTable::const_entry_t OpenAddressingHashTable<IsGlobal, ValueInPlace>::entry(
             [&](const CharacterSequence &cs) {
                 NChar val((ptr->clone() + off).template to<char*>(), e.nullable(), &cs);
                 if (e.nullable()) { // entry may be NULL
-                    auto off_null_bit =
-                        M_CONSTEXPR_COND(ValueInPlace, i, is_key ? i : i - key_indices_.size());
-                    const_reference_t<NChar> ref(val, ptr->clone() + off_null_bitmap, off_null_bit);
+                    const_reference_t<NChar> ref(val, ptr->clone() + off_null_bitmap, idx);
                     entry.add(e.id, std::move(ref));
                 } else { // entry must not be NULL
                     const_reference_t<NChar> ref(val);

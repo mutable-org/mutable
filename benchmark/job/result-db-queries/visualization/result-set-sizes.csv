@@ -1,0 +1,7 @@
+benchmark,query,resultdb,post-join,size
+job,Q1,0,0,5615
+job,Q1,1,0,3579
+job,Q1,1,1,5372
+job,Q4,0,0,19363
+job,Q4,1,0,15719
+job,Q4,1,1,19532

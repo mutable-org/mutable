@@ -1269,8 +1269,8 @@ void ChainedHashTable<IsGlobal>::rehash()
     if constexpr (IsGlobal) {
         if (not rehash_) {
             /*----- Backup former local variables to be able to use new ones for rehashing function. -----*/
-            auto old_address = std::exchange(address_, std::optional<Var<Ptr<void>>>());
-            auto old_mask = std::exchange(mask_, std::optional<Var<U32x1>>());
+            auto old_address = std::exchange(address_, std::nullopt);
+            auto old_mask = std::exchange(mask_, std::nullopt);
             /* omit `num_entries_` and `high_watermark_absolute_` as they are never accessed during rehashing */
 
             /*----- Create function for rehashing. -----*/
@@ -2313,10 +2313,10 @@ void OpenAddressingHashTable<IsGlobal, ValueInPlace>::rehash()
     if constexpr (IsGlobal) {
         if (not rehash_) {
             /*----- Backup former local variables to be able to use new ones for rehashing function. -----*/
-            auto old_address = std::exchange(address_, std::optional<Var<Ptr<void>>>());
-            auto old_mask = std::exchange(mask_, std::optional<Var<U32x1>>());
-            auto old_num_entries = std::exchange(num_entries_, std::optional<Var<U32x1>>());
-            auto old_high_watermark_absolute = std::exchange(high_watermark_absolute_, std::optional<Var<U32x1>>());
+            auto old_address = std::exchange(address_, std::nullopt);
+            auto old_mask = std::exchange(mask_, std::nullopt);
+            auto old_num_entries = std::exchange(num_entries_, std::nullopt);
+            auto old_high_watermark_absolute = std::exchange(high_watermark_absolute_, std::nullopt);
 
             /*----- Create function for rehashing. -----*/
             FUNCTION(rehash, void(void))

@@ -64,7 +64,7 @@ WasmEngine::WasmContext::WasmContext(uint32_t id, const MatchBase &plan, config_
     M_insist(size <= WASM_MAX_MEMORY);
 }
 
-uint32_t WasmEngine::WasmContext::map_table(const Table &table)
+uint64_t WasmEngine::WasmContext::map_table(const Table &table)
 {
     M_insist(Is_Page_Aligned(heap));
 
@@ -87,7 +87,7 @@ uint32_t WasmEngine::WasmContext::map_table(const Table &table)
     return off;
 }
 
-uint32_t WasmEngine::WasmContext::map_index(const idx::IndexBase &index)
+uint64_t WasmEngine::WasmContext::map_index(const idx::IndexBase &index)
 {
     M_insist(Is_Page_Aligned(heap));
 

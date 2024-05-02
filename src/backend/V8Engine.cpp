@@ -289,8 +289,8 @@ void m::wasm::detail::print_memory_consumption(const v8::FunctionCallbackInfo<v8
 {
     M_insist(Options::Get().statistics);
 
-    auto alloc_total_mem = info[0].As<v8::Uint32>()->Value();
-    auto alloc_peak_mem = info[1].As<v8::Uint32>()->Value();
+    auto alloc_total_mem = info[0].As<v8::BigInt>()->Uint64Value();
+    auto alloc_peak_mem = info[1].As<v8::BigInt>()->Uint64Value();
 
     std::cout << "Allocated memory overall consumption: " << alloc_total_mem / (1024.0 * 1024.0) << " MiB"<< std::endl;
     std::cout << "Allocated memory peak consumption: " << alloc_peak_mem / (1024.0 * 1024.0) << " MiB"<< std::endl;
@@ -326,7 +326,7 @@ void m::wasm::detail::read_result_set(const v8::FunctionCallbackInfo<v8::Value> 
 
     /* Compute address of result set. */
     M_insist(info.Length() == 2);
-    auto result_set_offset = info[0].As<v8::Uint32>()->Value();
+    auto result_set_offset = info[0].As<v8::BigInt>()->Uint64Value();
     M_insist((result_set_offset == 0) == (deduplicated_schema_without_constants.num_entries() == 0),
              "result set offset equals 0 (i.e. nullptr) iff schema contains only constants");
     auto result_set = context.vm.as<uint8_t*>() + result_set_offset;
@@ -549,7 +549,7 @@ void m::wasm::detail::index_seek(const v8::FunctionCallbackInfo<v8::Value> &info
     if constexpr (std::same_as<V8ValueT, v8::BigInt>)
         key = info[1].As<V8ValueT>()->Int64Value();
     else if constexpr (std::same_as<V8ValueT, v8::String>) {
-        auto offset = info[1].As<v8::Uint32>()->Value();
+        auto offset = info[1].As<v8::BigInt>()->Uint64Value();
         auto &context = WasmEngine::Get_Wasm_Context_By_ID(Module::ID());
         key = reinterpret_cast<const char*>(context.vm.as<uint8_t*>() + offset);
     } else
@@ -565,7 +565,7 @@ void m::wasm::detail::index_seek(const v8::FunctionCallbackInfo<v8::Value> &info
         M_CONSTEXPR_COND(IsLower, index.lower_bound(key), index.upper_bound(key))
     );
     M_insist(std::in_range<uint32_t>(offset), "should fit in uint32_t");
-    info.GetReturnValue().Set(uint32_t(offset));
+    info.GetReturnValue().Set(uint32_t(offset)); // TODO: not possible to set 64-bit return value
 }
 
 template<typename Index>
@@ -573,20 +573,20 @@ void m::wasm::detail::index_sequential_scan(const v8::FunctionCallbackInfo<v8::V
 {
     /*----- Unpack function parameters -----*/
     auto index_id = info[0].As<v8::BigInt>()->Uint64Value();
-    auto entry_offset = info[1].As<v8::Uint32>()->Value();
-    auto address_offset = info[2].As<v8::Uint32>()->Value();
-    auto batch_size = info[3].As<v8::Uint32>()->Value();
+    auto entry_offset = info[1].As<v8::BigInt>()->Uint64Value();
+    auto address_offset = info[2].As<v8::BigInt>()->Uint64Value();
+    auto batch_size = info[3].As<v8::BigInt>()->Uint64Value();
 
     /*----- Compute adress to write results to. -----*/
     auto &context = WasmEngine::Get_Wasm_Context_By_ID(Module::ID());
-    auto buffer_address = reinterpret_cast<uint32_t*>(context.vm.as<uint8_t*>() + address_offset);
+    auto buffer_address = reinterpret_cast<uint64_t*>(context.vm.as<uint8_t*>() + address_offset);
 
     /*----- Obtain index and cast to correct type. -----*/
     auto &index = as<const Index>(context.indexes[index_id]);
 
     /*----- Scan index and write result tuple ids to buffer -----*/
     auto it = index.begin() + entry_offset;
-    for (uint32_t i = 0; i < batch_size; ++i, ++it)
+    for (uint64_t i = 0; i < batch_size; ++i, ++it)
         buffer_address[i] = it->second;
 }
 
@@ -800,7 +800,7 @@ void V8Engine::compile(const m::MatchBase &plan) const
 #if 1
     /*----- Add print function. --------------------------------------------------------------------------------------*/
     Module::Get().emit_function_import<void(uint32_t)>("print");
-    Module::Get().emit_function_import<void(uint32_t, uint32_t)>("print_memory_consumption");
+    Module::Get().emit_function_import<void(uint64_t, uint64_t)>("print_memory_consumption");
 #endif
 
     /*----- Emit code for run function which computes the last pipeline and calls other pipeline functions. ----------*/
@@ -926,9 +926,9 @@ void V8Engine::execute(const m::MatchBase &plan)
         /* Compile the plan and thereby build the Wasm module. */
         M_TIME_EXPR(compile(plan), "|- Compile SQL to WebAssembly", C.timer());
         /* Perform memory pre-allocations and add allocation address initialization to env. */
-        Module::Get().emit_import<uint32_t>("alloc_addr_init");
+        Module::Get().emit_import<uint64_t>("alloc_addr_init");
         M_DISCARD env->Set(isolate_->GetCurrentContext(), to_v8_string(isolate_, "alloc_addr_init"),
-                           v8::Uint32::New(isolate_, Module::Allocator().perform_pre_allocations()));
+                           v8::BigInt::New(isolate_, Module::Allocator().perform_pre_allocations()));
         M_DISCARD imports->Set(context, mkstr(*isolate_, "imports"), env);
         /* Create a WebAssembly instance object. */
         auto instance = M_TIME_EXPR(instantiate(*isolate_, imports), " ` Compile WebAssembly to machine code", C.timer());
@@ -1095,7 +1095,7 @@ v8::Local<v8::Object> m::wasm::detail::create_env(v8::Isolate &isolate, const m:
         /* Add memory address to env. */
         std::ostringstream oss;
         oss << table.get().name() << "_mem";
-        M_DISCARD env->Set(Ctx, to_v8_string(&isolate, oss.str()), v8::Int32::New(&isolate, off));
+        M_DISCARD env->Set(Ctx, to_v8_string(&isolate, oss.str()), v8::BigInt::New(&isolate, off));
         Module::Get().emit_import<void*>(oss.str().c_str());
 
         /* Add table size (num_rows) to env. */
@@ -1116,14 +1116,14 @@ v8::Local<v8::Object> m::wasm::detail::create_env(v8::Isolate &isolate, const m:
                     /* Add memory address to env. */
                     std::ostringstream oss;
                     oss << "index_" << table.get().name() << '_' << attr.name << "_array" << "_mem";
-                    M_DISCARD env->Set(Ctx, to_v8_string(&isolate, oss.str()), v8::Int32::New(&isolate, off));
+                    M_DISCARD env->Set(Ctx, to_v8_string(&isolate, oss.str()), v8::BigInt::New(&isolate, off));
                     Module::Get().emit_import<void*>(oss.str().c_str());
 
                     /* Add table size (num_rows) to env. */
                     oss.str("");
                     oss << "index_" << table.get().name() << '_' << attr.name << "_array" << "_num_entries";
-                    M_DISCARD env->Set(Ctx, to_v8_string(&isolate, oss.str()), v8::Int32::New(&isolate, index.num_entries()));
-                    Module::Get().emit_import<uint32_t>(oss.str().c_str());
+                    M_DISCARD env->Set(Ctx, to_v8_string(&isolate, oss.str()), v8::BigInt::New(&isolate, index.num_entries()));
+                    Module::Get().emit_import<uint64_t>(oss.str().c_str());
                 }
             }
         }

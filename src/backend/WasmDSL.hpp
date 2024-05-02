@@ -256,7 +256,7 @@ struct wasm_type_helper<T, 1>
 template<dsl_pointer_to_primitive T, std::size_t L>
 struct wasm_type_helper<T, L>
 {
-    ::wasm::Type operator()() { return ::wasm::Type(::wasm::Type::i32); };
+    ::wasm::Type operator()() { return ::wasm::Type(::wasm::Type::i64); };
 };
 
 /** Specialization for \tparam T being vectorial. */
@@ -475,9 +475,9 @@ inline ::wasm::Literal make_literal(U value)
 /** Creates a `::wasm::Literal` of type \tparam T from a given \p value.  Used to solve macOS ambiguity. */
 template<typename T, std::size_t L, bool = false>
 requires (L == 1) and std::is_pointer_v<T>
-inline ::wasm::Literal make_literal(uint32_t value)
+inline ::wasm::Literal make_literal(uint64_t value)
 {
-    return ::wasm::Literal(uint32_t(value));
+    return ::wasm::Literal(value);
 }
 
 /** Creates a `::wasm::Literal` for \tparam L values of type \tparam T from a given \p value.  Used to solve macOS
@@ -847,7 +847,7 @@ struct Module final
         }
     }
     template<dsl_pointer_to_primitive T, std::size_t L = 1>
-    void emit_global(::wasm::Name name, bool is_mutable, uint32_t init) {
+    void emit_global(::wasm::Name name, bool is_mutable, uint64_t init) {
         ::wasm::Builder::Mutability mut = is_mutable ? ::wasm::Builder::Mutability::Mutable
                                                      : ::wasm::Builder::Mutability::Immutable;
         ::wasm::Const *_init = builder_.makeConst(::wasm::Literal(init));
@@ -1985,14 +1985,14 @@ struct PrimitiveExpr<T, L>
                not (std::floating_point<T> and integral<To> and sizeof(To) <= 2)))  //   except floating point to 8-bit or 16-bit integer
     PrimitiveExpr<To, ToL> to() { return convert<To, ToL>(); }
 
-    /** Explicit conversion of a `PrimitiveExpr<uint32_t, 1>` to a `PrimitiveExpr<To*, ToL>`
+    /** Explicit conversion of a `PrimitiveExpr<uint64_t, 1>` to a `PrimitiveExpr<To*, ToL>`
      *
-     * - `T` is `uint32_t`
+     * - `T` is `uint64_t`
      * - `L` equals 1, i.e. its scalar
      * - `To` is a pointer to primitive type
      */
     template<dsl_pointer_to_primitive To, std::size_t ToL = L>
-    PrimitiveExpr<To, ToL> to() requires std::same_as<T, uint32_t> and (L == 1) {
+    PrimitiveExpr<To, ToL> to() requires std::same_as<T, uint64_t> and (L == 1) {
         return PrimitiveExpr<To, ToL>(*this);
     }
 
@@ -4146,10 +4146,10 @@ struct PrimitiveExpr<T, L>
     using type = T;
     static constexpr std::size_t num_simd_lanes = L;
     using pointed_type = std::decay_t<std::remove_pointer_t<T>>;
-    using offset_t = int32_t;
+    using offset_t = int64_t;
 
     /*----- Friends --------------------------------------------------------------------------------------------------*/
-    template<typename, std::size_t> friend struct PrimitiveExpr; // to convert U* to T* and to convert uint32_t to T*
+    template<typename, std::size_t> friend struct PrimitiveExpr; // to convert U* to T* and to convert uint64_t to T*
     template<typename, VariableKind, bool, std::size_t>
     friend class detail::variable_storage; // to construct from `::wasm::Expression` and access private `expr()`
     friend struct Module; // to acces internal ::wasm::Expr
@@ -4158,12 +4158,12 @@ struct PrimitiveExpr<T, L>
     template<typename> friend struct invoke_interpreter; // to access private `expr()`
 
     private:
-    PrimitiveExpr<uint32_t, 1> addr_; ///< the address into the Wasm linear memory
+    PrimitiveExpr<uint64_t, 1> addr_; ///< the address into the Wasm linear memory
     offset_t offset_ = 0; ///< offset to this in bytes; used to directly address pointer via base address and offset
 
     public:
     /** Constructs a `PrimitiveExpr` from the memory address \p addr.  Optionally accepts an \p offset. */
-    explicit PrimitiveExpr(PrimitiveExpr<uint32_t, 1> addr, offset_t offset = 0) : addr_(addr), offset_(offset) { }
+    explicit PrimitiveExpr(PrimitiveExpr<uint64_t, 1> addr, offset_t offset = 0) : addr_(addr), offset_(offset) { }
 
     private:
     /** Constructs a `PrimitiveExpr` from the given address \p addr and \p referenced_bits.  Optionally accepts an \p
@@ -4201,11 +4201,11 @@ struct PrimitiveExpr<T, L>
 
     /** Constructs a Wasm `nullptr`.  Note, that in order to implement `nullptr` in Wasm, we must create an artificial
      * address that cannot be accessed. */
-    static PrimitiveExpr Nullptr() { return PrimitiveExpr(PrimitiveExpr<uint32_t, 1>(0U)); }
+    static PrimitiveExpr Nullptr() { return PrimitiveExpr(PrimitiveExpr<uint64_t, 1>(0U)); }
 
     private:
     /** **Moves** the underlying Binaryen `::wasm::Expression` out of `this`. */
-    ::wasm::Expression * expr() { return to<uint32_t>().expr(); }
+    ::wasm::Expression * expr() { return to<uint64_t>().expr(); }
     /** **Moves** the referenced bits out of `this`. */
     std::list<std::shared_ptr<Bit>> referenced_bits() { return addr_.referenced_bits(); }
     /** **Moves** the underlying Binaryen `wasm::Expression` and the referenced bits out of `this`. */
@@ -4235,17 +4235,17 @@ struct PrimitiveExpr<T, L>
     template<dsl_pointer_to_primitive To, std::size_t ToL = L>
     requires (not std::is_void_v<std::remove_pointer_t<To>>)
     PrimitiveExpr<To, ToL> to() requires std::is_void_v<pointed_type> and (L == 1) {
-        Wasm_insist((clone().template to<uint32_t>() % uint32_t(alignof(std::remove_pointer_t<To>))).eqz(),
+        Wasm_insist((clone().template to<uint64_t>() % uint64_t(alignof(std::remove_pointer_t<To>))).eqz(),
                     "cannot convert to type whose alignment requirement is not fulfilled");
         return PrimitiveExpr<To, ToL>(addr_.move(), offset_);
     }
 
-    /** Explicit conversion of a `PrimitiveExpr<T*, L>` to a `PrimitiveExpr<uint32_t, 1>`.  Adds possible offset to
+    /** Explicit conversion of a `PrimitiveExpr<T*, L>` to a `PrimitiveExpr<uint64_t, 1>`.  Adds possible offset to
      * the pointer. */
     template<typename To, std::size_t ToL = 1>
-    requires std::same_as<To, uint32_t> and (ToL == 1)
-    PrimitiveExpr<uint32_t, 1> to() {
-        return offset_ ? (offset_ > 0 ? addr_ + uint32_t(offset_) : addr_ - uint32_t(-offset_)) : addr_;
+    requires std::same_as<To, uint64_t> and (ToL == 1)
+    PrimitiveExpr<uint64_t, 1> to() {
+        return offset_ ? (offset_ > 0 ? addr_ + uint64_t(offset_) : addr_ - uint64_t(-offset_)) : addr_;
     }
 
     /** Explicit conversion of a `PrimitiveExpr<T*, L>` to a `PrimitiveExpr<void*, 1>`. */
@@ -4264,7 +4264,7 @@ struct PrimitiveExpr<T, L>
      * Hashing operations
      *----------------------------------------------------------------------------------------------------------------*/
 
-    PrimitiveExpr<uint64_t, L> hash() { return to<uint32_t>().hash(); }
+    PrimitiveExpr<uint64_t, L> hash() { return to<uint64_t>().hash(); }
 
 
     /*------------------------------------------------------------------------------------------------------------------
@@ -4273,14 +4273,14 @@ struct PrimitiveExpr<T, L>
 
     public:
     /** Returns `true` if `this` is `nullptr`. */
-    PrimitiveExpr<bool, 1> is_nullptr() { return to<uint32_t>() == 0U; }
+    PrimitiveExpr<bool, 1> is_nullptr() { return to<uint64_t>() == 0U; }
 
     /** Returns `true` if `this` is `NULL`, `false` otherwise.  Even if this method performs the same operation
      * as `is_nullptr()` it should be used for ternary logic since it additionally checks whether ternary logic usage
      * is expected. */
     PrimitiveExpr<bool, 1> is_null() {
         M_insist_no_ternary_logic();
-        return to<uint32_t>() == 0U;
+        return to<uint64_t>() == 0U;
     }
 
     /** Returns `true` if `this` is `NOT NULL`, `false` otherwise.  Even if this method performs the same operation
@@ -4288,7 +4288,7 @@ struct PrimitiveExpr<T, L>
      * usage is expected. */
     PrimitiveExpr<bool, 1> not_null() {
         M_insist_no_ternary_logic();
-        return to<uint32_t>() != 0U;
+        return to<uint64_t>() != 0U;
     }
 
     /** Returns a `std::pair` of `this` and a `PrimitiveExpr<bool, 1>` that tells whether `this` is `nullptr`. */
@@ -4321,7 +4321,7 @@ struct PrimitiveExpr<T, L>
         if constexpr (std::is_void_v<pointed_type>) {
             return PrimitiveExpr(addr_ + delta.make_unsigned(), offset_);
         } else {
-            const uint32_t log_size = std::countr_zero(sizeof(pointed_type));
+            const uint64_t log_size = std::countr_zero(sizeof(pointed_type));
             return PrimitiveExpr(addr_ + (delta.make_unsigned() << log_size), offset_);
         }
     }
@@ -4331,7 +4331,7 @@ struct PrimitiveExpr<T, L>
         if constexpr (std::is_void_v<pointed_type>) {
             offset_ += delta; // in bytes
         } else {
-            const uint32_t log_size = std::countr_zero(sizeof(pointed_type));
+            const uint64_t log_size = std::countr_zero(sizeof(pointed_type));
             offset_ += delta << log_size; // in elements
         }
         return *this;
@@ -4342,7 +4342,7 @@ struct PrimitiveExpr<T, L>
         if constexpr (std::is_void_v<pointed_type>) {
             return PrimitiveExpr(addr_ - delta.make_unsigned(), offset_);
         } else {
-            const uint32_t log_size = std::countr_zero(sizeof(pointed_type));
+            const uint64_t log_size = std::countr_zero(sizeof(pointed_type));
             return PrimitiveExpr(addr_ - (delta.make_unsigned() << log_size), offset_);
         }
     }
@@ -4352,7 +4352,7 @@ struct PrimitiveExpr<T, L>
         if constexpr (std::is_void_v<pointed_type>) {
             offset_ -= delta; // in bytes
         } else {
-            const uint32_t log_size = std::countr_zero(sizeof(pointed_type));
+            const uint64_t log_size = std::countr_zero(sizeof(pointed_type));
             offset_ -= delta << log_size; // in elements
         }
         return *this;
@@ -4365,7 +4365,7 @@ struct PrimitiveExpr<T, L>
             offset_t delta_offset = this->offset_ - other.offset_;
             return (delta_offset ? (delta_addr + delta_offset) : delta_addr);
         } else {
-            const int32_t log_size = std::countr_zero(sizeof(pointed_type));
+            const int64_t log_size = std::countr_zero(sizeof(pointed_type));
             PrimitiveExpr<offset_t, 1> delta_addr = (this->addr_ - other.addr_).make_signed() >> log_size;
             offset_t delta_offset = (this->offset_ - other.offset_) >> log_size;
             return (delta_offset ? (delta_addr + delta_offset) : delta_addr);
@@ -4376,7 +4376,7 @@ struct PrimitiveExpr<T, L>
 #define CMP_OP(SYMBOL) \
     /** Compares `this` to \p other by their addresses. */ \
     PrimitiveExpr<bool, 1> operator SYMBOL(PrimitiveExpr other) { \
-        return this->to<uint32_t>() SYMBOL other.to<uint32_t>(); \
+        return this->to<uint64_t>() SYMBOL other.to<uint64_t>(); \
     }
     CMP_OP(==)
     CMP_OP(!=)
@@ -4400,7 +4400,7 @@ struct PrimitiveExpr<T, L>
                 /* signed= */ std::is_signed_v<pointed_type>,
                 /* offset= */ offset_ >= 0 ? offset_ : 0,
                 /* align=  */ alignof(pointed_type),
-                /* ptr=    */ offset_ >= 0 ? addr_.expr() : (addr_ - uint32_t(-offset_)).expr(),
+                /* ptr=    */ offset_ >= 0 ? addr_.expr() : (addr_ - uint64_t(-offset_)).expr(),
                 /* type=   */ wasm_type<pointed_type, L>(),
                 /* memory= */ Module::Get().memory_->name
             );
@@ -4416,7 +4416,7 @@ struct PrimitiveExpr<T, L>
                     /* signed= */ std::is_signed_v<pointed_type>,
                     /* offset= */ offset >= 0 ? offset : 0,
                     /* align=  */ alignof(pointed_type),
-                    /* ptr=    */ offset >= 0 ? addr_cpy.expr() : (addr_cpy - uint32_t(-offset)).expr(),
+                    /* ptr=    */ offset >= 0 ? addr_cpy.expr() : (addr_cpy - uint64_t(-offset)).expr(),
                     /* type=   */ ::wasm::Type(::wasm::Type::v128),
                     /* memory= */ Module::Get().memory_->name
                 );
@@ -4435,7 +4435,7 @@ struct PrimitiveExpr<T, L>
                 /* bytes=  */ M_CONSTEXPR_COND(L == 1, sizeof(pointed_type), 16),
                 /* offset= */ offset_ >= 0 ? offset_ : 0,
                 /* align=  */ alignof(pointed_type),
-                /* ptr=    */ offset_ >= 0 ? addr_.expr() : (addr_ - uint32_t(-offset_)).expr(),
+                /* ptr=    */ offset_ >= 0 ? addr_.expr() : (addr_ - uint64_t(-offset_)).expr(),
                 /* value=  */ value.expr(),
                 /* type=   */ wasm_type<pointed_type, L>(),
                 /* memory= */ Module::Get().memory_->name
@@ -4450,7 +4450,7 @@ struct PrimitiveExpr<T, L>
                     /* bytes=  */ 16,
                     /* offset= */ offset >= 0 ? offset : 0,
                     /* align=  */ alignof(pointed_type),
-                    /* ptr=    */ offset >= 0 ? addr_cpy.expr() : (addr_cpy - uint32_t(-offset)).expr(),
+                    /* ptr=    */ offset >= 0 ? addr_cpy.expr() : (addr_cpy - uint64_t(-offset)).expr(),
                     /* value=  */ vectors[idx].expr(),
                     /* type=   */ ::wasm::Type(::wasm::Type::v128),
                     /* memory= */ Module::Get().memory_->name
@@ -5363,7 +5363,7 @@ class variable_storage<T, Kind, /* CanBeNull= */ false, L>
     friend struct Variable<T, Kind, false, L>; // to be usable by the respective Variable
 
     ///> the address
-    variable_storage<uint32_t, Kind, false, 1> addr_;
+    variable_storage<uint64_t, Kind, false, 1> addr_;
 
     /** Default-construct. */
     variable_storage() = default;
@@ -5380,11 +5380,11 @@ class variable_storage<T, Kind, /* CanBeNull= */ false, L>
     template<primitive_convertible U>
     requires requires (U &&u) { PrimitiveExpr<T, L>(primitive_expr_t<U>(std::forward<U>(u))); }
     void operator=(U &&value) {
-        addr_ = PrimitiveExpr<T, L>(primitive_expr_t<U>(std::forward<U>(value))).template to<uint32_t, 1>();
+        addr_ = PrimitiveExpr<T, L>(primitive_expr_t<U>(std::forward<U>(value))).template to<uint64_t, 1>();
     }
 
     /** Retrieve pointer. */
-    operator PrimitiveExpr<T, L>() const { return PrimitiveExpr<uint32_t, 1>(addr_).template to<T, L>(); }
+    operator PrimitiveExpr<T, L>() const { return PrimitiveExpr<uint64_t, 1>(addr_).template to<T, L>(); }
 };
 
 /** Specialization for global variables of primitive or pointer to primitive type \tparam T.  Global variables must be
@@ -5393,7 +5393,7 @@ template<typename T, std::size_t L>
 requires dsl_primitive<T> or dsl_pointer_to_primitive<T>
 class variable_storage<T, VariableKind::Global, /* CanBeNull= */ false, L>
 {
-    ///> the number of Wasm globals needed; pointers are always stored as single 32-bit unsigned integer global
+    ///> the number of Wasm globals needed; pointers are always stored as single 64-bit unsigned integer global
     static constexpr std::size_t num_globals = dsl_primitive<T> ? ((L * sizeof(T)) + 15) / 16 : 1;
 
     friend struct Variable<T, VariableKind::Global, false, L>; // to be usable by the respective Variable
@@ -5427,7 +5427,7 @@ class variable_storage<T, VariableKind::Global, /* CanBeNull= */ false, L>
         Module::Get().emit_global<T, L>(names_, true, init...);
     }
     /** Construct with optional initial value. */
-    explicit variable_storage(uint32_t init = 0)
+    explicit variable_storage(uint64_t init = 0)
     requires dsl_pointer_to_primitive<T>
         : names_(std::to_array<::wasm::Name>({ Module::Unique_Global_Name() }))
         , type_(wasm_type<T, L>())
@@ -5451,7 +5451,7 @@ class variable_storage<T, VariableKind::Global, /* CanBeNull= */ false, L>
             Module::Get().module_.getGlobal(names_[idx])->init = Module::Builder().makeConst(literals[idx]);
     }
     /** Sets the initial value. */
-    void init(uint32_t init) requires dsl_pointer_to_primitive<T> {
+    void init(uint64_t init) requires dsl_pointer_to_primitive<T> {
         Module::Get().module_.getGlobal(names_[0])->init = Module::Builder().makeConst(::wasm::Literal(init));
     }
     /** Sets the initial value. */
@@ -6494,31 +6494,30 @@ struct Allocator
     public:
     /** Pre-allocates memory for \p bytes consecutive bytes with alignment requirement \p align and returns a raw
      * pointer to the beginning of this memory. */
-    virtual void * raw_allocate(uint32_t bytes, uint32_t align = 1) = 0;
+    virtual void * raw_allocate(uint64_t bytes, uint32_t align = 1) = 0;
     /** Pre-allocates memory for \p bytes consecutive bytes with alignment requirement \p align and returns a pointer
      * to the beginning of this memory. */
-    virtual Ptr<void> pre_allocate(uint32_t bytes, uint32_t align = 1) = 0;
+    virtual Ptr<void> pre_allocate(uint64_t bytes, uint32_t align = 1) = 0;
     /** Allocates memory for \p bytes consecutive bytes with alignment requirement \p align and returns a pointer to the
      * beginning of this memory. */
-    virtual Var<Ptr<void>> allocate(U32x1 bytes, uint32_t align = 1) = 0;
+    virtual Var<Ptr<void>> allocate(U64x1 bytes, uint32_t align = 1) = 0;
     /** Deallocates the `bytes` consecutive bytes of allocated memory at address `ptr`. */
-    virtual void deallocate(Ptr<void> ptr, U32x1 bytes) = 0;
+    virtual void deallocate(Ptr<void> ptr, U64x1 bytes) = 0;
 
     /** Performs the actual pre-allocations.  Must be called exactly **once** **after** the last pre-allocation was
      * requested.
      * Returns the initial allocation address, i.e. an address after the last pre-allocated address. */
-    virtual uint32_t perform_pre_allocations() = 0;
+    virtual uint64_t perform_pre_allocations() = 0;
 
     /** Returns the pre-allocated memory overall consumption. */
-    virtual uint32_t pre_allocated_memory_consumption() const = 0;
+    virtual uint64_t pre_allocated_memory_consumption() const = 0;
     /** Returns the allocated memory overall consumption. */
-    virtual U32x1 allocated_memory_consumption() const = 0;
+    virtual U64x1 allocated_memory_consumption() const = 0;
     /** Returns the allocated memory peak consumption. */
-    virtual U32x1 allocated_memory_peak() const = 0;
+    virtual U64x1 allocated_memory_peak() const = 0;
 
-    Var<Ptr<void>> allocate(uint32_t bytes, uint32_t align = 1) { return allocate(U32x1(bytes), align); }
-    void deallocate(Ptr<void> ptr, uint32_t bytes) { return deallocate(ptr, U32x1(bytes)); }
-
+    Var<Ptr<void>> allocate(uint64_t bytes, uint32_t align = 1) { return allocate(U64x1(bytes), align); }
+    void deallocate(Ptr<void> ptr, uint64_t bytes) { return deallocate(ptr, U64x1(bytes)); }
 
     /** Pre-allocates memory for exactly one value of type \tparam T.  Returns a raw pointer to this memory. */
     template<dsl_primitive T>
@@ -6535,11 +6534,11 @@ struct Allocator
     /** Pre-allocates memory for an array of \p count consecutive values of type \tparam T.  Returns a raw pointer to
      * this memory. */
     template<dsl_primitive T>
-    T * raw_malloc(uint32_t count) { return static_cast<T*>(raw_allocate(sizeof(T) * count, alignof(T))); }
+    T * raw_malloc(uint64_t count) { return static_cast<T*>(raw_allocate(sizeof(T) * count, alignof(T))); }
     /** Pre-allocates memory for an array of \p count consecutive values of type \tparam T and number of SIMD lanes
      * \tparam L.  Returns a pointer to this memory. */
     template<dsl_primitive T, std::size_t L = 1>
-    Ptr<PrimitiveExpr<T, L>> pre_malloc(uint32_t count) {
+    Ptr<PrimitiveExpr<T, L>> pre_malloc(uint64_t count) {
         if constexpr (L == 1)
             return pre_allocate(sizeof(T) * count, alignof(T)).template to<T*, L>();
         else if constexpr (L * sizeof(T) <= 16)
@@ -6550,11 +6549,11 @@ struct Allocator
     /** Allocates memory for an array of \p count consecutive values of type \tparam T and number of SIMD lanes
      * \tparam L.  Returns a pointer to this memory. */
     template<dsl_primitive T, std::size_t L = 1, typename U>
-    requires requires (U &&u) { U32x1(std::forward<U>(u)); }
+    requires requires (U &&u) { U64x1(std::forward<U>(u)); }
     Var<Ptr<PrimitiveExpr<T, L>>> malloc(U &&count) {
         if constexpr (L == 1) {
             Var<Ptr<PrimitiveExpr<T, L>>> ptr(
-                allocate(uint32_t(sizeof(T)) * std::forward<U>(count), alignof(T)).template to<T*, L>()
+                allocate(uint64_t(sizeof(T)) * std::forward<U>(count), alignof(T)).template to<T*, L>()
             );
             return ptr;
         } else if constexpr (L * sizeof(T) <= 16) {
@@ -6565,7 +6564,7 @@ struct Allocator
         } else {
             Var<Ptr<PrimitiveExpr<T, L>>> ptr(
                 allocate(
-                    uint32_t(16 * PrimitiveExpr<T, L>::num_vectors) * std::forward<U>(count), alignof(T)
+                    uint64_t(16 * PrimitiveExpr<T, L>::num_vectors) * std::forward<U>(count), alignof(T)
                 ).template to<T*, L>()
             );
             return ptr;
@@ -6579,19 +6578,19 @@ struct Allocator
 
     /** Frees \p count consecutive values of type \tparam T of allocated memory pointed by \p ptr. */
     template<primitive_convertible T, typename U>
-    requires requires (U &&u) { U32x1(std::forward<U>(u)); } and
+    requires requires (U &&u) { U64x1(std::forward<U>(u)); } and
              requires (T &&t) { primitive_expr_t<T>(std::forward<T>(t)).template to<void*>(); }
     void free(T &&ptr, U &&count) {
         primitive_expr_t<T> _ptr(std::forward<T>(ptr));
         using pointed_type = typename decltype(_ptr)::pointed_type;
         constexpr std::size_t L = decltype(_ptr)::num_simd_lanes;
         if constexpr (L == 1)
-            deallocate(_ptr.template to<void*>(), uint32_t(sizeof(pointed_type)) * std::forward<U>(count));
+            deallocate(_ptr.template to<void*>(), uint64_t(sizeof(pointed_type)) * std::forward<U>(count));
         else if constexpr (L * sizeof(T) <= 16)
             deallocate(_ptr.template to<void*>(), 16U * std::forward<U>(count));
         else
             deallocate(_ptr.template to<void*>(),
-                       uint32_t(16 * PrimitiveExpr<T, L>::num_vectors) * std::forward<U>(count));
+                       uint64_t(16 * PrimitiveExpr<T, L>::num_vectors) * std::forward<U>(count));
     }
 };
 

@@ -46,7 +46,7 @@ auto local_value(v8::Local<v8::Value> local)
     if constexpr (std::is_floating_point_v<T> and L == 1)
         return local.As<v8::Number>()->Value();
     if constexpr (L > 1) {
-        const ptrdiff_t vec_offset = local.As<v8::Uint32>()->Value();
+        const ptrdiff_t vec_offset = local.As<v8::BigInt>()->Uint64Value();
         auto vec = m::WasmEngine::Get_Wasm_Context_By_ID(Module::ID()).vm.as<uint8_t*>() + vec_offset;
         std::array<T, L> res;
         for (std::size_t idx = 0; idx < L; ++idx) {
@@ -147,8 +147,8 @@ struct invoke_v8<PrimitiveExpr<ReturnType, ReturnL>(PrimitiveExpr<ParamTypes, Pa
         Module::Get().emit_function_import<void(void*,uint32_t)>("read_result_set");
         auto func_read_result_set = v8::Function::New(context, read_result_set).ToLocalChecked();
         env->Set(context, mkstr(*isolate_, "read_result_set"), func_read_result_set).Check();
-        Module::Get().emit_import<uint32_t>("alloc_addr_init");
-        auto val_alloc_addr_init = v8::Uint32::New(isolate_, Module::Allocator().perform_pre_allocations());
+        Module::Get().emit_import<uint64_t>("alloc_addr_init");
+        auto val_alloc_addr_init = v8::BigInt::New(isolate_, Module::Allocator().perform_pre_allocations());
         env->Set(context, mkstr(*isolate_, "alloc_addr_init"), val_alloc_addr_init).Check();
         M_DISCARD imports->Set(context, mkstr(*isolate_, "imports"), env);
 

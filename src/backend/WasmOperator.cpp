@@ -976,11 +976,11 @@ Ptr<void> get_base_address(const ThreadSafePooledString &table_name) {
 }
 
 /** Returns the number of entries of array index for table \p table_name and attribute \p attr_name. */
-U32x1 get_array_index_num_entries(const ThreadSafePooledString &table_name, const ThreadSafePooledString &attr_name) {
+U64x1 get_array_index_num_entries(const ThreadSafePooledString &table_name, const ThreadSafePooledString &attr_name) {
     static std::ostringstream oss;
     oss.str("");
     oss << "index_" << table_name << '_' << attr_name << "_array" << "_num_entries";
-    return Module::Get().get_global<uint32_t>(oss.str().c_str());
+    return Module::Get().get_global<uint64_t>(oss.str().c_str());
 }
 
 /** Returns a pointer to the beginning of array index for table \p table_name and attribute \p attr_name. */
@@ -1486,7 +1486,7 @@ void index_scan_codegen_compilation(const Index &index, const index_scan_bounds_
                                     setup_t setup, pipeline_t pipeline, teardown_t teardown) {
     using key_type = Index::key_type;
     using value_type = Index::value_type;
-    constexpr uint32_t entry_size = sizeof(typename Index::entry_type);
+    constexpr uint64_t entry_size = sizeof(typename Index::entry_type);
     using sql_type = SqlT;
 
     auto table_name = M.scan.store().table().name();
@@ -1572,11 +1572,11 @@ void index_scan_codegen_compilation(const Index &index, const index_scan_bounds_
                  * As a result, queries that only differ in the filter predicate are compiled to the exact same
                  * WebAssembly code, enabling caching of compiled plans in V8. */
                 if constexpr (std::same_as<sql_type, NChar>) {
-                    uint32_t *key_address = Module::Allocator().raw_malloc<uint32_t>();
+                    uint64_t *key_address = Module::Allocator().raw_malloc<uint64_t>();
                     *key_address = CodeGenContext::Get().get_literal_raw_address(_key);
 
-                    Ptr<U32x1> key_ptr(key_address);
-                    key.emplace(U32x1(*key_ptr).to<char*>());
+                    Ptr<U64x1> key_ptr(key_address);
+                    key.emplace(U64x1(*key_ptr).to<char*>());
                 } else {
                     auto *key_address = Module::Allocator().raw_malloc<key_type>();
                     *key_address = _key;
@@ -1588,38 +1588,38 @@ void index_scan_codegen_compilation(const Index &index, const index_scan_bounds_
                 M_unreachable("unknown materialization strategy");
             }
             M_insist(bool(key), "key must be set");
-            return Module::Get().emit_call<uint32_t>(
+            return Module::Get().emit_call<uint64_t>(
                 /* fn=       */ is_lower_bound ? lower_bound_fn : upper_bound_fn,
                 /* index_id= */ index_id.clone(),
                 /* key=      */ *key
             );
         };
-        Var<U32x1> lo(bool(bounds.lo) ? compile_bound_lookup(bounds.lo->get(), bounds.is_inclusive_lo)
-                                      : U32x1(0));
-        const Var<U32x1> hi(bool(bounds.hi) ? compile_bound_lookup(bounds.hi->get(), not bounds.is_inclusive_hi)
-                                      : U32x1(index.num_entries()));
+        Var<U64x1> lo(bool(bounds.lo) ? compile_bound_lookup(bounds.lo->get(), bounds.is_inclusive_lo)
+                                      : U64x1(0));
+        const Var<U64x1> hi(bool(bounds.hi) ? compile_bound_lookup(bounds.hi->get(), not bounds.is_inclusive_hi)
+                                      : U64x1(index.num_entries()));
         Wasm_insist(lo <= hi, "bounds need to be valid");
 
         /*----- Allocate memory for communication to host. -----*/
-        M_insist(std::in_range<uint32_t>(M.batch_size), "should fit in uint32_t");
+        M_insist(std::in_range<uint64_t>(M.batch_size), "should fit in uint64_t");
 
         /* Determine alloc size as minimum of number of results and command-line parameter batch size, where 0 is
          * interpreted as infinity. */
-        const Var<U32x1> alloc_size([&](){
-            U32x1 num_results = hi - lo;
-            U32x1 num_results_cpy = num_results.clone();
-            U32x1 batch_size = M.batch_size == 0 ? num_results.clone() : U32x1(M.batch_size);
-            U32x1 batch_size_cpy = batch_size.clone();
+        const Var<U64x1> alloc_size([&](){
+            U64x1 num_results = hi - lo;
+            U64x1 num_results_cpy = num_results.clone();
+            U64x1 batch_size = M.batch_size == 0 ? num_results.clone() : U64x1(M.batch_size);
+            U64x1 batch_size_cpy = batch_size.clone();
             return Select(batch_size < num_results, batch_size_cpy, num_results_cpy);
         }());
-        Ptr<U32x1> buffer_address = Module::Allocator().malloc<uint32_t>(alloc_size);
+        Ptr<U64x1> buffer_address = Module::Allocator().malloc<uint64_t>(alloc_size);
 
         /*----- Emit setup code *after* allocating memory to guarantee sequential memory allocation for pipeline. -----*/
         setup();
 
         /*----- Emit loop code. -----*/
-        Var<U32x1> num_tuples_in_batch;
-        Var<Ptr<U32x1>> ptr;
+        Var<U64x1> num_tuples_in_batch;
+        Var<Ptr<U64x1>> ptr;
         WHILE (lo < hi) {
             num_tuples_in_batch = Select(hi - lo > alloc_size, alloc_size, hi - lo);
             /* Call host to fill buffer memory with next batch of tuple ids. */
@@ -1652,7 +1652,7 @@ void index_scan_codegen_compilation(const Index &index, const index_scan_bounds_
         teardown();
 
         /*----- Free buffer memory. -----*/
-        IF (alloc_size > U32x1(0)) { // only free if actually allocated
+        IF (alloc_size > U64x1(0)) { // only free if actually allocated
             Module::Allocator().free(buffer_address, alloc_size);
         };
     } else if (options::index_scan_compilation_strategy == option_configs::IndexScanCompilationStrategy::EXPOSED_MEMORY) {
@@ -1694,11 +1694,11 @@ void index_scan_codegen_compilation(const Index &index, const index_scan_bounds_
                  * As a result, queries that only differ in the filter predicate are compiled to the exact same
                  * WebAssembly code, enabling caching of compiled plans in V8. */
                 if constexpr (std::same_as<sql_type, NChar>) {
-                    uint32_t *key_address = Module::Allocator().raw_malloc<uint32_t>();
+                    uint64_t *key_address = Module::Allocator().raw_malloc<uint64_t>();
                     *key_address = CodeGenContext::Get().get_literal_raw_address(_key);
 
-                    Ptr<U32x1> key_ptr(key_address);
-                    key.emplace(U32x1(*key_ptr).to<char*>());
+                    Ptr<U64x1> key_ptr(key_address);
+                    key.emplace(U64x1(*key_ptr).to<char*>());
                 } else {
                     auto *key_address = Module::Allocator().raw_malloc<key_type>();
                     *key_address = _key;
@@ -1714,10 +1714,10 @@ void index_scan_codegen_compilation(const Index &index, const index_scan_bounds_
             /* Implementation based on https://en.cppreference.com/w/cpp/algorithm/lower_bound and
              * https://en.cppreference.com/w/cpp/algorithm/upper_bound. */
             Var<Ptr<void>> first(get_array_index_base_address(table_name, attr_name));
-            Var<U32x1> count(get_array_index_num_entries(table_name, attr_name));
+            Var<U64x1> count(get_array_index_num_entries(table_name, attr_name));
 
             WHILE (count > 0U) {
-                const Var<U32x1> step(count / 2U);
+                const Var<U64x1> step(count / 2U);
                 const Var<Ptr<void>> it(first + (step * entry_size).make_signed());
                 Boolx1 cond = M_CONSTEXPR_COND(
                     std::same_as<M_COMMA(sql_type) NChar>,
@@ -1758,9 +1758,9 @@ void index_scan_codegen_compilation(const Index &index, const index_scan_bounds_
 
         /*----- Emit loop code. -----*/
         WHILE (lo < hi) {
-            constexpr int32_t value_offset =
+            constexpr int64_t value_offset =
                 ((sizeof(key_type) + alignof(value_type) - 1U) / alignof(value_type)) * alignof(value_type);
-            U32x1 tuple_id = PrimitiveExpr<value_type>(*(lo + value_offset).to<value_type*>()).template to<uint32_t>();
+            U64x1 tuple_id = PrimitiveExpr<value_type>(*(lo + value_offset).to<value_type*>()).template to<uint64_t>();
             static Schema empty_schema;
             compile_load_point_access(
                 /* tuple_value_schema=   */ M.scan.schema(),
@@ -1771,7 +1771,7 @@ void index_scan_codegen_compilation(const Index &index, const index_scan_bounds_
                 /* tuple_id=             */ tuple_id
             );
             pipeline();
-            lo += int32_t(entry_size);
+            lo += int64_t(entry_size);
         }
 
         /*----- Emit teardown code. -----*/
@@ -1826,15 +1826,15 @@ void index_scan_codegen_interpretation(const Index &index, const index_scan_boun
 
     if (options::index_scan_materialization_strategy == option_configs::IndexScanMaterializationStrategy::MEMORY) {
         /*----- Allocate sufficient memory for results. -----*/
-        uint32_t num_results = hi - lo;
-        uint32_t *buffer_address = Module::Allocator().raw_malloc<uint32_t>(num_results + 1); // +1 for storing number of results itself
+        uint64_t num_results = hi - lo;
+        uint64_t *buffer_address = Module::Allocator().raw_malloc<uint64_t>(num_results + 1); // +1 for storing number of results itself
 
         /*----- Perform index scan and fill memory with number of results and results. -----*/
-        uint32_t *buffer_ptr = buffer_address;
+        uint64_t *buffer_ptr = buffer_address;
         *buffer_ptr = num_results; // store in memory to enable caching
         ++buffer_ptr;
         for (auto it = index.begin() + lo; it != index.begin() + hi; ++it) {
-            M_insist(std::in_range<uint32_t>(it->second), "tuple id must fit in uint32_t");
+            M_insist(std::in_range<uint64_t>(it->second), "tuple id must fit in uint64_t");
             *buffer_ptr = it->second;
             ++buffer_ptr;
         }
@@ -1843,10 +1843,10 @@ void index_scan_codegen_interpretation(const Index &index, const index_scan_boun
         setup();
 
         /*----- Emit loop code. -----*/
-        Ptr<U32x1> base(buffer_address + 1); // +1 to skip stored number of results
-        Var<Ptr<U32x1>> ptr(base.clone());
-        const Var<Ptr<U32x1>> end(base + U32x1(*Ptr<U32x1>(buffer_address)).make_signed());
-        WHILE (ptr < end) {
+        Ptr<U64x1> base(buffer_address + 1); // +1 to skip stored number of results
+        Var<Ptr<U64x1>> ptr(base.clone());
+        const Var<Ptr<U64x1>> end(base + U64x1(*Ptr<U64x1>(buffer_address)).make_signed());
+        WHILE(ptr < end) {
             compile_load_point_access(
                 /* tuple_value_schema=   */ M.scan.schema(),
                 /* tuple_address_schema= */ empty_schema,
@@ -1863,7 +1863,7 @@ void index_scan_codegen_interpretation(const Index &index, const index_scan_boun
         teardown();
     } else if (options::index_scan_materialization_strategy == option_configs::IndexScanMaterializationStrategy::INLINE) {
         /*----- Define function that emits code for loading and executing pipeline for a single tuple. -----*/
-        FUNCTION(index_scan_parent_pipeline, void(uint32_t))
+        FUNCTION(index_scan_parent_pipeline, void(uint64_t))
         {
             auto S = CodeGenContext::Get().scoped_environment(); // create scoped environment for this function
 
@@ -1889,8 +1889,8 @@ void index_scan_codegen_interpretation(const Index &index, const index_scan_boun
 
         /*----- Perform index sequential scan, emit code to execute pipeline for each tuple. -----*/
         for (auto it = index.begin() + lo; it != index.begin() + hi; ++it) {
-            M_insist(std::in_range<uint32_t>(it->second), "tuple id must fit in uint32_t");
-            index_scan_parent_pipeline(uint32_t(it->second));
+            M_insist(std::in_range<uint64_t>(it->second), "tuple id must fit in uint64_t");
+            index_scan_parent_pipeline(uint64_t(it->second));
         }
     } else {
         M_unreachable("unknown materialization strategy");
@@ -1904,7 +1904,7 @@ void index_scan_codegen_hybrid(const Index &index, const index_scan_bounds_t &bo
 {
     using key_type = Index::key_type;
     using value_type = Index::value_type;
-    constexpr uint32_t entry_size = sizeof(typename Index::entry_type);
+    constexpr uint64_t entry_size = sizeof(typename Index::entry_type);
     using sql_type = SqlT;
 
     auto table_name = M.scan.store().table().name();
@@ -1982,12 +1982,12 @@ void index_scan_codegen_hybrid(const Index &index, const index_scan_bounds_t &bo
     std::size_t hi = bool(bounds.hi) ? interpret_and_lookup_bound(bounds.hi->get(), not bounds.is_inclusive_hi)
                                      : index.num_entries();
     M_insist(lo <= hi, "bounds need to be valid");
-    M_insist(std::in_range<uint32_t>(lo), "should fit in uint32_t");
-    M_insist(std::in_range<uint32_t>(hi), "should fit in uint32_t");
+    M_insist(std::in_range<uint64_t>(lo), "should fit in uint64_t");
+    M_insist(std::in_range<uint64_t>(hi), "should fit in uint64_t");
 
     /*----- Materialize offsets hi and lo. -----*/
-    std::optional<U32x1> begin;
-    std::optional<U32x1> end;
+    std::optional<U64x1> begin;
+    std::optional<U64x1> end;
     if (options::index_scan_materialization_strategy == option_configs::IndexScanMaterializationStrategy::INLINE) {
         begin.emplace(lo);
         end.emplace(hi);
@@ -1995,11 +1995,11 @@ void index_scan_codegen_hybrid(const Index &index, const index_scan_bounds_t &bo
         /* If we materialize before allocating buffer memory, the addresses are independent of the buffer size.  As a
          * result, queries that only differ in the filter predicate are compiled to the exact same WebAssembly code,
          * enabling caching of compiled plans in V8. */
-        uint32_t *offset_address = Module::Allocator().raw_malloc<uint32_t>(2);
-        offset_address[0] = uint32_t(lo);
-        offset_address[1] = uint32_t(hi);
+        uint64_t *offset_address = Module::Allocator().raw_malloc<uint64_t>(2);
+        offset_address[0] = uint64_t(lo);
+        offset_address[1] = uint64_t(hi);
 
-        Ptr<U32x1> offset_ptr(offset_address);
+        Ptr<U64x1> offset_ptr(offset_address);
         begin.emplace(*offset_ptr.clone());
         end.emplace(*(offset_ptr + 1));
     } else {
@@ -2009,26 +2009,26 @@ void index_scan_codegen_hybrid(const Index &index, const index_scan_bounds_t &bo
 
     if (options::index_scan_compilation_strategy == option_configs::IndexScanCompilationStrategy::CALLBACK) {
         /*----- Allocate buffer memory for communication to host. -----*/
-        M_insist(std::in_range<uint32_t>(M.batch_size), "should fit in uint32_t");
+        M_insist(std::in_range<uint64_t>(M.batch_size), "should fit in uint64_t");
 
         /* Determine alloc size as minimum of number of results and command-line parameter batch size, where 0 is
          * interpreted as infinity. */
-        const Var<U32x1> alloc_size([&](){
-            U32x1 num_results = end->clone() - begin->clone();
-            U32x1 num_results_cpy = num_results.clone();
-            U32x1 batch_size = M.batch_size == 0 ? num_results.clone() : U32x1(M.batch_size);
-            U32x1 batch_size_cpy = batch_size.clone();
+        const Var<U64x1> alloc_size([&](){
+            U64x1 num_results = end->clone() - begin->clone();
+            U64x1 num_results_cpy = num_results.clone();
+            U64x1 batch_size = M.batch_size == 0 ? num_results.clone() : U64x1(M.batch_size);
+            U64x1 batch_size_cpy = batch_size.clone();
             return Select(batch_size < num_results, batch_size_cpy, num_results_cpy);
         }());
-        Ptr<U32x1> buffer_address = Module::Allocator().malloc<uint32_t>(alloc_size);
+        Ptr<U64x1> buffer_address = Module::Allocator().malloc<uint64_t>(alloc_size);
 
         /*----- Emit setup code *after* allocating memory to guarantee sequential memory allocation for pipeline. -----*/
         setup();
 
         /*----- Emit loop code. -----*/
-        Var<U32x1> num_tuples_in_batch;
-        Var<Ptr<U32x1>> ptr;
-        Var<U32x1> _begin(*begin);
+        Var<U64x1> num_tuples_in_batch;
+        Var<Ptr<U64x1>> ptr;
+        Var<U64x1> _begin(*begin);
         WHILE (_begin < end->clone()) {
             auto end_cpy = end->clone();
             num_tuples_in_batch = Select(*end - _begin > alloc_size, alloc_size, end_cpy - _begin);
@@ -2062,7 +2062,7 @@ void index_scan_codegen_hybrid(const Index &index, const index_scan_bounds_t &bo
         teardown();
 
         /*----- Free buffer memory. -----*/
-        IF (alloc_size > U32x1(0)) { // only free if actually allocated
+        IF (alloc_size > U64x1(0)) { // only free if actually allocated
             Module::Allocator().free(buffer_address, alloc_size);
         };
     } else if (options::index_scan_compilation_strategy == option_configs::IndexScanCompilationStrategy::EXPOSED_MEMORY) {
@@ -2070,12 +2070,12 @@ void index_scan_codegen_hybrid(const Index &index, const index_scan_bounds_t &bo
         setup();
 
         /*----- Emit loop code. -----*/
-        Var<I32x1> lo((*begin * entry_size).make_signed());
-        const Var<I32x1> hi((*end * entry_size).make_signed());
+        Var<I64x1> lo((*begin * entry_size).make_signed());
+        const Var<I64x1> hi((*end * entry_size).make_signed());
         WHILE (lo < hi) {
-            constexpr int32_t value_offset =
+            constexpr int64_t value_offset =
                 ((sizeof(key_type) + alignof(value_type) - 1U) / alignof(value_type)) * alignof(value_type);
-            U32x1 tuple_id = PrimitiveExpr<value_type>(*(get_array_index_base_address(table_name, attr_name) + lo + value_offset).template to<value_type*>()).template to<uint32_t>();
+            U64x1 tuple_id = PrimitiveExpr<value_type>(*(get_array_index_base_address(table_name, attr_name) + lo + value_offset).template to<value_type*>()).template to<uint64_t>();
             static Schema empty_schema;
             compile_load_point_access(
                 /* tuple_value_schema=   */ M.scan.schema(),
@@ -2086,7 +2086,7 @@ void index_scan_codegen_hybrid(const Index &index, const index_scan_bounds_t &bo
                 /* tuple_id=             */ tuple_id
             );
             pipeline();
-            lo += int32_t(entry_size);
+            lo += int64_t(entry_size);
         }
 
         /*----- Emit teardown code. -----*/

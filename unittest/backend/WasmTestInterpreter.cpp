@@ -60,7 +60,7 @@ struct invoke_interpreter<PrimitiveExpr<ReturnType, ReturnL>(PrimitiveExpr<Param
     return_type operator()(fn_proxy_type &func, PrimitiveExpr<ParamTypes, ParamLs>... parameters) {
         ::wasm::GlobalValueSet imports;
 
-        Module::Get().emit_global<uint32_t>("alloc_addr_init", false, 0); // XXX: should be an import but does not work
+        Module::Get().emit_global<uint64_t>("alloc_addr_init", false, 0); // XXX: should be an import but does not work
         auto val_alloc_addr_init = Module::Allocator().perform_pre_allocations();
         imports.emplace("alloc_addr_init", ::wasm::Literals({ ::wasm::Literal(val_alloc_addr_init) }));
 

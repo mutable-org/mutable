@@ -39,7 +39,7 @@ struct WasmEngine
         ///> factory used to create the result set data layout
         std::unique_ptr<const storage::DataLayoutFactory> result_set_factory;
         memory::AddressSpace vm; ///<  WebAssembly module instance's virtual address space aka.\ *linear memory*
-        uint32_t heap = 0; ///< beginning of the heap, encoded as offset from the beginning of the virtual address space
+        uint64_t heap = 0; ///< beginning of the heap, encoded as offset from the beginning of the virtual address space
         std::vector<std::reference_wrapper<const idx::IndexBase>> indexes; ///< the indexes used in the query
 
         WasmContext(uint32_t id, const MatchBase &plan, config_t configuration, std::size_t size);
@@ -49,11 +49,11 @@ struct WasmEngine
         /** Maps a table at the current start of `heap` and advances `heap` past the mapped region.  Returns the address
          * (in linear memory) of the mapped table.  Installs guard pages after each mapping.  Acknowledges
          * `TRAP_GUARD_PAGES`.  */
-        uint32_t map_table(const Table &table);
+        uint64_t map_table(const Table &table);
         /** Maps an index at the current start of `heap` and advances `heap` past the mapped region.  Returns the address
          * (in linear memory) of the mapped index.  Installs guard pages after each mapping.  Acknowledges
          * `TRAP_GUARD_PAGES`.  */
-        uint32_t map_index(const idx::IndexBase &index);
+        uint64_t map_index(const idx::IndexBase &index);
 
         /** Installs a guard page at the current `heap` and increments `heap` to the next page.  Acknowledges
          * `TRAP_GUARD_PAGES`. */

@@ -855,7 +855,7 @@ struct CodeGenContext
     private:
     Environment *env_ = nullptr; ///< environment for locally bound identifiers
     Global<U32x1> num_tuples_; ///< variable to hold the number of result tuples produced
-    std::unordered_map<const char*, std::pair<uint32_t, NChar>> literals_; ///< maps each literal to its address at which it is stored
+    std::unordered_map<const char*, std::pair<uint64_t, NChar>> literals_; ///< maps each literal to its address at which it is stored
     ///> number of SIMD lanes currently used, i.e. 1 for scalar and at least 2 for vectorial values
     std::size_t num_simd_lanes_ = 1;
     ///> number of SIMD lanes currently preferred, i.e. 1 for scalar and at least 2 for vectorial values
@@ -914,16 +914,16 @@ struct CodeGenContext
     void inc_num_tuples(U32x1 n = U32x1(1)) { num_tuples_ += n; }
 
     /** Adds the string literal `literal` located at pointer offset `ptr`. */
-    void add_literal(const char *literal, uint32_t ptr) {
+    void add_literal(const char *literal, uint64_t ptr) {
         auto [_, inserted] = literals_.emplace(
             std::piecewise_construct,
             std::forward_as_tuple(literal),
-            std::forward_as_tuple(ptr, NChar(Ptr<Charx1>(U32x1(ptr)), false, strlen(literal) + 1, true))
+            std::forward_as_tuple(ptr, NChar(Ptr<Charx1>(U64x1(ptr)), false, strlen(literal) + 1, true))
         );
         M_insist(inserted);
     }
     /** Returns the raw address at which `literal` is stored. */
-    uint32_t get_literal_raw_address(const char *literal) const {
+    uint64_t get_literal_raw_address(const char *literal) const {
         auto it = literals_.find(literal);
         M_insist(it != literals_.end(), "unknown literal");
         return it->second.first;

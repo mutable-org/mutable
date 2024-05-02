@@ -55,7 +55,7 @@ U64x1 murmur3_64a_hash(std::vector<std::pair<const Type*, SQL_t>> values);
 struct HashTable
 {
     using index_t = std::size_t;
-    using offset_t = int32_t;
+    using offset_t = int64_t;
     using size_t = uint32_t;
 
     // forward declaration
@@ -647,7 +647,7 @@ struct ChainedHashTable : HashTable
     chained_hash_table_storage<IsGlobal> storage_;
     ///> function to perform rehashing; only possible for global hash tables since variables have to be updated
     std::optional<FunctionProxy<void(void)>> rehash_;
-    std::vector<std::pair<Ptr<void>, U32x1>> dummy_allocations_; ///< address-size pairs of dummy entry allocations
+    std::vector<std::pair<Ptr<void>, U64x1>> dummy_allocations_; ///< address-size pairs of dummy entry allocations
     std::optional<var_t<Ptr<void>>> predication_dummy_; ///< dummy bucket used for predication
 
     public:
@@ -671,7 +671,7 @@ struct ChainedHashTable : HashTable
     /** Returns the capacity of the hash table. */
     U32x1 capacity() const { return mask() + 1U; }
     /** Returns the overall size in bytes of the actual hash table, i.e. without collision list entries. */
-    U32x1 size_in_bytes() const { return capacity() * uint32_t(sizeof(uint32_t)); }
+    U32x1 size_in_bytes() const { return capacity() * uint32_t(sizeof(uint64_t)); }
 
     public:
     /** Performs the setup of all local variables of the hash table (by reading them from the global backups iff
@@ -709,8 +709,8 @@ struct ChainedHashTable : HashTable
     void create_predication_dummy() {
         M_insist(not predication_dummy_);
         predication_dummy_.emplace(); // since globals cannot be constructed with runtime values
-        *predication_dummy_ = Module::Allocator().allocate(sizeof(uint32_t), sizeof(uint32_t));
-        *predication_dummy_->template to<uint32_t*>() = 0U; // set to nullptr
+        *predication_dummy_ = Module::Allocator().allocate(sizeof(uint64_t), alignof(uint64_t));
+        *predication_dummy_->template to<uint64_t*>() = 0U; // set to nullptr
     }
 
     public:
@@ -912,7 +912,7 @@ struct OpenAddressingHashTable : OpenAddressingHashTableBase
     open_addressing_hash_table_storage<IsGlobal> storage_;
     ///> function to perform rehashing; only possible for global hash tables since variables have to be updated
     std::optional<FunctionProxy<void(void)>> rehash_;
-    std::vector<std::pair<Ptr<void>, U32x1>> dummy_allocations_; ///< address-size pairs of dummy entry allocations
+    std::vector<std::pair<Ptr<void>, U64x1>> dummy_allocations_; ///< address-size pairs of dummy entry allocations
     std::optional<var_t<Ptr<void>>> predication_dummy_; ///< dummy entry used for predication
 
     public:

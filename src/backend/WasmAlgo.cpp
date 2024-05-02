@@ -481,7 +481,7 @@ ChainedHashTable<IsGlobal>::ChainedHashTable(const Schema &schema, std::vector<H
     bool has_nullable = false;
 
     /*----- Add pointer to next entry in linked collision list. -----*/
-    types.push_back(Type::Get_Integer(Type::TY_Vector, sizeof(uint32_t)));
+    types.push_back(Type::Get_Integer(Type::TY_Vector, sizeof(uint64_t)));
 
     /*----- Add schema types. -----*/
     for (auto &e : schema_.get()) {
@@ -530,37 +530,37 @@ ChainedHashTable<IsGlobal>::~ChainedHashTable()
     if constexpr (IsGlobal) { // free memory of global hash table when object is destroyed and no use may occur later
         /*----- Free collision list entries. -----*/
         Var<Ptr<void>> it(storage_.address_);
-        const Var<Ptr<void>> end(storage_.address_ + ((storage_.mask_ + 1U) * uint32_t(sizeof(uint32_t))).make_signed());
+        const Var<Ptr<void>> end(storage_.address_ + ((storage_.mask_ + 1U) * uint32_t(sizeof(uint64_t))).make_signed());
         WHILE (it != end) {
             Wasm_insist(storage_.address_ <= it and it < end, "bucket out-of-bounds");
-            Var<Ptr<void>> bucket_it(Ptr<void>(*it.to<uint32_t*>()));
+            Var<Ptr<void>> bucket_it(Ptr<void>(*it.to<uint64_t*>()));
             WHILE (not bucket_it.is_nullptr()) { // another entry in collision list
                 const Var<Ptr<void>> tmp(bucket_it);
-                bucket_it = Ptr<void>(*(bucket_it + ptr_offset_in_bytes_).template to<uint32_t*>());
+                bucket_it = Ptr<void>(*(bucket_it + ptr_offset_in_bytes_).template to<uint64_t*>());
                 Module::Allocator().deallocate(tmp, entry_size_in_bytes_);
             }
-            it += int32_t(sizeof(uint32_t));
+            it += int64_t(sizeof(uint64_t));
         }
 
         /*----- Free all buckets. -----*/
-        Module::Allocator().deallocate(storage_.address_, (storage_.mask_ + 1U) * uint32_t(sizeof(uint32_t)));
+        Module::Allocator().deallocate(storage_.address_, (storage_.mask_ + 1U) * uint32_t(sizeof(uint64_t)));
 
         /*----- Free dummy entries. -----*/
         for (auto it = dummy_allocations_.rbegin(); it != dummy_allocations_.rend(); ++it)
             Module::Allocator().deallocate(it->first, it->second);
         if (predication_dummy_) {
 #if 1
-            Wasm_insist(Ptr<void>(*predication_dummy_->template to<uint32_t*>()).is_nullptr(),
+            Wasm_insist(Ptr<void>(*predication_dummy_->template to<uint64_t*>()).is_nullptr(),
                         "predication dummy must always contain an empty collision list");
 #else
-            Var<Ptr<void>> bucket_it(Ptr<void>(*predication_dummy_->template to<uint32_t*>()));
+            Var<Ptr<void>> bucket_it(Ptr<void>(*predication_dummy_->template to<uint64_t*>()));
             WHILE (not bucket_it.is_nullptr()) { // another entry in collision list
                 const Var<Ptr<void>> tmp(bucket_it);
-                bucket_it = Ptr<void>(*(bucket_it + ptr_offset_in_bytes_).to<uint32_t*>());
+                bucket_it = Ptr<void>(*(bucket_it + ptr_offset_in_bytes_).to<uint64_t*>());
                 Module::Allocator().deallocate(tmp, entry_size_in_bytes_);
             }
 #endif
-            Module::Allocator().deallocate(*predication_dummy_, sizeof(uint32_t));
+            Module::Allocator().deallocate(*predication_dummy_, sizeof(uint64_t));
         }
     }
 }
@@ -595,7 +595,7 @@ void ChainedHashTable<IsGlobal>::setup()
     if constexpr (IsGlobal) {
         IF (storage_.address_.is_nullptr()) { // hash table not yet allocated
             /*----- Allocate memory for initial capacity. -----*/
-            *address_ = Module::Allocator().allocate(size_in_bytes(), sizeof(uint32_t));
+            *address_ = Module::Allocator().allocate(size_in_bytes(), alignof(uint64_t));
 
             /*----- Clear initial hash table. -----*/
             clear();
@@ -604,7 +604,7 @@ void ChainedHashTable<IsGlobal>::setup()
         };
     } else {
         /*----- Allocate memory for initial capacity. -----*/
-        *address_ = Module::Allocator().allocate(size_in_bytes(), sizeof(uint32_t));
+        *address_ = Module::Allocator().allocate(size_in_bytes(), alignof(uint64_t));
 
         /*----- Clear initial hash table. -----*/
         clear();
@@ -624,13 +624,13 @@ void ChainedHashTable<IsGlobal>::teardown()
         Var<Ptr<void>> it(begin());
         WHILE (it != end()) {
             Wasm_insist(begin() <= it and it < end(), "bucket out-of-bounds");
-            Var<Ptr<void>> bucket_it(Ptr<void>(*it.to<uint32_t*>()));
+            Var<Ptr<void>> bucket_it(Ptr<void>(*it.to<uint64_t*>()));
             WHILE (not bucket_it.is_nullptr()) { // another entry in collision list
                 const Var<Ptr<void>> tmp(bucket_it);
-                bucket_it = Ptr<void>(*(bucket_it + ptr_offset_in_bytes_).template to<uint32_t*>());
+                bucket_it = Ptr<void>(*(bucket_it + ptr_offset_in_bytes_).template to<uint64_t*>());
                 Module::Allocator().deallocate(tmp, entry_size_in_bytes_);
             }
-            it += int32_t(sizeof(uint32_t));
+            it += int64_t(sizeof(uint64_t));
         }
 
         /*----- Free all buckets. -----*/
@@ -641,17 +641,17 @@ void ChainedHashTable<IsGlobal>::teardown()
             Module::Allocator().deallocate(it->first, it->second);
         if (predication_dummy_) {
 #if 1
-            Wasm_insist(Ptr<void>(*predication_dummy_->template to<uint32_t*>()).is_nullptr(),
+            Wasm_insist(Ptr<void>(*predication_dummy_->template to<uint64_t*>()).is_nullptr(),
                         "predication dummy must always contain an empty collision list");
 #else
-            Var<Ptr<void>> bucket_it(Ptr<void>(*predication_dummy_->template to<uint32_t*>()));
+            Var<Ptr<void>> bucket_it(Ptr<void>(*predication_dummy_->template to<uint64_t*>()));
             WHILE (not bucket_it.is_nullptr()) { // another entry in collision list
                 const Var<Ptr<void>> tmp(bucket_it);
-                bucket_it = Ptr<void>(*(bucket_it + ptr_offset_in_bytes_).to<uint32_t*>());
+                bucket_it = Ptr<void>(*(bucket_it + ptr_offset_in_bytes_).to<uint64_t*>());
                 Module::Allocator().deallocate(tmp, entry_size_in_bytes_);
             }
 #endif
-            Module::Allocator().deallocate(*predication_dummy_, sizeof(uint32_t));
+            Module::Allocator().deallocate(*predication_dummy_, sizeof(uint64_t));
         }
     }
 
@@ -677,15 +677,15 @@ void ChainedHashTable<IsGlobal>::clear()
     WHILE (it != end()) {
         Wasm_insist(begin() <= it and it < end(), "entry out-of-bounds");
 #if 0
-        Var<Ptr<void>> bucket_it(Ptr<void>(*it.to<uint32_t*>())); // XXX: may be random address
+        Var<Ptr<void>> bucket_it(Ptr<void>(*it.to<uint64_t*>())); // XXX: may be random address
         WHILE (not bucket_it.is_nullptr()) { // another entry in collision list
             const Var<Ptr<void>> tmp(bucket_it);
-            bucket_it = Ptr<void>(*(bucket_it + ptr_offset_in_bytes_).to<uint32_t*>());
+            bucket_it = Ptr<void>(*(bucket_it + ptr_offset_in_bytes_).to<uint64_t*>());
             Module::Allocator().deallocate(tmp, entry_size_in_bytes_); // free collision list entry
         }
 #endif
-        *(it + ptr_offset_in_bytes_).template to<uint32_t*>() = 0U; // set to nullptr
-        it += int32_t(sizeof(uint32_t));
+        *(it + ptr_offset_in_bytes_).template to<uint64_t*>() = 0U; // set to nullptr
+        it += int64_t(sizeof(uint64_t));
     }
 }
 
@@ -708,7 +708,7 @@ Ptr<void> ChainedHashTable<IsGlobal>::hash_to_bucket(std::vector<SQL_t> key) con
 
     /*----- Compute bucket address. -----*/
     U32x1 bucket_idx = hash.to<uint32_t>() bitand *mask_; // modulo capacity
-    Ptr<void> bucket = begin() + (bucket_idx * uint32_t(sizeof(uint32_t))).make_signed();
+    Ptr<void> bucket = begin() + (bucket_idx * uint32_t(sizeof(uint64_t))).make_signed();
     Wasm_insist(begin() <= bucket.clone() and bucket.clone() < end(), "bucket out-of-bounds");
     return bucket;
 }
@@ -778,9 +778,9 @@ HashTable::entry_t ChainedHashTable<IsGlobal>::emplace_without_rehashing(std::ve
     Var<Ptr<void>> entry = Module::Allocator().allocate(entry_size_in_bytes_, entry_max_alignment_in_bytes_);
 
     /*----- Iff no predication is used or predicate is fulfilled, insert entry at collision list's front. -----*/
-    *(entry + ptr_offset_in_bytes_).template to<uint32_t*>() = *bucket.to<uint32_t*>();
-    *bucket.to<uint32_t*>() = pred ? Select(*pred, entry.to<uint32_t>(), *bucket.to<uint32_t*>())
-                                   : entry.to<uint32_t>(); // FIXME: entry memory never freed iff predicate is not fulfilled
+    *(entry + ptr_offset_in_bytes_).template to<uint64_t*>() = *bucket.to<uint64_t*>();
+    *bucket.to<uint64_t*>() = pred ? Select(*pred, entry.to<uint64_t>(), *bucket.to<uint64_t*>())
+                                   : entry.to<uint64_t>(); // FIXME: entry memory never freed iff predicate is not fulfilled
 
     /*----- Update number of entries. -----*/
     *num_entries_ += pred ? pred->to<uint32_t>() : U32x1(1);
@@ -823,7 +823,7 @@ std::pair<HashTable::entry_t, Boolx1> ChainedHashTable<IsGlobal>::try_emplace(st
 
     /*----- Probe collision list, abort and skip insertion if key already exists. -----*/
     Var<Boolx1> entry_inserted(false);
-    Var<Ptr<void>> bucket_it(Ptr<void>(*bucket.to<uint32_t*>()));
+    Var<Ptr<void>> bucket_it(Ptr<void>(*bucket.to<uint64_t*>()));
     BLOCK(insert_entry) {
         IF (bucket_it.is_nullptr()) { // empty collision list
             bucket_it = bucket - ptr_offset_in_bytes_; // set bucket iterator to point to bucket's collision list front
@@ -831,14 +831,14 @@ std::pair<HashTable::entry_t, Boolx1> ChainedHashTable<IsGlobal>::try_emplace(st
             LOOP () {
                 GOTO(equal_key(bucket_it, clone(key)), insert_entry); // clone key (see above)
                 const Var<Ptr<void>> next_bucket_it(
-                    Ptr<void>(*(bucket_it + ptr_offset_in_bytes_).template to<uint32_t*>())
+                    Ptr<void>(*(bucket_it + ptr_offset_in_bytes_).template to<uint64_t*>())
                 );
                 BREAK(next_bucket_it.is_nullptr());
                 bucket_it = next_bucket_it;
                 CONTINUE();
             }
         };
-        Wasm_insist(Ptr<void>(*(bucket_it + ptr_offset_in_bytes_).template to<uint32_t*>()).is_nullptr());
+        Wasm_insist(Ptr<void>(*(bucket_it + ptr_offset_in_bytes_).template to<uint64_t*>()).is_nullptr());
         if (pred)
             Wasm_insist(*pred or bucket_it == bucket - ptr_offset_in_bytes_,
                         "predication dummy must always contain an empty collision list");
@@ -850,8 +850,8 @@ std::pair<HashTable::entry_t, Boolx1> ChainedHashTable<IsGlobal>::try_emplace(st
         Var<Ptr<void>> entry = Module::Allocator().allocate(entry_size_in_bytes_, entry_max_alignment_in_bytes_);
 
         /*----- Iff no predication is used or predicate is fulfilled, insert entry at the collision list's end. -----*/
-        *(bucket_it + ptr_offset_in_bytes_).template to<uint32_t*>() = pred ? Select(*pred, entry.to<uint32_t>(), 0U)
-                                                                            : entry.to<uint32_t>(); // FIXME: entry memory never freed iff predicate is not fulfilled
+        *(bucket_it + ptr_offset_in_bytes_).template to<uint64_t*>() = pred ? Select(*pred, entry.to<uint64_t>(), 0U)
+                                                                            : entry.to<uint64_t>(); // FIXME: entry memory never freed iff predicate is not fulfilled
 
         /*----- Set bucket iterator to inserted entry. -----*/
         bucket_it = entry;
@@ -876,10 +876,10 @@ std::pair<HashTable::entry_t, Boolx1> ChainedHashTable<IsGlobal>::find(std::vect
         bucket_hint ? *bucket_hint : compute_bucket(clone(key)); // clone key since we need it again for comparison
 
     /*----- Probe collision list, abort if key already exists. -----*/
-    Var<Ptr<void>> bucket_it(Ptr<void>(*bucket.to<uint32_t*>()));
+    Var<Ptr<void>> bucket_it(Ptr<void>(*bucket.to<uint64_t*>()));
     WHILE (not bucket_it.is_nullptr()) { // another entry in collision list
         BREAK(equal_key(bucket_it, std::move(key))); // move key at last use
-        bucket_it = Ptr<void>(*(bucket_it + ptr_offset_in_bytes_).template to<uint32_t*>());
+        bucket_it = Ptr<void>(*(bucket_it + ptr_offset_in_bytes_).template to<uint64_t*>());
     }
 
     /*----- Key is found iff end of collision list is not yet reached. -----*/
@@ -896,12 +896,12 @@ void ChainedHashTable<IsGlobal>::for_each(callback_t Pipeline) const
     Var<Ptr<void>> it(begin());
     WHILE (it != end()) {
         Wasm_insist(begin() <= it and it < end(), "bucket out-of-bounds");
-        Var<Ptr<void>> bucket_it(Ptr<void>(*it.to<uint32_t*>()));
+        Var<Ptr<void>> bucket_it(Ptr<void>(*it.to<uint64_t*>()));
         WHILE (not bucket_it.is_nullptr()) { // another entry in collision list
             Pipeline(entry(bucket_it));
-            bucket_it = Ptr<void>(*(bucket_it + ptr_offset_in_bytes_).template to<uint32_t*>());
+            bucket_it = Ptr<void>(*(bucket_it + ptr_offset_in_bytes_).template to<uint64_t*>());
         }
-        it += int32_t(sizeof(uint32_t));
+        it += int64_t(sizeof(uint64_t));
     }
 }
 
@@ -913,7 +913,7 @@ void ChainedHashTable<IsGlobal>::for_each_in_equal_range(std::vector<SQL_t> key,
         bucket_hint ? *bucket_hint : compute_bucket(clone(key)); // clone key since we need it again for comparison
 
     /*----- Iterate over collision list entries and call pipeline (with entry handle argument) on matches. -----*/
-    Var<Ptr<void>> bucket_it(Ptr<void>(*bucket.to<uint32_t*>()));
+    Var<Ptr<void>> bucket_it(Ptr<void>(*bucket.to<uint64_t*>()));
     WHILE (not bucket_it.is_nullptr()) { // another entry in collision list
         if (predicated) {
             CodeGenContext::Get().env().add_predicate(equal_key(bucket_it, std::move(key)));
@@ -923,7 +923,7 @@ void ChainedHashTable<IsGlobal>::for_each_in_equal_range(std::vector<SQL_t> key,
                 Pipeline(entry(bucket_it));
             };
         }
-        bucket_it = Ptr<void>(*(bucket_it + ptr_offset_in_bytes_).template to<uint32_t*>());
+        bucket_it = Ptr<void>(*(bucket_it + ptr_offset_in_bytes_).template to<uint64_t*>());
     }
 }
 
@@ -1221,7 +1221,7 @@ void ChainedHashTable<IsGlobal>::rehash()
         *mask_ = (*mask_ << 1U) + 1U;
 
         /*----- Allocate memory for new hash table with updated capacity. -----*/
-        *address_ = Module::Allocator().allocate(size_in_bytes(), sizeof(uint32_t));
+        *address_ = Module::Allocator().allocate(size_in_bytes(), alignof(uint64_t));
 
         /*----- Clear newly created hash table. -----*/
         clear();
@@ -1230,7 +1230,7 @@ void ChainedHashTable<IsGlobal>::rehash()
         Var<Ptr<void>> it(begin_old.val());
         WHILE (it != end_old) {
             Wasm_insist(begin_old <= it and it < end_old, "bucket out-of-bounds");
-            Var<Ptr<void>> bucket_it(Ptr<void>(*it.to<uint32_t*>()));
+            Var<Ptr<void>> bucket_it(Ptr<void>(*it.to<uint64_t*>()));
             WHILE (not bucket_it.is_nullptr()) { // another entry in old collision list
                 auto e_old = entry(it);
 
@@ -1247,22 +1247,22 @@ void ChainedHashTable<IsGlobal>::rehash()
                 const Var<Ptr<void>> bucket(hash_to_bucket(std::move(key)));
 
                 /*----- Store next entry's address in old collision list (since it will be overwritten). -----*/
-                const Var<Ptr<void>> tmp(Ptr<void>(*(bucket_it + ptr_offset_in_bytes_).template to<uint32_t*>()));
+                const Var<Ptr<void>> tmp(Ptr<void>(*(bucket_it + ptr_offset_in_bytes_).template to<uint64_t*>()));
 
                 /*----- Insert old entry at new collision list's front. No reallocation of the entry is needed. -----*/
-                *(bucket_it + ptr_offset_in_bytes_).template to<uint32_t*>() = *bucket.to<uint32_t*>();
-                *bucket.to<uint32_t*>() = bucket_it.to<uint32_t>();
+                *(bucket_it + ptr_offset_in_bytes_).template to<uint64_t*>() = *bucket.to<uint64_t*>();
+                *bucket.to<uint64_t*>() = bucket_it.to<uint64_t>();
 
                 /*----- Advance to next entry in old collision list. -----*/
                 bucket_it = tmp.val();
             }
 
             /*----- Advance to next bucket in old hash table. -----*/
-            it += int32_t(sizeof(uint32_t));
+            it += int64_t(sizeof(uint64_t));
         }
 
         /*----- Free old hash table (without collision list entries since they are reused). -----*/
-        U32x1 size = (end_old - begin_old).make_unsigned();
+        U64x1 size = (end_old - begin_old).make_unsigned();
         Module::Allocator().deallocate(begin_old, size);
     };
 
@@ -1325,7 +1325,7 @@ void OpenAddressingHashTableBase::clear()
     WHILE (it != end()) {
         Wasm_insist(begin() <= it and it < end(), "entry out-of-bounds");
         reference_count(it) = ref_t(0);
-        it += int32_t(entry_size_in_bytes_);
+        it += int64_t(entry_size_in_bytes_);
     }
 }
 
@@ -1400,7 +1400,7 @@ OpenAddressingHashTable<IsGlobal, ValueInPlace>::OpenAddressingHashTable(const S
         }
 
         /*----- Add type for pointer to out-of-place values. -----*/
-        types.push_back(Type::Get_Integer(Type::TY_Vector, 4));
+        types.push_back(Type::Get_Integer(Type::TY_Vector, sizeof(uint64_t)));
 
         if (has_nullable) {
             /*----- Add type for keys NULL bitmap. Reference counter and pointer to values cannot be NULL. -----*/
@@ -1484,10 +1484,10 @@ OpenAddressingHashTable<IsGlobal, ValueInPlace>::~OpenAddressingHashTable()
             WHILE (it != end) {
                 Wasm_insist(storage_.address_ <= it and it < end, "entry out-of-bounds");
                 IF (reference_count(it) != ref_t(0)) { // occupied
-                    Module::Allocator().deallocate(Ptr<void>(*(it + layout_.ptr_offset_in_bytes_).template to<uint32_t*>()),
+                    Module::Allocator().deallocate(Ptr<void>(*(it + layout_.ptr_offset_in_bytes_).template to<uint64_t*>()),
                                                    layout_.values_size_in_bytes_);
                 };
-                it += int32_t(entry_size_in_bytes_);
+                it += int64_t(entry_size_in_bytes_);
             }
         }
 
@@ -1561,10 +1561,10 @@ void OpenAddressingHashTable<IsGlobal, ValueInPlace>::teardown()
             WHILE (it != end()) {
                 Wasm_insist(begin() <= it and it < end(), "entry out-of-bounds");
                 IF (reference_count(it) != ref_t(0)) { // occupied
-                    Module::Allocator().deallocate(Ptr<void>(*(it + layout_.ptr_offset_in_bytes_).template to<uint32_t*>()),
+                    Module::Allocator().deallocate(Ptr<void>(*(it + layout_.ptr_offset_in_bytes_).template to<uint64_t*>()),
                                                    layout_.values_size_in_bytes_);
                 };
-                it += int32_t(entry_size_in_bytes_);
+                it += int64_t(entry_size_in_bytes_);
             }
         }
 
@@ -1634,7 +1634,7 @@ HashTable::entry_t OpenAddressingHashTable<IsGlobal, ValueInPlace>::emplace(std:
         /*----- Allocate memory for out-of-place values and set pointer to it. -----*/
         Ptr<void> ptr =
             Module::Allocator().allocate(layout_.values_size_in_bytes_, layout_.values_max_alignment_in_bytes_);
-        *(slot + layout_.ptr_offset_in_bytes_).template to<uint32_t*>() = ptr.clone().to<uint32_t>();
+        *(slot + layout_.ptr_offset_in_bytes_).template to<uint64_t*>() = ptr.clone().to<uint64_t>();
 
         /*----- Return entry handle containing all values. -----*/
         return value_entry(ptr);
@@ -1766,7 +1766,7 @@ OpenAddressingHashTable<IsGlobal, ValueInPlace>::try_emplace(std::vector<SQL_t> 
             /*----- Allocate memory for out-of-place values and set pointer to it. -----*/
             Ptr<void> ptr =
                 Module::Allocator().allocate(layout_.values_size_in_bytes_, layout_.values_max_alignment_in_bytes_);
-            *(slot + layout_.ptr_offset_in_bytes_).template to<uint32_t*>() = ptr.clone().to<uint32_t>();
+            *(slot + layout_.ptr_offset_in_bytes_).template to<uint64_t*>() = ptr.clone().to<uint64_t>();
 
             if (pred) {
                 /*----- Store address and size of dummy predication entry to free them later. -----*/
@@ -1783,7 +1783,7 @@ OpenAddressingHashTable<IsGlobal, ValueInPlace>::try_emplace(std::vector<SQL_t> 
 
     if constexpr (not ValueInPlace) {
         /*----- Set slot pointer to out-of-place values. -----*/
-        slot = *(slot + layout_.ptr_offset_in_bytes_).template to<uint32_t*>();
+        slot = *(slot + layout_.ptr_offset_in_bytes_).template to<uint64_t*>();
     }
 
     /*----- Return entry handle containing all values and the flag whether an insertion was performed. -----*/
@@ -1819,7 +1819,7 @@ std::pair<HashTable::entry_t, Boolx1> OpenAddressingHashTable<IsGlobal, ValueInP
 
     if constexpr (not ValueInPlace) {
         /*----- Set slot pointer to out-of-place values. -----*/
-        slot = *(slot + layout_.ptr_offset_in_bytes_).template to<uint32_t*>();
+        slot = *(slot + layout_.ptr_offset_in_bytes_).template to<uint64_t*>();
     }
 
     /*----- Return entry handle containing both keys and values and the flag whether key was found. -----*/
@@ -1836,7 +1836,7 @@ void OpenAddressingHashTable<IsGlobal, ValueInPlace>::for_each(callback_t Pipeli
         IF (reference_count(it) != ref_t(0)) { // occupied
             Pipeline(entry(it));
         };
-        it += int32_t(entry_size_in_bytes_);
+        it += int64_t(entry_size_in_bytes_);
     }
 }
 
@@ -2136,7 +2136,7 @@ HashTable::const_entry_t OpenAddressingHashTable<IsGlobal, ValueInPlace>::entry(
 
     std::unique_ptr<Ptr<void>> value; ///< pointer to out-of-place values
     if constexpr (not ValueInPlace) {
-        const Var<Ptr<void>> value_(*(slot.clone() + layout_.ptr_offset_in_bytes_).template to<uint32_t*>());
+        const Var<Ptr<void>> value_(*(slot.clone() + layout_.ptr_offset_in_bytes_).template to<uint64_t*>());
         value = std::make_unique<Ptr<void>>(value_);
     }
 
@@ -2295,13 +2295,13 @@ void OpenAddressingHashTable<IsGlobal, ValueInPlace>::rehash()
                     M_insist(e_new.empty());
                 } else {
                     /*----- Set pointer to out-of-place values of new entry to the one of old entry. -----*/
-                    *(slot + layout_.ptr_offset_in_bytes_).template to<uint32_t*>() =
-                        *(it + layout_.ptr_offset_in_bytes_).template to<uint32_t*>();
+                    *(slot + layout_.ptr_offset_in_bytes_).template to<uint64_t*>() =
+                        *(it + layout_.ptr_offset_in_bytes_).template to<uint64_t*>();
                 }
             };
 
             /*----- Advance to next entry in old hash table. -----*/
-            it += int32_t(entry_size_in_bytes_);
+            it += int64_t(entry_size_in_bytes_);
         }
 
 #ifndef NDEBUG
@@ -2309,7 +2309,7 @@ void OpenAddressingHashTable<IsGlobal, ValueInPlace>::rehash()
 #endif
 
         /*----- Free old hash table. -----*/
-        U32x1 size = (end_old - begin_old).make_unsigned();
+        U64x1 size = (end_old - begin_old).make_unsigned();
         Module::Allocator().deallocate(begin_old, size);
     };
 

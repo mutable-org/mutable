@@ -691,13 +691,12 @@ compile_data_layout_sequential(const Schema &_tuple_value_schema, const Schema &
             };
             return rec(tuple_id.clone(), levels.cbegin(), levels.cend(), rec);
         };
-        std::optional<const Var<I32x1>> inode_byte_offset;
+        std::optional<const Var<I64x1>> inode_byte_offset;
         std::optional<const Var<U32x1>> inode_iter;
         BLOCK_OPEN(inits) {
             M_insist(inode_offset_in_bits % 8 == 0, "INode offset must be byte aligned");
             inode_byte_offset.emplace(
-                int32_t(inode_offset_in_bits / 8)
-                + compute_additional_inode_byte_offset(tuple_id).make_signed().template to<int32_t>()
+                int64_t(inode_offset_in_bits / 8) + compute_additional_inode_byte_offset(tuple_id).make_signed()
             );
             M_insist(levels.back().num_tuples != 0, "INode must be large enough for at least one tuple");
             if (levels.back().num_tuples != 1) {
@@ -727,7 +726,7 @@ compile_data_layout_sequential(const Schema &_tuple_value_schema, const Schema &
                     M_insist(bool(inode_iter), "stride requires repetition");
                     U64x1 leaf_offset_in_bits = leaf_info.offset_in_bits + *inode_iter * leaf_info.stride_in_bits;
                     U8x1  leaf_bit_offset  = (leaf_offset_in_bits.clone() bitand uint64_t(7)).to<uint8_t>() ; // mod 8
-                    I32x1 leaf_byte_offset = (leaf_offset_in_bits >> uint64_t(3)).make_signed().to<int32_t>(); // div 8
+                    I64x1 leaf_byte_offset = (leaf_offset_in_bits >> uint64_t(3)).make_signed(); // div 8
 
                     null_bitmap_bit_offset = leaf_info.offset_in_bits % 8;
                     null_bitmap_stride_in_bits = leaf_info.stride_in_bits;
@@ -752,7 +751,7 @@ compile_data_layout_sequential(const Schema &_tuple_value_schema, const Schema &
                             M_insist(*tuple_it->type == *layout_entry.type);
                             const auto delta = layout_idx - prev_layout_idx;
                             const uint8_t bit_delta  = delta % 8;
-                            const int32_t byte_delta = delta / 8;
+                            const int64_t byte_delta = delta / 8;
 
                             auto advance_to_next_bit = [&]() {
                                 if (bit_delta) {
@@ -764,7 +763,7 @@ compile_data_layout_sequential(const Schema &_tuple_value_schema, const Schema &
                                         *null_bitmap_mask <<= bit_delta; // advance mask
                                     }
                                     /* If the mask surpasses the first byte, advance pointer to the next byte... */
-                                    *null_bitmap_ptr += (*null_bitmap_mask bitand 0xffU).eqz().template to<int32_t>();
+                                    *null_bitmap_ptr += (*null_bitmap_mask bitand 0xffU).eqz().template to<int64_t>();
                                     /* ... and remove lowest byte from the mask. */
                                     *null_bitmap_mask = Select((*null_bitmap_mask bitand 0xffU).eqz(),
                                                                *null_bitmap_mask >> 8U, *null_bitmap_mask);
@@ -892,7 +891,7 @@ compile_data_layout_sequential(const Schema &_tuple_value_schema, const Schema &
                      * to advance by `delta` bits since we already have advanced by `prev_layout_idx` bits. */
                     const auto delta = leaf_info.stride_in_bits - prev_layout_idx;
                     const uint8_t bit_delta  = delta % 8;
-                    const int32_t byte_delta = delta / 8;
+                    const int64_t byte_delta = delta / 8;
                     if (bit_delta) {
                         BLOCK_OPEN(jumps) {
                             if (is_predicated) {
@@ -902,7 +901,7 @@ compile_data_layout_sequential(const Schema &_tuple_value_schema, const Schema &
                                 *null_bitmap_mask <<= bit_delta; // advance mask
                             }
                             /* If the mask surpasses the first byte, advance pointer to the next byte... */
-                            *null_bitmap_ptr += (*null_bitmap_mask bitand 0xffU).eqz().template to<int32_t>();
+                            *null_bitmap_ptr += (*null_bitmap_mask bitand 0xffU).eqz().template to<int64_t>();
                             /* ... and remove the lowest byte from the mask. */
                             *null_bitmap_mask = Select((*null_bitmap_mask bitand 0xffU).eqz(),
                                                        *null_bitmap_mask >> 8U, *null_bitmap_mask);
@@ -930,14 +929,14 @@ compile_data_layout_sequential(const Schema &_tuple_value_schema, const Schema &
                     M_insist(L == 1 or leaf_info.offset_in_bits % 8 == 0,
                              "NULL bitmaps must not start with bit offset when loading SIMDfied");
 
-                    auto byte_offset = [&]() -> I32x1 {
+                    auto byte_offset = [&]() -> I64x1 {
                         if (inode_iter and leaf_info.stride_in_bits) {
                             /* omit `leaf_info.offset_in_bits` here to add it to the static offsets and masks;
                              * this is valid since no bit stride means that the leaf byte offset computation is
                              * independent of the static parts */
                             U64x1 leaf_offset_in_bits = *inode_iter * leaf_info.stride_in_bits;
                             U8x1  leaf_bit_offset  = (leaf_offset_in_bits.clone() bitand uint64_t(7)).to<uint8_t>(); // mod 8
-                            I32x1 leaf_byte_offset = (leaf_offset_in_bits >> uint64_t(3)).make_signed().to<int32_t>(); // div 8
+                            I64x1 leaf_byte_offset = (leaf_offset_in_bits >> uint64_t(3)).make_signed(); // div 8
                             BLOCK_OPEN(inits) {
                                 Wasm_insist(leaf_bit_offset == 0U, "no leaf bit offset without bit stride");
                             }
@@ -962,7 +961,7 @@ compile_data_layout_sequential(const Schema &_tuple_value_schema, const Schema &
                     const auto &ptr = it->second.ptr;
 
                     ///> maps static byte offsets to already loaded bytes to reuse them; only needed for scalar loading
-                    std::unordered_map<int32_t, Var<U8x1>> loaded_bytes;
+                    std::unordered_map<int64_t, Var<U8x1>> loaded_bytes;
 
                     using bytes_t = std::variant<std::monostate, Var<U8<L>>, Var<U16<L>>, Var<U32<L>>, Var<U64<L>>>;
                     ///> a SIMD vector containing all loaded NULL bitmaps; only needed for SIMDfied loading
@@ -992,7 +991,7 @@ compile_data_layout_sequential(const Schema &_tuple_value_schema, const Schema &
                         M_insist(*tuple_entry.type == *layout_entry.type);
                         if (layout_entry.nullable()) { // layout entry may be NULL
                             const uint8_t static_bit_offset  = (leaf_info.offset_in_bits + layout_idx) % 8;
-                            const int32_t static_byte_offset = (leaf_info.offset_in_bits + layout_idx) / 8;
+                            const int64_t static_byte_offset = (leaf_info.offset_in_bits + layout_idx) / 8;
                             if constexpr (IsStore) {
                                 /*----- Store NULL bit depending on its type. -----*/
                                 auto store = overloaded{
@@ -1159,7 +1158,7 @@ compile_data_layout_sequential(const Schema &_tuple_value_schema, const Schema &
                     M_insist(bool(inode_iter), "stride requires repetition");
                     U64x1 leaf_offset_in_bits = leaf_info.offset_in_bits + *inode_iter * leaf_info.stride_in_bits;
                     U8x1  leaf_bit_offset  = (leaf_offset_in_bits.clone() bitand uint64_t(7)).to<uint8_t>() ; // mod 8
-                    I32x1 leaf_byte_offset = (leaf_offset_in_bits >> uint64_t(3)).make_signed().to<int32_t>(); // div 8
+                    I64x1 leaf_byte_offset = (leaf_offset_in_bits >> uint64_t(3)).make_signed(); // div 8
 
                     if constexpr (L > 1) {
                         BLOCK_OPEN(inits) {
@@ -1249,14 +1248,14 @@ compile_data_layout_sequential(const Schema &_tuple_value_schema, const Schema &
                         }
                     }
                 } else { // entry without bit stride; if masking is required, we can use a static mask
-                    auto byte_offset = [&]() -> I32x1 {
+                    auto byte_offset = [&]() -> I64x1 {
                         if (inode_iter and leaf_info.stride_in_bits) {
                             /* omit `leaf_info.offset_in_bits` here to use it as static offset and mask;
                              * this is valid since no bit stride means that the leaf byte offset computation is
                              * independent of the static parts */
                             U64x1 leaf_offset_in_bits = *inode_iter * leaf_info.stride_in_bits;
                             U8x1  leaf_bit_offset  = (leaf_offset_in_bits.clone() bitand uint64_t(7)).to<uint8_t>(); // mod 8
-                            I32x1 leaf_byte_offset = (leaf_offset_in_bits >> uint64_t(3)).make_signed().to<int32_t>(); // div 8
+                            I64x1 leaf_byte_offset = (leaf_offset_in_bits >> uint64_t(3)).make_signed(); // div 8
                             BLOCK_OPEN(inits) {
                                 Wasm_insist(leaf_bit_offset == 0U, "no leaf bit offset without bit stride");
                             }
@@ -1267,7 +1266,7 @@ compile_data_layout_sequential(const Schema &_tuple_value_schema, const Schema &
                     }();
 
                     const uint8_t static_bit_offset  = leaf_info.offset_in_bits % 8;
-                    const int32_t static_byte_offset = leaf_info.offset_in_bits / 8;
+                    const int64_t static_byte_offset = leaf_info.offset_in_bits / 8;
 
                     key_t key(leaf_info.offset_in_bits % 8, leaf_info.stride_in_bits);
                     auto [it, inserted] =
@@ -1429,7 +1428,7 @@ compile_data_layout_sequential(const Schema &_tuple_value_schema, const Schema &
                          "remaining stride of INodes must be whole multiple of a byte");
 
                 /*----- If there is a remaining stride for this level, emit conditional stride jump. -----*/
-                if (const int32_t remaining_stride_in_bytes = stride_remaining_in_bits / 8) [[likely]] {
+                if (const int64_t remaining_stride_in_bytes = stride_remaining_in_bits / 8) [[likely]] {
                     M_insist(curr->num_tuples > 0);
                     if (curr->num_tuples != 1U) {
                         Boolx1 cond_mod = (tuple_id % uint32_t(curr->num_tuples)).eqz();
@@ -1497,7 +1496,7 @@ compile_data_layout_sequential(const Schema &_tuple_value_schema, const Schema &
             /*----- Emit the per-leaf stride jumps, i.e. from one instance of the leaf to the next. -----*/
             for (auto &[key, value] : loading_context) {
                 const uint8_t bit_stride  = key.second % 8;
-                const int32_t byte_stride = key.second / 8;
+                const int64_t byte_stride = key.second / 8;
                 if (bit_stride) {
                     M_insist(L == 1);
                     M_insist(bool(value.mask));
@@ -1508,7 +1507,7 @@ compile_data_layout_sequential(const Schema &_tuple_value_schema, const Schema &
                         *value.mask <<= bit_stride; // advance mask
                     }
                     /* If the mask surpasses the first byte, advance pointer to the next byte... */
-                    value.ptr += (*value.mask bitand 0xffU).eqz().template to<int32_t>();
+                    value.ptr += (*value.mask bitand 0xffU).eqz().template to<int64_t>();
                     /* ... and remove the lowest byte from the mask. */
                     *value.mask = Select((*value.mask bitand 0xffU).eqz(), *value.mask >> 8U, *value.mask);
                 }
@@ -1518,7 +1517,7 @@ compile_data_layout_sequential(const Schema &_tuple_value_schema, const Schema &
                         M_insist(bool(pred));
                         value.ptr += Select(*pred, byte_stride, 0); // possibly advance pointer
                     } else {
-                        value.ptr += int32_t(L) * byte_stride; // advance pointer
+                        value.ptr += int64_t(L) * byte_stride; // advance pointer
                     }
                 }
             }
@@ -1533,7 +1532,7 @@ compile_data_layout_sequential(const Schema &_tuple_value_schema, const Schema &
                     const auto stride_remaining_in_bits = levels.back().stride_in_bits -
                                                           levels.back().num_tuples * key.second;
                     const uint8_t remaining_bit_stride  = stride_remaining_in_bits % 8;
-                    const int32_t remaining_byte_stride = stride_remaining_in_bits / 8;
+                    const int64_t remaining_byte_stride = stride_remaining_in_bits / 8;
                     if (remaining_bit_stride) {
                         M_insist(L == 1);
                         M_insist(bool(value.mask));
@@ -1550,9 +1549,9 @@ compile_data_layout_sequential(const Schema &_tuple_value_schema, const Schema &
                             /* ... and advance pointer to next byte if resetting of the mask surpasses the current byte. */
                             if (is_predicated) {
                                 M_insist(bool(pred));
-                                value.ptr += Select(*pred, int32_t(end_bit_offset > key.first), 0);
+                                value.ptr += Select(*pred, int64_t(end_bit_offset > key.first), 0);
                             } else {
-                                value.ptr += int32_t(end_bit_offset > key.first);
+                                value.ptr += int64_t(end_bit_offset > key.first);
                             }
                         }
                     }
@@ -1576,7 +1575,7 @@ compile_data_layout_sequential(const Schema &_tuple_value_schema, const Schema &
                     const auto stride_remaining_in_bits = levels.back().stride_in_bits -
                                                           levels.back().num_tuples * null_bitmap_stride_in_bits;
                     const uint8_t remaining_bit_stride  = stride_remaining_in_bits % 8;
-                    const int32_t remaining_byte_stride = stride_remaining_in_bits / 8;
+                    const int64_t remaining_byte_stride = stride_remaining_in_bits / 8;
                     if (remaining_bit_stride) {
                         BLOCK_OPEN(lowest_inode_jumps) {
                             const uint8_t end_bit_offset =
@@ -1593,9 +1592,9 @@ compile_data_layout_sequential(const Schema &_tuple_value_schema, const Schema &
                             if (is_predicated) {
                                 M_insist(bool(pred));
                                 *null_bitmap_ptr +=
-                                    Select(*pred, int32_t(end_bit_offset > null_bitmap_bit_offset), 0);
+                                    Select(*pred, int64_t(end_bit_offset > null_bitmap_bit_offset), 0);
                             } else {
-                                *null_bitmap_ptr += int32_t(end_bit_offset > null_bitmap_bit_offset);
+                                *null_bitmap_ptr += int64_t(end_bit_offset > null_bitmap_bit_offset);
                             }
                         }
                     }
@@ -2001,8 +2000,8 @@ void compile_data_layout_point_access(const Schema &_tuple_value_schema, const S
         M_insist(inode_offset_in_bits % 8 == 0, "INode offset must be byte aligned");
         const Var<Ptr<void>> inode_ptr(
             base_address.clone()
-            + int32_t(inode_offset_in_bits / 8)
-            + compute_additional_inode_byte_offset(tuple_id.clone()).make_signed().template to<int32_t>()
+            + int64_t(inode_offset_in_bits / 8)
+            + compute_additional_inode_byte_offset(tuple_id.clone()).make_signed()
         );
         std::optional<const Var<U32x1>> inode_iter;
         M_insist(levels.back().num_tuples != 0, "INode must be large enough for at least one tuple");
@@ -2032,7 +2031,7 @@ void compile_data_layout_point_access(const Schema &_tuple_value_schema, const S
                     const Var<U8x1> leaf_bit_offset(
                         (leaf_offset_in_bits.clone() bitand uint64_t(7)).to<uint8_t>() // mod 8
                     );
-                    I32x1 leaf_byte_offset = (leaf_offset_in_bits >> uint64_t(3)).make_signed().to<int32_t>(); // div 8
+                    I64x1 leaf_byte_offset = (leaf_offset_in_bits >> uint64_t(3)).make_signed(); // div 8
 
                     const Var<Ptr<void>> ptr(inode_ptr + leaf_byte_offset); // pointer to NULL bitmap
 
@@ -2044,7 +2043,7 @@ void compile_data_layout_point_access(const Schema &_tuple_value_schema, const S
                         if (layout_entry.nullable()) { // layout entry may be NULL
                             U64x1 offset_in_bits = leaf_bit_offset + layout_idx;
                             U8x1  bit_offset  = (offset_in_bits.clone() bitand uint64_t(7)).to<uint8_t>() ; // mod 8
-                            I32x1 byte_offset = (offset_in_bits >> uint64_t(3)).make_signed().to<int32_t>(); // div 8
+                            I64x1 byte_offset = (offset_in_bits >> uint64_t(3)).make_signed(); // div 8
                             if constexpr (IsStore) {
                                 /*----- Store NULL bit depending on its type. -----*/
                                 auto store = [&]<typename T>() {
@@ -2138,7 +2137,7 @@ void compile_data_layout_point_access(const Schema &_tuple_value_schema, const S
                              * independent of the static parts */
                             U64x1 leaf_offset_in_bits = *inode_iter * leaf_info.stride_in_bits;
                             U8x1  leaf_bit_offset  = (leaf_offset_in_bits.clone() bitand uint64_t(7)).to<uint8_t>(); // mod 8
-                            I32x1 leaf_byte_offset = (leaf_offset_in_bits >> uint64_t(3)).make_signed().to<int32_t>(); // div 8
+                            I64x1 leaf_byte_offset = (leaf_offset_in_bits >> uint64_t(3)).make_signed(); // div 8
                             Wasm_insist(leaf_bit_offset == 0U, "no leaf bit offset without bit stride");
                             const Var<Ptr<void>> ptr(inode_ptr + leaf_byte_offset);
                             return ptr;
@@ -2154,7 +2153,7 @@ void compile_data_layout_point_access(const Schema &_tuple_value_schema, const S
                         M_insist(*tuple_entry.type == *layout_entry.type);
                         if (layout_entry.nullable()) { // layout entry may be NULL
                             const uint8_t static_bit_offset  = (leaf_info.offset_in_bits + layout_idx) % 8;
-                            const int32_t static_byte_offset = (leaf_info.offset_in_bits + layout_idx) / 8;
+                            const int64_t static_byte_offset = (leaf_info.offset_in_bits + layout_idx) / 8;
                             if constexpr (IsStore) {
                                 /*----- Store NULL bit depending on its type. -----*/
                                 auto store = [&]<typename T>() {
@@ -2261,7 +2260,7 @@ void compile_data_layout_point_access(const Schema &_tuple_value_schema, const S
                     M_insist(bool(inode_iter), "stride requires repetition");
                     U64x1 leaf_offset_in_bits = leaf_info.offset_in_bits + *inode_iter * leaf_info.stride_in_bits;
                     U8x1  leaf_bit_offset  = (leaf_offset_in_bits.clone() bitand uint64_t(7)).to<uint8_t>() ; // mod 8
-                    I32x1 leaf_byte_offset = (leaf_offset_in_bits >> uint64_t(3)).make_signed().to<int32_t>(); // div 8
+                    I64x1 leaf_byte_offset = (leaf_offset_in_bits >> uint64_t(3)).make_signed(); // div 8
 
                     Ptr<U8x1> byte_ptr = (inode_ptr + leaf_byte_offset).template to<uint8_t*>();
                     U8x1 mask = uint8_t(1) << leaf_bit_offset;
@@ -2290,7 +2289,7 @@ void compile_data_layout_point_access(const Schema &_tuple_value_schema, const S
                              * independent of the static parts */
                             U64x1 leaf_offset_in_bits = *inode_iter * leaf_info.stride_in_bits;
                             U8x1  leaf_bit_offset  = (leaf_offset_in_bits.clone() bitand uint64_t(7)).to<uint8_t>(); // mod 8
-                            I32x1 leaf_byte_offset = (leaf_offset_in_bits >> uint64_t(3)).make_signed().to<int32_t>(); // div 8
+                            I64x1 leaf_byte_offset = (leaf_offset_in_bits >> uint64_t(3)).make_signed(); // div 8
                             Wasm_insist(leaf_bit_offset == 0U, "no leaf bit offset without bit stride");
                             return inode_ptr + leaf_byte_offset;
                         } else {
@@ -2299,7 +2298,7 @@ void compile_data_layout_point_access(const Schema &_tuple_value_schema, const S
                     }(); // pointer to entry
 
                     const uint8_t static_bit_offset  = leaf_info.offset_in_bits % 8;
-                    const int32_t static_byte_offset = leaf_info.offset_in_bits / 8;
+                    const int64_t static_byte_offset = leaf_info.offset_in_bits / 8;
 
                     /*----- Store value depending on its type. -----*/
                     auto store = [&]<typename T>() {
@@ -2690,7 +2689,7 @@ void Buffer<IsGlobal>::resume_pipeline(param_t _tuple_value_schema, param_t _tup
             const std::size_t num_simd_lanes =
                 load_simdfied_ ? std::max<std::size_t>({ num_simd_lanes_preferred,
                                                        get_num_simd_lanes(layout_, schema_, tuple_value_schema),
-                                                       tuple_addr_schema.empty() ? 0UL : 4UL }) // 32-bit pointers and 128-bit SIMD vectors
+                                                       tuple_addr_schema.empty() ? 0UL : 2UL }) // 64-bit pointers and 128-bit SIMD vectors
                                : 1;
             CodeGenContext::Get().set_num_simd_lanes(num_simd_lanes);
 
@@ -2771,7 +2770,7 @@ void Buffer<IsGlobal>::execute_pipeline(setup_t setup, pipeline_t pipeline, tear
         const std::size_t num_simd_lanes =
             load_simdfied_ ? std::max<std::size_t>({ num_simd_lanes_preferred,
                                                    get_num_simd_lanes(layout_, schema_, tuple_value_schema),
-                                                   tuple_addr_schema.empty() ? 0UL : 4UL }) // 32-bit pointers and 128-bit SIMD vectors
+                                                   tuple_addr_schema.empty() ? 0UL : 2UL }) // 64-bit pointers and 128-bit SIMD vectors
                            : 1;
         CodeGenContext::Get().set_num_simd_lanes(num_simd_lanes);
 
@@ -2852,7 +2851,7 @@ void Buffer<IsGlobal>::execute_pipeline_inline(setup_t setup, pipeline_t pipelin
     const std::size_t num_simd_lanes =
         load_simdfied_ ? std::max<std::size_t>({ num_simd_lanes_preferred,
                                                get_num_simd_lanes(layout_, schema_, tuple_value_schema),
-                                               tuple_addr_schema.empty() ? 0UL : 4UL }) // 32-bit pointers and 128-bit SIMD vectors
+                                               tuple_addr_schema.empty() ? 0UL : 2UL }) // 64-bit pointers and 128-bit SIMD vectors
                        : 1;
     CodeGenContext::Get().set_num_simd_lanes(num_simd_lanes);
 

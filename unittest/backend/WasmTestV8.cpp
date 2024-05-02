@@ -46,7 +46,7 @@ auto local_value(v8::Local<v8::Value> local)
     if constexpr (std::is_floating_point_v<T> and L == 1)
         return local.As<v8::Number>()->Value();
     if constexpr (L > 1) {
-        const ptrdiff_t vec_offset = local.As<v8::Uint32>()->Value();
+        const ptrdiff_t vec_offset = local.As<v8::BigInt>()->Uint64Value();
         auto vec = m::WasmEngine::Get_Wasm_Context_By_ID(Module::ID()).vm.as<uint8_t*>() + vec_offset;
         std::array<T, L> res;
         for (std::size_t idx = 0; idx < L; ++idx) {

@@ -281,8 +281,8 @@ void m::wasm::detail::print_memory_consumption(const v8::FunctionCallbackInfo<v8
 {
     M_insist(Options::Get().statistics);
 
-    auto alloc_total_mem = info[0].As<v8::Uint32>()->Value();
-    auto alloc_peak_mem = info[1].As<v8::Uint32>()->Value();
+    auto alloc_total_mem = info[0].As<v8::BigInt>()->Uint64Value();
+    auto alloc_peak_mem = info[1].As<v8::BigInt>()->Uint64Value();
 
     std::cout << "Allocated memory overall consumption: " << alloc_total_mem / (1024.0 * 1024.0) << " MiB"<< std::endl;
     std::cout << "Allocated memory peak consumption: " << alloc_peak_mem / (1024.0 * 1024.0) << " MiB"<< std::endl;
@@ -318,7 +318,7 @@ void m::wasm::detail::read_result_set(const v8::FunctionCallbackInfo<v8::Value> 
 
     /* Compute address of result set. */
     M_insist(info.Length() == 2);
-    auto result_set_offset = info[0].As<v8::Uint32>()->Value();
+    auto result_set_offset = info[0].As<v8::BigInt>()->Uint64Value();
     M_insist((result_set_offset == 0) == (deduplicated_schema_without_constants.num_entries() == 0),
              "result set offset equals 0 (i.e. nullptr) iff schema contains only constants");
     auto result_set = context.vm.as<uint8_t*>() + result_set_offset;
@@ -740,7 +740,7 @@ void V8Engine::compile(const m::MatchBase &plan) const
 #if 1
     /*----- Add print function. --------------------------------------------------------------------------------------*/
     Module::Get().emit_function_import<void(uint32_t)>("print");
-    Module::Get().emit_function_import<void(uint32_t, uint32_t)>("print_memory_consumption");
+    Module::Get().emit_function_import<void(uint64_t, uint64_t)>("print_memory_consumption");
 #endif
 
     /*----- Emit code for run function which computes the last pipeline and calls other pipeline functions. ----------*/
@@ -1011,7 +1011,7 @@ v8::Local<v8::Object> m::wasm::detail::create_env(v8::Isolate &isolate, const m:
         /* Add memory address to env. */
         std::ostringstream oss;
         oss << table.get().name() << "_mem";
-        M_DISCARD env->Set(Ctx, to_v8_string(&isolate, oss.str()), v8::Int32::New(&isolate, off));
+        M_DISCARD env->Set(Ctx, to_v8_string(&isolate, oss.str()), v8::BigInt::New(&isolate, off));
         Module::Get().emit_import<void*>(oss.str().c_str());
 
         /* Add table size (num_rows) to env. */

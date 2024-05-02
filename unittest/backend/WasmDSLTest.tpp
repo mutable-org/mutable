@@ -44,8 +44,8 @@ TEST_CASE("Wasm/" BACKEND_NAME "/wasm_type", "[core][wasm]")
     REQUIRE(wasm_type<double, 1>() == ::wasm::Type::f64);
 
     /*----- Pointers -----*/
-    REQUIRE(wasm_type<void*, 1>() == ::wasm::Type::i32);
-    REQUIRE(wasm_type<float*, 10>() == ::wasm::Type::i32);
+    REQUIRE(wasm_type<void*, 1>() == ::wasm::Type::i64);
+    REQUIRE(wasm_type<float*, 10>() == ::wasm::Type::i64);
 
     /*----- Functions -----*/
     REQUIRE(wasm_type<void(signed int), 1>() == ::wasm::Signature({ ::wasm::Type::i32 }, ::wasm::Type::none));
@@ -2074,8 +2074,8 @@ TEST_CASE("Wasm/" BACKEND_NAME "/Pointer/operators", "[core][wasm]")
     CHECK_RESULT_INLINE( true, bool(), { Var<Ptr<I32x1>> a(Module::Allocator().malloc<int>()); RETURN((a + 2) - 1 > a); });
 
     /* pointer difference */
-    CHECK_RESULT_INLINE(0, int32_t(), { Var<Ptr<I32x1>> a(Module::Allocator().malloc<int>()); RETURN(a - a); });
-    CHECK_RESULT_INLINE(4, int32_t(), { Var<Ptr<I32x1>> a(Module::Allocator().malloc<int>()); RETURN((a + 4) - a); });
+    CHECK_RESULT_INLINE(0, int64_t(), { Var<Ptr<I32x1>> a(Module::Allocator().malloc<int>()); RETURN(a - a); });
+    CHECK_RESULT_INLINE(4, int64_t(), { Var<Ptr<I32x1>> a(Module::Allocator().malloc<int>()); RETURN((a + 4) - a); });
 
     /* comparison */
     CHECK_RESULT_INLINE( true, bool(), { Var<Ptr<I32x1>> a(Module::Allocator().malloc<int>()); RETURN(a == a); });
@@ -2158,12 +2158,12 @@ TEST_CASE("Wasm/" BACKEND_NAME "/Memory", "[core][wasm]")
         *ptr1 = uint8_t(0x12);
         Module::Allocator().free(ptr1);
         Var<Ptr<U16x1>> ptr2(Module::Allocator().malloc<uint16_t>()); // reuses byte 0 and additionally uses byte 1
-        RETURN(ptr1.to<uint32_t>() == ptr2.to<uint32_t>());
+        RETURN(ptr1.to<uint64_t>() == ptr2.to<uint64_t>());
     });
 
     /* returning pointer */
     CHECK_RESULT_INLINE(42, int(void), {
-        FUNCTION(alloc, int*(unsigned))
+        FUNCTION(alloc, int*(uint64_t))
         {
             RETURN(Module::Allocator().malloc<int>(PARAMETER(0)));
         }

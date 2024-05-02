@@ -912,8 +912,8 @@ struct CodeGenContext
     void inc_num_tuples(U32x1 n = U32x1(1)) { num_tuples_ += n; }
 
     /** Adds the string literal `literal` located at pointer offset `ptr`. */
-    void add_literal(const char *literal, uint32_t ptr) {
-        auto [_, inserted] = literals_.emplace(literal, NChar(Ptr<Charx1>(U32x1(ptr)), false, strlen(literal) + 1, true));
+    void add_literal(const char *literal, uint64_t ptr) {
+        auto [_, inserted] = literals_.emplace(literal, NChar(Ptr<Charx1>(U64x1(ptr)), false, strlen(literal) + 1, true));
         M_insist(inserted);
     }
     /** Returns the address at which `literal` is stored. */

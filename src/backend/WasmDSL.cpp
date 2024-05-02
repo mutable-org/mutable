@@ -217,18 +217,18 @@ struct LinearAllocator : Allocator
     ///> flag whether pre-allocations were already performed, i.e. `perform_pre_allocations()` was already called
     bool pre_allocations_performed_ = false;
     ///> compile-time size of the currently used memory, used as pointer to next free pre-allocation
-    uint32_t pre_alloc_addr_;
+    uint64_t pre_alloc_addr_;
     ///> runtime global size of the currently used memory, used as pointer to next free allocation
-    Global<U32x1> alloc_addr_;
+    Global<U64x1> alloc_addr_;
     ///> compile-time total memory consumption
-    uint32_t pre_alloc_total_mem_ = 0;
+    uint64_t pre_alloc_total_mem_ = 0;
     ///> runtime total memory consumption
-    Global<U32x1> alloc_total_mem_;
+    Global<U64x1> alloc_total_mem_;
     ///> runtime peak memory consumption
-    Global<U32x1> alloc_peak_mem_;
+    Global<U64x1> alloc_peak_mem_;
 
     public:
-    LinearAllocator(const memory::AddressSpace &memory, uint32_t start_addr)
+    LinearAllocator(const memory::AddressSpace &memory, uint64_t start_addr)
         : memory_(memory)
         , pre_alloc_addr_(start_addr)
     {
@@ -244,7 +244,7 @@ struct LinearAllocator : Allocator
         M_insist(pre_allocations_performed_, "must call `perform_pre_allocations()` before destruction");
     }
 
-    void * raw_allocate(uint32_t bytes, uint32_t alignment) override {
+    void * raw_allocate(uint64_t bytes, uint32_t alignment) override {
         M_insist(not pre_allocations_performed_,
                  "must not request a pre-allocation after `perform_pre_allocations()` was already called");
         M_insist(alignment);
@@ -257,20 +257,20 @@ struct LinearAllocator : Allocator
         M_insist(memory_.size() >= pre_alloc_addr_, "allocation must fit in memory");
         return ptr;
     }
-    Ptr<void> pre_allocate(uint32_t bytes, uint32_t alignment) override {
+    Ptr<void> pre_allocate(uint64_t bytes, uint32_t alignment) override {
         M_insist(not pre_allocations_performed_,
                  "must not request a pre-allocation after `perform_pre_allocations()` was already called");
         M_insist(alignment);
         M_insist(is_pow_2(alignment), "alignment must be a power of 2");
         if (alignment != 1U)
             align_pre_memory(alignment);
-        Ptr<void> ptr(U32x1(pre_alloc_addr_).template to<void*>());
+        Ptr<void> ptr(U64x1(pre_alloc_addr_).template to<void*>());
         pre_alloc_addr_ += bytes; // advance memory size by bytes
         pre_alloc_total_mem_ += bytes;
         M_insist(memory_.size() >= pre_alloc_addr_, "allocation must fit in memory");
         return ptr;
     }
-    Var<Ptr<void>> allocate(U32x1 bytes, uint32_t alignment) override {
+    Var<Ptr<void>> allocate(U64x1 bytes, uint32_t alignment) override {
         M_insist(alignment);
         M_insist(is_pow_2(alignment), "alignment must be a power of 2");
         if (alignment != 1U)
@@ -283,9 +283,9 @@ struct LinearAllocator : Allocator
         return ptr;
     }
 
-    void deallocate(Ptr<void> ptr, U32x1 bytes) override {
-        Wasm_insist(ptr.clone().template to<uint32_t>() < alloc_addr_, "must not try to free unallocated memory");
-        IF (ptr.template to<uint32_t>() + bytes.clone() == alloc_addr_) { // last allocation can be freed
+    void deallocate(Ptr<void> ptr, U64x1 bytes) override {
+        Wasm_insist(ptr.clone().template to<uint64_t>() < alloc_addr_, "must not try to free unallocated memory");
+        IF (ptr.template to<uint64_t>() + bytes.clone() == alloc_addr_) { // last allocation can be freed
             alloc_addr_ -= bytes; // free by decreasing memory size
         };
     }
@@ -297,20 +297,20 @@ struct LinearAllocator : Allocator
         pre_allocations_performed_ = true;
     }
 
-    uint32_t pre_allocated_memory_consumption() const override { return pre_alloc_total_mem_; }
-    U32x1 allocated_memory_consumption() const override { return alloc_total_mem_; }
-    U32x1 allocated_memory_peak() const override { return alloc_peak_mem_; }
+    uint64_t pre_allocated_memory_consumption() const override { return pre_alloc_total_mem_; }
+    U64x1 allocated_memory_consumption() const override { return alloc_total_mem_; }
+    U64x1 allocated_memory_peak() const override { return alloc_peak_mem_; }
 
     private:
     /** Aligns the memory for pre-allocations with alignment requirement `align`. */
     void align_pre_memory(uint32_t alignment) {
         M_insist(is_pow_2(alignment));
-        pre_alloc_addr_ = (pre_alloc_addr_ + (alignment - 1U)) bitand ~(alignment - 1U);
+        pre_alloc_addr_ = (pre_alloc_addr_ + uint64_t(alignment - 1U)) bitand ~uint64_t(alignment - 1U);
     }
     /** Aligns the memory for allocations with alignment requirement `align`. */
     void align_memory(uint32_t alignment) {
         M_insist(is_pow_2(alignment));
-        alloc_addr_ = (alloc_addr_ + (alignment - 1U)) bitand ~(alignment - 1U);
+        alloc_addr_ = (alloc_addr_ + uint64_t(alignment - 1U)) bitand ~uint64_t(alignment - 1U);
     }
 };
 

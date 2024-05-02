@@ -854,7 +854,7 @@ struct CodeGenContext
 
     private:
     Environment *env_ = nullptr; ///< environment for locally bound identifiers
-    Global<U32x1> num_tuples_; ///< variable to hold the number of result tuples produced
+    Global<U64x1> num_tuples_; ///< variable to hold the number of result tuples produced
     std::unordered_map<const char*, std::pair<uint64_t, NChar>> literals_; ///< maps each literal to its address at which it is stored
     ///> number of SIMD lanes currently used, i.e. 1 for scalar and at least 2 for vectorial values
     std::size_t num_simd_lanes_ = 1;
@@ -907,11 +907,11 @@ struct CodeGenContext
     const Environment & env() const { M_insist(bool(env_)); return *env_; }
 
     /** Returns the number of result tuples produced. */
-    U32x1 num_tuples() const { return num_tuples_; }
+    U64x1 num_tuples() const { return num_tuples_; }
     /** Set the number of result tuples produced to `n`. */
-    void set_num_tuples(U32x1 n) { num_tuples_ = n; }
+    void set_num_tuples(U64x1 n) { num_tuples_ = n; }
     /** Increments the number of result tuples produced by `n`. */
-    void inc_num_tuples(U32x1 n = U32x1(1)) { num_tuples_ += n; }
+    void inc_num_tuples(U64x1 n = U64x1(1)) { num_tuples_ += n; }
 
     /** Adds the string literal `literal` located at pointer offset `ptr`. */
     void add_literal(const char *literal, uint64_t ptr) {
@@ -986,7 +986,7 @@ template<VariableKind Kind>
 std::tuple<Block, Block, Block>
 compile_store_sequential(const Schema &tuple_value_schema, const Schema &tuple_addr_schema, Ptr<void> base_address,
                          const storage::DataLayout &layout, std::size_t num_simd_lanes, const Schema &layout_schema,
-                         Variable<uint32_t, Kind, false> &tuple_id);
+                         Variable<uint64_t, Kind, false> &tuple_id);
 
 /** Compiles the data layout \p layout containing tuples of schema \p layout_schema such that it sequentially stores
  * tuples of schema \p tuple_value_schema starting at memory address \p base_address and tuple ID \p tuple_id.  The store
@@ -1005,7 +1005,7 @@ std::tuple<Block, Block, Block>
 compile_store_sequential_single_pass(const Schema &tuple_value_schema, const Schema &tuple_addr_schema,
                                      Ptr<void> base_address, const storage::DataLayout &layout,
                                      std::size_t num_simd_lanes, const Schema &layout_schema,
-                                     Variable<uint32_t, Kind, false> &tuple_id);
+                                     Variable<uint64_t, Kind, false> &tuple_id);
 
 /** Compiles the data layout \p layout containing tuples of schema \p layout_schema such that it sequentially loads
  * tuples of schema \p tuple_value_schema starting at memory address \p base_address and tuple ID \p tuple_id.  The given
@@ -1021,7 +1021,7 @@ template<VariableKind Kind>
 std::tuple<Block, Block, Block>
 compile_load_sequential(const Schema &tuple_value_schema, const Schema &tuple_addr_schema, Ptr<void> base_address,
                         const storage::DataLayout &layout, std::size_t num_simd_lanes, const Schema &layout_schema,
-                        Variable<uint32_t, Kind, false> &tuple_id);
+                        Variable<uint64_t, Kind, false> &tuple_id);
 
 /** Compiles the data layout \p layout starting at memory address \p base_address and containing tuples of schema
  * \p layout_schema such that it stores the single tuple with schema \p tuple_value_schema and ID \p tuple_id.
@@ -1030,7 +1030,7 @@ compile_load_sequential(const Schema &tuple_value_schema, const Schema &tuple_ad
  * values of tuples with schema \p tuple_addr_schema into the current environment. */
 void compile_store_point_access(const Schema &tuple_value_schema, const Schema &tuple_addr_schema,
                                 Ptr<void> base_address, const storage::DataLayout &layout, const Schema &layout_schema,
-                                U32x1 tuple_id);
+                                U64x1 tuple_id);
 
 /** Compiles the data layout \p layout starting at memory address \p base_address and containing tuples of schema
  * \p layout_schema such that it loads the single tuple with schema \p tuple_value_schema and ID \p tuple_id.
@@ -1040,7 +1040,7 @@ void compile_store_point_access(const Schema &tuple_value_schema, const Schema &
  * environment. */
 void compile_load_point_access(const Schema &tuple_value_schema, const Schema &tuple_addr_schema,
                                Ptr<void> base_address, const storage::DataLayout &layout, const Schema &layout_schema,
-                               U32x1 tuple_id);
+                               U64x1 tuple_id);
 
 
 /*======================================================================================================================
@@ -1059,9 +1059,9 @@ class buffer_storage<true>
     friend struct Buffer<true>;
 
     Global<Ptr<void>> base_address_; ///< global backup for base address of buffer
-    Global<U32x1> size_; ///< global backup for current size of buffer, default initialized to 0
+    Global<U64x1> size_; ///< global backup for current size of buffer, default initialized to 0
     ///> global backup for dynamic capacity of infinite buffer, default initialized to 0
-    std::optional<Global<U32x1>> capacity_;
+    std::optional<Global<U64x1>> capacity_;
 };
 
 /** Buffers tuples by materializing them into memory. */
@@ -1076,15 +1076,15 @@ struct Buffer
     storage::DataLayout layout_; ///< data layout of buffer
     bool load_simdfied_ = false; ///< flag whether to load from the buffer in SIMDfied manner
     std::optional<Var<Ptr<void>>> base_address_; ///< base address of buffer
-    std::optional<Var<U32x1>> size_; ///< current size of buffer, default initialized to 0
-    std::optional<Var<U32x1>> capacity_; ///< dynamic capacity of infinite buffer, default initialized to 0
+    std::optional<Var<U64x1>> size_; ///< current size of buffer, default initialized to 0
+    std::optional<Var<U64x1>> capacity_; ///< dynamic capacity of infinite buffer, default initialized to 0
     std::optional<Var<Boolx1>> first_iteration_; ///< flag to indicate first loop iteration for infinite buffer
     buffer_storage<IsGlobal> storage_; ///< if `IsGlobal`, contains backups for base address, capacity, and size
     setup_t setup_; ///< remaining pipeline initializations
     pipeline_t pipeline_; ///< remaining actual pipeline
     teardown_t teardown_; ///< remaining pipeline post-processing
     ///> function to resume pipeline for entire buffer; expects base address and size of buffer as parameters
-    mutable std::optional<FunctionProxy<void(void*, uint32_t)>> resume_pipeline_;
+    mutable std::optional<FunctionProxy<void(void*, uint64_t)>> resume_pipeline_;
 
     public:
     /** Creates a buffer for \p num_tuples tuples (0 means infinite) of schema \p schema using the data layout
@@ -1116,7 +1116,7 @@ struct Buffer
         }
     }
     /** Returns the current size of the buffer. */
-    U32x1 size() const {
+    U64x1 size() const {
         if constexpr (IsGlobal) {
             return size_ ? size_->val() : storage_.size_.val(); // since global may be outdated
         } else {
@@ -1230,7 +1230,7 @@ struct buffer_load_proxy_t
     const Schema & addr_schema() const { return addr_schema_; }
 
     /** Loads tuple with ID \p tuple_id into the current environment. */
-    void operator()(U32x1 tuple_id) {
+    void operator()(U64x1 tuple_id) {
         Wasm_insist(tuple_id.clone() < buffer_.get().size(), "tuple ID out of bounds");
         compile_load_point_access(value_schema_, addr_schema_, buffer_.get().base_address(), buffer_.get().layout(),
                                   buffer_.get().schema(), tuple_id);
@@ -1262,7 +1262,7 @@ struct buffer_store_proxy_t
     const Schema & schema() const { return schema_; }
 
     /** Stores values from the current environment to tuple with ID \p tuple_id. */
-    void operator()(U32x1 tuple_id) {
+    void operator()(U64x1 tuple_id) {
         static Schema empty_schema;
         Wasm_insist(tuple_id.clone() < buffer_.get().size(), "tuple ID out of bounds");
         compile_store_point_access(schema_, empty_schema, buffer_.get().base_address(), buffer_.get().layout(),
@@ -1290,20 +1290,20 @@ struct buffer_swap_proxy_t
     const Schema & schema() const { return schema_; }
 
     /** Swaps tuples with IDs \p first and \p second. */
-    void operator()(U32x1 first, U32x1 second);
+    void operator()(U64x1 first, U64x1 second);
     /** Swaps tuples with IDs \p first and \p second where the first one is already loaded and accessible through
      * \p env_first.  Note that environments are also swapped afterwards, i.e. \p env_first contains still the values
      * of the former tuple with ID \p first which is located at ID \p second after the call, except for `NChar`s
      * since they are only pointers to the actual values, i.e. \p env_first contains still the addresses of the
      * former tuple with ID \p first where the values of tuple with ID \p second are stored after the call. */
-    void operator()(U32x1 first, U32x1 second, const Environment &env_first);
+    void operator()(U64x1 first, U64x1 second, const Environment &env_first);
     /** Swaps tuples with IDs \p first and \p second which are already loaded and accessible through \p env_first and
      * \p env_second.  Note that environments are also swapped afterwards, i.e. \p env_first contains still the values
      * of the former tuple with ID \p first which is located at ID \p second after the call and vice versa, except
      * for `NChar`s since they are only pointers to the actual values, i.e. \p env_first contains still the addresses
      * of the former tuple with ID \p first where the values of tuple with ID \p second are stored after the call and
      * vice versa. */
-    void operator()(U32x1 first, U32x1 second, const Environment &env_first, const Environment &env_second);
+    void operator()(U64x1 first, U64x1 second, const Environment &env_first, const Environment &env_second);
 };
 
 
@@ -1418,34 +1418,34 @@ template _Boolx1  Environment::get_predicate() const;
 template _Boolx16 Environment::get_predicate() const;
 template _Boolx32 Environment::get_predicate() const;
 extern template std::tuple<Block, Block, Block> compile_store_sequential(
-    const Schema&, const Schema&, Ptr<void>, const storage::DataLayout&, std::size_t, const Schema&, Var<U32x1>&
+    const Schema&, const Schema&, Ptr<void>, const storage::DataLayout&, std::size_t, const Schema&, Var<U64x1>&
 );
 extern template std::tuple<Block, Block, Block> compile_store_sequential(
-    const Schema&, const Schema&, Ptr<void>, const storage::DataLayout&, std::size_t, const Schema&, Global<U32x1>&
+    const Schema&, const Schema&, Ptr<void>, const storage::DataLayout&, std::size_t, const Schema&, Global<U64x1>&
 );
 extern template std::tuple<Block, Block, Block> compile_store_sequential(
     const Schema&, const Schema&, Ptr<void>, const storage::DataLayout&, std::size_t, const Schema&,
-    Variable<uint32_t, VariableKind::Param, false>&
+    Variable<uint64_t, VariableKind::Param, false>&
 );
 extern template std::tuple<Block, Block, Block> compile_store_sequential_single_pass(
-    const Schema&, const Schema&, Ptr<void>, const storage::DataLayout&, std::size_t, const Schema&, Var<U32x1>&
+    const Schema&, const Schema&, Ptr<void>, const storage::DataLayout&, std::size_t, const Schema&, Var<U64x1>&
 );
 extern template std::tuple<Block, Block, Block> compile_store_sequential_single_pass(
-    const Schema&, const Schema&, Ptr<void>, const storage::DataLayout&, std::size_t, const Schema&, Global<U32x1>&
+    const Schema&, const Schema&, Ptr<void>, const storage::DataLayout&, std::size_t, const Schema&, Global<U64x1>&
 );
 extern template std::tuple<Block, Block, Block> compile_store_sequential_single_pass(
     const Schema&, const Schema&, Ptr<void>, const storage::DataLayout&, std::size_t, const Schema&,
-    Variable<uint32_t, VariableKind::Param, false>&
+    Variable<uint64_t, VariableKind::Param, false>&
 );
 extern template std::tuple<Block, Block, Block> compile_load_sequential(
-    const Schema&, const Schema&, Ptr<void>, const storage::DataLayout&, std::size_t, const Schema&, Var<U32x1>&
+    const Schema&, const Schema&, Ptr<void>, const storage::DataLayout&, std::size_t, const Schema&, Var<U64x1>&
 );
 extern template std::tuple<Block, Block, Block> compile_load_sequential(
-    const Schema&, const Schema&, Ptr<void>, const storage::DataLayout&, std::size_t, const Schema&, Global<U32x1>&
+    const Schema&, const Schema&, Ptr<void>, const storage::DataLayout&, std::size_t, const Schema&, Global<U64x1>&
 );
 extern template std::tuple<Block, Block, Block> compile_load_sequential(
     const Schema&, const Schema&, Ptr<void>, const storage::DataLayout&, std::size_t, const Schema&,
-    Variable<uint32_t, VariableKind::Param, false>&
+    Variable<uint64_t, VariableKind::Param, false>&
 );
 extern template struct Buffer<false>;
 extern template struct Buffer<true>;

@@ -574,7 +574,7 @@ requires (L > 0) and (is_pow_2(L))
 std::tuple<Block, Block, Block>
 compile_data_layout_sequential(const Schema &_tuple_value_schema, const Schema &_tuple_addr_schema,
                                Ptr<void> base_address, const storage::DataLayout &layout, const Schema &layout_schema,
-                               Variable<uint32_t, Kind, false> &tuple_id)
+                               Variable<uint64_t, Kind, false> &tuple_id)
 {
     const auto tuple_value_schema = _tuple_value_schema.deduplicate().drop_constants();
     const auto tuple_addr_schema = _tuple_addr_schema.deduplicate().drop_constants();
@@ -628,7 +628,7 @@ compile_data_layout_sequential(const Schema &_tuple_value_schema, const Schema &
 
     if constexpr (L > 1) {
         BLOCK_OPEN(inits) {
-            Wasm_insist(tuple_id % uint32_t(L) == 0U, "must start at a tuple ID beginning a SIMD batch");
+            Wasm_insist(tuple_id % uint64_t(L) == 0U, "must start at a tuple ID beginning a SIMD batch");
         }
     }
 
@@ -658,14 +658,14 @@ compile_data_layout_sequential(const Schema &_tuple_value_schema, const Schema &
             if (is_predicated) {
                 M_insist(L == 1);
                 M_insist(bool(pred));
-                tuple_id += pred->to<uint32_t>();
+                tuple_id += pred->to<uint64_t>();
             } else {
-                tuple_id += uint32_t(L);
+                tuple_id += uint64_t(L);
             }
         }
     } else {
         BLOCK_OPEN(jumps) {
-            tuple_id += uint32_t(L);
+            tuple_id += uint64_t(L);
         }
     }
 
@@ -685,24 +685,24 @@ compile_data_layout_sequential(const Schema &_tuple_value_schema, const Schema &
         uint64_t null_bitmap_stride_in_bits;
 
         /*----- Compute INode offset in bytes and INode iteration depending on the given tuple ID. -----*/
-        auto compute_additional_inode_byte_offset = [&](U32x1 tuple_id) -> U64x1 {
-            auto rec = [&](U32x1 curr_tuple_id, decltype(levels.cbegin()) curr, const decltype(levels.cend()) end,
+        auto compute_additional_inode_byte_offset = [&](U64x1 tuple_id) -> U64x1 {
+            auto rec = [&](U64x1 curr_tuple_id, decltype(levels.cbegin()) curr, const decltype(levels.cend()) end,
                            auto rec) -> U64x1
             {
                 if (curr == end) {
-                    Wasm_insist(curr_tuple_id == tuple_id % uint32_t(levels.back().num_tuples));
+                    Wasm_insist(curr_tuple_id == tuple_id % uint64_t(levels.back().num_tuples));
                     return U64x1(0);
                 }
 
                 if (is_pow_2(curr->num_tuples)) {
-                    U32x1 child_iter = curr_tuple_id.clone() >> uint32_t(__builtin_ctzl(curr->num_tuples));
-                    U32x1 inner_tuple_id = curr_tuple_id bitand uint32_t(curr->num_tuples - 1U);
+                    U64x1 child_iter = curr_tuple_id.clone() >> uint64_t(__builtin_ctzl(curr->num_tuples));
+                    U64x1 inner_tuple_id = curr_tuple_id bitand uint64_t(curr->num_tuples - 1U);
                     M_insist(curr->stride_in_bits % 8 == 0, "INode stride must be byte aligned");
                     U64x1 offset_in_bytes = child_iter * uint64_t(curr->stride_in_bits / 8);
                     return offset_in_bytes + rec(inner_tuple_id, std::next(curr), end, rec);
                 } else {
-                    U32x1 child_iter = curr_tuple_id.clone() / uint32_t(curr->num_tuples);
-                    U32x1 inner_tuple_id = curr_tuple_id % uint32_t(curr->num_tuples);
+                    U64x1 child_iter = curr_tuple_id.clone() / uint64_t(curr->num_tuples);
+                    U64x1 inner_tuple_id = curr_tuple_id % uint64_t(curr->num_tuples);
                     M_insist(curr->stride_in_bits % 8 == 0, "INode stride must be byte aligned");
                     U64x1 offset_in_bytes = child_iter * uint64_t(curr->stride_in_bits / 8);
                     return offset_in_bytes + rec(inner_tuple_id, std::next(curr), end, rec);
@@ -711,7 +711,7 @@ compile_data_layout_sequential(const Schema &_tuple_value_schema, const Schema &
             return rec(tuple_id.clone(), levels.cbegin(), levels.cend(), rec);
         };
         std::optional<const Var<I64x1>> inode_byte_offset;
-        std::optional<const Var<U32x1>> inode_iter;
+        std::optional<const Var<U64x1>> inode_iter;
         BLOCK_OPEN(inits) {
             M_insist(inode_offset_in_bits % 8 == 0, "INode offset must be byte aligned");
             inode_byte_offset.emplace(
@@ -720,8 +720,8 @@ compile_data_layout_sequential(const Schema &_tuple_value_schema, const Schema &
             M_insist(levels.back().num_tuples != 0, "INode must be large enough for at least one tuple");
             if (levels.back().num_tuples != 1) {
                 inode_iter.emplace(
-                    is_pow_2(levels.back().num_tuples) ? tuple_id bitand uint32_t(levels.back().num_tuples - 1U)
-                                                       : tuple_id % uint32_t(levels.back().num_tuples)
+                    is_pow_2(levels.back().num_tuples) ? tuple_id bitand uint64_t(levels.back().num_tuples - 1U)
+                                                       : tuple_id % uint64_t(levels.back().num_tuples)
                 );
             } else {
                 /* omit computation of INode iteration since it is always the first iteration, i.e. equals 0 */
@@ -1450,8 +1450,8 @@ compile_data_layout_sequential(const Schema &_tuple_value_schema, const Schema &
                 if (const int64_t remaining_stride_in_bytes = stride_remaining_in_bits / 8) [[likely]] {
                     M_insist(curr->num_tuples > 0);
                     if (curr->num_tuples != 1U) {
-                        Boolx1 cond_mod = (tuple_id % uint32_t(curr->num_tuples)).eqz();
-                        Boolx1 cond_and = (tuple_id bitand uint32_t(curr->num_tuples - 1U)).eqz();
+                        Boolx1 cond_mod = (tuple_id % uint64_t(curr->num_tuples)).eqz();
+                        Boolx1 cond_and = (tuple_id bitand uint64_t(curr->num_tuples - 1U)).eqz();
                         const bool use_and = is_pow_2(curr->num_tuples) and options::remainder_removal;
                         Boolx1 cond = use_and ? cond_and : cond_mod; // select implementation to use...
                         (use_and ? cond_mod : cond_and).discard(); // ... and discard the other
@@ -1634,8 +1634,8 @@ compile_data_layout_sequential(const Schema &_tuple_value_schema, const Schema &
                 if (not lowest_inode_jumps.empty()) [[likely]] {
                     M_insist(levels.back().num_tuples > 0);
                     if (levels.back().num_tuples != 1U) {
-                        Boolx1 cond_mod = (tuple_id % uint32_t(levels.back().num_tuples)).eqz();
-                        Boolx1 cond_and = (tuple_id bitand uint32_t(levels.back().num_tuples - 1U)).eqz();
+                        Boolx1 cond_mod = (tuple_id % uint64_t(levels.back().num_tuples)).eqz();
+                        Boolx1 cond_and = (tuple_id bitand uint64_t(levels.back().num_tuples - 1U)).eqz();
                         const bool use_and = is_pow_2(levels.back().num_tuples) and options::remainder_removal;
                         Boolx1 cond = use_and ? cond_and : cond_mod; // select implementation to use...
                         (use_and ? cond_mod : cond_and).discard(); // ... and discard the other
@@ -1743,7 +1743,7 @@ template<VariableKind Kind>
 std::tuple<m::wasm::Block, m::wasm::Block, m::wasm::Block>
 m::wasm::compile_store_sequential(const Schema &tuple_value_schema, const Schema &tuple_addr_schema,
                                   Ptr<void> base_address, const storage::DataLayout &layout, std::size_t num_simd_lanes,
-                                  const Schema &layout_schema, Variable<uint32_t, Kind, false> &tuple_id)
+                                  const Schema &layout_schema, Variable<uint64_t, Kind, false> &tuple_id)
 {
     if (options::pointer_sharing) {
         switch (num_simd_lanes) {
@@ -1797,7 +1797,7 @@ std::tuple<m::wasm::Block, m::wasm::Block, m::wasm::Block>
 m::wasm::compile_store_sequential_single_pass(const Schema &tuple_value_schema, const Schema &tuple_addr_schema,
                                               Ptr<void> base_address, const storage::DataLayout &layout,
                                               std::size_t num_simd_lanes, const Schema &layout_schema,
-                                              Variable<uint32_t, Kind, false> &tuple_id)
+                                              Variable<uint64_t, Kind, false> &tuple_id)
 {
     if (options::pointer_sharing) {
         switch (num_simd_lanes) {
@@ -1850,7 +1850,7 @@ template<VariableKind Kind>
 std::tuple<m::wasm::Block, m::wasm::Block, m::wasm::Block>
 m::wasm::compile_load_sequential(const Schema &tuple_value_schema, const Schema &tuple_addr_schema,
                                  Ptr<void> base_address, const storage::DataLayout &layout, std::size_t num_simd_lanes,
-                                 const Schema &layout_schema, Variable<uint32_t, Kind, false> &tuple_id)
+                                 const Schema &layout_schema, Variable<uint64_t, Kind, false> &tuple_id)
 {
     if (options::pointer_sharing) {
         switch (num_simd_lanes) {
@@ -1901,34 +1901,34 @@ m::wasm::compile_load_sequential(const Schema &tuple_value_schema, const Schema 
 
 // explicit instantiations to prevent linker errors
 template std::tuple<m::wasm::Block, m::wasm::Block, m::wasm::Block> m::wasm::compile_store_sequential(
-    const Schema&, const Schema&, Ptr<void>, const storage::DataLayout&, std::size_t, const Schema&, Var<U32x1>&
+    const Schema&, const Schema&, Ptr<void>, const storage::DataLayout&, std::size_t, const Schema&, Var<U64x1>&
 );
 template std::tuple<m::wasm::Block, m::wasm::Block, m::wasm::Block> m::wasm::compile_store_sequential(
-    const Schema&, const Schema&, Ptr<void>, const storage::DataLayout&, std::size_t, const Schema&, Global<U32x1>&
+    const Schema&, const Schema&, Ptr<void>, const storage::DataLayout&, std::size_t, const Schema&, Global<U64x1>&
 );
 template std::tuple<m::wasm::Block, m::wasm::Block, m::wasm::Block> m::wasm::compile_store_sequential(
     const Schema&, const Schema&, Ptr<void>, const storage::DataLayout&, std::size_t, const Schema&,
-    Variable<uint32_t, VariableKind::Param, false>&
+    Variable<uint64_t, VariableKind::Param, false>&
 );
 template std::tuple<m::wasm::Block, m::wasm::Block, m::wasm::Block> m::wasm::compile_store_sequential_single_pass(
-    const Schema&, const Schema&, Ptr<void>, const storage::DataLayout&, std::size_t, const Schema&, Var<U32x1>&
+    const Schema&, const Schema&, Ptr<void>, const storage::DataLayout&, std::size_t, const Schema&, Var<U64x1>&
 );
 template std::tuple<m::wasm::Block, m::wasm::Block, m::wasm::Block> m::wasm::compile_store_sequential_single_pass(
-    const Schema&, const Schema&, Ptr<void>, const storage::DataLayout&, std::size_t, const Schema&, Global<U32x1>&
+    const Schema&, const Schema&, Ptr<void>, const storage::DataLayout&, std::size_t, const Schema&, Global<U64x1>&
 );
 template std::tuple<m::wasm::Block, m::wasm::Block, m::wasm::Block> m::wasm::compile_store_sequential_single_pass(
     const Schema&, const Schema&, Ptr<void>, const storage::DataLayout&, std::size_t, const Schema&,
-    Variable<uint32_t, VariableKind::Param, false>&
+    Variable<uint64_t, VariableKind::Param, false>&
 );
 template std::tuple<m::wasm::Block, m::wasm::Block, m::wasm::Block> m::wasm::compile_load_sequential(
-    const Schema&, const Schema&, Ptr<void>, const storage::DataLayout&, std::size_t, const Schema&, Var<U32x1>&
+    const Schema&, const Schema&, Ptr<void>, const storage::DataLayout&, std::size_t, const Schema&, Var<U64x1>&
 );
 template std::tuple<m::wasm::Block, m::wasm::Block, m::wasm::Block> m::wasm::compile_load_sequential(
-    const Schema&, const Schema&, Ptr<void>, const storage::DataLayout&, std::size_t, const Schema&, Global<U32x1>&
+    const Schema&, const Schema&, Ptr<void>, const storage::DataLayout&, std::size_t, const Schema&, Global<U64x1>&
 );
 template std::tuple<m::wasm::Block, m::wasm::Block, m::wasm::Block> m::wasm::compile_load_sequential(
     const Schema&, const Schema&, Ptr<void>, const storage::DataLayout&, std::size_t, const Schema&,
-    Variable<uint32_t, VariableKind::Param, false>&
+    Variable<uint64_t, VariableKind::Param, false>&
 );
 
 namespace m {
@@ -1944,7 +1944,7 @@ namespace wasm {
 template<bool IsStore>
 void compile_data_layout_point_access(const Schema &_tuple_value_schema, const Schema &_tuple_addr_schema,
                                       Ptr<void> base_address, const storage::DataLayout &layout,
-                                      const Schema &layout_schema, U32x1 tuple_id)
+                                      const Schema &layout_schema, U64x1 tuple_id)
 {
     const auto tuple_value_schema = _tuple_value_schema.deduplicate().drop_constants();
     const auto tuple_addr_schema = _tuple_addr_schema.deduplicate().drop_constants();
@@ -1991,24 +1991,24 @@ void compile_data_layout_point_access(const Schema &_tuple_value_schema, const S
                                   const DataLayout::level_info_stack_t &levels, uint64_t inode_offset_in_bits)
     {
         /*----- Compute INode pointer and INode iteration depending on the given tuple ID. -----*/
-        auto compute_additional_inode_byte_offset = [&](U32x1 tuple_id) -> U64x1 {
-            auto rec = [&](U32x1 curr_tuple_id, decltype(levels.cbegin()) curr, const decltype(levels.cend()) end,
+        auto compute_additional_inode_byte_offset = [&](U64x1 tuple_id) -> U64x1 {
+            auto rec = [&](U64x1 curr_tuple_id, decltype(levels.cbegin()) curr, const decltype(levels.cend()) end,
                            auto rec) -> U64x1
             {
                 if (curr == end) {
-                    Wasm_insist(curr_tuple_id == tuple_id % uint32_t(levels.back().num_tuples));
+                    Wasm_insist(curr_tuple_id == tuple_id % uint64_t(levels.back().num_tuples));
                     return U64x1(0);
                 }
 
                 if (is_pow_2(curr->num_tuples)) {
-                    U32x1 child_iter = curr_tuple_id.clone() >> uint32_t(__builtin_ctzl(curr->num_tuples));
-                    U32x1 inner_tuple_id = curr_tuple_id bitand uint32_t(curr->num_tuples - 1U);
+                    U64x1 child_iter = curr_tuple_id.clone() >> uint64_t(__builtin_ctzl(curr->num_tuples));
+                    U64x1 inner_tuple_id = curr_tuple_id bitand uint64_t(curr->num_tuples - 1U);
                     M_insist(curr->stride_in_bits % 8 == 0, "INode stride must be byte aligned");
                     U64x1 offset_in_bytes = child_iter * uint64_t(curr->stride_in_bits / 8);
                     return offset_in_bytes + rec(inner_tuple_id, std::next(curr), end, rec);
                 } else {
-                    U32x1 child_iter = curr_tuple_id.clone() / uint32_t(curr->num_tuples);
-                    U32x1 inner_tuple_id = curr_tuple_id % uint32_t(curr->num_tuples);
+                    U64x1 child_iter = curr_tuple_id.clone() / uint64_t(curr->num_tuples);
+                    U64x1 inner_tuple_id = curr_tuple_id % uint64_t(curr->num_tuples);
                     M_insist(curr->stride_in_bits % 8 == 0, "INode stride must be byte aligned");
                     U64x1 offset_in_bytes = child_iter * uint64_t(curr->stride_in_bits / 8);
                     return offset_in_bytes + rec(inner_tuple_id, std::next(curr), end, rec);
@@ -2022,12 +2022,12 @@ void compile_data_layout_point_access(const Schema &_tuple_value_schema, const S
             + int64_t(inode_offset_in_bits / 8)
             + compute_additional_inode_byte_offset(tuple_id.clone()).make_signed()
         );
-        std::optional<const Var<U32x1>> inode_iter;
+        std::optional<const Var<U64x1>> inode_iter;
         M_insist(levels.back().num_tuples != 0, "INode must be large enough for at least one tuple");
         if (levels.back().num_tuples != 1) {
             inode_iter.emplace(
-                is_pow_2(levels.back().num_tuples) ? tuple_id bitand uint32_t(levels.back().num_tuples - 1U)
-                                                   : tuple_id % uint32_t(levels.back().num_tuples)
+                is_pow_2(levels.back().num_tuples) ? tuple_id bitand uint64_t(levels.back().num_tuples - 1U)
+                                                   : tuple_id % uint64_t(levels.back().num_tuples)
             );
         } else {
             /* omit computation of INode iteration since it is always the first iteration, i.e. equals 0 */
@@ -2470,7 +2470,7 @@ void compile_data_layout_point_access(const Schema &_tuple_value_schema, const S
 
 void m::wasm::compile_store_point_access(const Schema &tuple_value_schema, const Schema &tuple_addr_schema,
                                          Ptr<void> base_address, const DataLayout &layout, const Schema &layout_schema,
-                                         U32x1 tuple_id)
+                                         U64x1 tuple_id)
 {
     return compile_data_layout_point_access<true>(tuple_value_schema, tuple_addr_schema, base_address, layout,
                                                   layout_schema, tuple_id);
@@ -2478,7 +2478,7 @@ void m::wasm::compile_store_point_access(const Schema &tuple_value_schema, const
 
 void m::wasm::compile_load_point_access(const Schema &tuple_value_schema, const Schema &tuple_addr_schema,
                                          Ptr<void> base_address, const DataLayout &layout, const Schema &layout_schema,
-                                         U32x1 tuple_id)
+                                         U64x1 tuple_id)
 {
     return compile_data_layout_point_access<false>(tuple_value_schema, tuple_addr_schema, base_address, layout,
                                                    layout_schema, tuple_id);
@@ -2504,8 +2504,8 @@ Buffer<IsGlobal>::Buffer(const Schema &schema, const DataLayoutFactory &factory,
     if constexpr (IsGlobal) {
         if (layout_.is_finite()) {
             /*----- Pre-allocate memory for entire buffer. Use maximal possible alignment requirement of 8 bytes. ----*/
-            const uint32_t child_size_in_bytes = (layout_.stride_in_bits() + 7) / 8;
-            const uint32_t num_children =
+            const uint64_t child_size_in_bytes = (layout_.stride_in_bits() + 7) / 8;
+            const uint64_t num_children =
                 (layout_.num_tuples() + layout_.child().num_tuples() - 1) / layout_.child().num_tuples();
             storage_.base_address_ =
                 Module::Allocator().pre_allocate(num_children * child_size_in_bytes, /* alignment= */ 8);
@@ -2522,9 +2522,9 @@ Buffer<IsGlobal>::~Buffer()
         if (not layout_.is_finite()) {
             /*----- Deallocate memory for buffer. -----*/
             M_insist(bool(storage_.capacity_));
-            const uint32_t child_size_in_bytes = (layout_.stride_in_bits() + 7) / 8;
+            const uint64_t child_size_in_bytes = (layout_.stride_in_bits() + 7) / 8;
             auto buffer_size_in_bytes =
-                (*storage_.capacity_ / uint32_t(layout_.child().num_tuples())) * child_size_in_bytes;
+                (*storage_.capacity_ / uint64_t(layout_.child().num_tuples())) * child_size_in_bytes;
             Module::Allocator().deallocate(storage_.base_address_, buffer_size_in_bytes);
         }
     }
@@ -2609,8 +2609,8 @@ void Buffer<IsGlobal>::setup()
             *base_address_ = storage_.base_address_; // buffer always already pre-allocated
         } else {
             /*----- Pre-allocate memory for entire buffer. Use maximal possible alignment requirement of 8 bytes. ----*/
-            const uint32_t child_size_in_bytes = (layout_.stride_in_bits() + 7) / 8;
-            const uint32_t num_children =
+            const uint64_t child_size_in_bytes = (layout_.stride_in_bits() + 7) / 8;
+            const uint64_t num_children =
                 (layout_.num_tuples() + layout_.child().num_tuples() - 1) / layout_.child().num_tuples();
             *base_address_ = Module::Allocator().pre_allocate(num_children * child_size_in_bytes, /* alignment= */ 8);
         }
@@ -2618,20 +2618,20 @@ void Buffer<IsGlobal>::setup()
         if constexpr (IsGlobal) {
             IF (*capacity_ == 0U) { // buffer not yet allocated
                 /*----- Set initial capacity. -----*/
-                *capacity_ = uint32_t(layout_.child().num_tuples());
+                *capacity_ = uint64_t(layout_.child().num_tuples());
 
                 /*----- Allocate memory for one child instance. Use max. possible alignment requirement of 8 bytes. --*/
-                const uint32_t child_size_in_bytes = (layout_.stride_in_bits() + 7) / 8;
+                const uint64_t child_size_in_bytes = (layout_.stride_in_bits() + 7) / 8;
                 *base_address_ = Module::Allocator().allocate(child_size_in_bytes, /* alignment= */ 8);
             } ELSE {
                 *base_address_ = storage_.base_address_;
             };
         } else {
             /*----- Set initial capacity. -----*/
-            *capacity_ = uint32_t(layout_.child().num_tuples());
+            *capacity_ = uint64_t(layout_.child().num_tuples());
 
             /*----- Allocate memory for one child instance. Use max. possible alignment requirement of 8 bytes. -----*/
-            const uint32_t child_size_in_bytes = (layout_.stride_in_bits() + 7) / 8;
+            const uint64_t child_size_in_bytes = (layout_.stride_in_bits() + 7) / 8;
             *base_address_ = Module::Allocator().allocate(child_size_in_bytes, /* alignment= */ 8);
         }
     }
@@ -2648,8 +2648,8 @@ void Buffer<IsGlobal>::teardown()
     if constexpr (not IsGlobal) { // free memory of local buffer when user calls teardown method
         if (not layout_.is_finite()) {
             /*----- Deallocate memory for buffer. -----*/
-            const uint32_t child_size_in_bytes = (layout_.stride_in_bits() + 7) / 8;
-            auto buffer_size_in_bytes = (*capacity_ / uint32_t(layout_.child().num_tuples())) * child_size_in_bytes;
+            const uint64_t child_size_in_bytes = (layout_.stride_in_bits() + 7) / 8;
+            auto buffer_size_in_bytes = (*capacity_ / uint64_t(layout_.child().num_tuples())) * child_size_in_bytes;
             Module::Allocator().deallocate(*base_address_, buffer_size_in_bytes);
         }
     }
@@ -2694,13 +2694,13 @@ void Buffer<IsGlobal>::resume_pipeline(param_t _tuple_value_schema, param_t _tup
     /*----- Create function on-demand to assert that all needed identifiers are already created. -----*/
     if (not resume_pipeline_) {
         /*----- Create function to resume the pipeline for each tuple contained in the buffer. -----*/
-        FUNCTION(resume_pipeline, void(void*, uint32_t))
+        FUNCTION(resume_pipeline, void(void*, uint64_t))
         {
             auto S = CodeGenContext::Get().scoped_environment(); // create scoped environment for this function
 
             /*----- Access base address and size parameters. -----*/
             Ptr<void> base_address = PARAMETER(0);
-            U32x1 size = PARAMETER(1);
+            U64x1 size = PARAMETER(1);
 
             /*----- Compute poss. number of SIMD lanes and decide which to use with regard to other ops. preferences. */
             const auto num_simd_lanes_preferred =
@@ -2715,12 +2715,12 @@ void Buffer<IsGlobal>::resume_pipeline(param_t _tuple_value_schema, param_t _tup
             /*----- Emit setup code *before* compiling data layout to not overwrite its temporary boolean variables. -*/
             setup_();
 
-            Var<U32x1> load_tuple_id; // default initialized to 0
+            Var<U64x1> load_tuple_id; // default initialized to 0
 
             if (tuple_value_schema.num_entries() == 0 and tuple_addr_schema.num_entries() == 0) {
                 /*----- If no attributes must be loaded, generate a loop just executing the pipeline `size`-times. -----*/
                 WHILE (load_tuple_id < size) {
-                    load_tuple_id += uint32_t(num_simd_lanes);
+                    load_tuple_id += uint64_t(num_simd_lanes);
                     pipeline_();
                 }
                 base_address.discard(); // since it is not needed
@@ -2775,13 +2775,13 @@ void Buffer<IsGlobal>::execute_pipeline(setup_t setup, pipeline_t pipeline, tear
 #endif
 
     /*----- Create function to resume the pipeline for each tuple contained in the buffer. -----*/
-    FUNCTION(resume_pipeline, void(void*, uint32_t))
+    FUNCTION(resume_pipeline, void(void*, uint64_t))
     {
         auto S = CodeGenContext::Get().scoped_environment(); // create scoped environment for this function
 
         /*----- Access base address and size parameters. -----*/
         Ptr<void> base_address = PARAMETER(0);
-        U32x1 size = PARAMETER(1);
+        U64x1 size = PARAMETER(1);
 
         /*----- Compute poss. number of SIMD lanes and decide which to use with regard to other ops. preferences. */
         const auto num_simd_lanes_preferred =
@@ -2796,12 +2796,12 @@ void Buffer<IsGlobal>::execute_pipeline(setup_t setup, pipeline_t pipeline, tear
         /*----- Emit setup code *before* compiling data layout to not overwrite its temporary boolean variables. -*/
         setup();
 
-        Var<U32x1> load_tuple_id; // default initialized to 0
+        Var<U64x1> load_tuple_id; // default initialized to 0
 
         if (tuple_value_schema.num_entries() == 0 and tuple_addr_schema.num_entries() == 0) {
             /*----- If no attributes must be loaded, generate a loop just executing the pipeline `size`-times. -----*/
             WHILE (load_tuple_id < size) {
-                load_tuple_id += uint32_t(num_simd_lanes);
+                load_tuple_id += uint64_t(num_simd_lanes);
                 pipeline();
             }
             base_address.discard(); // since it is not needed
@@ -2851,9 +2851,9 @@ void Buffer<IsGlobal>::execute_pipeline_inline(setup_t setup, pipeline_t pipelin
         M_CONSTEXPR_COND(IsGlobal,
                          base_address_ ? base_address_->val() : Var<Ptr<void>>(storage_.base_address_.val()).val(),
                          ({ M_insist(bool(base_address_)); base_address_->val(); }));
-    U32x1 size =
+    U64x1 size =
         M_CONSTEXPR_COND(IsGlobal,
-                         size_ ? size_->val() : Var<U32x1>(storage_.size_.val()).val(),
+                         size_ ? size_->val() : Var<U64x1>(storage_.size_.val()).val(),
                          ({ M_insist(bool(size_)); size_->val(); }));
 
     /*----- If predication is used, compute number of tuples to load from buffer depending on predicate. -----*/
@@ -2862,7 +2862,7 @@ void Buffer<IsGlobal>::execute_pipeline_inline(setup_t setup, pipeline_t pipelin
         M_insist(CodeGenContext::Get().num_simd_lanes() == 1, "invalid number of SIMD lanes");
         pred = env.extract_predicate<_Boolx1>().is_true_and_not_null();
     }
-    U32x1 num_tuples = pred ? Select(*pred, size, 0U) : size;
+    U64x1 num_tuples = pred ? Select(*pred, size, 0U) : size;
 
     /*----- Compute possible number of SIMD lanes and decide which to use with regard to other operators preferences. */
     const auto num_simd_lanes_preferred =
@@ -2877,12 +2877,12 @@ void Buffer<IsGlobal>::execute_pipeline_inline(setup_t setup, pipeline_t pipelin
     /*----- Emit setup code *before* compiling data layout to not overwrite its temporary boolean variables. -----*/
     setup();
 
-    Var<U32x1> load_tuple_id(0); // explicitly (re-)set tuple ID to 0
+    Var<U64x1> load_tuple_id(0); // explicitly (re-)set tuple ID to 0
 
     if (tuple_value_schema.num_entries() == 0 and tuple_addr_schema.num_entries() == 0) {
         /*----- If no attributes must be loaded, generate a loop just executing the pipeline `size`-times. -----*/
         WHILE (load_tuple_id < num_tuples) {
-            load_tuple_id += uint32_t(num_simd_lanes);
+            load_tuple_id += uint64_t(num_simd_lanes);
             pipeline();
         }
         base_address.discard(); // since it is not needed
@@ -2931,8 +2931,8 @@ void Buffer<IsGlobal>::consume()
     } else {
         IF (*size_ == *capacity_) { // buffer full
             /*----- Resize buffer by doubling its capacity. -----*/
-            const uint32_t child_size_in_bytes = (layout_.stride_in_bits() + 7) / 8;
-            auto buffer_size_in_bytes = (*capacity_ / uint32_t(layout_.child().num_tuples())) * child_size_in_bytes;
+            const uint64_t child_size_in_bytes = (layout_.stride_in_bits() + 7) / 8;
+            auto buffer_size_in_bytes = (*capacity_ / uint64_t(layout_.child().num_tuples())) * child_size_in_bytes;
             auto ptr = Module::Allocator().allocate(buffer_size_in_bytes.clone());
             Wasm_insist(ptr == *base_address_ + buffer_size_in_bytes.make_signed(),
                         "buffer could not be resized sequentially in memory");
@@ -2951,9 +2951,9 @@ void Buffer<IsGlobal>::consume()
     stores.attach_to_current();
 
     if (layout_.is_finite()) {
-        IF (*size_ == uint32_t(layout_.num_tuples() - CodeGenContext::Get().num_simd_lanes())) { // buffer full
+        IF (*size_ == uint64_t(layout_.num_tuples() - CodeGenContext::Get().num_simd_lanes())) { // buffer full
             /*----- Resume pipeline for each tuple in buffer and reset size of buffer to 0. -----*/
-            *size_ = uint32_t(layout_.num_tuples()); // increment size of buffer to resume pipeline even for last tuple
+            *size_ = uint64_t(layout_.num_tuples()); // increment size of buffer to resume pipeline even for last tuple
             resume_pipeline();
             *size_ = 0U;
         } ELSE { // buffer not full
@@ -2976,7 +2976,7 @@ template struct m::wasm::Buffer<true>;
  *====================================================================================================================*/
 
 template<bool IsGlobal>
-void buffer_swap_proxy_t<IsGlobal>::operator()(U32x1 first, U32x1 second)
+void buffer_swap_proxy_t<IsGlobal>::operator()(U64x1 first, U64x1 second)
 {
     /*----- Create load proxy. -----*/
     auto load = buffer_.get().create_load_proxy(schema_.get());
@@ -2992,7 +2992,7 @@ void buffer_swap_proxy_t<IsGlobal>::operator()(U32x1 first, U32x1 second)
 }
 
 template<bool IsGlobal>
-void buffer_swap_proxy_t<IsGlobal>::operator()(U32x1 first, U32x1 second, const Environment &env_first)
+void buffer_swap_proxy_t<IsGlobal>::operator()(U64x1 first, U64x1 second, const Environment &env_first)
 {
     /*----- Create load and store proxies. -----*/
     auto load  = buffer_.get().create_load_proxy(schema_.get());
@@ -3041,7 +3041,7 @@ void buffer_swap_proxy_t<IsGlobal>::operator()(U32x1 first, U32x1 second, const 
 }
 
 template<bool IsGlobal>
-void buffer_swap_proxy_t<IsGlobal>::operator()(U32x1 first, U32x1 second, const Environment &env_first,
+void buffer_swap_proxy_t<IsGlobal>::operator()(U64x1 first, U64x1 second, const Environment &env_first,
                                                const Environment &env_second)
 {
     /*----- Create store proxy. -----*/

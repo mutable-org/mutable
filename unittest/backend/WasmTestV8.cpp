@@ -144,7 +144,7 @@ struct invoke_v8<PrimitiveExpr<ReturnType, ReturnL>(PrimitiveExpr<ParamTypes, Pa
         env->Set(context, mkstr(*isolate_, "insist"), func_insist).Check();
         auto func_throw = v8::Function::New(context, _throw).ToLocalChecked();
         env->Set(context, mkstr(*isolate_, "throw"), func_throw).Check();
-        Module::Get().emit_function_import<void(void*,uint32_t)>("read_result_set");
+        Module::Get().emit_function_import<void(void*,uint64_t)>("read_result_set");
         auto func_read_result_set = v8::Function::New(context, read_result_set).ToLocalChecked();
         env->Set(context, mkstr(*isolate_, "read_result_set"), func_read_result_set).Check();
         Module::Get().emit_import<uint64_t>("alloc_addr_init");

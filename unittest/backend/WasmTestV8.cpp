@@ -115,6 +115,7 @@ struct invoke_v8<PrimitiveExpr<ReturnType, ReturnL>(PrimitiveExpr<ParamTypes, Pa
 
         /* Set flags and create isolate. */
         v8::V8::SetFlagsFromString(
+            "--experimental-wasm-memory64 "
             "--no-liftoff "
             "--wasm-bounds-checks "
             "--wasm-stack-checks "

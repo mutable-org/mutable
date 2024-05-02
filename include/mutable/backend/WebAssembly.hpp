@@ -14,10 +14,10 @@ namespace m {
 /** A `WasmEngine` provides an environment to compile and execute WebAssembly modules. */
 struct WasmEngine
 {
-    /** the size of a WebAssembly memory page, 64 KiB. */
+    /** The size of a WebAssembly memory page, 64 KiB. */
     static constexpr std::size_t WASM_PAGE_SIZE = 1UL << 16;
-    /** The maximum memory of a WebAssembly module:  2^32 - 2^16 bytes ≈ 4 GiB */
-    static constexpr std::size_t WASM_MAX_MEMORY = (1UL << 32) - (1UL << 16);
+    /** The maximum memory of a WebAssembly module, 16 GiB */
+    static constexpr std::size_t WASM_MAX_MEMORY = 1UL << 34;
     /** The alignment that is suitable for all built-in types. */
     static constexpr std::size_t WASM_ALIGNMENT = 8;
 

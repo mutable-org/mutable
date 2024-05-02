@@ -238,7 +238,7 @@ static void add_wasm_operator_args()
         /* short=       */ nullptr,
         /* long=        */ "--hash-table-initial-capacity",
         /* description= */ "specify the initial capacity for hash tables",
-        /* callback=    */ [](uint32_t initial_capacity){
+        /* callback=    */ [](uint64_t initial_capacity){
             options::hash_table_initial_capacity = initial_capacity;
         }
     );
@@ -537,7 +537,7 @@ void m::register_wasm_operators(PhysicalOptimizer &phys_opt)
  * result set is either materialized entirely (if \p window_size equals 0 indicating infinity) or only partially (if
  * \p window_size does not equal 0 indicating the used batch size).  To emit the code at the correct position, code
  * generation is delegated to the child physical operator \p child. */
-void write_result_set(const Schema &schema, const DataLayoutFactory &factory, uint32_t window_size,
+void write_result_set(const Schema &schema, const DataLayoutFactory &factory, uint64_t window_size,
                       const m::wasm::MatchBase &child)
 {
     M_insist(schema == schema.drop_constants().deduplicate(), "schema must not contain constants or duplicates");
@@ -552,9 +552,9 @@ void write_result_set(const Schema &schema, const DataLayoutFactory &factory, ui
             M_insist(window_size >= CodeGenContext::Get().num_simd_lanes());
             M_insist(window_size % CodeGenContext::Get().num_simd_lanes() == 0);
 
-            std::optional<Var<U32x1>> counter; ///< variable to *locally* count
+            std::optional<Var<U64x1>> counter; ///< variable to *locally* count
             ///> *global* counter backup since the following code may be called multiple times
-            Global<U32x1> counter_backup; // default initialized to 0
+            Global<U64x1> counter_backup; // default initialized to 0
 
             /*----- Create child function s.t. result set is extracted in case of returns (e.g. due to `Limit`). -----*/
             FUNCTION(child_pipeline, void(void))
@@ -570,15 +570,15 @@ void write_result_set(const Schema &schema, const DataLayoutFactory &factory, ui
                         if (auto &env = CodeGenContext::Get().env(); env.predicated()) {
                             M_insist(CodeGenContext::Get().num_simd_lanes() == 1,
                                      "SIMDfication with predication not supported");
-                            *counter += env.extract_predicate<_Boolx1>().is_true_and_not_null().to<uint32_t>();
+                            *counter += env.extract_predicate<_Boolx1>().is_true_and_not_null().to<uint64_t>();
                         } else {
-                            *counter += uint32_t(CodeGenContext::Get().num_simd_lanes());
+                            *counter += uint64_t(CodeGenContext::Get().num_simd_lanes());
                         }
 
                         /*----- If window size is reached, update result size, extract current results, and reset tuple ID. */
                         IF (*counter == window_size) {
-                            CodeGenContext::Get().inc_num_tuples(U32x1(window_size));
-                            Module::Get().emit_call<void>("read_result_set", Ptr<void>::Nullptr(), U32x1(window_size));
+                            CodeGenContext::Get().inc_num_tuples(U64x1(window_size));
+                            Module::Get().emit_call<void>("read_result_set", Ptr<void>::Nullptr(), U64x1(window_size));
                             *counter = 0U;
                         };
                     },
@@ -602,7 +602,7 @@ void write_result_set(const Schema &schema, const DataLayoutFactory &factory, ui
             {
                 auto S = CodeGenContext::Get().scoped_environment(); // create scoped environment for this function
 
-                std::optional<Var<U32x1>> num_tuples; ///< variable to *locally* count additional result tuples
+                std::optional<Var<U64x1>> num_tuples; ///< variable to *locally* count additional result tuples
 
                 child.execute(
                     /* setup=    */ setup_t::Make_Without_Parent([&](){
@@ -613,9 +613,9 @@ void write_result_set(const Schema &schema, const DataLayoutFactory &factory, ui
                         if (auto &env = CodeGenContext::Get().env(); env.predicated()) {
                             M_insist(CodeGenContext::Get().num_simd_lanes() == 1,
                                      "SIMDfication with predication not supported");
-                            *num_tuples += env.extract_predicate<_Boolx1>().is_true_and_not_null().to<uint32_t>();
+                            *num_tuples += env.extract_predicate<_Boolx1>().is_true_and_not_null().to<uint64_t>();
                         } else {
-                            *num_tuples += uint32_t(CodeGenContext::Get().num_simd_lanes());
+                            *num_tuples += uint64_t(CodeGenContext::Get().num_simd_lanes());
                         }
                     },
                     /* teardown= */ teardown_t::Make_Without_Parent([&](){
@@ -648,7 +648,7 @@ void write_result_set(const Schema &schema, const DataLayoutFactory &factory, ui
                     /* pipeline= */ [&](){
                         /*----- Store whether only a single slot is free to not extract result for empty buffer. -----*/
                         const Var<Boolx1> single_slot_free(
-                            result_set.size() == window_size - uint32_t(CodeGenContext::Get().num_simd_lanes())
+                            result_set.size() == window_size - uint64_t(CodeGenContext::Get().num_simd_lanes())
                         );
 
                         /*----- Write the result. -----*/
@@ -656,9 +656,9 @@ void write_result_set(const Schema &schema, const DataLayoutFactory &factory, ui
 
                         /*----- If the last buffer slot was filled, update result size and extract current results. */
                         IF (single_slot_free and result_set.size() == 0U) {
-                            CodeGenContext::Get().inc_num_tuples(U32x1(window_size));
+                            CodeGenContext::Get().inc_num_tuples(U64x1(window_size));
                             Module::Get().emit_call<void>("read_result_set", result_set.base_address(),
-                                                          U32x1(window_size));
+                                                          U64x1(window_size));
                         };
                     },
                     /* teardown= */ teardown_t::Make_Without_Parent([&](){ result_set.teardown(); })
@@ -859,11 +859,11 @@ decompose_equi_predicate(const cnf::CNF &cnf, const Schema &schema_left)
 }
 
 /** Returns the number of rows of table \p table_name. */
-U32x1 get_num_rows(const ThreadSafePooledString &table_name) {
+U64x1 get_num_rows(const ThreadSafePooledString &table_name) {
     static std::ostringstream oss;
     oss.str("");
     oss << table_name << "_num_rows";
-    return Module::Get().get_global<uint32_t>(oss.str().c_str());
+    return Module::Get().get_global<uint64_t>(oss.str().c_str());
 }
 
 /** Returns a pointer to the beginning of table \p table_name in the WebAssembly linear memory. */
@@ -875,8 +875,8 @@ Ptr<void> get_base_address(const ThreadSafePooledString &table_name) {
 }
 
 /** Computes the initial hash table capacity for \p op. The function ensures that the initial capacity is in the range
- * [0, 2^32 - 1] such that the capacity does *not* exceed the `uint32_t` value limit. */
-uint32_t compute_initial_ht_capacity(const Operator &op, double load_factor) {
+ * [0, 2^64 - 1] such that the capacity does *not* exceed the `uint64_t` value limit. */
+uint64_t compute_initial_ht_capacity(const Operator &op, double load_factor) {
     uint64_t initial_capacity;
     if (options::hash_table_initial_capacity) {
         initial_capacity = *options::hash_table_initial_capacity;
@@ -888,7 +888,7 @@ uint32_t compute_initial_ht_capacity(const Operator &op, double load_factor) {
         else
             initial_capacity = 1024; // fallback
     }
-    return std::in_range<uint32_t>(initial_capacity) ? initial_capacity : std::numeric_limits<uint32_t>::max();
+    return initial_capacity;
 }
 
 /*======================================================================================================================
@@ -897,7 +897,7 @@ uint32_t compute_initial_ht_capacity(const Operator &op, double load_factor) {
 
 void NoOp::execute(const Match<NoOp> &M, setup_t, pipeline_t, teardown_t)
 {
-    std::optional<Var<U32x1>> num_tuples; ///< variable to *locally* count additional result tuples
+    std::optional<Var<U64x1>> num_tuples; ///< variable to *locally* count additional result tuples
 
     M.child->execute(
         /* setup=    */ setup_t::Make_Without_Parent([&](){ num_tuples.emplace(CodeGenContext::Get().num_tuples()); }),
@@ -907,7 +907,7 @@ void NoOp::execute(const Match<NoOp> &M, setup_t, pipeline_t, teardown_t)
                 switch (CodeGenContext::Get().num_simd_lanes()) {
                     default: M_unreachable("invalid number of simd lanes");
                     case  1: {
-                        *num_tuples += env.extract_predicate<_Boolx1>().is_true_and_not_null().to<uint32_t>();
+                        *num_tuples += env.extract_predicate<_Boolx1>().is_true_and_not_null().to<uint64_t>();
                         break;
                     }
                     case 16: {
@@ -917,7 +917,7 @@ void NoOp::execute(const Match<NoOp> &M, setup_t, pipeline_t, teardown_t)
                     }
                 }
             } else {
-                *num_tuples += uint32_t(CodeGenContext::Get().num_simd_lanes());
+                *num_tuples += uint64_t(CodeGenContext::Get().num_simd_lanes());
             }
         },
         /* teardown= */ teardown_t::Make_Without_Parent([&](){
@@ -1064,7 +1064,7 @@ void Scan<SIMDfied>::execute(const Match<Scan> &M, setup_t setup, pipeline_t pip
     M_insist(schema == schema.drop_constants().deduplicate(), "schema of `ScanOperator` must not contain NULL or duplicates");
     M_insist(not table.layout().is_finite(), "layout for `wasm::Scan` must be infinite");
 
-    Var<U32x1> tuple_id; // default initialized to 0
+    Var<U64x1> tuple_id; // default initialized to 0
 
     /*----- Compute possible number of SIMD lanes and decide which to use with regard to other operators preferences. */
     const auto layout_schema = table.schema(M.scan.alias());
@@ -1078,13 +1078,13 @@ void Scan<SIMDfied>::execute(const Match<Scan> &M, setup_t setup, pipeline_t pip
     CodeGenContext::Get().set_num_simd_lanes(num_simd_lanes);
 
     /*----- Import the number of rows of `table`. -----*/
-    U32x1 num_rows = get_num_rows(table.name());
+    U64x1 num_rows = get_num_rows(table.name());
 
     /*----- If no attributes must be loaded, generate a loop just executing the pipeline `num_rows`-times. -----*/
     if (schema.num_entries() == 0) {
         setup();
         WHILE (tuple_id < num_rows) {
-            tuple_id += uint32_t(num_simd_lanes);
+            tuple_id += uint64_t(num_simd_lanes);
             pipeline();
         }
         teardown();
@@ -1463,7 +1463,7 @@ void HashBasedGrouping::execute(const Match<HashBasedGrouping> &M, setup_t setup
     }
 
     /*----- Compute initial capacity of hash table. -----*/
-    uint32_t initial_capacity = compute_initial_ht_capacity(M.grouping, M.load_factor);
+    uint64_t initial_capacity = compute_initial_ht_capacity(M.grouping, M.load_factor);
 
     /*----- Create hash table. -----*/
     std::unique_ptr<HashTable> ht;
@@ -3931,7 +3931,7 @@ void SimpleHashJoin<UniqueBuild, Predicated>::execute(const Match<SimpleHashJoin
     }
 
     /*----- Compute initial capacity of hash table. -----*/
-    uint32_t initial_capacity = compute_initial_ht_capacity(M.build, M.load_factor);
+    uint64_t initial_capacity = compute_initial_ht_capacity(M.build, M.load_factor);
 
     /*----- Create hash table for build child. -----*/
     std::unique_ptr<HashTable> ht;
@@ -4301,7 +4301,7 @@ void SortMergeJoin<SortLeft, SortRight, Predicated, CmpPredicated>::execute(
 
     /*----- Compile data layouts to generate sequential loads from buffers. -----*/
     static Schema empty_schema;
-    Var<U32x1> tuple_id_parent, tuple_id_child; // default initialized to 0
+    Var<U64x1> tuple_id_parent, tuple_id_child; // default initialized to 0
     auto [inits_parent, loads_parent, _jumps_parent] = [&](){
        if (needs_buffer_parent) {
            return compile_load_sequential(buffer_parent->schema(), empty_schema, buffer_parent->base_address(),
@@ -4331,9 +4331,9 @@ void SortMergeJoin<SortLeft, SortRight, Predicated, CmpPredicated>::execute(
     setup();
     inits_parent.attach_to_current();
     inits_child.attach_to_current();
-    U32x1 size_parent = needs_buffer_parent ? buffer_parent->size()
+    U64x1 size_parent = needs_buffer_parent ? buffer_parent->size()
                                             : get_num_rows(as<const ScanOperator>(M.parent).store().table().name());
-    U32x1 size_child = needs_buffer_child ? buffer_child->size()
+    U64x1 size_child = needs_buffer_child ? buffer_child->size()
                                           : get_num_rows(as<const ScanOperator>(M.child).store().table().name());
     WHILE (tuple_id_parent < size_parent and tuple_id_child < size_child) { // neither end reached
         loads_parent.attach_to_current();
@@ -4378,9 +4378,9 @@ void Limit::execute(const Match<Limit> &M, setup_t setup, pipeline_t pipeline, t
     std::optional<Block> teardown_block; ///< block around pipeline code to jump to teardown code when limit is reached
     std::optional<BlockUser> use_teardown; ///< block user to set teardown block active
 
-    std::optional<Var<U32x1>> counter; ///< variable to *locally* count
+    std::optional<Var<U64x1>> counter; ///< variable to *locally* count
     /* default initialized to 0 */
-    Global<U32x1> counter_backup; ///< *global* counter backup since the following code may be called multiple times
+    Global<U64x1> counter_backup; ///< *global* counter backup since the following code may be called multiple times
 
     M.child->execute(
         /* setup=    */ setup_t(std::move(setup), [&](){
@@ -4391,7 +4391,7 @@ void Limit::execute(const Match<Limit> &M, setup_t setup, pipeline_t pipeline, t
         /* pipeline= */ [&, pipeline=std::move(pipeline)](){
             M_insist(bool(teardown_block));
             M_insist(bool(counter));
-            const uint32_t limit = M.limit.offset() + M.limit.limit();
+            const uint64_t limit = M.limit.offset() + M.limit.limit();
 
             /*----- Abort pipeline, i.e. go to teardown code, if limit is exceeded. -----*/
             IF (*counter >= limit) {
@@ -4400,7 +4400,7 @@ void Limit::execute(const Match<Limit> &M, setup_t setup, pipeline_t pipeline, t
 
             /*----- Emit result if in bounds. -----*/
             if (M.limit.offset()) {
-                IF (*counter >= uint32_t(M.limit.offset())) {
+                IF (*counter >= uint64_t(M.limit.offset())) {
                     Wasm_insist(*counter < limit, "counter must not exceed limit");
                     pipeline();
                 };
@@ -4542,7 +4542,7 @@ void HashBasedGroupJoin::execute(const Match<HashBasedGroupJoin> &M, setup_t set
     M_insist(build_keys.size() == num_keys);
 
     /*----- Compute initial capacity of hash table. -----*/
-    uint32_t initial_capacity = compute_initial_ht_capacity(M.grouping, M.load_factor);
+    uint64_t initial_capacity = compute_initial_ht_capacity(M.grouping, M.load_factor);
 
     /*----- Create hash table for build relation. -----*/
     std::unique_ptr<HashTable> ht;

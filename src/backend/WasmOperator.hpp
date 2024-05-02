@@ -136,7 +136,7 @@ inline double load_factor_open_addressing = 0.8;
 inline double load_factor_chained = 1.5;
 
 /** Which initial capacity should be used for `wasm::HashTable`s. */
-inline std::optional<uint32_t> hash_table_initial_capacity;
+inline std::optional<uint64_t> hash_table_initial_capacity;
 
 /** Whether to use `wasm::HashBasedGroupJoin` if possible. */
 inline bool hash_based_group_join = true;

@@ -93,7 +93,7 @@ TEST_CASE("Wasm/" BACKEND_NAME "/Scan", "[core][wasm]")
         Module::Get().emit_global<void*>(oss.str(), false, off);
         oss.str("");
         oss << table.name() << "_num_rows";
-        Module::Get().emit_global<uint32_t>(oss.str(), false, table.store().num_rows());
+        Module::Get().emit_global<uint64_t>(oss.str(), false, table.store().num_rows());
 
         CodeGenContext::Init(); // create fresh codegen context
         FUNCTION(scan_code, void(void)) {

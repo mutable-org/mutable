@@ -312,7 +312,7 @@ void m::wasm::detail::read_result_set(const v8::FunctionCallbackInfo<v8::Value> 
     auto deduplicated_schema_without_constants = deduplicated_schema.drop_constants();
 
     /* Get number of result tuples. */
-    auto num_tuples = info[1].As<v8::Uint32>()->Value();
+    auto num_tuples = info[1].As<v8::BigInt>()->Uint64Value();
     if (num_tuples == 0)
         return;
 
@@ -751,7 +751,7 @@ void V8Engine::compile(const m::MatchBase &plan) const
     }
 
     /*----- Create function `main` which executes the given query. ---------------------------------------------------*/
-    m::wasm::Function<uint32_t(uint32_t)> main("main");
+    m::wasm::Function<uint64_t(uint32_t)> main("main");
     BLOCK_OPEN(main.body())
     {
         auto S = CodeGenContext::Get().scoped_environment(); // create scoped environment for this function
@@ -868,8 +868,8 @@ void V8Engine::execute(const m::MatchBase &plan)
 
         /* Invoke the exported function `main` of the module. */
         args_t args { v8::Int32::New(isolate_, wasm_context.id), };
-        const uint32_t num_rows =
-            M_TIME_EXPR(main->Call(context, context->Global(), 1, args).ToLocalChecked().As<v8::Uint32>()->Value(),
+        const uint64_t num_rows =
+            M_TIME_EXPR(main->Call(context, context->Global(), 1, args).ToLocalChecked().As<v8::BigInt>()->Uint64Value(),
                         "Execute machine code", C.timer());
 
         /* Print total number of result tuples. */
@@ -1017,8 +1017,8 @@ v8::Local<v8::Object> m::wasm::detail::create_env(v8::Isolate &isolate, const m:
         /* Add table size (num_rows) to env. */
         oss.str("");
         oss << table.get().name() << "_num_rows";
-        M_DISCARD env->Set(Ctx, to_v8_string(&isolate, oss.str()), v8::Int32::New(&isolate, table.get().store().num_rows()));
-        Module::Get().emit_import<uint32_t>(oss.str().c_str());
+        M_DISCARD env->Set(Ctx, to_v8_string(&isolate, oss.str()), v8::BigInt::New(&isolate, table.get().store().num_rows()));
+        Module::Get().emit_import<uint64_t>(oss.str().c_str());
     }
 
     /* Map all string literals into the Wasm module. */
@@ -1043,7 +1043,7 @@ v8::Local<v8::Object> m::wasm::detail::create_env(v8::Isolate &isolate, const m:
     M_insist(Is_Page_Aligned(context.heap));
 
     /* Add functions to environment. */
-    Module::Get().emit_function_import<void(void*,uint32_t)>("read_result_set");
+    Module::Get().emit_function_import<void(void*,uint64_t)>("read_result_set");
 #define ADD_FUNC(FUNC) { \
     auto func = v8::Function::New(Ctx, (FUNC)).ToLocalChecked(); \
     env->Set(Ctx, mkstr(isolate, #FUNC), func).Check(); \

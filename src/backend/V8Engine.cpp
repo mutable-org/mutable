@@ -754,7 +754,8 @@ void V8Engine::initialize()
     /* A documentation of these flags can be found at
      * https://chromium.googlesource.com/v8/v8/+/2c22fd50128ad130e9dba77fce828e5661559121/src/flags/flag-definitions.h.*/
     std::ostringstream flags;
-    flags << "--stack_size 1000000 ";
+    flags << "--stack_size 1000000 "
+          << "--experimental-wasm-memory64 ";
     if (options::wasm_adaptive) {
         flags << "--opt "
               << "--liftoff "

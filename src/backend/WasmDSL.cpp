@@ -351,13 +351,15 @@ Module::Module()
     /*----- Export the Wasm linear memory, s.t. it can be accessed from the environment (JavaScript). -----*/
     memory_ = module_.getMemory(memory_name);
     memory_->initial = 1; // otherwise the Binaryen interpreter traps
-    memory_->max = int32_t(WasmEngine::WASM_MAX_MEMORY / WasmEngine::WASM_PAGE_SIZE);
+    memory_->max = int64_t(WasmEngine::WASM_MAX_MEMORY / WasmEngine::WASM_PAGE_SIZE);
+    memory_->indexType = ::wasm::Type::i64;
     module_.exports.emplace_back(
         builder_.makeExport("memory", memory_->name, ::wasm::ExternalKind::Memory)
     );
 
     /*----- Set features. -----*/
     module_.features.setBulkMemory(true);
+    module_.features.setMemory64(true);
     module_.features.setSIMD(true);
 }
 

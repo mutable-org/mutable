@@ -223,6 +223,9 @@ set_source_files_properties(
 include("CMakeFiles/Catch2.cmake")
 include("CMakeFiles/Eigen.cmake")
 include("CMakeFiles/nlohmann_json.cmake")
+if (WITH_V8)
+    include("CMakeFiles/depot_tools.cmake")
+endif()
 
 # Include all required external projects.
 include("CMakeFiles/Boost.cmake")

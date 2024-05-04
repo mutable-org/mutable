@@ -227,8 +227,10 @@ include("CMakeFiles/nlohmann_json.cmake")
 # Include all required external projects.
 include("CMakeFiles/Boost.cmake")
 include("CMakeFiles/Replxx.cmake")
-include("CMakeFiles/Binaryen.cmake")
-include("CMakeFiles/V8.cmake")
+if (WITH_V8)
+    include("CMakeFiles/Binaryen.cmake")
+    include("CMakeFiles/V8.cmake")
+endif()
 
 
 ########################################################################################################################

@@ -1,5 +1,12 @@
 # Install Google `depot_tools`
 
+🚨🚨🚨 **DEPRECATED** 🚨🚨🚨
+
+We now ship Google depot_tools with CMake during the configure step.
+No manual setup is required.
+
+---
+
 ## Build from Source
 
 Clone the repository

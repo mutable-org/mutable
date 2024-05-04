@@ -1,5 +1,12 @@
 # Install Standalone Google `gn` Build Configuration Tool
 
+🚨🚨🚨 **DEPRECATED** 🚨🚨🚨
+
+We now ship Google `gn` as part of depot_tools with CMake during the configure step.
+No manual setup is required.
+
+---
+
 `gn` -- short for *generate Ninja* -- is Google's take on CMake.
 
 ## Build from Source

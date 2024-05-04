@@ -118,7 +118,10 @@ Otherwise, there will be runtime errors: the client will see a data structure w/
 
 
 ### `-DWITH_V8`: Enable WebAssembly execution backend with V8 engine.
-Requirements: see [Building with V8](setup-building-with-V8.md)
+
+~~Requirements: see [Building with V8](setup-building-with-V8.md)~~
+
+All requirements are automatically set up during CMake configure and build steps.
 
 - `-DBUILD_WITH_V8=ON` -- Build mu*t*able with the WebAssembly-based execution backend.
 

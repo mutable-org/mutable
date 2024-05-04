@@ -1,11 +1,18 @@
 # Building mu*t*able with V8
 
+🚨🚨🚨 **DEPRECATED** 🚨🚨🚨
+
+We ship our dependencies during CMake configure.
+No manual setup is required.
+
 ## Dependencies
 
-Install the following dependencies:
+~~Install the following dependencies:~~
 
 * [Google `depot_tools`](setup-depot_tools.md)
 * [Google `gn`](setup-gn.md)
+
+V8 requires the Google depot_tools, that we ship during CMake configure.
 
 ## Configuration
 

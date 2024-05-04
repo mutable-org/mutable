@@ -1,8 +1,11 @@
 set(Boost_LIBRARIES
-    system
+    atomic
     container
+    system
+    thread
 )
 list(TRANSFORM Boost_LIBRARIES PREPEND "Boost::" OUTPUT_VARIABLE BOOST_LINK_LIBRARIES)
+list(JOIN Boost_LIBRARIES "," BOOST_LIBRARIES_ARGS_STRING)
 set(Boost_BYPRODUCTS)
 foreach(lib IN LISTS Boost_LIBRARIES)
     if (BUILD_SHARED_LIBS)
@@ -27,7 +30,7 @@ ExternalProject_Add(
     URL https://github.com/boostorg/boost/releases/download/boost-1.84.0/boost-1.84.0.tar.xz
     URL_MD5 893b5203b862eb9bbd08553e24ff146a
     DOWNLOAD_EXTRACT_TIMESTAMP ON
-    CONFIGURE_COMMAND ./bootstrap.sh --with-toolset=clang --libdir="${CMAKE_BINARY_DIR}/third-party/src/Boost-build" --with-libraries=all
+    CONFIGURE_COMMAND ./bootstrap.sh --with-toolset=clang --libdir="${CMAKE_BINARY_DIR}/third-party/src/Boost-build" --with-libraries=${BOOST_LIBRARIES_ARGS_STRING}
     CONFIGURE_HANDLED_BY_BUILD true
     BUILD_IN_SOURCE ON
     BUILD_COMMAND ./b2 ${Boost_BUILD_TYPE}

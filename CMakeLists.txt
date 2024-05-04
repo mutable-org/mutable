@@ -219,10 +219,13 @@ set_source_files_properties(
 ### Third-Parties
 ########################################################################################################################
 
+# Fetch contents without building.
 include("CMakeFiles/Catch2.cmake")
 include("CMakeFiles/Eigen.cmake")
-include("CMakeFiles/Boost.cmake")
 include("CMakeFiles/nlohmann_json.cmake")
+
+# Include all required external projects.
+include("CMakeFiles/Boost.cmake")
 include("CMakeFiles/Replxx.cmake")
 include("CMakeFiles/Binaryen.cmake")
 include("CMakeFiles/V8.cmake")

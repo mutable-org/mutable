@@ -5,4 +5,6 @@ FetchContent_Populate(
     URL_HASH MD5=0e9367cfe53621c8669af73e34a8c556
     SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/third-party/catch2/include/catch2"
     DOWNLOAD_NO_EXTRACT TRUE
+    SYSTEM
+    EXCLUDE_FROM_ALL
 )

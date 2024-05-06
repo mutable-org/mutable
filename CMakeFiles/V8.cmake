@@ -28,7 +28,7 @@ if(${BUILD_SHARED_LIBS})
 else()
     set(V8_BUILD_ARGS "${V8_BUILD_ARGS} v8_monolithic=true is_component_build=false")
     set(V8_LIBRARIES v8_monolith)
-    set(V8_BUILD_BYPRODUCTS "${PROJECT_BINARY_DIR}/third-party/src/V8-build/out/obj/${CMAKE_STATIC_LIBRARY_PREFIX}v8_monolith${CMAKE_STATIC_LIBRARY_SUFFIX}")
+    set(V8_BUILD_BYPRODUCTS "${CMAKE_SOURCE_DIR}/third-party/v8/v8/out-${CMAKE_BUILD_TYPE}/obj/${CMAKE_STATIC_LIBRARY_PREFIX}v8_monolith${CMAKE_STATIC_LIBRARY_SUFFIX}")
 endif()
 if(${USE_LLD})
     set(V8_BUILD_ARGS "${V8_BUILD_ARGS} use_lld=true")
@@ -45,24 +45,24 @@ endif()
 ExternalProject_Add(
     V8
     PREFIX third-party
-    DOWNLOAD_DIR "${CMAKE_CURRENT_SOURCE_DIR}/third-party/v8"
-    SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/third-party/v8/v8"
+    DOWNLOAD_DIR "${CMAKE_SOURCE_DIR}/third-party/v8"
+    SOURCE_DIR "${CMAKE_SOURCE_DIR}/third-party/v8/v8"
     DOWNLOAD_COMMAND env DEPOT_TOOLS_UPDATE=0 "${DEPOT_TOOLS_FETCH}" --force v8 || true
-    COMMAND cd "${CMAKE_CURRENT_SOURCE_DIR}/third-party/v8/v8/" && git remote remove mutable || true
-    COMMAND cd "${CMAKE_CURRENT_SOURCE_DIR}/third-party/v8/v8/" && git remote add mutable "https://gitlab.cs.uni-saarland.de/bigdata/mutable/v8.git" || true
-    COMMAND cd "${CMAKE_CURRENT_SOURCE_DIR}/third-party/v8/v8/" && git fetch mutable
-    COMMAND cd "${CMAKE_CURRENT_SOURCE_DIR}/third-party/v8/v8/" && git checkout adfc01872f43132c74bbd2182b127ad6f462f2c1
-    UPDATE_COMMAND cd "${CMAKE_CURRENT_SOURCE_DIR}/third-party/v8/v8/" && env DEPOT_TOOLS_UPDATE=0 "${DEPOT_TOOLS_GCLIENT}" sync
-    COMMAND        cd "${CMAKE_CURRENT_SOURCE_DIR}/third-party/v8/v8/" && env DEPOT_TOOLS_UPDATE=0 "${DEPOT_TOOLS_GCLIENT}" sync -D -f
-    CONFIGURE_COMMAND "${DEPOT_TOOLS_GN}" gen out --root=${CMAKE_CURRENT_SOURCE_DIR}/third-party/v8/v8 --args=${V8_BUILD_ARGS}
+    COMMAND cd "${CMAKE_SOURCE_DIR}/third-party/v8/v8/" && git remote remove mutable || true
+    COMMAND cd "${CMAKE_SOURCE_DIR}/third-party/v8/v8/" && git remote add mutable "https://gitlab.cs.uni-saarland.de/bigdata/mutable/v8.git" || true
+    COMMAND cd "${CMAKE_SOURCE_DIR}/third-party/v8/v8/" && git fetch mutable
+    COMMAND cd "${CMAKE_SOURCE_DIR}/third-party/v8/v8/" && git checkout adfc01872f43132c74bbd2182b127ad6f462f2c1
+    UPDATE_COMMAND cd "${CMAKE_SOURCE_DIR}/third-party/v8/v8/" && env DEPOT_TOOLS_UPDATE=0 "${DEPOT_TOOLS_GCLIENT}" sync
+    COMMAND        cd "${CMAKE_SOURCE_DIR}/third-party/v8/v8/" && env DEPOT_TOOLS_UPDATE=0 "${DEPOT_TOOLS_GCLIENT}" sync -D -f
+    CONFIGURE_COMMAND cd "${CMAKE_SOURCE_DIR}/third-party/v8/v8/" && PATH=${DEPOT_TOOLS_PATH}:$ENV{PATH} "third_party/depot_tools/gn" gen out-${CMAKE_BUILD_TYPE} --root=${CMAKE_SOURCE_DIR}/third-party/v8/v8 --args=${V8_BUILD_ARGS}
     CONFIGURE_HANDLED_BY_BUILD true
-    BUILD_BYPRODUCTS "${V8_BUILD_BYPRODUCTS}"
-    BUILD_COMMAND ninja -C out ${V8_LIBRARIES}
+    BUILD_BYPRODUCTS ${V8_BUILD_BYPRODUCTS}
+    BUILD_COMMAND cd "${CMAKE_SOURCE_DIR}/third-party/v8/v8/" && PATH=${DEPOT_TOOLS_PATH}:$ENV{PATH} ninja -C out-${CMAKE_BUILD_TYPE} ${V8_LIBRARIES}
     INSTALL_COMMAND ""
 )
 include_directories(SYSTEM third-party/v8/v8/include)
 if(${BUILD_SHARED_LIBS})
-    link_directories(${PROJECT_BINARY_DIR}/third-party/src/V8-build/out)
+    link_directories(${CMAKE_SOURCE_DIR}/third-party/v8/v8/out-${CMAKE_BUILD_TYPE})
 else()
-    link_directories(${PROJECT_BINARY_DIR}/third-party/src/V8-build/out/obj)
+    link_directories(${CMAKE_SOURCE_DIR}/third-party/v8/v8/out-${CMAKE_BUILD_TYPE}/obj)
 endif()

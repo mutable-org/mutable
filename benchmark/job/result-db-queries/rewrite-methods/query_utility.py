@@ -1,4 +1,5 @@
 from typing import DefaultDict
+import copy
 from collections import defaultdict
 from itertools import count
 import graphviz as gv
@@ -157,6 +158,16 @@ class JoinGraph:
             excluded_relations.add(current_relation)
 
         return res
+
+    def connected(self, relations: set[Relation]) -> bool:
+        if len(relations) == 0:
+            return False
+        if len(relations) == 1:
+            return True
+        nodes_to_check = copy.deepcopy(relations)
+        start = nodes_to_check.pop()
+        reachable_set = self.reachable(start, set(self.relations).difference(nodes_to_check))
+        return reachable_set == relations
 
     def draw(self):
         """Draw the join graph using graphviz."""

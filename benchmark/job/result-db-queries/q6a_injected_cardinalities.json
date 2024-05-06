@@ -1,5 +1,5 @@
 {
-	"result_db": [
+	"imdb": [
 		{"relations": ["ci"], "size": 36244344},
 		{"relations": ["k"], "size": 1},
 		{"relations": ["mk"], "size": 4523930},
@@ -18,6 +18,6 @@
 		{"relations": ["ci", "k", "mk", "n"], "size": 6},
 		{"relations": ["ci", "k", "mk", "t"], "size": 1224},
 		{"relations": ["ci", "mk", "n", "t"], "size": 1194},
-		{"relations": ["ci", "k", "mk", "n", "t"], "size": 6}
+		{"relations": ["ci", "k", "t", "mk", "n"], "size": 6}
 	]
 }

@@ -1,5 +1,5 @@
 {
-	"result_db": [
+	"imdb": [
 		{"relations": ["ct"], "size": 1},
 		{"relations": ["it"], "size": 113},
 		{"relations": ["mc"], "size": 0},
@@ -15,9 +15,9 @@
 		{"relations": ["it", "mc", "mi"], "size": 0},
 		{"relations": ["it", "mi", "t"], "size": 82354},
 		{"relations": ["mc", "mi", "t"], "size": 0},
-		{"relations": ["ct", "it", "mc", "mi"], "size": 0},
-		{"relations": ["ct", "mc", "mi", "t"], "size": 0},
-		{"relations": ["it", "mc", "mi", "t"], "size": 0},
-		{"relations": ["ct", "it", "mc", "mi", "t"], "size": 0}
+		{"relations": ["ct", "it", "mi", "mc"], "size": 0},
+		{"relations": ["ct", "mc", "t", "mi"], "size": 0},
+		{"relations": ["it", "mc", "t", "mi"], "size": 0},
+		{"relations": ["ct", "it", "mi", "mc", "t"], "size": 0}
 	]
 }

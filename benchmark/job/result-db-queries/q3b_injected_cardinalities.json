@@ -1,5 +1,5 @@
 {
-	"result_db": [
+	"imdb": [
 		{"relations": ["k"], "size": 30},
 		{"relations": ["mi"], "size": 2287},
 		{"relations": ["mk"], "size": 4523930},

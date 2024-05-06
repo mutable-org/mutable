@@ -1,5 +1,5 @@
 {
-	"result_db": [
+	"imdb": [
 		{"relations": ["chn"], "size": 3140339},
 		{"relations": ["ci"], "size": 32288},
 		{"relations": ["cn"], "size": 1361},
@@ -37,21 +37,21 @@
 		{"relations": ["ci", "ct", "mc", "t"], "size": 20369},
 		{"relations": ["ci", "mc", "rt", "t"], "size": 14489},
 		{"relations": ["cn", "ct", "mc", "t"], "size": 4539},
-		{"relations": ["chn", "ci", "cn", "ct", "mc"], "size": 337},
-		{"relations": ["chn", "ci", "cn", "mc", "rt"], "size": 265},
-		{"relations": ["chn", "ci", "cn", "mc", "t"], "size": 135},
-		{"relations": ["chn", "ci", "ct", "mc", "rt"], "size": 86127},
-		{"relations": ["chn", "ci", "ct", "mc", "t"], "size": 18771},
-		{"relations": ["chn", "ci", "mc", "rt", "t"], "size": 13694},
-		{"relations": ["ci", "cn", "ct", "mc", "rt"], "size": 275},
-		{"relations": ["ci", "cn", "ct", "mc", "t"], "size": 151},
-		{"relations": ["ci", "cn", "mc", "rt", "t"], "size": 112},
-		{"relations": ["ci", "ct", "mc", "rt", "t"], "size": 14489},
-		{"relations": ["chn", "ci", "cn", "ct", "mc", "rt"], "size": 265},
-		{"relations": ["chn", "ci", "cn", "ct", "mc", "t"], "size": 135},
-		{"relations": ["chn", "ci", "cn", "mc", "rt", "t"], "size": 104},
-		{"relations": ["chn", "ci", "ct", "mc", "rt", "t"], "size": 13694},
-		{"relations": ["ci", "cn", "ct", "mc", "rt", "t"], "size": 112},
-		{"relations": ["chn", "ci", "cn", "ct", "mc", "rt", "t"], "size": 104}
+		{"relations": ["chn", "ci", "mc", "cn", "ct"], "size": 337},
+		{"relations": ["chn", "ci", "rt", "cn", "mc"], "size": 265},
+		{"relations": ["chn", "ci", "t", "cn", "mc"], "size": 135},
+		{"relations": ["chn", "ci", "rt", "ct", "mc"], "size": 86127},
+		{"relations": ["chn", "ci", "t", "ct", "mc"], "size": 18771},
+		{"relations": ["chn", "ci", "t", "mc", "rt"], "size": 13694},
+		{"relations": ["ci", "cn", "rt", "ct", "mc"], "size": 275},
+		{"relations": ["ci", "cn", "t", "ct", "mc"], "size": 151},
+		{"relations": ["ci", "cn", "t", "mc", "rt"], "size": 112},
+		{"relations": ["ci", "ct", "t", "mc", "rt"], "size": 14489},
+		{"relations": ["chn", "ci", "mc", "cn", "ct", "rt"], "size": 265},
+		{"relations": ["chn", "ci", "mc", "cn", "ct", "t"], "size": 135},
+		{"relations": ["chn", "ci", "rt", "cn", "mc", "t"], "size": 104},
+		{"relations": ["chn", "ci", "rt", "ct", "mc", "t"], "size": 13694},
+		{"relations": ["ci", "cn", "rt", "ct", "mc", "t"], "size": 112},
+		{"relations": ["chn", "ci", "mc", "cn", "ct", "rt", "t"], "size": 104}
 	]
 }

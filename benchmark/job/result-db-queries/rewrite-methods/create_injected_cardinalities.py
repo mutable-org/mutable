@@ -7,27 +7,26 @@ from typing import Any
 from query_utility import Relation, JoinGraph
 import query_definitions as q_def
 
-DATABASE='result_db'
+OUTPUT_DIR='benchmark/job/result-db-queries/'
 
 def write_to_file(output_file: str, text: str, mode: str):
     with open(output_file, mode) as file:
         file.write(text)
 
-def create_injected_cardinalities(query_name: str, config) -> None:
+def create_injected_cardinalities(join_graph: JoinGraph, query_name: str, config) -> None:
     # enumerate each subproblem (of sizes 1, 2, 3, ...)
     # for each subproblem, check if connected
     # create the following query
     #  SELECT COUNT(*)
     #  FROM relations
     #  WHERE  filter_predicates AND join_predicates;
-    join_graph: JoinGraph = getattr(q_def, f"create_{query_name}")() # execute the function `create_<query_name>` of module `q_def`
     n = len(join_graph.relations)
-    query_file_dir = f'{config["output_dir"]}{query_name}_cardinalities/'
+    query_file_dir = f'{OUTPUT_DIR}{query_name}_cardinalities/'
     Path(query_file_dir).mkdir(exist_ok=True)
 
-    cardinality_file = f'{config["output_dir"]}/{query_name}_injected_cardinalities.json'
+    cardinality_file = f'{OUTPUT_DIR}/{query_name}_injected_cardinalities.json' 
     cardinality_text = '{\n'
-    cardinality_text += f'\t"{DATABASE}": [\n'
+    cardinality_text += '\t"job": [\n'
     for i in range(n + 1):
         for subproblem in combinations(join_graph.relations,  i):
             S: set[Relation] = set(subproblem)
@@ -101,47 +100,48 @@ def create_injected_cardinalities(query_name: str, config) -> None:
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(prog = 'Generate Injected Cardinalities',
-                                     description = '''Compute the real cardinality for each subproblem of a given query
-                                     using PostgreSQL.''')
+                                     description = '''Compute the real cardinality for each subproblem of (multiple)
+                                     given JOB queries.''')
 
-    parser.add_argument("-u", "--user", default="joris")
-    parser.add_argument("-d", "--database", default="imdb")
-    parser.add_argument("-q", "--queries", default=["imdb"], nargs='+', type=str)
-    parser.add_argument("-o", "--output_dir", default="benchmark/job/result-db-queries/")
+    parser.add_argument("-u", "--user", default="joris", help="")
+    parser.add_argument("-d", "--database", default="imdb", help="")
 
     args = parser.parse_args()
     config: dict[str, Any] = vars(args)
-
-    if "imdb" in config['queries']:
-        assert len(config['queries']) == 1, "list of queries may only contain 'imdb' or actual queries"
-        config['queries'] = ["q1a", "q2a", "q3b", "q4a", "q5b", "q6a", "q7b", "q8d", "q9b", "q10a", "q13a", "q17a"]
-    elif "star" in config['queries']:
-        assert len(config['queries']) == 1, "list of queries may only contain 'star' or actual queries"
-        config['queries'] = [
-                             'star_joins_1',
-                             'star_joins_2',
-                             'star_joins_3',
-                             'star_joins_4',
-                             'star_proj_2_dim',
-                             'star_proj_3_dim',
-                             'star_proj_4_dim',
-                             'star_proj_fact_1_dim',
-                             'star_proj_fact_2_dim',
-                             'star_proj_fact_3_dim',
-                             'star_proj_fact_4_dim',
-                             'star_sel_10',
-                             'star_sel_20',
-                             'star_sel_30',
-                             'star_sel_40',
-                             'star_sel_50',
-                             'star_sel_60',
-                             'star_sel_70',
-                             'star_sel_80',
-                             'star_sel_90',
-                             'star_sel_100',
-                            ]
-
     if __debug__: print('Configuration:', config)
 
-    for query in config['queries']:
-        create_injected_cardinalities(query, config)
+    # q1a = q_def.create_q1a()
+    # create_injected_cardinalities(q1a, "q1a", config)
+
+    # q2a = q_def.create_q2a()
+    # create_injected_cardinalities(q2a, "q2a", config)
+
+    # q3b = q_def.create_q3b()
+    # create_injected_cardinalities(q3b, "q3b", config)
+
+    # q4a = q_def.create_q4a()
+    # create_injected_cardinalities(q4a, "q4a", config)
+
+    # q5b = q_def.create_q5b()
+    # create_injected_cardinalities(q5b, "q5b", config)
+
+    # q6a = q_def.create_q6a()
+    # create_injected_cardinalities(q6a, "q6a", config)
+
+    # q7b = q_def.create_q7b()
+    # create_injected_cardinalities(q7b, "q7b", config)
+
+    # q8d = q_def.create_q8d()
+    # create_injected_cardinalities(q8d, "q8d", config)
+
+    # q9b = q_def.create_q9b()
+    # create_injected_cardinalities(q9b, "q9b", config)
+
+    # q10a = q_def.create_q10a()
+    # create_injected_cardinalities(q10a, "q10a", config)
+
+    # q13a = q_def.create_q13a()
+    # create_injected_cardinalities(q13a, "q13a", config)
+
+    q17a = q_def.create_q17a()
+    create_injected_cardinalities(q17a, "q17a", config)

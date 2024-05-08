@@ -253,7 +253,7 @@ void m::wasm::detail::_throw(const v8::FunctionCallbackInfo<v8::Value> &info)
 
     std::ostringstream oss;
     oss << filename << ':' << line << ": Exception `" << m::wasm::exception::names_[type] << "` thrown.";
-    if (*msg)
+    if (msg)
         oss << "  " << msg << '.';
     oss << std::endl;
 

@@ -257,6 +257,13 @@ void m::wasm::detail::_throw(const v8::FunctionCallbackInfo<v8::Value> &info)
         oss << "  " << msg << '.';
     oss << std::endl;
 
+#ifdef NDEBUG
+    /* Print message of thrown exception in release build as it is not printed by default if the exception is never
+     * catched (which seems to be impossible since the `_throw()` callback itself cannot be enclosed by a
+     * try-catch-block at host side). */
+    std::cerr << oss.str() << std::endl;
+#endif
+
     throw m::wasm::exception(type, oss.str());
 }
 

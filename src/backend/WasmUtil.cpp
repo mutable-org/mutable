@@ -112,6 +112,9 @@ std::conditional_t<CanBeNull, _Bool<L>, Bool<L>> compile_cnf(ExprCompiler &C, co
 {
     using result_t = std::conditional_t<CanBeNull, _Bool<L>, Bool<L>>;
 
+    if (cnf.empty())
+        return result_t(true);
+
     std::optional<result_t> wasm_cnf, wasm_clause;
     for (auto &clause : cnf) {
         wasm_clause.reset();

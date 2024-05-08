@@ -254,7 +254,8 @@ struct LinearAllocator : Allocator
         void *ptr = static_cast<uint8_t*>(memory_.addr()) + pre_alloc_addr_;
         pre_alloc_addr_ += bytes; // advance memory size by bytes
         pre_alloc_total_mem_ += bytes;
-        M_insist(memory_.size() >= pre_alloc_addr_, "allocation must fit in memory");
+        if (memory_.size() < pre_alloc_addr_)
+            throw m::runtime_error("allocation must fit in memory");
         return ptr;
     }
     Ptr<void> pre_allocate(uint64_t bytes, uint32_t alignment) override {
@@ -267,7 +268,8 @@ struct LinearAllocator : Allocator
         Ptr<void> ptr(U64x1(pre_alloc_addr_).template to<void*>());
         pre_alloc_addr_ += bytes; // advance memory size by bytes
         pre_alloc_total_mem_ += bytes;
-        M_insist(memory_.size() >= pre_alloc_addr_, "allocation must fit in memory");
+        if (memory_.size() < pre_alloc_addr_)
+            throw m::runtime_error("allocation must fit in memory");
         return ptr;
     }
     Var<Ptr<void>> allocate(U64x1 bytes, uint32_t alignment) override {
@@ -279,7 +281,9 @@ struct LinearAllocator : Allocator
         alloc_addr_ += bytes.clone(); // advance memory size by bytes
         alloc_total_mem_ += bytes;
         alloc_peak_mem_ = Select(alloc_peak_mem_ > alloc_addr_, alloc_peak_mem_, alloc_addr_);
-        Wasm_insist(memory_.size() >= alloc_addr_, "allocation must fit in memory");
+        IF (memory_.size() < alloc_addr_) {
+            Throw(m::wasm::exception::runtime_error, "allocation must fit in memory");
+        };
         return ptr;
     }
 

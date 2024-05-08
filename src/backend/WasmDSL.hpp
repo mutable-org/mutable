@@ -547,6 +547,7 @@ inline std::array<::wasm::Literal, (L * sizeof(T)) / 16> make_literal(Us... valu
 
 #define M_EXCEPTION_LIST(X) \
     X(invalid_escape_sequence) \
+    X(runtime_error) \
     X(unreachable) \
     X(failed_unittest_check)
 

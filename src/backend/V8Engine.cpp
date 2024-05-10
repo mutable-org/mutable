@@ -3,6 +3,7 @@
 #include "backend/Interpreter.hpp"
 #include "backend/WasmOperator.hpp"
 #include "backend/WasmUtil.hpp"
+#include "mutable/util/macro.hpp"
 #include "storage/Store.hpp"
 #include <chrono>
 #include <cstdint>
@@ -545,6 +546,33 @@ void m::wasm::detail::read_result_set(const v8::FunctionCallbackInfo<v8::Value> 
     read_result_set_(result_set_offset, num_tuples, result_set_schema, root_op);
 }
 
+void m::wasm::detail::read_semi_join_reduction_result_set(const v8::FunctionCallbackInfo<v8::Value> &info)
+{
+    auto &context = WasmEngine::Get_Wasm_Context_By_ID(Module::ID());
+
+    /* Create dummy `PrintOperator` as root operator. */
+    PrintOperator root_op(std::cout); // TODO: add ostream to `SemiJoinReductionOperator`
+
+    /* Get result set name and schema. */
+    M_insist(not context.result_set_infos.empty(), "no result set info available");
+    auto &[result_set_name, result_set_schema] = context.result_set_infos.front();
+
+    /* Get number of result tuples. */
+    auto num_tuples = info[1].As<v8::BigInt>()->Uint64Value();
+
+    std::cout << "Result set for " << result_set_name << ':' << std::endl;
+    if (not Options::Get().benchmark) {
+        /* Get offset of result set. */
+        auto result_set_offset = info[0].As<v8::BigInt>()->Uint64Value();
+
+        read_result_set_(result_set_offset, num_tuples, result_set_schema, root_op);
+    }
+    std::cout << num_tuples << " rows" << std::endl;
+
+    context.result_set_infos.pop(); // remove current result set info
+}
+
+
 /*======================================================================================================================
  * V8Engine helper classes
  *====================================================================================================================*/
@@ -847,6 +875,9 @@ void V8Engine::execute(const m::MatchBase &plan)
         v8::Local<v8::ObjectTemplate> global = v8::ObjectTemplate::New(isolate_);
         global->Set(isolate_, "set_wasm_instance_raw_memory", v8::FunctionTemplate::New(isolate_, set_wasm_instance_raw_memory));
         global->Set(isolate_, "read_result_set", v8::FunctionTemplate::New(isolate_, read_result_set));
+        global->Set(isolate_, "read_semi_join_reduction_result_set",
+                    v8::FunctionTemplate::New(isolate_, read_semi_join_reduction_result_set));
+
         v8::Local<v8::Context> context = v8::Context::New(isolate_, /* extensions= */ nullptr, global);
         v8::Context::Scope context_scope(context);
 
@@ -1066,6 +1097,7 @@ v8::Local<v8::Object> m::wasm::detail::create_env(v8::Isolate &isolate, const m:
 
     /* Add functions to environment. */
     Module::Get().emit_function_import<void(void*,uint64_t)>("read_result_set");
+    Module::Get().emit_function_import<void(void*,uint64_t)>("read_semi_join_reduction_result_set");
 #define ADD_FUNC(FUNC) { \
     auto func = v8::Function::New(Ctx, (FUNC)).ToLocalChecked(); \
     env->Set(Ctx, mkstr(isolate, #FUNC), func).Check(); \
@@ -1074,6 +1106,7 @@ v8::Local<v8::Object> m::wasm::detail::create_env(v8::Isolate &isolate, const m:
     ADD_FUNC(print)
     ADD_FUNC(print_memory_consumption)
     ADD_FUNC(read_result_set)
+    ADD_FUNC(read_semi_join_reduction_result_set)
 #undef ADD_FUNC
     {
         auto func = v8::Function::New(Ctx, _throw).ToLocalChecked();
@@ -1104,6 +1137,7 @@ std::string m::wasm::detail::create_js_debug_script(v8::Isolate &isolate, v8::Lo
     env_str.insert(env_str.length() - 1, "\"print\": function (arg) { console.log(arg); },");
     env_str.insert(env_str.length() - 1, "\"throw\": function (ex) { console.error(ex); },");
     env_str.insert(env_str.length() - 1, "\"read_result_set\": read_result_set,");
+    env_str.insert(env_str.length() - 1, "\"read_semi_join_reduction_result_set\": read_semi_join_reduction_result_set,");
 
     /* Construct import object. */
     oss << "\

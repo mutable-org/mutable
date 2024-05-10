@@ -1,9 +1,20 @@
 #include "backend/WasmOperator.hpp"
 
 #include "backend/WasmAlgo.hpp"
+#include "backend/WasmDSL.hpp"
 #include "backend/WasmMacro.hpp"
+#include "backend/WasmUtil.hpp"
+#include <algorithm>
+#include <iterator>
 #include <mutable/catalog/Catalog.hpp>
+#include <mutable/catalog/Schema.hpp>
+#include <mutable/IR/Condition.hpp>
+#include <mutable/IR/Operator.hpp>
+#include <mutable/IR/QueryGraph.hpp>
+#include <mutable/Options.hpp>
+#include <mutable/util/macro.hpp>
 #include <numeric>
+#include <unordered_map>
 
 
 using namespace m;
@@ -454,6 +465,7 @@ void m::register_wasm_operators(PhysicalOptimizer &phys_opt)
     phys_opt.register_operator<Print<false>>();
     phys_opt.register_operator<Print<true>>();
     phys_opt.register_operator<Scan<false>>();
+    phys_opt.register_operator<SemiJoinReduction>();
     if (options::simd)
         phys_opt.register_operator<Scan<true>>();
     if (bool(options::filter_selection_strategy bitand option_configs::SelectionStrategy::BRANCHING))
@@ -4356,6 +4368,768 @@ void SortMergeJoin<SortLeft, SortRight, Predicated, CmpPredicated>::execute(
     teardown();
 }
 
+/*======================================================================================================================
+ * SemiJoinReduction
+ *====================================================================================================================*/
+
+ConditionSet SemiJoinReduction::pre_condition(std::size_t, const std::tuple<const SemiJoinReductionOperator*>&)
+{
+    ConditionSet pre_cond;
+
+    /*----- SemiJoinReduction does not support SIMD. -----*/
+    pre_cond.add_condition(NoSIMD());
+
+    return pre_cond;
+}
+
+/* We have to implement this method because we have multiple children. */
+ConditionSet
+SemiJoinReduction::adapt_post_conditions(const Match<SemiJoinReduction> &,
+                                         std::vector<std::reference_wrapper<const ConditionSet>> &&post_cond_children)
+{
+    M_insist(post_cond_children.size() >= 2);
+    ConditionSet post_cond;
+    post_cond.add_condition(NoSIMD());
+    post_cond.add_condition(Predicated(false));
+    return post_cond;
+}
+
+void SemiJoinReduction::execute(const Match<SemiJoinReduction> &M, setup_t, pipeline_t, teardown_t)
+{
+    // TODO: determine setup
+    const uint64_t PAYLOAD_SIZE_THRESHOLD_IN_BITS =
+        M.use_in_place_values ? std::numeric_limits<uint64_t>::max() : 0;
+
+    auto &C = Catalog::Get();
+    auto &context = WasmEngine::Get_Wasm_Context_By_ID(Module::ID());
+    context.result_set_factory = M.materializing_factory->clone(); // register factory for printing
+
+    auto &semi_join_reduction_order = M.semi_join_reduction.semi_join_reduction_order();
+    const auto num_children = M.children.size();
+
+#if 0
+    /*----- Display semi-join reduction order. -----*/
+    std::cout << '[';
+    for (std::size_t i = 0; i < semi_join_reduction_order.size(); ++i) {
+        std::cout << semi_join_reduction_order[i];
+        if (i != semi_join_reduction_order.size() - 1)
+            std::cout << ", ";
+    }
+    std::cout << ']' << std::endl;
+#endif
+
+    /*----- Fill buffer for each child. -----*/
+    std::vector<Schema> schemas; // to own adapted buffer and hash table schemas
+    std::vector<GlobalBuffer> buffers;
+    schemas.reserve(3 * num_children - 2); // upper bound
+    buffers.reserve(num_children);
+    Schema::Identifier cnt(C.pool("cnt"));
+    Schema::Identifier cnt_ptr(C.pool("cnt_ptr"));
+    for (std::size_t i = 0; i < num_children; ++i) {
+        /*----- Create function for each child. -----*/
+        FUNCTION(semi_join_reduction_child_pipeline, void(void))
+        {
+            auto S = CodeGenContext::Get().scoped_environment(); // create scoped environment for this function
+
+            auto &child_op = M.children[i]->get_matched_root();
+            auto &buffer_schema = schemas.emplace_back(child_op.schema().deduplicate().drop_constants());
+
+            /* Add counter to buffer. */
+            buffer_schema.add(cnt, Type::Get_Integer(Type::TY_Vector, 8), Schema::entry_type::NOT_NULLABLE);
+            auto &buffer = buffers.emplace_back(buffer_schema, *M.materializing_factory);
+
+            M.children[i]->execute(
+                /* setup=    */ setup_t::Make_Without_Parent([&](){ buffer.setup(); }),
+                /* pipeline= */ [&](){
+                    CodeGenContext::Get().env().add(cnt, I64x1(0));
+                    buffer.consume();
+                },
+                /* teardown= */ teardown_t::Make_Without_Parent([&](){ buffer.teardown(); })
+            );
+        }
+        semi_join_reduction_child_pipeline(); // call child pipeline
+    }
+
+    struct semi_join_info_t {
+        std::unique_ptr<HashTable> ht;
+        std::vector<Schema::Identifier> keys; // probe keys in bottom-up, build keys in top-down
+
+        semi_join_info_t(std::unique_ptr<HashTable> ht, std::vector<Schema::Identifier> keys)
+            : ht(std::move(ht))
+            , keys(std::move(keys))
+        { }
+    };
+
+    /*----- Bottom-up Semi-joins. -----*/
+    std::unordered_multimap<std::size_t, semi_join_info_t> processed_data_sources;
+    auto &root = semi_join_reduction_order.front().lhs;
+    for (auto it = semi_join_reduction_order.crbegin(); it != semi_join_reduction_order.crend(); ++it) {
+        auto &parent = it->lhs;
+        auto &child = it->rhs;
+
+        const bool is_leaf = not processed_data_sources.contains(child.id());
+        const bool is_root_child = parent == root;
+
+        /*----- Find join of `child` that joins with `parent`. -----*/
+        auto join_it = std::find_if(child.joins().begin(), child.joins().end(), [&parent](auto &join) {
+            M_insist(join.get().sources().size() == 2, "only binary joins allowed");
+            return join.get().sources()[0].get() == parent or join.get().sources()[1].get() == parent;
+        });
+        M_insist(join_it != child.joins().end(), "must find a join with current parent");
+
+        /*----- Decompose each clause of the join predicate of the form `A.x = B.y` into parts `A.x` and `B.y`. -----*/
+        const auto child_idx = [&]() {
+            auto child_it = std::find_if(M.semi_join_reduction.sources().begin(),
+                                         M.semi_join_reduction.sources().end(),
+                                         [&child](auto &ds) { return *ds == child; });
+            M_insist(child_it != M.semi_join_reduction.sources().end());
+            return std::distance(M.semi_join_reduction.sources().begin(), child_it);
+        }();
+        const auto &child_op = *M.semi_join_reduction.children()[child_idx];
+        const auto [build_keys, probe_keys] = decompose_equi_predicate(join_it->get().condition(), child_op.schema());
+
+        /*----- Build hash table schema. -----*/
+        auto &ht_schema = schemas.emplace_back();
+        for (auto &key : build_keys) {
+            if (ht_schema.has(key))
+                continue; // do not add duplicates to the hash table schema
+            auto e = child_op.schema()[key].second; // copy due to added constraint
+            e.constraints |= Schema::entry_type::NOT_NULLABLE;
+            ht_schema.add(std::move(e));
+        }
+        if (not is_leaf or is_root_child) // add pointer to counter (64-bit address space)
+            ht_schema.add(cnt_ptr, Type::Get_Integer(Type::TY_Vector, 8), Schema::entry_type::NOT_NULLABLE);
+
+        /*----- Compute initial capacity of hash table. -----*/
+        uint32_t initial_capacity = compute_initial_ht_capacity(child_op, M.load_factor);
+
+        /*----- Create hash table for child. -----*/
+        std::unique_ptr<HashTable> ht;
+        std::vector<HashTable::index_t> build_key_indices;
+        for (auto &build_key : build_keys)
+            build_key_indices.push_back(ht_schema[build_key].first);
+        if (M.use_open_addressing_hashing) {
+            uint32_t payload_size_in_bits = is_leaf ? 64 : 0; // payload is pointer to "cnt", i.e. 64 bit, or empty
+            if (payload_size_in_bits < PAYLOAD_SIZE_THRESHOLD_IN_BITS)
+                ht = std::make_unique<LocalOpenAddressingInPlaceHashTable>(ht_schema, std::move(build_key_indices),
+                                                                           initial_capacity);
+            else
+                ht = std::make_unique<LocalOpenAddressingOutOfPlaceHashTable>(ht_schema, std::move(build_key_indices),
+                                                                              initial_capacity);
+            if (M.use_quadratic_probing)
+                as<OpenAddressingHashTableBase>(*ht).set_probing_strategy<QuadraticProbing>();
+            else
+                as<OpenAddressingHashTableBase>(*ht).set_probing_strategy<LinearProbing>();
+        } else {
+            ht = std::make_unique<LocalChainedHashTable>(ht_schema, std::move(build_key_indices), initial_capacity);
+        }
+
+        /*---- Compute buffer index (buffers are sorted based on order of physical child operators). -----*/
+        const auto buffer_idx = [&](){
+            auto child_it = std::find_if(M.children.begin(), M.children.end(), [&child_op](auto &M){
+                return &M->get_matched_root() == &child_op;
+            });
+            M_insist(child_it != M.children.end());
+            return std::distance(M.children.begin(), child_it);
+        }();
+        auto &child_buffer = buffers[buffer_idx];
+
+        const auto [begin, end] = processed_data_sources.equal_range(child.id());
+        const std::size_t num_children = std::distance(begin, end);
+        M_insist(is_leaf or num_children > 0);
+
+        Schema tuple_value_schema;
+        for (auto it = begin; it != end; ++it) {
+            for (auto &probe_key : it->second.keys)
+                tuple_value_schema.add(child_buffer.schema()[probe_key].second);
+        }
+        for (auto &build_key : build_keys)
+            tuple_value_schema.add(child_buffer.schema()[build_key].second);
+        Schema tuple_addr_schema;
+        if (not is_leaf or is_root_child)
+            tuple_addr_schema.add(child_buffer.schema()[cnt].second);
+
+        /*----- Compute semi-join. -----*/
+        M_insist(CodeGenContext::Get().env().empty());
+        child_buffer.setup();
+        child_buffer.execute_pipeline_inline(
+            /* setup=              */ setup_t::Make_Without_Parent([&](){
+                ht->setup();
+                ht->set_high_watermark(M.load_factor);
+            }),
+            /* pipeline=           */ [&](){
+                auto &env = CodeGenContext::Get().env();
+
+                auto probe_and_fill = [&]() -> void {
+                    auto probe_and_fill_rec = [&](std::remove_const_t<decltype(begin)> it, auto &rec) -> void {
+                        if (it == end) {
+                            std::optional<Ptr<I64x1>> ptr;
+                            if (not is_leaf) {
+                                /*----- Increment counter. -----*/
+                                ptr.emplace(env.extract_addr<Ptr<I64x1>>(cnt));
+                                Wasm_insist(not ptr->clone().is_nullptr(), "bottom-up: ptr is nullptr");
+                                *ptr->clone() += int64_t(num_children);
+                            }
+
+                            /*----- Insert into own hash table. -----*/
+                            std::optional<Boolx1> build_key_not_null;
+                            for (auto &build_key : build_keys) {
+                                auto val = env.get(build_key);
+                                if (build_key_not_null)
+                                    build_key_not_null.emplace(*build_key_not_null and not_null(val));
+                                else
+                                    build_key_not_null.emplace(not_null(val));
+                            }
+                            M_insist(bool(build_key_not_null));
+                            IF (*build_key_not_null) { // TODO: predicated version
+                                /*----- Insert key. -----*/
+                                std::vector<SQL_t> key;
+                                for (auto &build_key : build_keys)
+                                    key.emplace_back(env.get(build_key));
+                                auto e = ht->emplace(std::move(key));
+
+                                /*----- Write payload (pointer to cnt). -----*/
+                                if (not is_leaf) { // already extracted `cnt` above
+                                    M_insist(bool(ptr));
+                                    e.extract<_I64x1>(cnt_ptr) = ptr->to<uint64_t>().make_signed();
+                                } else if (is_root_child) {
+                                    ptr.emplace(env.extract_addr<Ptr<I64x1>>(cnt));
+                                    e.extract<_I64x1>(cnt_ptr) = ptr->to<uint64_t>().make_signed();
+                                }
+                            };
+                        } else {
+                            /*----- Probe child hash table and recurse. -----*/
+                            std::vector<SQL_t> key;
+                            for (auto &probe_key : it->second.keys)
+                                key.emplace_back(env.get(probe_key));
+                            Boolx1 found = it->second.ht->find(std::move(key)).second;
+                            IF (found) {
+                                rec(++it, rec);
+                            };
+                        }
+                    };
+                    probe_and_fill_rec(begin, probe_and_fill_rec);
+                };
+                probe_and_fill();
+            },
+            /* teardown=           */ teardown_t::Make_Without_Parent([&](){
+                for (auto it = begin; it != end; ++it)
+                    it->second.ht->teardown(); // teardown local child hash tables after probing
+                processed_data_sources.erase(begin, end); // remove processed children
+            }),
+            /* tuple_value_schema= */ tuple_value_schema,
+            /* tuple_addr_schema=  */ tuple_addr_schema
+        );
+        child_buffer.teardown();
+        CodeGenContext::Get().env().clear(); // explicitly clear environment between independent semi-joins
+
+        processed_data_sources.emplace(
+            std::piecewise_construct,
+            std::forward_as_tuple(parent.id()),
+            std::forward_as_tuple(std::move(ht), std::move(probe_keys))
+        );
+    }
+
+#if 0
+    /* Print buffers. */
+    for (std::size_t i = 0; i < buffers.size(); ++i) {
+        auto &buffer = buffers[i];
+        std::ostringstream oss;
+        oss << "Bottom-up buffer " << i;
+        context.result_set_infos.push({C.pool(oss.str().c_str()), buffer.schema()});
+        Module::Get().emit_call<void>("read_semi_join_reduction_result_set", buffer.base_address(),
+                                      buffer.size());
+    }
+#endif
+
+    /*----- Root. -----*/
+#ifndef NDEBUG
+    std::for_each(processed_data_sources.cbegin(), processed_data_sources.cend(), [&](const auto& e) {
+        M_insist(e.first == root.id()); // ensure there are only entries with the root as key
+    });
+#endif
+    const auto [begin, end] = processed_data_sources.equal_range(root.id());
+    const std::size_t num_root_children = std::distance(begin, end);
+    M_insist(num_root_children > 0);
+    {
+        struct probe_hint_t {
+            std::vector<SQL_t> key;
+            Ptr<void> hint;
+
+            probe_hint_t(std::vector<SQL_t> key, Ptr<void> hint) : key(std::move(key)), hint(hint) { }
+        };
+        std::vector<probe_hint_t> probe_hints;
+
+        /*---- Compute buffer index (buffers are sorted based on order of physical child operators). -----*/
+        const auto root_idx = [&](){
+            auto root_it = std::find_if(M.semi_join_reduction.sources().begin(),
+                                        M.semi_join_reduction.sources().end(),
+                                        [&root](auto &ds) { return *ds == root; });
+            M_insist(root_it != M.semi_join_reduction.sources().end());
+            auto root_idx = std::distance(M.semi_join_reduction.sources().begin(), root_it);
+            auto root_op = M.semi_join_reduction.children()[root_idx];
+            auto child_it = std::find_if(M.children.begin(), M.children.end(), [&root_op](auto &M){
+                return &M->get_matched_root() == root_op;
+            });
+            M_insist(child_it != M.children.end());
+            return std::distance(M.children.begin(), child_it);
+        }();
+        auto &root_buffer = buffers[root_idx];
+
+        Schema tuple_value_schema;
+        for (auto it = begin; it != end; ++it) {
+            for (auto &probe_key : it->second.keys)
+                tuple_value_schema.add(root_buffer.schema()[probe_key].second);
+        }
+        Schema tuple_addr_schema;
+        tuple_addr_schema.add(root_buffer.schema()[cnt].second);
+
+        /*----- Compute semi-join. -----*/
+        M_insist(CodeGenContext::Get().env().empty());
+        root_buffer.setup();
+        root_buffer.execute_pipeline_inline(
+            /* setup=              */ setup_t::Make_Without_Parent([](){}),
+            /* pipeline=           */ [&](){
+                auto &env = CodeGenContext::Get().env();
+
+                auto probe_and_fill = [&]() -> void {
+                    auto probe_and_fill_rec = [&](std::remove_const_t<decltype(begin)> it, auto &rec) -> void {
+                        if (it == end) {
+                            /*----- Increment counter. -----*/
+                            auto ptr = env.extract_addr<Ptr<I64x1>>(cnt);
+                            Wasm_insist(not ptr.clone().is_nullptr(), "root::increment_counter: ptr is nullptr");
+                            *ptr += int64_t(num_root_children);
+
+                            /*----- Iterate over child hash table matches and increment counter. -----*/
+                            M_insist(num_root_children == probe_hints.size());
+                            for (std::size_t i = 0; i < num_root_children; ++i) {
+                                auto& [key, hint] = probe_hints[i];
+                                auto &ht = std::next(begin, i)->second.ht;
+                                ht->for_each_in_equal_range(std::move(key), [&cnt_ptr](HashTable::const_entry_t e) {
+                                    auto ptr = _I64x1(e.extract<_I64x1>(cnt_ptr)).insist_not_null()
+                                                                                 .make_unsigned()
+                                                                                 .to<int64_t*>();
+                                    Wasm_insist(not ptr.clone().is_nullptr(), "root:increment_child_counter: ptr is nullptr");
+                                    *ptr += int64_t(1);
+                                }, false, hint);
+                            }
+                        } else {
+                            /*----- Probe child hash table and recurse. -----*/
+                            std::vector<SQL_t> key;
+                            for (auto &probe_key : it->second.keys)
+                                key.emplace_back(env.get(probe_key));
+                            auto hint = it->second.ht->compute_bucket(HashTable::clone(key));
+                            Boolx1 found = it->second.ht->find(HashTable::clone(key), hint.clone()).second;
+                            probe_hints.emplace_back(std::move(key), hint);
+                            IF (found) {
+                                rec(++it, rec);
+                            };
+                        }
+                    };
+                    probe_and_fill_rec(begin, probe_and_fill_rec);
+                };
+                probe_and_fill();
+            },
+            /* teardown=           */ teardown_t::Make_Without_Parent([&](){
+                for (auto it = begin; it != end; ++it)
+                    it->second.ht->teardown(); // teardown local child hash tables after probing
+                processed_data_sources.erase(begin, end); // remove processed children
+            }),
+            /* tuple_value_schema= */ tuple_value_schema,
+            /* tuple_addr_schema=  */ tuple_addr_schema
+        );
+        root_buffer.teardown();
+        CodeGenContext::Get().env().clear(); // explicitly clear environment between independent semi-joins
+    }
+
+#if 0
+    /* Print buffers. */
+    for (std::size_t i = 0; i < buffers.size(); ++i) {
+        auto &buffer = buffers[i];
+        std::ostringstream oss;
+        oss << "Root buffer " << i;
+        context.result_set_infos.push({C.pool(oss.str().c_str()), buffer.schema()});
+        Module::Get().emit_call<void>("read_semi_join_reduction_result_set", buffer.base_address(),
+                                      buffer.size());
+    }
+#endif
+
+    /*----- Top-down Semi-joins. -----*/
+    M_insist(processed_data_sources.empty());
+    std::unordered_set<std::size_t> relations_to_reduce;
+    M_insist(M.semi_join_reduction.sources().size() == M.semi_join_reduction.children().size());
+    for (std::size_t idx = 0; idx < M.semi_join_reduction.sources().size(); ++idx) {
+        for (auto &e : M.semi_join_reduction.children()[idx]->schema()) {
+            if (M.semi_join_reduction.schema().has(e.id)) { // contained in result set
+                relations_to_reduce.insert(M.semi_join_reduction.sources()[idx]->id()); // relations contributing to the result set must be reduced
+                break;
+            }
+        }
+    }
+
+    std::optional<Block> top_down_block;
+    std::ostringstream oss;
+    for (auto it = semi_join_reduction_order.crbegin(); it != semi_join_reduction_order.crend(); ++it) {
+        auto &parent = it->lhs;
+        auto &child = it->rhs;
+
+        if (not relations_to_reduce.contains(child.id()))
+            continue;
+        relations_to_reduce.insert(parent.id()); // entire path to the root must be reduced
+
+        const bool child_is_leaf = not processed_data_sources.contains(child.id());
+        const bool parent_is_root = parent == root;
+
+        if (child_is_leaf and parent_is_root) // we already processed this child in the root part
+            continue;
+
+        oss.str("");
+        oss << "top_down_semi_join_" << parent.name() << '_' << child.name();
+        Block current_block(oss.str(), false);
+
+        /*----- Find join of `child` that joins with `parent`. -----*/
+        auto join_it = std::find_if(child.joins().begin(), child.joins().end(), [&parent](auto &join) {
+            M_insist(join.get().sources().size() == 2, "only binary joins allowed");
+            return join.get().sources()[0].get() == parent or join.get().sources()[1].get() == parent;
+        });
+        M_insist(join_it != child.joins().end(), "must find a join with current parent");
+
+        /*----- Decompose each clause of the join predicate of the form `A.x = B.y` into parts `A.x` and `B.y`. -----*/
+        const auto parent_idx = [&]() {
+            auto parent_it = std::find_if(M.semi_join_reduction.sources().begin(),
+                                          M.semi_join_reduction.sources().end(),
+                                          [&parent](auto &ds) { return *ds == parent; });
+            M_insist(parent_it != M.semi_join_reduction.sources().end());
+            return std::distance(M.semi_join_reduction.sources().begin(), parent_it);
+        }();
+        const auto &parent_op = *M.semi_join_reduction.children()[parent_idx];
+        const auto [build_keys, probe_keys] = decompose_equi_predicate(join_it->get().condition(), parent_op.schema());
+
+        std::unique_ptr<HashTable> ht;
+        if (not parent_is_root) {
+            /*----- Build hash table schema. -----*/
+            auto &ht_schema = schemas.emplace_back();
+            for (auto &key : build_keys) {
+                if (ht_schema.has(key))
+                    continue; // do not add duplicates to the hash table schema
+                auto e = parent_op.schema()[key].second; // copy due to added constraint
+                e.constraints |= Schema::entry_type::NOT_NULLABLE;
+                ht_schema.add(std::move(e));
+            }
+
+            /*----- Compute initial capacity of hash table. -----*/
+            uint32_t initial_capacity = compute_initial_ht_capacity(parent_op, M.load_factor);
+
+            /*----- Create hash table for parent. -----*/
+            std::vector<HashTable::index_t> build_key_indices;
+            for (auto &build_key : build_keys)
+                build_key_indices.push_back(ht_schema[build_key].first);
+            if (M.use_open_addressing_hashing) {
+                ht = std::make_unique<LocalOpenAddressingInPlaceHashTable>(ht_schema, std::move(build_key_indices),
+                                                                           initial_capacity);
+                if (M.use_quadratic_probing)
+                    as<OpenAddressingHashTableBase>(*ht).set_probing_strategy<QuadraticProbing>();
+                else
+                    as<OpenAddressingHashTableBase>(*ht).set_probing_strategy<LinearProbing>();
+            } else {
+                ht = std::make_unique<LocalChainedHashTable>(ht_schema, std::move(build_key_indices), initial_capacity);
+            }
+        }
+
+        /*---- Compute buffer index (buffers are sorted based on order of physical child operators). -----*/
+        const auto child_idx = [&](){
+            auto child_it = std::find_if(M.semi_join_reduction.sources().begin(),
+                                         M.semi_join_reduction.sources().end(),
+                                         [&child](auto &ds) { return *ds == child; });
+            M_insist(child_it != M.semi_join_reduction.sources().end());
+            auto child_idx = std::distance(M.semi_join_reduction.sources().begin(), child_it);
+            auto child_op = M.semi_join_reduction.children()[child_idx];
+            auto it = std::find_if(M.children.begin(), M.children.end(), [&child_op](auto &M){
+                return &M->get_matched_root() == child_op;
+            });
+            M_insist(it != M.children.end());
+            return std::distance(M.children.begin(), it);
+        }();
+        auto &child_buffer = buffers[child_idx];
+
+        const auto [begin, end] = processed_data_sources.equal_range(child.id());
+        const std::size_t num_children = std::distance(begin, end);
+        M_insist(child_is_leaf or num_children > 0);
+
+        Schema tuple_value_schema;
+        if (not parent_is_root) {
+            for (auto &probe_key : probe_keys)
+                tuple_value_schema.add(child_buffer.schema()[probe_key].second);
+        } else {
+            tuple_value_schema.add(child_buffer.schema()[cnt].second);
+        }
+        if (not child_is_leaf) {
+            for (auto it = begin; it != end; ++it) {
+                for (auto &build_key : it->second.keys)
+                    tuple_value_schema.add(child_buffer.schema()[build_key].second);
+            }
+        }
+        Schema tuple_addr_schema;
+        if (not parent_is_root)
+            tuple_addr_schema.add(child_buffer.schema()[cnt].second);
+
+        /*----- Compute semi-join. -----*/
+        if (not parent_is_root) {
+            /* Must be emitted outside of `current_block` to guarantee that hash table is allocated before use in later
+             * iteration (blocks are emitted in reverse order). */
+            ht->setup();
+            ht->set_high_watermark(M.load_factor);
+        }
+        BLOCK_OPEN(current_block) {
+            M_insist(CodeGenContext::Get().env().empty());
+            child_buffer.setup();
+            child_buffer.execute_pipeline_inline(
+                /* setup=              */ setup_t::Make_Without_Parent([](){}),
+                /* pipeline=           */ [&](){
+                    auto &env = CodeGenContext::Get().env();
+
+                    /*----- Either check counter or probe parent hash table. -----*/
+                    Boolx1 cond = [&](){
+                        if (parent_is_root) {
+                            auto cnt_value = env.extract<_I64x1>(cnt).insist_not_null();
+                            return cnt_value >= int64_t(child.joins().size());
+                        } else {
+                            std::vector<SQL_t> key;
+                            for (auto &probe_key : probe_keys)
+                                key.emplace_back(env.get(probe_key));
+                            return ht->find(std::move(key)).second;
+                        }
+                    }();
+                    IF (cond) {
+                        if (not parent_is_root) {
+                            /*----- Increment counter. -----*/
+                            auto ptr = env.extract_addr<Ptr<I64x1>>(cnt);
+                            *ptr += int64_t(1);
+                        }
+                        if (not child_is_leaf) {
+                            for (auto info_it = begin; info_it != end; ++info_it) {
+#ifndef NDEBUG
+                                std::optional<Boolx1> build_key_not_null;
+                                for (auto &build_key : info_it->second.keys) {
+                                    auto val = env.get(build_key);
+                                    if (build_key_not_null)
+                                        build_key_not_null.emplace(*build_key_not_null and not_null(val));
+                                    else
+                                        build_key_not_null.emplace(not_null(val));
+                                }
+                                M_insist(bool(build_key_not_null));
+                                Wasm_insist(*build_key_not_null,
+                                            "must have a join partner in bottom-up pass, cannot be null");
+#endif
+
+                                /*----- Insert key. -----*/
+                                std::vector<SQL_t> key;
+                                for (auto &build_key : info_it->second.keys)
+                                    key.emplace_back(env.get(build_key));
+                                info_it->second.ht->emplace(std::move(key));
+                            }
+                        }
+                    };
+                },
+                /* teardown=           */ teardown_t::Make_Without_Parent([](){}),
+                /* tuple_value_schema= */ tuple_value_schema,
+                /* tuple_addr_schema=  */ tuple_addr_schema
+            );
+            child_buffer.teardown();
+            CodeGenContext::Get().env().clear(); // explicitly clear environment between independent semi-joins
+
+            if (top_down_block)
+                top_down_block->attach_to_current(); // attach in reverse order
+        }
+
+        if (not parent_is_root) {
+            processed_data_sources.emplace(
+                std::piecewise_construct,
+                std::forward_as_tuple(parent.id()),
+                std::forward_as_tuple(std::move(ht), std::move(build_keys))
+            );
+        }
+
+        top_down_block = std::move(current_block);
+    }
+    if (top_down_block)
+        top_down_block->attach_to_current();
+
+    for (auto &v : processed_data_sources)
+        v.second.ht->teardown(); // teardown local child hash tables to guarantee that they exist for all blocks
+    processed_data_sources.clear(); // explicitly delete hash tables, does not emit any code
+
+#if 0
+    /* Print buffers. */
+    for (std::size_t i = 0; i < buffers.size(); ++i) {
+        auto &buffer = buffers[i];
+        std::ostringstream oss;
+        oss << "Top-down buffer " << i;
+        context.result_set_infos.push({C.pool(oss.str().c_str()), buffer.schema()});
+        Module::Get().emit_call<void>("read_semi_join_reduction_result_set", buffer.base_address(),
+                                      buffer.size());
+    }
+#endif
+
+    /*----- Remove duplicate entries (due to projection or join) and print result sets. -----*/
+    for (std::size_t i = 0; i < buffers.size(); ++i) {
+        auto &buffer = buffers[i];
+        auto &child = M.children[i];
+        auto &child_op = child->get_matched_root();
+
+        /*----- Compute schema of result sets. -----*/
+        std::unordered_map<ThreadSafePooledString, Schema> result_data_sources; ///< maps data source names to their result schema
+        visit(overloaded {
+            [&M, &result_data_sources](const MatchLeaf &M_leaf){
+                M_insist(is<const Match<Scan<false>>>(M_leaf), "currently only wasm::Scan<false> supported");
+                auto &M_scan = as<const Match<Scan<false>>>(M_leaf);
+
+                Schema s;
+                for (auto &e : M_scan.scan.schema()) {
+                    if (M.semi_join_reduction.schema().has(e.id)) // contained in result set
+                        s.add(e);
+                }
+                if (not s.empty()) {
+                    result_data_sources.emplace(
+                        std::piecewise_construct,
+                        std::forward_as_tuple(M_scan.scan.alias()),
+                        std::forward_as_tuple(std::move(s))
+                    );
+                }
+            },
+            [&M, &result_data_sources](const Match<Projection> &M_proj){
+                Schema s;
+                for (auto &e : M_proj.projection.schema()) {
+                    if (M.semi_join_reduction.schema().has(e.id)) // contained in result set
+                        s.add(e);
+                }
+                M_insist(std::all_of(M_proj.projection.schema().begin(), M_proj.projection.schema().end(), [&](auto &e){
+                    return e.id.prefix == M_proj.projection.schema()[0].id.prefix;
+                }));
+                if (not s.empty()) {
+                    result_data_sources.emplace(
+                        std::piecewise_construct,
+                        std::forward_as_tuple(M_proj.projection.schema()[0].id.prefix),
+                        std::forward_as_tuple(std::move(s))
+                    );
+                }
+                throw visit_skip_subtree();
+            },
+            []<typename T>(T&) requires (not std::derived_from<T, MatchLeaf>) { /* nothing to be done */ }
+        }, *child, tag<ConstPreOrderMatchBaseVisitor>());
+
+        std::vector<std::unique_ptr<HashTable>> hash_tables;
+        std::vector<Schema> ht_schemas; // to own hash table schemas for result sets
+        hash_tables.reserve(result_data_sources.size());
+        ht_schemas.reserve(result_data_sources.size());
+        for (auto &[ds_name, proj_schema] : result_data_sources) {
+            /*----- Compute initial capacity of hash table. -----*/
+            uint32_t initial_capacity = compute_initial_ht_capacity(child_op, M.load_factor);
+
+            /*----- Create hash table to remove duplicates. -----*/
+            auto &ht_schema = ht_schemas.emplace_back(proj_schema.deduplicate().drop_constants());
+            std::vector<HashTable::index_t> build_key_indices;
+            for (auto &key : proj_schema)
+                build_key_indices.push_back(ht_schema[key.id].first);
+            if (M.use_open_addressing_hashing) {
+                hash_tables.push_back(
+                    std::make_unique<LocalOpenAddressingInPlaceHashTable>(ht_schema, std::move(build_key_indices),
+                                                                          initial_capacity)
+                );
+                if (M.use_quadratic_probing)
+                    as<OpenAddressingHashTableBase>(*hash_tables.back()).set_probing_strategy<QuadraticProbing>();
+                else
+                    as<OpenAddressingHashTableBase>(*hash_tables.back()).set_probing_strategy<LinearProbing>();
+            } else {
+                hash_tables.push_back(
+                    std::make_unique<LocalChainedHashTable>(ht_schema, std::move(build_key_indices), initial_capacity)
+                );
+            }
+        }
+
+        /*----- Fill all hash tables. -----*/
+        Schema tuple_value_schema;
+        for (auto &ht : hash_tables)
+            tuple_value_schema += ht->schema();
+        tuple_value_schema.add(buffer.schema()[cnt].second);
+
+        buffer.setup();
+        buffer.execute_pipeline_inline(
+            /* setup=              */ setup_t::Make_Without_Parent([&](){
+                for (auto &ht : hash_tables) {
+                    ht->setup();
+                    ht->set_high_watermark(M.load_factor);
+                }
+            }),
+            /* pipeline=           */ [&](){
+                auto &env = CodeGenContext::Get().env();
+
+                /*---- Compute number of join partners of this physical operator. -----*/
+                const int64_t num_joins = [&](){
+                    auto child_it = std::find_if(M.semi_join_reduction.children().begin(),
+                                                 M.semi_join_reduction.children().end(),
+                                                 [&child_op](auto c) { return c == &child_op; });
+                    M_insist(child_it != M.semi_join_reduction.children().end());
+                    auto child_idx = std::distance(M.semi_join_reduction.children().begin(), child_it);
+                    return M.semi_join_reduction.sources()[child_idx]->joins().size();
+                }();
+
+                auto cnt_value = env.extract<_I64x1>(cnt).insist_not_null();
+                Boolx1 cond = cnt_value >= num_joins;
+                IF (cond) { // check whether tuple qualifies, i.e. all semi-joins matched
+                    for (auto &ht : hash_tables) {
+                        /*----- Insert key. -----*/
+                        std::vector<SQL_t> key;
+                        for (auto &e : ht->schema())
+                            key.emplace_back(env.extract(e.id));
+                        ht->try_emplace(std::move(key)).second.discard(); // discard returned found flag
+                    }
+                };
+            },
+            /* teardown=           */ teardown_t::Make_Without_Parent([](){}),
+            /* tuple_value_schema= */ tuple_value_schema
+        );
+        buffer.teardown();
+
+        /*----- Write and print a result set buffer for each hash table. -----*/
+        auto ht_it = hash_tables.begin();
+        for (auto &p : result_data_sources) {
+            auto &ht = *ht_it;
+            context.result_set_infos.push(std::move(p)); // required for printing the result set
+
+            if (not Options::Get().benchmark) {
+                LocalBuffer result_set(ht->schema(), *M.materializing_factory);
+
+                /*----- Write to buffer. -----*/
+                result_set.setup();
+                ht->for_each([&ht, &result_set](HashTable::const_entry_t ht_e){
+                    auto &env = CodeGenContext::Get().env();
+                    for (auto &e : ht->schema()) {
+                        visit(overloaded {
+                            [&env, &e]<sql_type T>(HashTable::const_reference_t<T> &&r){ env.add(e.id, T(r)); },
+                            [](std::monostate){ M_unreachable("invalid reference"); }
+                        }, ht_e.extract(e.id));
+
+                    }
+                    result_set.consume(); // fill buffer
+                });
+
+                /*----- Print buffer. -----*/
+                Module::Get().emit_call<void>("read_semi_join_reduction_result_set", result_set.base_address(),
+                                              result_set.size());
+
+                result_set.teardown();
+            } else {
+                /*----- Print number of result rows *without* writing to buffer. -----*/
+                Module::Get().emit_call<void>("read_semi_join_reduction_result_set", Ptr<void>::Nullptr(),
+                                              ht->num_entries());
+            }
+            ++ht_it;
+        }
+    }
+}
+
+double SemiJoinReduction::cost(const Match<SemiJoinReduction>&) { return 0; };
 
 /*======================================================================================================================
  * Limit
@@ -5342,6 +6116,20 @@ void Match<m::wasm::SortMergeJoin<SortLeft, SortRight, Predicated, CmpPredicated
     right.print(out, level + 1);
     indent(out, level) << "left input";
     left.print(out, level + 1);
+}
+
+void Match<m::wasm::SemiJoinReduction>::print(std::ostream &out, unsigned level) const
+{
+    indent(out, level) << "wasm::SemiJoinReduction ";
+    out << this->semi_join_reduction.schema() << " (cumulative cost " << cost() << ')';
+
+    ++level;
+    std::size_t i = this->children.size();
+    while (i--) {
+        const m::wasm::MatchBase &child = *this->children[i];
+        indent(out, level) << i << ". input";
+        child.print(out, level + 1);
+    }
 }
 
 void Match<m::wasm::Limit>::print(std::ostream &out, unsigned level) const

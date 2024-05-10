@@ -83,6 +83,7 @@ void print(const v8::FunctionCallbackInfo<v8::Value> &info);
 void print_memory_consumption(const v8::FunctionCallbackInfo<v8::Value> &info);
 void set_wasm_instance_raw_memory(const v8::FunctionCallbackInfo<v8::Value> &info);
 void read_result_set(const v8::FunctionCallbackInfo<v8::Value> &info);
+void read_semi_join_reduction_result_set(const v8::FunctionCallbackInfo<v8::Value> &info);
 
 v8::Local<v8::String> mkstr(v8::Isolate &isolate, const std::string &str);
 v8::Local<v8::WasmModuleObject> instantiate(v8::Isolate &isolate, v8::Local<v8::Object> imports);

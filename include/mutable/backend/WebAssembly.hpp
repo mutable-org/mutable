@@ -6,6 +6,7 @@
 #include <mutable/storage/DataLayoutFactory.hpp>
 #include <mutable/util/macro.hpp>
 #include <mutable/util/memory.hpp>
+#include <queue>
 #include <unordered_map>
 
 
@@ -37,6 +38,8 @@ struct WasmEngine
         const MatchBase &plan; ///< current plan
         ///> factory used to create the result set data layout
         std::unique_ptr<const storage::DataLayoutFactory> result_set_factory;
+        ///> names and schemas of all result sets, only used for `read_semi_join_reduction_result_set` host function
+        std::queue<std::pair<ThreadSafePooledString, Schema>> result_set_infos;
         memory::AddressSpace vm; ///<  WebAssembly module instance's virtual address space aka.\ *linear memory*
         uint64_t heap = 0; ///< beginning of the heap, encoded as offset from the beginning of the virtual address space
 

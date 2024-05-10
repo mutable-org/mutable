@@ -1313,10 +1313,12 @@ compile_data_layout_sequential(const Schema &_tuple_value_schema, const Schema &
                                     );
                                     new (&values[tuple_value_idx]) SQL_t(T(value));
                                 }
-                                if (tuple_addr_it != tuple_addr_schema.end())
+                                if (tuple_addr_it != tuple_addr_schema.end()) {
+                                    Wasm_insist(not ((ptr + static_byte_offset).template to<type*, lanes>()).is_nullptr(), "compile_data_layout_sequential: inserting nullptr");
                                     new (&addrs[tuple_addr_idx]) SQL_addr_t(
                                         (ptr + static_byte_offset).template to<type*, lanes>()
                                     );
+                                }
                             }
                         },
                         []<typename>() {
@@ -2318,10 +2320,12 @@ void compile_data_layout_point_access(const Schema &_tuple_value_schema, const S
                             Var<PrimitiveExpr<type>> value(*(ptr.clone() + static_byte_offset).template to<type*>());
                             new (&values[tuple_value_idx]) SQL_t(T(value));
                         }
-                        if (tuple_addr_it != tuple_addr_schema.end())
+                        if (tuple_addr_it != tuple_addr_schema.end()) {
+                            Wasm_insist(not ((ptr.clone() + static_byte_offset).template to<type*>()).is_nullptr(), "compile_data_layout_point_access: inserting nullptr");
                             new (&addrs[tuple_addr_idx]) SQL_addr_t(
                                 (ptr.clone() + static_byte_offset).template to<type*>()
                             );
+                        }
                         ptr.discard();
                     };
                     /*----- Select call target (store or load) and visit attribute type. -----*/

@@ -486,7 +486,6 @@ struct HashTable
     using callback_t = std::function<void(const_entry_t)>;
     using hint_t = std::optional<Ptr<void>>;
 
-    protected:
     ///> Copies the vector of `SQL_t`s \p values.
     static std::vector<SQL_t> clone(const std::vector<SQL_t> &values) {
         std::vector<SQL_t> cpy;

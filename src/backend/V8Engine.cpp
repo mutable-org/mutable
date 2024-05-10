@@ -309,23 +309,15 @@ void m::wasm::detail::set_wasm_instance_raw_memory(const v8::FunctionCallbackInf
     v8::SetWasmInstanceRawMemory(wasm_instance, wasm_context.vm.as<uint8_t*>(), wasm_context.vm.size());
 }
 
-void m::wasm::detail::read_result_set(const v8::FunctionCallbackInfo<v8::Value> &info)
+void read_result_set_(uint32_t result_set_offset, uint32_t num_tuples, const Schema &schema, const Operator &root_op)
 {
-    auto &context = WasmEngine::Get_Wasm_Context_By_ID(Module::ID());
-
-    auto &root_op = context.plan.get_matched_root();
-    auto &schema = root_op.schema();
-    auto deduplicated_schema = schema.deduplicate();
-    auto deduplicated_schema_without_constants = deduplicated_schema.drop_constants();
-
-    /* Get number of result tuples. */
-    auto num_tuples = info[1].As<v8::BigInt>()->Uint64Value();
     if (num_tuples == 0)
         return;
 
-    /* Compute address of result set. */
-    M_insist(info.Length() == 2);
-    auto result_set_offset = info[0].As<v8::BigInt>()->Uint64Value();
+    auto &context = WasmEngine::Get_Wasm_Context_By_ID(Module::ID());
+    auto deduplicated_schema = schema.deduplicate();
+    auto deduplicated_schema_without_constants = deduplicated_schema.drop_constants();
+
     M_insist((result_set_offset == 0) == (deduplicated_schema_without_constants.num_entries() == 0),
              "result set offset equals 0 (i.e. nullptr) iff schema contains only constants");
     auto result_set = context.vm.as<uint8_t*>() + result_set_offset;
@@ -335,9 +327,7 @@ void m::wasm::detail::read_result_set(const v8::FunctionCallbackInfo<v8::Value> 
         auto find_projection_impl = [](const Operator &op, auto &find_projection_ref) -> const ProjectionOperator * {
             if (auto projection_op = cast<const ProjectionOperator>(&op)) {
                 return projection_op;
-            } else if (auto c = cast<const Consumer>(&op)) {
-                M_insist(c->children().size() == 1,
-                         "at least one projection without siblings in the operator tree must be contained");
+            } else if (auto c = cast<const Consumer>(&op); c and c->children().size() == 1) {
                 M_insist(c->schema().num_entries() == c->child(0)->schema().num_entries(),
                          "at least one projection with the same schema as the plan's root must be contained");
 #ifndef NDEBUG
@@ -347,7 +337,7 @@ void m::wasm::detail::read_result_set(const v8::FunctionCallbackInfo<v8::Value> 
 #endif
                 return find_projection_ref(*c->child(0), find_projection_ref);
             } else {
-                return nullptr; // no projection found
+                return nullptr; // no projection found in linear plan from `root_op` to first non-unary operator
             }
         };
         return find_projection_impl(op, find_projection_impl);
@@ -537,6 +527,23 @@ void m::wasm::detail::read_result_set(const v8::FunctionCallbackInfo<v8::Value> 
     }
 }
 
+void m::wasm::detail::read_result_set(const v8::FunctionCallbackInfo<v8::Value> &info)
+{
+    auto &context = WasmEngine::Get_Wasm_Context_By_ID(Module::ID());
+
+    /* Get root operator and its schema. */
+    auto &root_op = context.plan.get_matched_root();
+    auto &result_set_schema = root_op.schema();
+
+    /* Get number of result tuples. */
+    auto num_tuples = info[1].As<v8::BigInt>()->Uint64Value();
+
+    /* Get offset of result set. */
+    M_insist(info.Length() == 2);
+    auto result_set_offset = info[0].As<v8::BigInt>()->Uint64Value();
+
+    read_result_set_(result_set_offset, num_tuples, result_set_schema, root_op);
+}
 
 /*======================================================================================================================
  * V8Engine helper classes

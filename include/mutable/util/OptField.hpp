@@ -20,7 +20,6 @@ struct OptField
     requires std::convertible_to<U, T>
     OptField(U &&value) : value_(std::forward<U>(value)) { }
 
-    operator T() const { return value_; }
     operator T&() { return value_; }
     operator const T&() const { return value_; }
 

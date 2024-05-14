@@ -21,7 +21,6 @@ using namespace m::pe::hs;
 template<typename PlanTable>
 void init_PT_base_case(const QueryGraph &G, PlanTable &PT, const CardinalityEstimator &CE)
 {
-    //auto &CE = Catalog::Get().get_database_in_use().cardinality_estimator();
     using Subproblem = SmallBitset;
     for (auto &ds : G.sources()) {
         Subproblem s = Subproblem::Singleton(ds->id());
@@ -195,6 +194,7 @@ TEST_CASE("AStar_Chain_Bottomup_GOO", "[core][IR]")
         >;
 
         SearchAlgorithm S(plan_table, G, M, C_out, db.cardinality_estimator());
+        ai::SearchConfiguration<config::AStar> config = {};
 
 
         bool search_result = heuristic_search<PlanTable,
@@ -203,10 +203,7 @@ TEST_CASE("AStar_Chain_Bottomup_GOO", "[core][IR]")
                                               SearchAlgorithm,
                                               heuristics::GOO,
                                               config::AStar
-                                              >(plan_table, G, M, C_out, db.cardinality_estimator(), S,
-                                              {
-                                                .weighting_factor = 1.f
-                                                });
+                                              >(plan_table, G, M, C_out, db.cardinality_estimator(), S, config);
 
         /* Caution: In Case of the Injected Cardinality Estimator the join operation is commutative. Therefore the given
          * order of the left and the right subproblem is saved. As subproblems in heuristic search are ordered
@@ -395,7 +392,7 @@ TEST_CASE("AStar_Star_TopDown_zero", "[core][IR]")
         >;
 
         SearchAlgorithm S(plan_table, G, M, C_out, db.cardinality_estimator());
-
+        ai::SearchConfiguration<config::AStar> config = {};
 
         bool search_result = heuristic_search<PlanTable,
                                               search_states::SubproblemsArray,
@@ -403,10 +400,7 @@ TEST_CASE("AStar_Star_TopDown_zero", "[core][IR]")
                                               SearchAlgorithm,
                                               heuristics::zero,
                                               config::AStar
-                                              >(plan_table, G, M, C_out, db.cardinality_estimator(), S,
-                                              {
-                                                .weighting_factor = 1.f
-                                                });
+                                              >(plan_table, G, M, C_out, db.cardinality_estimator(), S, config);
 
         /* Fill `expected` with the anticipated plan. */
         expected.update(G, db.cardinality_estimator(), C_out, R0, R1, condition);
@@ -601,7 +595,7 @@ TEST_CASE("AStar_Clique_TopDown_sum", "[core][IR]")
         >;
 
         SearchAlgorithm S(plan_table, G, M, C_out, db.cardinality_estimator());
-
+        ai::SearchConfiguration<config::AStar> config = {};
 
         bool search_result = heuristic_search<PlanTable,
                                               search_states::SubproblemsArray,
@@ -609,10 +603,7 @@ TEST_CASE("AStar_Clique_TopDown_sum", "[core][IR]")
                                               SearchAlgorithm,
                                               heuristics::sum,
                                               config::AStar
-                                              >(plan_table, G, M, C_out, db.cardinality_estimator(), S,
-                                              {
-                                                .weighting_factor = 1.f
-                                                });
+                                              >(plan_table, G, M, C_out, db.cardinality_estimator(), S, config);
 
         /* Fill `expected` with the anticipated plan. */
         expected.update(G, db.cardinality_estimator(), C_out, R0, R2, condition);
@@ -885,6 +876,8 @@ TEST_CASE("AnytimeAStar_general_functionality_and_TopDown_path_completion", "[co
         SearchAlgorithm S(plan_table, G, M, C_out, db.cardinality_estimator());
 
         uint64_t budget = std::numeric_limits<uint64_t>::max();
+        ai::SearchConfiguration<config::anytimeAStar> config;
+        config.expansion_budget = budget;
 
         bool search_result = heuristic_search<PlanTable,
                                               search_states::SubproblemsArray,
@@ -892,10 +885,7 @@ TEST_CASE("AnytimeAStar_general_functionality_and_TopDown_path_completion", "[co
                                               SearchAlgorithm,
                                               heuristics::zero,
                                               config::anytimeAStar
-                                              >(plan_table, G, M, C_out, db.cardinality_estimator(), S,
-                                              {
-                                                .expansion_budget = budget,
-                                                });
+                                              >(plan_table, G, M, C_out, db.cardinality_estimator(), S, config);
 
         /* Caution: In Case of the Injected Cardinality Estimator the join operation is commutative. Therefore the given
          * order of the left and the right subproblem is saved. As subproblems in heuristic search are ordered
@@ -964,6 +954,8 @@ TEST_CASE("AnytimeAStar_general_functionality_and_TopDown_path_completion", "[co
         SearchAlgorithm S(plan_table, G, M, C_out, db.cardinality_estimator());
 
         uint64_t budget = 0;
+        ai::SearchConfiguration<config::anytimeAStar> config;
+        config.expansion_budget = budget;
 
         bool search_result = heuristic_search<PlanTable,
                                               search_states::SubproblemsArray,
@@ -971,10 +963,7 @@ TEST_CASE("AnytimeAStar_general_functionality_and_TopDown_path_completion", "[co
                                               SearchAlgorithm,
                                               heuristics::zero,
                                               config::anytimeAStar
-                                              >(plan_table, G, M, C_out, db.cardinality_estimator(), S,
-                                              {
-                                                .expansion_budget = budget,
-                                                });
+                                              >(plan_table, G, M, C_out, db.cardinality_estimator(), S, config);
 
         /* Fill `expected` with the anticipated plan. */
         expected.update(G, db.cardinality_estimator(), C_out, R0, R1, condition);
@@ -1038,6 +1027,8 @@ TEST_CASE("AnytimeAStar_general_functionality_and_TopDown_path_completion", "[co
         SearchAlgorithm S(plan_table, G, M, C_out, db.cardinality_estimator());
 
         uint64_t budget = std::numeric_limits<uint64_t>::max();
+        ai::SearchConfiguration<config::anytimeAStar> config;
+        config.expansion_budget = budget;
 
         bool search_result = heuristic_search<PlanTable,
                                               search_states::SubproblemsArray,
@@ -1045,10 +1036,7 @@ TEST_CASE("AnytimeAStar_general_functionality_and_TopDown_path_completion", "[co
                                               SearchAlgorithm,
                                               heuristics::sum,
                                               config::anytimeAStar
-                                              >(plan_table, G, M, C_out, db.cardinality_estimator(), S,
-                                              {
-                                                .expansion_budget = budget
-                                                });
+                                              >(plan_table, G, M, C_out, db.cardinality_estimator(), S, config);
 
         /* Fill `expected` with the anticipated plan. */
         expected.update(G, db.cardinality_estimator(), C_out, R0, R1, condition);
@@ -1110,6 +1098,8 @@ TEST_CASE("AnytimeAStar_general_functionality_and_TopDown_path_completion", "[co
         SearchAlgorithm S(plan_table, G, M, C_out, db.cardinality_estimator());
 
         uint64_t budget = std::numeric_limits<uint64_t>::max();
+        ai::SearchConfiguration<config::anytimeAStar> config;
+        config.expansion_budget = budget;
 
         bool search_result = heuristic_search<PlanTable,
                                               search_states::SubproblemsArray,
@@ -1117,10 +1107,7 @@ TEST_CASE("AnytimeAStar_general_functionality_and_TopDown_path_completion", "[co
                                               SearchAlgorithm,
                                               heuristics::GOO,
                                               config::anytimeAStar
-                                              >(plan_table, G, M, C_out, db.cardinality_estimator(), S,
-                                              {
-                                                .expansion_budget = budget
-                                                });
+                                              >(plan_table, G, M, C_out, db.cardinality_estimator(), S, config);
 
         /* Fill `expected` with the anticipated plan. */
         expected.update(G, db.cardinality_estimator(), C_out, R0, R1, condition);
@@ -1183,6 +1170,8 @@ TEST_CASE("AnytimeAStar_general_functionality_and_TopDown_path_completion", "[co
         SearchAlgorithm S(plan_table, G, M, C_out, db.cardinality_estimator());
 
         uint64_t budget = std::numeric_limits<uint64_t>::max();
+        ai::SearchConfiguration<config::anytimeAStar> config;
+        config.expansion_budget = budget;
 
         bool search_result = heuristic_search<PlanTable,
                                               search_states::SubproblemsArray,
@@ -1190,10 +1179,7 @@ TEST_CASE("AnytimeAStar_general_functionality_and_TopDown_path_completion", "[co
                                               SearchAlgorithm,
                                               heuristics::zero,
                                               config::anytimeAStar
-                                              >(plan_table, G, M, C_out, db.cardinality_estimator(), S,
-                                              {
-                                                .expansion_budget = budget
-                                                });
+                                              >(plan_table, G, M, C_out, db.cardinality_estimator(), S, config);
 
         /* Fill `expected` with the anticipated plan. */
         expected.update(G, db.cardinality_estimator(), C_out, R0, R1, condition);
@@ -1251,6 +1237,8 @@ TEST_CASE("AnytimeAStar_general_functionality_and_TopDown_path_completion", "[co
         SearchAlgorithm S(plan_table, G, M, C_out, db.cardinality_estimator());
 
         uint64_t budget = std::numeric_limits<uint64_t>::max();
+        ai::SearchConfiguration<config::anytimeAStar> config;
+        config.expansion_budget = budget;
 
         bool search_result = heuristic_search<PlanTable,
                                               search_states::SubproblemsArray,
@@ -1258,10 +1246,7 @@ TEST_CASE("AnytimeAStar_general_functionality_and_TopDown_path_completion", "[co
                                               SearchAlgorithm,
                                               heuristics::sum,
                                               config::anytimeAStar
-                                              >(plan_table, G, M, C_out, db.cardinality_estimator(), S,
-                                              {
-                                                .expansion_budget = budget
-                                                });
+                                              >(plan_table, G, M, C_out, db.cardinality_estimator(), S, config);
 
         /* Fill `expected` with the anticipated plan. */
         expected.update(G, db.cardinality_estimator(), C_out, R0, R1, condition);
@@ -1340,6 +1325,8 @@ TEST_CASE("AnytimeAStar_general_functionality_and_TopDown_path_completion", "[co
         SearchAlgorithm S(plan_table, G, M, C_out, db.cardinality_estimator());
 
         uint64_t budget = 0;
+        ai::SearchConfiguration<config::anytimeAStar> config;
+        config.expansion_budget = budget;
 
         bool search_result = heuristic_search<PlanTable,
                                               search_states::SubproblemsArray,
@@ -1347,10 +1334,7 @@ TEST_CASE("AnytimeAStar_general_functionality_and_TopDown_path_completion", "[co
                                               SearchAlgorithm,
                                               heuristics::GOO,
                                               config::anytimeAStar
-                                              >(plan_table, G, M, C_out, db.cardinality_estimator(), S,
-                                              {
-                                                .expansion_budget = budget
-                                                });
+                                              >(plan_table, G, M, C_out, db.cardinality_estimator(), S, config);
 
         /* Fill `expected` with the anticipated plan. */
         /* Full path completion via TDGOO from the starting state. */
@@ -1413,6 +1397,8 @@ TEST_CASE("AnytimeAStar_general_functionality_and_TopDown_path_completion", "[co
         SearchAlgorithm S(plan_table, G, M, C_out, db.cardinality_estimator());
 
         uint64_t budget = 1;
+        ai::SearchConfiguration<config::anytimeAStar> config;
+        config.expansion_budget = budget;
 
         bool search_result = heuristic_search<PlanTable,
                                               search_states::SubproblemsArray,
@@ -1420,10 +1406,7 @@ TEST_CASE("AnytimeAStar_general_functionality_and_TopDown_path_completion", "[co
                                               SearchAlgorithm,
                                               heuristics::GOO,
                                               config::anytimeAStar
-                                              >(plan_table, G, M, C_out, db.cardinality_estimator(), S,
-                                              {
-                                                .expansion_budget = budget
-                                                });
+                                              >(plan_table, G, M, C_out, db.cardinality_estimator(), S, config);
 
         /* Fill `expected` with the anticipated plan. */
         /* Starting state for the path completion: {{R0,R2,R3},{R1}}. */
@@ -1486,6 +1469,8 @@ TEST_CASE("AnytimeAStar_general_functionality_and_TopDown_path_completion", "[co
         SearchAlgorithm S(plan_table, G, M, C_out, db.cardinality_estimator());
 
         uint64_t budget = 2;
+        ai::SearchConfiguration<config::anytimeAStar> config;
+        config.expansion_budget = budget;
 
         bool search_result = heuristic_search<PlanTable,
                                               search_states::SubproblemsArray,
@@ -1493,10 +1478,7 @@ TEST_CASE("AnytimeAStar_general_functionality_and_TopDown_path_completion", "[co
                                               SearchAlgorithm,
                                               heuristics::GOO,
                                               config::anytimeAStar
-                                              >(plan_table, G, M, C_out, db.cardinality_estimator(), S,
-                                              {
-                                                .expansion_budget = budget
-                                                });
+                                              >(plan_table, G, M, C_out, db.cardinality_estimator(), S, config);
 
         /* Fill `expected` with the anticipated plan. */
         /* Starting state for the path completion: {{R2,R3},{R0},{R1}}. */
@@ -1559,6 +1541,8 @@ TEST_CASE("AnytimeAStar_general_functionality_and_TopDown_path_completion", "[co
         SearchAlgorithm S(plan_table, G, M, C_out, db.cardinality_estimator());
 
         uint64_t budget = 3;
+        ai::SearchConfiguration<config::anytimeAStar> config;
+        config.expansion_budget = budget;
 
         bool search_result = heuristic_search<PlanTable,
                                               search_states::SubproblemsArray,
@@ -1566,10 +1550,7 @@ TEST_CASE("AnytimeAStar_general_functionality_and_TopDown_path_completion", "[co
                                               SearchAlgorithm,
                                               heuristics::GOO,
                                               config::anytimeAStar
-                                              >(plan_table, G, M, C_out, db.cardinality_estimator(), S,
-                                              {
-                                                .expansion_budget = budget
-                                                });
+                                              >(plan_table, G, M, C_out, db.cardinality_estimator(), S, config);
 
         /* Fill `expected` with the anticipated plan. */
         /* Leads to the same plan as with budget 2. The state {{R2,R3},{R0},{R1}} is expanded, adding the goal state to
@@ -1634,6 +1615,8 @@ TEST_CASE("AnytimeAStar_general_functionality_and_TopDown_path_completion", "[co
         SearchAlgorithm S(plan_table, G, M, C_out, db.cardinality_estimator());
 
         uint64_t budget = 4;
+        ai::SearchConfiguration<config::anytimeAStar> config;
+        config.expansion_budget = budget;
 
         bool search_result = heuristic_search<PlanTable,
                                               search_states::SubproblemsArray,
@@ -1641,10 +1624,7 @@ TEST_CASE("AnytimeAStar_general_functionality_and_TopDown_path_completion", "[co
                                               SearchAlgorithm,
                                               heuristics::GOO,
                                               config::anytimeAStar
-                                              >(plan_table, G, M, C_out, db.cardinality_estimator(), S,
-                                              {
-                                                .expansion_budget = budget
-                                                });
+                                              >(plan_table, G, M, C_out, db.cardinality_estimator(), S, config);
 
         /* Fill `expected` with the anticipated plan. */
         /* Found cheaper path to state {{R2,R3},{R0},{R1}} by the expansion of {{R1,R2,R3},{R0}}. This leads to a
@@ -1710,6 +1690,8 @@ TEST_CASE("AnytimeAStar_general_functionality_and_TopDown_path_completion", "[co
         SearchAlgorithm S(plan_table, G, M, C_out, db.cardinality_estimator());
 
         uint64_t budget = 5;
+        ai::SearchConfiguration<config::anytimeAStar> config;
+        config.expansion_budget = budget;
 
         bool search_result = heuristic_search<PlanTable,
                                               search_states::SubproblemsArray,
@@ -1717,10 +1699,7 @@ TEST_CASE("AnytimeAStar_general_functionality_and_TopDown_path_completion", "[co
                                               SearchAlgorithm,
                                               heuristics::GOO,
                                               config::anytimeAStar
-                                              >(plan_table, G, M, C_out, db.cardinality_estimator(), S,
-                                              {
-                                                .expansion_budget = budget
-                                                });
+                                              >(plan_table, G, M, C_out, db.cardinality_estimator(), S, config);
 
         /* Fill `expected` with the anticipated plan. */
         /* Leads to the same plan as with budget 4. Here {{R2,R3},{R0},{R1}} is expanded, leading to the goal state on
@@ -1785,6 +1764,8 @@ TEST_CASE("AnytimeAStar_general_functionality_and_TopDown_path_completion", "[co
         SearchAlgorithm S(plan_table, G, M, C_out, db.cardinality_estimator());
 
         uint64_t budget = 6;
+        ai::SearchConfiguration<config::anytimeAStar> config;
+        config.expansion_budget = budget;
 
         bool search_result = heuristic_search<PlanTable,
                                               search_states::SubproblemsArray,
@@ -1792,10 +1773,7 @@ TEST_CASE("AnytimeAStar_general_functionality_and_TopDown_path_completion", "[co
                                               SearchAlgorithm,
                                               heuristics::GOO,
                                               config::anytimeAStar
-                                              >(plan_table, G, M, C_out, db.cardinality_estimator(), S,
-                                              {
-                                                .expansion_budget = budget
-                                                });
+                                              >(plan_table, G, M, C_out, db.cardinality_estimator(), S, config);
 
         /* Fill `expected` with the anticipated plan. */
         /* Again a cheaper path to the goal is found as the new expansion adds a goal state with lower g-value to the
@@ -1859,6 +1837,8 @@ TEST_CASE("AnytimeAStar_general_functionality_and_TopDown_path_completion", "[co
         SearchAlgorithm S(plan_table, G, M, C_out, db.cardinality_estimator());
 
         uint64_t budget = 7;
+        ai::SearchConfiguration<config::anytimeAStar> config;
+        config.expansion_budget = budget;
 
         bool search_result = heuristic_search<PlanTable,
                                               search_states::SubproblemsArray,
@@ -1866,10 +1846,7 @@ TEST_CASE("AnytimeAStar_general_functionality_and_TopDown_path_completion", "[co
                                               SearchAlgorithm,
                                               heuristics::GOO,
                                               config::anytimeAStar
-                                              >(plan_table, G, M, C_out, db.cardinality_estimator(), S,
-                                              {
-                                                .expansion_budget = budget
-                                                });
+                                              >(plan_table, G, M, C_out, db.cardinality_estimator(), S, config);
 
         /* Fill `expected` with the anticipated plan. */
         /* The goal state is expanded, not leading to a cheaper path than already found by path completion. */
@@ -1932,6 +1909,8 @@ TEST_CASE("AnytimeAStar_general_functionality_and_TopDown_path_completion", "[co
         SearchAlgorithm S(plan_table, G, M, C_out, db.cardinality_estimator());
 
         uint64_t budget = 8;
+        ai::SearchConfiguration<config::anytimeAStar> config;
+        config.expansion_budget = budget;
 
         bool search_result = heuristic_search<PlanTable,
                                               search_states::SubproblemsArray,
@@ -1939,10 +1918,7 @@ TEST_CASE("AnytimeAStar_general_functionality_and_TopDown_path_completion", "[co
                                               SearchAlgorithm,
                                               heuristics::GOO,
                                               config::anytimeAStar
-                                              >(plan_table, G, M, C_out, db.cardinality_estimator(), S,
-                                             {
-                                                .expansion_budget = budget
-                                                });
+                                              >(plan_table, G, M, C_out, db.cardinality_estimator(), S, config);
 
         /* Fill `expected` with the anticipated plan. */
         /* As the path to the goal state is found within 7 expansions, a higher budget has to lead to the same path and
@@ -2006,6 +1982,8 @@ TEST_CASE("AnytimeAStar_general_functionality_and_TopDown_path_completion", "[co
         SearchAlgorithm S(plan_table, G, M, C_out, db.cardinality_estimator());
 
         uint64_t budget = std::numeric_limits<uint64_t>::max();
+        ai::SearchConfiguration<config::anytimeAStar> config;
+        config.expansion_budget = budget;
 
         bool search_result = heuristic_search<PlanTable,
                                               search_states::SubproblemsArray,
@@ -2013,10 +1991,7 @@ TEST_CASE("AnytimeAStar_general_functionality_and_TopDown_path_completion", "[co
                                               SearchAlgorithm,
                                               heuristics::GOO,
                                               config::anytimeAStar
-                                              >(plan_table, G, M, C_out, db.cardinality_estimator(), S,
-                                              {
-                                                .expansion_budget = budget
-                                                });
+                                              >(plan_table, G, M, C_out, db.cardinality_estimator(), S, config);
 
         /* Fill `expected` with the anticipated plan. */
         /* As the path to the goal state is found within 7 expansions, a higher budget has to lead to the same path and
@@ -2215,6 +2190,8 @@ TEST_CASE("AnytimeAStar_BottomUp_path_completion", "[core][IR]")
         SearchAlgorithm S(plan_table, G, M, C_out, db.cardinality_estimator());
 
         uint64_t budget = 0;
+        ai::SearchConfiguration<config::anytimeAStar> config;
+        config.expansion_budget = budget;
 
         bool search_result = heuristic_search<PlanTable,
                                               search_states::SubproblemsArray,
@@ -2222,10 +2199,7 @@ TEST_CASE("AnytimeAStar_BottomUp_path_completion", "[core][IR]")
                                               SearchAlgorithm,
                                               heuristics::zero,
                                               config::anytimeAStar
-                                              >(plan_table, G, M, C_out, db.cardinality_estimator(), S,
-                                              {
-                                                .expansion_budget = budget
-                                                });
+                                              >(plan_table, G, M, C_out, db.cardinality_estimator(), S, config);
 
         /* Fill `expected` with the anticipated plan. */
         expected.update(G, db.cardinality_estimator(), C_out, R0, R1, condition);
@@ -2285,7 +2259,10 @@ TEST_CASE("AnytimeAStar_BottomUp_path_completion", "[core][IR]")
         >;
 
         SearchAlgorithm S(plan_table, G, M, C_out, db.cardinality_estimator());
+
         uint64_t budget = 1;
+        ai::SearchConfiguration<config::anytimeAStar> config;
+        config.expansion_budget = budget;
 
         bool search_result = heuristic_search<PlanTable,
                                               search_states::SubproblemsArray,
@@ -2293,10 +2270,7 @@ TEST_CASE("AnytimeAStar_BottomUp_path_completion", "[core][IR]")
                                               SearchAlgorithm,
                                               heuristics::zero,
                                               config::anytimeAStar
-                                              >(plan_table, G, M, C_out, db.cardinality_estimator(), S,
-                                              {
-                                                .expansion_budget = budget
-                                                });
+                                              >(plan_table, G, M, C_out, db.cardinality_estimator(), S, config);
 
         /* Fill `expected` with the anticipated plan. */
         expected.update(G, db.cardinality_estimator(), C_out, R0, R1, condition);
@@ -2357,6 +2331,8 @@ TEST_CASE("AnytimeAStar_BottomUp_path_completion", "[core][IR]")
         SearchAlgorithm S(plan_table, G, M, C_out, db.cardinality_estimator());
 
         uint64_t budget = 2;
+        ai::SearchConfiguration<config::anytimeAStar> config;
+        config.expansion_budget = budget;
 
         bool search_result = heuristic_search<PlanTable,
                                               search_states::SubproblemsArray,
@@ -2364,10 +2340,7 @@ TEST_CASE("AnytimeAStar_BottomUp_path_completion", "[core][IR]")
                                               SearchAlgorithm,
                                               heuristics::zero,
                                               config::anytimeAStar
-                                              >(plan_table, G, M, C_out, db.cardinality_estimator(), S,
-                                              {
-                                                .expansion_budget = budget
-                                                });
+                                              >(plan_table, G, M, C_out, db.cardinality_estimator(), S, config);
 
         /* Fill `expected` with the anticipated plan. */
         /* Leads to the same plan as with budget 1, as the state with the least remaining joins to the full plan is
@@ -2430,6 +2403,8 @@ TEST_CASE("AnytimeAStar_BottomUp_path_completion", "[core][IR]")
         SearchAlgorithm S(plan_table, G, M, C_out, db.cardinality_estimator());
 
         uint64_t budget = 3;
+        ai::SearchConfiguration<config::anytimeAStar> config;
+        config.expansion_budget = budget;
 
         bool search_result = heuristic_search<PlanTable,
                                               search_states::SubproblemsArray,
@@ -2437,10 +2412,7 @@ TEST_CASE("AnytimeAStar_BottomUp_path_completion", "[core][IR]")
                                               SearchAlgorithm,
                                               heuristics::zero,
                                               config::anytimeAStar
-                                              >(plan_table, G, M, C_out, db.cardinality_estimator(), S,
-                                              {
-                                                .expansion_budget = budget
-                                                });
+                                              >(plan_table, G, M, C_out, db.cardinality_estimator(), S, config);
 
         /* Fill `expected` with the anticipated plan. */
         /* Leads to the same plan as with budget 1, as the state with the least remaining joins to the full plan is
@@ -2501,7 +2473,10 @@ TEST_CASE("AnytimeAStar_BottomUp_path_completion", "[core][IR]")
         >;
 
         SearchAlgorithm S(plan_table, G, M, C_out, db.cardinality_estimator());
+
         uint64_t budget = 4;
+        ai::SearchConfiguration<config::anytimeAStar> config;
+        config.expansion_budget = budget;
 
         bool search_result = heuristic_search<PlanTable,
                                               search_states::SubproblemsArray,
@@ -2509,10 +2484,7 @@ TEST_CASE("AnytimeAStar_BottomUp_path_completion", "[core][IR]")
                                               SearchAlgorithm,
                                               heuristics::zero,
                                               config::anytimeAStar
-                                              >(plan_table, G, M, C_out, db.cardinality_estimator(), S,
-                                              {
-                                                .expansion_budget = budget
-                                                });
+                                              >(plan_table, G, M, C_out, db.cardinality_estimator(), S, config);
 
         /* Fill `expected` with the anticipated plan. */
         expected.update(G, db.cardinality_estimator(), C_out, R1, R2, condition);
@@ -2573,6 +2545,8 @@ TEST_CASE("AnytimeAStar_BottomUp_path_completion", "[core][IR]")
         SearchAlgorithm S(plan_table, G, M, C_out, db.cardinality_estimator());
 
         uint64_t budget = 5;
+        ai::SearchConfiguration<config::anytimeAStar> config;
+        config.expansion_budget = budget;
 
         bool search_result = heuristic_search<PlanTable,
                                               search_states::SubproblemsArray,
@@ -2580,10 +2554,7 @@ TEST_CASE("AnytimeAStar_BottomUp_path_completion", "[core][IR]")
                                               SearchAlgorithm,
                                               heuristics::zero,
                                               config::anytimeAStar
-                                              >(plan_table, G, M, C_out, db.cardinality_estimator(), S,
-                                              {
-                                                .expansion_budget = budget
-                                                });
+                                              >(plan_table, G, M, C_out, db.cardinality_estimator(), S, config);
 
         /* Fill `expected` with the anticipated plan. */
         /* Leads to the same plan as with budget 4, as the state {{R1,R2},{R0,R3}} is expanded as the fifth expansion,
@@ -2649,6 +2620,8 @@ TEST_CASE("AnytimeAStar_BottomUp_path_completion", "[core][IR]")
         SearchAlgorithm S(plan_table, G, M, C_out, db.cardinality_estimator());
 
         uint64_t budget = 6;
+        ai::SearchConfiguration<config::anytimeAStar> config;
+        config.expansion_budget = budget;
 
         bool search_result = heuristic_search<PlanTable,
                                               search_states::SubproblemsArray,
@@ -2656,10 +2629,7 @@ TEST_CASE("AnytimeAStar_BottomUp_path_completion", "[core][IR]")
                                               SearchAlgorithm,
                                               heuristics::zero,
                                               config::anytimeAStar
-                                              >(plan_table, G, M, C_out, db.cardinality_estimator(), S,
-                                              {
-                                                .expansion_budget = budget
-                                                });
+                                              >(plan_table, G, M, C_out, db.cardinality_estimator(), S, config);
 
         /* Fill `expected` with the anticipated plan. */
         /* Leads to the same plan as with budget 5, as the state {R0,R1,R2,R3} is expanded as the sixth expansion,
@@ -2720,7 +2690,10 @@ TEST_CASE("AnytimeAStar_BottomUp_path_completion", "[core][IR]")
         >;
 
         SearchAlgorithm S(plan_table, G, M, C_out, db.cardinality_estimator());
+
         uint64_t budget = 7;
+        ai::SearchConfiguration<config::anytimeAStar> config;
+        config.expansion_budget = budget;
 
         bool search_result = heuristic_search<PlanTable,
                                               search_states::SubproblemsArray,
@@ -2728,10 +2701,7 @@ TEST_CASE("AnytimeAStar_BottomUp_path_completion", "[core][IR]")
                                               SearchAlgorithm,
                                               heuristics::zero,
                                               config::anytimeAStar
-                                              >(plan_table, G, M, C_out, db.cardinality_estimator(), S,
-                                              {
-                                                .expansion_budget = budget
-                                                });
+                                              >(plan_table, G, M, C_out, db.cardinality_estimator(), S, config);
 
         /* Fill `expected` with the anticipated plan. */
         /* Leads to the same plan as with budget 6, as the search finishes within 6 expansions. */
@@ -2793,7 +2763,10 @@ TEST_CASE("AnytimeAStar_BottomUp_path_completion", "[core][IR]")
         >;
 
         SearchAlgorithm S(plan_table, G, M, C_out, db.cardinality_estimator());
+
         uint64_t budget = std::numeric_limits<uint64_t>::max();
+        ai::SearchConfiguration<config::anytimeAStar> config;
+        config.expansion_budget = budget;
 
         bool search_result = heuristic_search<PlanTable,
                                               search_states::SubproblemsArray,
@@ -2801,10 +2774,7 @@ TEST_CASE("AnytimeAStar_BottomUp_path_completion", "[core][IR]")
                                               SearchAlgorithm,
                                               heuristics::zero,
                                               config::anytimeAStar
-                                              >(plan_table, G, M, C_out, db.cardinality_estimator(), S,
-                                              {
-                                                .expansion_budget = budget
-                                                });
+                                              >(plan_table, G, M, C_out, db.cardinality_estimator(), S, config);
 
         /* Fill `expected` with the anticipated plan. */
         /* Leads to the same plan as with budget 6, as the search finishes within a budget of 6 expansions. */
@@ -3003,6 +2973,8 @@ TEST_CASE("AnytimeAStar_TopDown_cost-based_pruning_and_weighted_search", "[core]
         SearchAlgorithm S(plan_table, G, M, C_out, db.cardinality_estimator());
 
         uint64_t budget = 4;
+        ai::SearchConfiguration<config::anytimeAStar_with_cbp> config;
+        config.expansion_budget = budget;
 
         bool search_result = heuristic_search<PlanTable,
                                               search_states::SubproblemsArray,
@@ -3010,10 +2982,7 @@ TEST_CASE("AnytimeAStar_TopDown_cost-based_pruning_and_weighted_search", "[core]
                                               SearchAlgorithm,
                                               heuristics::GOO,
                                               config::anytimeAStar_with_cbp
-                                              >(plan_table, G, M, C_out, db.cardinality_estimator(), S,
-                                              {
-                                                .expansion_budget = budget
-                                                });
+                                              >(plan_table, G, M, C_out, db.cardinality_estimator(), S, config);
 
         /* Fill `expected` with the anticipated plan. */
         expected.update(G, db.cardinality_estimator(), C_out, R2, R3, condition);
@@ -3077,6 +3046,8 @@ TEST_CASE("AnytimeAStar_TopDown_cost-based_pruning_and_weighted_search", "[core]
         SearchAlgorithm S(plan_table, G, M, C_out, db.cardinality_estimator());
 
         uint64_t budget = 7;
+        ai::SearchConfiguration<config::anytimeAStar_with_cbp> config;
+        config.expansion_budget = budget;
 
         bool search_result = heuristic_search<PlanTable,
                                               search_states::SubproblemsArray,
@@ -3084,10 +3055,7 @@ TEST_CASE("AnytimeAStar_TopDown_cost-based_pruning_and_weighted_search", "[core]
                                               SearchAlgorithm,
                                               heuristics::GOO,
                                               config::anytimeAStar_with_cbp
-                                              >(plan_table, G, M, C_out, db.cardinality_estimator(), S,
-                                              {
-                                                .expansion_budget = budget
-                                                });
+                                              >(plan_table, G, M, C_out, db.cardinality_estimator(), S, config);
 
         /* Fill `expected` with the anticipated plan. */
         expected.update(G, db.cardinality_estimator(), C_out, R2, R3, condition);
@@ -3150,6 +3118,8 @@ TEST_CASE("AnytimeAStar_TopDown_cost-based_pruning_and_weighted_search", "[core]
         SearchAlgorithm S(plan_table, G, M, C_out, db.cardinality_estimator());
 
         uint64_t budget = 9;
+        ai::SearchConfiguration<config::anytimeAStar_with_cbp> config;
+        config.expansion_budget = budget;
 
         bool search_result = heuristic_search<PlanTable,
                                               search_states::SubproblemsArray,
@@ -3157,10 +3127,7 @@ TEST_CASE("AnytimeAStar_TopDown_cost-based_pruning_and_weighted_search", "[core]
                                               SearchAlgorithm,
                                               heuristics::GOO,
                                               config::anytimeAStar_with_cbp
-                                              >(plan_table, G, M, C_out, db.cardinality_estimator(), S,
-                                              {
-                                                .expansion_budget = budget
-                                                });
+                                              >(plan_table, G, M, C_out, db.cardinality_estimator(), S, config);
 
         /* Fill `expected` with the anticipated plan. */
         expected.update(G, db.cardinality_estimator(), C_out, R0, R3, condition);
@@ -3218,7 +3185,11 @@ TEST_CASE("AnytimeAStar_TopDown_cost-based_pruning_and_weighted_search", "[core]
         >;
 
         SearchAlgorithm S(plan_table, G, M, C_out, db.cardinality_estimator());
+
         uint64_t budget = std::numeric_limits<uint64_t>::max();
+        ai::SearchConfiguration<config::weighted_anytimeAStar> config;
+        config.expansion_budget = budget;
+        config.weighting_factor = 2.f;
 
         bool search_result = heuristic_search<PlanTable,
                                               search_states::SubproblemsArray,
@@ -3226,11 +3197,7 @@ TEST_CASE("AnytimeAStar_TopDown_cost-based_pruning_and_weighted_search", "[core]
                                               SearchAlgorithm,
                                               heuristics::GOO,
                                               config::weighted_anytimeAStar
-                                              >(plan_table, G, M, C_out, db.cardinality_estimator(), S,
-                                              {
-                                                .weighting_factor = 2.f,
-                                                .expansion_budget = budget
-                                                });
+                                              >(plan_table, G, M, C_out, db.cardinality_estimator(), S, config);
 
         /* Fill `expected` with the anticipated plan. */
         /* The weighted search leads to a differet plan than the unweighted version. */
@@ -3394,7 +3361,6 @@ TEST_CASE("AnytimeAStar_BottomUp_and_TopDown_initial_upper_bound", "[core][IR]")
     /* Heuristic search configurations. */
     using State = search_states::SubproblemsArray;
 
-
     /* Initialization of the upper bound for cost-based pruning via BottomUp GOO. */
     double upper_bound = [&]() {
         /*----- Run GOO to compute upper bound of plan cost. -----*/
@@ -3403,7 +3369,6 @@ TEST_CASE("AnytimeAStar_BottomUp_and_TopDown_initial_upper_bound", "[core][IR]")
         const auto &plan = plan_table.get_final();
         return plan_table[plan.left].cost + plan_table[plan.right].cost;
     }();
-
 
     /* TopDown sum variant for testing cost-based pruning of AnytimeAStar with an initial upper bound for pruning. */
     /* The TopDown sum heuristic is admissible, therefore the f-values of the states are considered for pruning. Here
@@ -3433,6 +3398,9 @@ TEST_CASE("AnytimeAStar_BottomUp_and_TopDown_initial_upper_bound", "[core][IR]")
         SearchAlgorithm S(plan_table, G, M, C_out, db.cardinality_estimator());
 
         uint64_t budget = 1;
+        ai::SearchConfiguration<config::anytimeAStar_with_cbp> config;
+        config.expansion_budget = budget;
+        config.upper_bound = upper_bound;
 
         bool search_result = heuristic_search<PlanTable,
                                               search_states::SubproblemsArray,
@@ -3440,11 +3408,7 @@ TEST_CASE("AnytimeAStar_BottomUp_and_TopDown_initial_upper_bound", "[core][IR]")
                                               SearchAlgorithm,
                                               heuristics::sum,
                                               config::anytimeAStar_with_cbp
-                                              >(plan_table, G, M, C_out, db.cardinality_estimator(), S,
-                                              {
-                                                .upper_bound = upper_bound,
-                                                .expansion_budget = budget,
-                                                });
+                                              >(plan_table, G, M, C_out, db.cardinality_estimator(), S, config);
 
         /* Check for successful run of the search */
         CHECK(search_result == true);
@@ -3498,6 +3462,10 @@ TEST_CASE("AnytimeAStar_BottomUp_and_TopDown_initial_upper_bound", "[core][IR]")
         SearchAlgorithm S(plan_table, G, M, C_out, db.cardinality_estimator());
 
         uint64_t budget = 1;
+        ai::SearchConfiguration<config::weighted_anytimeAStar_with_cbp> config;
+        config.expansion_budget = budget;
+        config.weighting_factor = 4.f;
+        config.upper_bound = upper_bound;
 
         bool search_result = heuristic_search<PlanTable,
                                               search_states::SubproblemsArray,
@@ -3505,12 +3473,7 @@ TEST_CASE("AnytimeAStar_BottomUp_and_TopDown_initial_upper_bound", "[core][IR]")
                                               SearchAlgorithm,
                                               heuristics::sum,
                                               config::weighted_anytimeAStar_with_cbp
-                                              >(plan_table, G, M, C_out, db.cardinality_estimator(), S,
-                                              {
-                                                .upper_bound = upper_bound,
-                                                .weighting_factor = 4.f,
-                                                .expansion_budget = budget
-                                                });
+                                              >(plan_table, G, M, C_out, db.cardinality_estimator(), S, config);
 
         /* Check for successful run of the search */
         CHECK(search_result == true);
@@ -3574,6 +3537,9 @@ TEST_CASE("AnytimeAStar_BottomUp_and_TopDown_initial_upper_bound", "[core][IR]")
         SearchAlgorithm S(plan_table, G, M, C_out, db.cardinality_estimator());
 
         uint64_t budget = 1;
+        ai::SearchConfiguration<config::anytimeAStar_with_cbp> config;
+        config.expansion_budget = budget;
+        config.upper_bound = upper_bound;
 
         bool search_result = heuristic_search<PlanTable,
                                               search_states::SubproblemsArray,
@@ -3581,11 +3547,7 @@ TEST_CASE("AnytimeAStar_BottomUp_and_TopDown_initial_upper_bound", "[core][IR]")
                                               SearchAlgorithm,
                                               heuristics::zero,
                                               config::anytimeAStar_with_cbp
-                                              >(plan_table, G, M, C_out, db.cardinality_estimator(), S,
-                                              {
-                                                .upper_bound = upper_bound,
-                                                .expansion_budget = budget
-                                                });
+                                              >(plan_table, G, M, C_out, db.cardinality_estimator(), S, config);
 
         /* Check for successful run of the search */
         CHECK(search_result == true);
@@ -3635,6 +3597,9 @@ TEST_CASE("AnytimeAStar_BottomUp_and_TopDown_initial_upper_bound", "[core][IR]")
         SearchAlgorithm S(plan_table, G, M, C_out, db.cardinality_estimator());
 
         uint64_t budget = std::numeric_limits<uint64_t>::max();
+        ai::SearchConfiguration<config::anytimeAStar_with_cbp> config;
+        config.expansion_budget = budget;
+        config.upper_bound = upper_bound;
 
         bool search_result = heuristic_search<PlanTable,
                                               search_states::SubproblemsArray,
@@ -3642,11 +3607,7 @@ TEST_CASE("AnytimeAStar_BottomUp_and_TopDown_initial_upper_bound", "[core][IR]")
                                               SearchAlgorithm,
                                               heuristics::zero,
                                               config::anytimeAStar_with_cbp
-                                              >(plan_table, G, M, C_out, db.cardinality_estimator(), S,
-                                              {
-                                                .upper_bound = upper_bound,
-                                                .expansion_budget = budget
-                                                });
+                                              >(plan_table, G, M, C_out, db.cardinality_estimator(), S, config);
 
         /* Check for successful run of the search */
         CHECK(search_result == true);
@@ -3823,6 +3784,9 @@ TEST_CASE("AnytimeAStar_weighted_path_completion", "[core][IR]")
         SearchAlgorithm S(plan_table, G, M, C_out, db.cardinality_estimator());
 
         uint64_t budget = std::numeric_limits<uint64_t>::max();
+        ai::SearchConfiguration<config::weighted_anytimeAStar> config;
+        config.expansion_budget = budget;
+        config.weighting_factor = 20.f;
 
         bool search_result = heuristic_search<PlanTable,
                                               search_states::SubproblemsArray,
@@ -3830,11 +3794,7 @@ TEST_CASE("AnytimeAStar_weighted_path_completion", "[core][IR]")
                                               SearchAlgorithm,
                                               heuristics::sum,
                                               config::weighted_anytimeAStar
-                                              >(plan_table, G, M, C_out, db.cardinality_estimator(), S,
-                                              {
-                                                .weighting_factor = 20.f,
-                                                .expansion_budget = budget
-                                                });
+                                              >(plan_table, G, M, C_out, db.cardinality_estimator(), S, config);
 
         /* Fill `expected` with the anticipated plan. */
         /* This is to ensure that weighted search results in a plan different from the unweighted version. */
@@ -3896,6 +3856,8 @@ TEST_CASE("AnytimeAStar_weighted_path_completion", "[core][IR]")
         SearchAlgorithm S(plan_table, G, M, C_out, db.cardinality_estimator());
 
         uint64_t budget = 4;
+        ai::SearchConfiguration<config::anytimeAStar> config;
+        config.expansion_budget = budget;
 
         bool search_result = heuristic_search<PlanTable,
                                               search_states::SubproblemsArray,
@@ -3903,10 +3865,7 @@ TEST_CASE("AnytimeAStar_weighted_path_completion", "[core][IR]")
                                               SearchAlgorithm,
                                               heuristics::sum,
                                               config::anytimeAStar
-                                              >(plan_table, G, M, C_out, db.cardinality_estimator(), S,
-                                              {
-                                                .expansion_budget = budget
-                                                });
+                                              >(plan_table, G, M, C_out, db.cardinality_estimator(), S, config);
 
         /* Fill `expected` with the anticipated plan. */
         /* This is to ensure that the GOO path completion of the weighted search results in the same starting
@@ -3969,6 +3928,9 @@ TEST_CASE("AnytimeAStar_weighted_path_completion", "[core][IR]")
         SearchAlgorithm S(plan_table, G, M, C_out, db.cardinality_estimator());
 
         uint64_t budget = 4;
+        ai::SearchConfiguration<config::weighted_anytimeAStar> config;
+        config.expansion_budget = budget;
+        config.weighting_factor = 20.f;
 
         bool search_result = heuristic_search<PlanTable,
                                               search_states::SubproblemsArray,
@@ -3976,11 +3938,7 @@ TEST_CASE("AnytimeAStar_weighted_path_completion", "[core][IR]")
                                               SearchAlgorithm,
                                               heuristics::sum,
                                               config::weighted_anytimeAStar
-                                              >(plan_table, G, M, C_out, db.cardinality_estimator(), S,
-                                              {
-                                                .weighting_factor = 20.f,
-                                                .expansion_budget = budget
-                                                });
+                                              >(plan_table, G, M, C_out, db.cardinality_estimator(), S, config);
 
         /* Fill `expected` with the anticipated plan. */
         /* After 4 expansions the state with the lowest weighted f-value among the states closest to the goal is state
@@ -4175,6 +4133,9 @@ TEST_CASE("AnytimeAStar_OptFields", "[core][IR]")
         SearchAlgorithm S(plan_table, G, M, C_out, db.cardinality_estimator());
 
         uint64_t budget = std::numeric_limits<uint64_t>::max();
+        ai::SearchConfiguration<config::weighted_anytimeAStar> config;
+        config.expansion_budget = budget;
+        config.weighting_factor = 20.f;
 
         bool search_result = heuristic_search<PlanTable,
                                               search_states::SubproblemsArray,
@@ -4182,10 +4143,7 @@ TEST_CASE("AnytimeAStar_OptFields", "[core][IR]")
                                               SearchAlgorithm,
                                               heuristics::sum,
                                               config::weighted_anytimeAStar
-                                              >(plan_table, G, M, C_out, db.cardinality_estimator(), S,
-                                              {
-                                                .weighting_factor = 20.f,
-                                                });
+                                              >(plan_table, G, M, C_out, db.cardinality_estimator(), S, config);
 
         /* Fill `expected` with the anticipated plan. */
         /* Check that the expected plan is achieved in the weighted version of the search. */
@@ -4247,6 +4205,9 @@ TEST_CASE("AnytimeAStar_OptFields", "[core][IR]")
         SearchAlgorithm S(plan_table, G, M, C_out, db.cardinality_estimator());
 
         uint64_t budget = std::numeric_limits<uint64_t>::max();
+        ai::SearchConfiguration<config::anytimeAStar> config;
+        config.expansion_budget = budget;
+        config.weighting_factor = 20.f;
 
         bool search_result = heuristic_search<PlanTable,
                                               search_states::SubproblemsArray,
@@ -4254,10 +4215,7 @@ TEST_CASE("AnytimeAStar_OptFields", "[core][IR]")
                                               SearchAlgorithm,
                                               heuristics::sum,
                                               config::anytimeAStar
-                                              >(plan_table, G, M, C_out, db.cardinality_estimator(), S,
-                                              {
-                                                .weighting_factor = 20.f,
-                                                });
+                                              >(plan_table, G, M, C_out, db.cardinality_estimator(), S, config);
 
         /* Fill `expected` with the anticipated plan. */
         /* Check that the provided weighting factor is not used for regular anytimeAStar.  Without the weighting factor
@@ -4319,7 +4277,9 @@ TEST_CASE("AnytimeAStar_OptFields", "[core][IR]")
 
         SearchAlgorithm S(plan_table, G, M, C_out, db.cardinality_estimator());
 
-        uint64_t budget = std::numeric_limits<uint64_t>::max();
+        uint64_t budget = 1;
+        ai::SearchConfiguration<config::anytimeAStar> config;
+        config.expansion_budget = budget;
 
         bool search_result = heuristic_search<PlanTable,
                                               search_states::SubproblemsArray,
@@ -4327,10 +4287,7 @@ TEST_CASE("AnytimeAStar_OptFields", "[core][IR]")
                                               SearchAlgorithm,
                                               heuristics::zero,
                                               config::anytimeAStar
-                                              >(plan_table, G, M, C_out, db.cardinality_estimator(), S,
-                                              {
-                                                .expansion_budget = 1,
-                                                });
+                                              >(plan_table, G, M, C_out, db.cardinality_estimator(), S, config);
 
         /* Fill `expected` with the anticipated plan. */
         /* Check that the expected plan is achieved in the budgeted version of the search. */
@@ -4391,7 +4348,9 @@ TEST_CASE("AnytimeAStar_OptFields", "[core][IR]")
 
         SearchAlgorithm S(plan_table, G, M, C_out, db.cardinality_estimator());
 
-        uint64_t budget = std::numeric_limits<uint64_t>::max();
+        uint64_t budget = 1;
+        ai::SearchConfiguration<config::AStar> config;
+        config.expansion_budget = budget;
 
         bool search_result = heuristic_search<PlanTable,
                                               search_states::SubproblemsArray,
@@ -4399,10 +4358,7 @@ TEST_CASE("AnytimeAStar_OptFields", "[core][IR]")
                                               SearchAlgorithm,
                                               heuristics::zero,
                                               config::AStar
-                                              >(plan_table, G, M, C_out, db.cardinality_estimator(), S,
-                                              {
-                                                .expansion_budget = 1,
-                                                });
+                                              >(plan_table, G, M, C_out, db.cardinality_estimator(), S, config);
 
         /* Fill `expected` with the anticipated plan. */
         /* Check that the provided expansion budget is not used. Without the usage of the expansion budget the
@@ -4425,7 +4381,7 @@ TEST_CASE("AnytimeAStar_OptFields", "[core][IR]")
 
         /* Dependencies between the search state counters. */
         const auto &SM = S.state_manager();
-        check_state_counter_dependencies<State, SearchAlgorithm, decltype(SM)>(S, SM, budget);
+        check_state_counter_dependencies<State, SearchAlgorithm, decltype(SM)>(S, SM,       std::numeric_limits<uint64_t>::max());
 
         /* Configuration-specific assertions. */
         CHECK(State::NUM_STATES_GENERATED() == 13);
@@ -4466,16 +4422,16 @@ TEST_CASE("AnytimeAStar_OptFields", "[core][IR]")
 
         SearchAlgorithm S(plan_table, G, M, C_out, db.cardinality_estimator());
 
+        ai::SearchConfiguration<config::anytimeAStar_with_cbp> config;
+        config.upper_bound = 2000.f;
+
         bool search_result = heuristic_search<PlanTable,
                                               search_states::SubproblemsArray,
                                               expansions::BottomUpComplete,
                                               SearchAlgorithm,
                                               heuristics::zero,
                                               config::anytimeAStar_with_cbp
-                                              >(plan_table, G, M, C_out, db.cardinality_estimator(), S,
-                                              {
-                                                .upper_bound = 2000.f,
-                                                });
+                                              >(plan_table, G, M, C_out, db.cardinality_estimator(), S, config);
 
         /* Fill `expected` with the anticipated plan. */
         /* Check that the expected plan is achieved in the version with cost-based pruning of the search. */
@@ -4538,6 +4494,9 @@ TEST_CASE("AnytimeAStar_OptFields", "[core][IR]")
         SearchAlgorithm S(plan_table, G, M, C_out, db.cardinality_estimator());
 
         uint64_t budget = std::numeric_limits<uint64_t>::max();
+        ai::SearchConfiguration<config::anytimeAStar> config;
+        config.expansion_budget = budget;
+        config.upper_bound = 2000.f;
 
         bool search_result = heuristic_search<PlanTable,
                                               search_states::SubproblemsArray,
@@ -4545,10 +4504,7 @@ TEST_CASE("AnytimeAStar_OptFields", "[core][IR]")
                                               SearchAlgorithm,
                                               heuristics::zero,
                                               config::anytimeAStar
-                                              >(plan_table, G, M, C_out, db.cardinality_estimator(), S,
-                                              {
-                                                .upper_bound = 2000.f,
-                                                });
+                                              >(plan_table, G, M, C_out, db.cardinality_estimator(), S, config);
 
         /* Fill `expected` with the anticipated plan. */
         /* Leads to the same plan as the version with cost-based pruning.  The search differs in the number of states

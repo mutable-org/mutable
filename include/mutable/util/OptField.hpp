@@ -30,6 +30,12 @@ struct OptField
         return *this;
     }
 
+    T & operator*() { return value_; }
+    const T & operator*() const { return value_; }
+
+    T * operator->() { return &value_; }
+    const T * operator->() const { return &value_; }
+
     friend std::ostream & operator<<(std::ostream &out, const OptField &F) { return out << F.value_; }
 };
 

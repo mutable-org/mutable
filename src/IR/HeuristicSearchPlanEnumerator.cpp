@@ -101,7 +101,41 @@ void reconstruct_plan_top_down(const State &goal, PlanTable &PT, const QueryGrap
         current = parent; // advance
     }
 }
+}
 
+namespace m::pe::hs {
+
+/* Run GOO from the starting state 'state' until all relations of the query graph are joined. Return the cost of the
+ * resulting (partial) plan. We save the found (partial) plan in the provided `plan`. */
+template<typename PlanTable, typename State>
+double goo_path_completion(const State &state, PlanTable &PT, const QueryGraph &G, const AdjacencyMatrix &M,
+                           const CardinalityEstimator &CE, const CostFunction &CF, binary_plan_type &plan)
+{
+    /*----- Initialize nodes. -----*/
+    m::pe::GOO::node nodes[G.num_sources()];
+    std::size_t num_nodes = 0;
+    state.for_each_subproblem([&](Subproblem S) {
+        new (&nodes[num_nodes++]) m::pe::GOO::node(S, M.neighbors(S));
+    }, G);
+
+    /*----- Greedily enumerate all joins. -----*/
+    const Subproblem All = Subproblem::All(G.num_sources());
+    double cost = 0;
+    m::pe::GOO{}.for_each_join([&](Subproblem left, Subproblem right) {
+        static cnf::CNF condition; // TODO: use join condition
+        plan.emplace_back(std::pair(left, right));
+        if (All != (left|right)) {
+            /* We only consider the cost of the current join and discard the accumulated costs of the inputs. */
+            const double old_cost_left = std::exchange(PT[left].cost, 0);
+            const double old_cost_right = std::exchange(PT[right].cost, 0);
+            cost += CF.calculate_join_cost(G, PT, CE, left, right, condition);
+            PT[left].cost = old_cost_left;
+            PT[right].cost = old_cost_right;
+        }
+    }, PT, G, M, CF, CE, nodes, nodes + num_nodes);
+
+    return cost;
+}
 }
 
 
@@ -329,15 +363,16 @@ bool heuristic_search_helper(const char *vertex_str, const char *expand_str, con
 
         if constexpr (StaticConfig::PerformCostBasedPruning) {
             if (options::initialize_upper_bound) {
+                /*----- Run GOO to compute upper bound of plan cost. -----*/
+                /* Obtain the sum of the costs of the left and the right subplan of the resulting initial plan. The
+                 * costs considered for the search do not include the cardinality of the result set. Save the initial
+                 * plan. */
                 config.upper_bound = [&]() {
-                    /*----- Run GOO to compute upper bound of plan cost. -----*/
-                    /* Obtain the sum of the costs of the left and the right subplan of the resulting plan. The costs
-                     * considered for the search do not include the cardinality of the result set. */
-                    GOO Goo;
-                    Goo(G, CF, PT);
-                    const auto &plan = PT.get_final();
-                    M_insist(not plan.left.empty() and not plan.right.empty());
-                    return PT[plan.left].cost + PT[plan.right].cost;
+                    config.initial_plan->reserve(G.num_sources()-1);
+                    double cost_initial_plan = 0;
+                    State initial_state = expansions::BottomUpComplete::template Start<State>(PT, G, M, CF, CE);
+                    cost_initial_plan = goo_path_completion(initial_state, PT, G, M, CE, CF, config.initial_plan);
+                    return cost_initial_plan;
                 }();
             }
         } else if (options::initialize_upper_bound) {

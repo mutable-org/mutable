@@ -2177,6 +2177,12 @@ DEFINE_SEARCH(weighted_anytimeAStar_with_cbp,   weighted_search<true>,  lazy<fal
 
 namespace m::pe::hs {
 
+using binary_plan_type = std::vector<std::pair<Subproblem, Subproblem>>;
+
+template<typename PlanTable, typename State>
+double goo_path_completion(const State &state, PlanTable &PT, const QueryGraph &G, const AdjacencyMatrix &M,
+                           const CardinalityEstimator &CE, const CostFunction &CF, binary_plan_type &plan);
+
 template<
     typename PlanTable,
     typename State,

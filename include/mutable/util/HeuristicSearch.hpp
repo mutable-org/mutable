@@ -581,8 +581,15 @@ concept SearchConfigConcept =
 template<SearchConfigConcept StaticConfig>
 struct SearchConfiguration
 {
+    using Subproblem = SmallBitset;
+
     SearchConfiguration() = default;
     SearchConfiguration(SearchConfiguration&&) = default;
+
+    /** Initial plan for the query. Determines the cost of the upper bound for cost-based pruning. Can be used when the
+     * search does not find a plan. For Anytime A* this plan can be used when path completion does not find a cheaper
+     * plan. */
+    OptField<StaticConfig::PerformCostBasedPruning, std::vector<std::pair<Subproblem, Subproblem>>> initial_plan;
 
     /** Upper bound on the cost of plans to consider.  More costly plans will be pruned.  Defaults to NaN, expressing
      * that no bound is given.  (Usually, the search algorithm will then initialize its internal upper bound with

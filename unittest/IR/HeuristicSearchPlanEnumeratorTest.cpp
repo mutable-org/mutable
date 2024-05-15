@@ -45,7 +45,6 @@ void check_state_counter_dependencies(SearchAlgorithm &S, StateManager &SM, uint
     CHECK(State::NUM_STATES_DISPOSED() == SM.num_duplicates()+SM.num_pruned_by_cost());
 }
 
-
 /*======================================================================================================================
  * Test Heuristic Search strategies.
  *====================================================================================================================*/
@@ -3361,14 +3360,14 @@ TEST_CASE("AnytimeAStar_BottomUp_and_TopDown_initial_upper_bound", "[core][IR]")
     /* Heuristic search configurations. */
     using State = search_states::SubproblemsArray;
 
-    /* Initialization of the upper bound for cost-based pruning via BottomUp GOO. */
-    double upper_bound = [&]() {
-        /*----- Run GOO to compute upper bound of plan cost. -----*/
-        GOO Goo;
-        Goo(G, C_out, plan_table);
-        const auto &plan = plan_table.get_final();
-        return plan_table[plan.left].cost + plan_table[plan.right].cost;
-    }();
+    /* Initialization of the upper bound and the initial plan for cost-based pruning via BottomUp GOO. */
+    binary_plan_type initial_plan;
+    initial_plan.reserve(G.num_sources()-1);
+    const State initial_state = expansions::BottomUpComplete::template Start<State>(plan_table, G, M, C_out,
+                                                                                    db.cardinality_estimator());
+    double upper_bound = goo_path_completion(initial_state, plan_table, G, M, db.cardinality_estimator(), C_out,
+                                             initial_plan);
+
 
     /* TopDown sum variant for testing cost-based pruning of AnytimeAStar with an initial upper bound for pruning. */
     /* The TopDown sum heuristic is admissible, therefore the f-values of the states are considered for pruning. Here
@@ -3401,6 +3400,7 @@ TEST_CASE("AnytimeAStar_BottomUp_and_TopDown_initial_upper_bound", "[core][IR]")
         ai::SearchConfiguration<config::anytimeAStar_with_cbp> config;
         config.expansion_budget = budget;
         config.upper_bound = upper_bound;
+        config.initial_plan = std::move(initial_plan);
 
         bool search_result = heuristic_search<PlanTable,
                                               search_states::SubproblemsArray,
@@ -3466,6 +3466,7 @@ TEST_CASE("AnytimeAStar_BottomUp_and_TopDown_initial_upper_bound", "[core][IR]")
         config.expansion_budget = budget;
         config.weighting_factor = 4.f;
         config.upper_bound = upper_bound;
+        config.initial_plan = std::move(initial_plan);
 
         bool search_result = heuristic_search<PlanTable,
                                               search_states::SubproblemsArray,
@@ -3540,6 +3541,7 @@ TEST_CASE("AnytimeAStar_BottomUp_and_TopDown_initial_upper_bound", "[core][IR]")
         ai::SearchConfiguration<config::anytimeAStar_with_cbp> config;
         config.expansion_budget = budget;
         config.upper_bound = upper_bound;
+        config.initial_plan = std::move(initial_plan);
 
         bool search_result = heuristic_search<PlanTable,
                                               search_states::SubproblemsArray,
@@ -3600,6 +3602,7 @@ TEST_CASE("AnytimeAStar_BottomUp_and_TopDown_initial_upper_bound", "[core][IR]")
         ai::SearchConfiguration<config::anytimeAStar_with_cbp> config;
         config.expansion_budget = budget;
         config.upper_bound = upper_bound;
+        config.initial_plan = std::move(initial_plan);
 
         bool search_result = heuristic_search<PlanTable,
                                               search_states::SubproblemsArray,

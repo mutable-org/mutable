@@ -581,6 +581,9 @@ concept SearchConfigConcept =
 template<SearchConfigConcept StaticConfig>
 struct SearchConfiguration
 {
+    SearchConfiguration() = default;
+    SearchConfiguration(SearchConfiguration&&) = default;
+
     /** Upper bound on the cost of plans to consider.  More costly plans will be pruned.  Defaults to NaN, expressing
      * that no bound is given.  (Usually, the search algorithm will then initialize its internal upper bound with
      * infinity.) */

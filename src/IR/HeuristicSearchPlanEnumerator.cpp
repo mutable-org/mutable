@@ -129,7 +129,8 @@ template<
     ai::SearchConfigConcept StaticConfig
 >
 bool heuristic_search(PlanTable &PT, const QueryGraph &G, const AdjacencyMatrix &M, const CostFunction &CF,
-                      const CardinalityEstimator &CE, SearchAlgorithm &S, ai::SearchConfiguration<StaticConfig> config)
+                      const CardinalityEstimator &CE, SearchAlgorithm &S,
+                      const ai::SearchConfiguration<StaticConfig> &config)
 {
     State::RESET_STATE_COUNTERS();
 

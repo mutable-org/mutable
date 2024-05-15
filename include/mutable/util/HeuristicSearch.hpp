@@ -727,7 +727,7 @@ struct genericAStar
      * @return the cost of the computed path from `initial_state` to a goal state
      */
     const State & search(state_type initial_state, expand_type expand, heuristic_type &heuristic,
-                         SearchConfiguration<StaticConfig> config, Context&... context);
+                         const SearchConfiguration<StaticConfig> &config, Context&... context);
 
     /** Resets the state of the search. */
     void clear() {
@@ -895,7 +895,7 @@ const State & genericAStar<State, Expand, Heuristic, StaticConfig, Context...>::
     state_type initial_state,
     expand_type expand,
     heuristic_type &heuristic,
-    SearchConfiguration<StaticConfig> config,
+    const SearchConfiguration<StaticConfig> &config,
     Context&... context
 ) {
     if constexpr (use_weighted_search) {

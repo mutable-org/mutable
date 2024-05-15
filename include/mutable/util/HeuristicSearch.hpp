@@ -916,16 +916,16 @@ const State & genericAStar<State, Expand, Heuristic, StaticConfig, Context...>::
     }
 
     /* Lambda function to assure that the budgeted number of expansions is met when using Anytime A*. */
-    auto have_budget = [&config]() mutable -> bool {
+    auto have_budget = [budget=config.expansion_budget]() mutable -> bool {
         if constexpr (use_anytime_search) {
-            if (config.expansion_budget) {
-                --config.expansion_budget;
+            if (budget) {
+                --budget;
                 return true;
             } else {
-                return false;
+                /* Expansion budget exhausted. The search did not terminate with a goal state. */
+                throw budget_exhausted_exception("no goal state found with given expansion budget");
             }
         } else {
-            (void) config; // silence unused warning
             return true;
         }
     };
@@ -946,10 +946,6 @@ const State & genericAStar<State, Expand, Heuristic, StaticConfig, Context...>::
         explore_state(state, heuristic, expand, context...);
     }
 
-    if constexpr (use_anytime_search) {
-        if (config.expansion_budget == 0) // expansion budget exhausted?
-            throw budget_exhausted_exception("no goal state found with given expansion budget");
-    }
     throw std::logic_error("goal state unreachable from provided initial state");
 }
 

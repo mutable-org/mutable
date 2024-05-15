@@ -82,6 +82,7 @@ void reconstruct_plan_bottom_up(const State &state, PlanTable &PT, const QueryGr
     if (not parent) return;
     reconstruct_plan_bottom_up(*parent, PT, G, CE, CF); // solve recursively
     const auto D = delta(*parent, state); // find joined subproblems
+    M_insist(not PT.has_plan(D[0] | D[1]), "PlanTable must not contain plans for intermediate results");
     PT.update(G, CE, CF, D[0], D[1], condition); // update plan table
 }
 
@@ -95,6 +96,7 @@ void reconstruct_plan_top_down(const State &goal, PlanTable &PT, const QueryGrap
     while (current->parent()) {
         const State *parent = current->parent();
         const auto D = delta(*current, *parent); // find joined subproblems
+        M_insist(not PT.has_plan(D[0] | D[1]), "PlanTable must not contain plans for intermediate results");
         PT.update(G, CE, CF, D[0], D[1], condition); // update plan table
         current = parent; // advance
     }

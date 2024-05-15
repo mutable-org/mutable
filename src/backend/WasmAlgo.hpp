@@ -543,6 +543,9 @@ struct HashTable
     /** Clears the hash table. */
     virtual void clear() = 0;
 
+    /** Returns the the number of occupied entries in the hash table. */
+    virtual U64x1 num_entries() const = 0;
+
     /** Computes the bucket for key \p key.  Often used as hint for `find()` and `for_each_in_equal_range()`. */
     virtual Ptr<void> compute_bucket(std::vector<SQL_t> key) const = 0;
 
@@ -671,8 +674,12 @@ struct ChainedHashTable : HashTable
     U64x1 capacity() const { return mask() + 1U; }
     /** Returns the overall size in bytes of the actual hash table, i.e. without collision list entries. */
     U64x1 size_in_bytes() const { return capacity() * uint64_t(sizeof(uint64_t)); }
-
     public:
+    U64x1 num_entries() const override {
+        M_insist(bool(num_entries_), "must call `setup()` before");
+        return *num_entries_;
+    }
+
     /** Performs the setup of all local variables of the hash table (by reading them from the global backups iff
      * \tparam IsGlobal).  Must be called before any call to a setup method, i.e. setting the high watermark, or an
      * access method, i.e. clearing, insertion, lookup, or dummy entry creation. */
@@ -929,8 +936,12 @@ struct OpenAddressingHashTable : OpenAddressingHashTableBase
     Ptr<void> begin() const override { M_insist(bool(address_), "must call `setup()` before"); return *address_; }
     Ptr<void> end() const override { return begin() + (capacity() * entry_size_in_bytes_).make_signed(); }
     U64x1 mask() const override { M_insist(bool(mask_), "must call `setup()` before"); return *mask_; }
-
     public:
+    U64x1 num_entries() const override {
+        M_insist(bool(num_entries_), "must call `setup()` before");
+        return *num_entries_;
+    }
+
     /** Performs the setup of all local variables of the hash table (by reading them from the global backups iff
      * \tparam IsGlobal).  Must be called before any call to a setup method, i.e. setting the high watermark, or an
      * access method, i.e. clearing, insertion, lookup, or dummy entry creation. */

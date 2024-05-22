@@ -278,7 +278,7 @@ struct LinearAllocator : Allocator
         };
     }
 
-    virtual void perform_pre_allocations() override {
+    void perform_pre_allocations() override {
         M_insist(not pre_allocations_performed_,
                  "must not call `perform_pre_allocations()` multiple times");
         alloc_addr_.init(pre_alloc_addr_);

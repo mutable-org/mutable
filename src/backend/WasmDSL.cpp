@@ -218,7 +218,7 @@ struct LinearAllocator : Allocator
     bool pre_allocations_performed_ = false;
     ///> compile-time size of the currently used memory, used as pointer to next free pre-allocation
     uint32_t pre_alloc_addr_;
-    ///> global size of the currently used memory, used as pointer to next free allocation
+    ///> runtime global size of the currently used memory, used as pointer to next free allocation
     Global<U32x1> alloc_addr_;
 
     public:

@@ -133,6 +133,7 @@ struct invoke_v8<PrimitiveExpr<ReturnType, ReturnL>(PrimitiveExpr<ParamTypes, Pa
         /* Create context. */
         v8::Local<v8::ObjectTemplate> global = v8::ObjectTemplate::New(isolate_);
         global->Set(isolate_, "set_wasm_instance_raw_memory", v8::FunctionTemplate::New(isolate_, set_wasm_instance_raw_memory));
+        global->Set(isolate_, "read_result_set", v8::FunctionTemplate::New(isolate_, read_result_set));
         v8::Local<v8::Context> context = v8::Context::New(isolate_, /* extensions= */ nullptr, global);
         v8::Context::Scope context_scope(context);
 

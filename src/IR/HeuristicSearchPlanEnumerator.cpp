@@ -101,6 +101,18 @@ void reconstruct_plan_top_down(const State &goal, PlanTable &PT, const QueryGrap
         current = parent; // advance
     }
 }
+
+/* Reconstruct a saved (partial) plan. */
+template<typename PlanTable>
+void reconstruct_saved_plan(const std::vector<std::pair<Subproblem, Subproblem>> &saved_plan, PlanTable &PT,
+                             const QueryGraph &G, const CardinalityEstimator &CE, const CostFunction &CF)
+{
+    static cnf::CNF condition; // TODO: use join condition
+    for (auto [left, right]: saved_plan) {
+        M_insist(not PT.has_plan(left | right), "PlanTable must not contain plans for intermediate results");
+        PT.update(G, CE, CF, left, right, condition);
+    }
+};
 }
 
 namespace m::pe::hs {
@@ -204,15 +216,20 @@ bool heuristic_search(PlanTable &PT, const QueryGraph &G, const AdjacencyMatrix 
         /* Any incplete search may *not* find a plan and hence throw a `std::logic_error`.  In this case, we can attempt
          * to use a plan we found during initialization of the search.  If we do no have such a plan, we resort to a
          * complete search, e.g. `DPccp`. */
-        if (PT.has_plan(Subproblem::All(G.num_sources()))) { // did we *not* already find a plan, e.g. during CBP
-                                                             // initialization?
+        if constexpr (StaticConfig::PerformCostBasedPruning) {
+            if (options::initialize_upper_bound) {
+                /* Fall back to initial plan from upper bound initialization. */
+                if (not Options::Get().quiet)
+                    std::cout << "search did not reach a goal state, fall back to plan found during initialization"
+                              << std::endl;
+                reconstruct_saved_plan(config.initial_plan, PT, G, CE, CF);
+            }
+        }
+        if (not options::initialize_upper_bound) {
+            /* No plan available from upper bound initialization. Fall back to DPccp. */
             if (not Options::Get().quiet)
                 std::cout << "search did not reach a goal state, fall back to DPccp" << std::endl;
             DPccp{}(G, CF, PT);
-        } else {
-            if (not Options::Get().quiet)
-                std::cout << "search did not reach a goal state, fall back to plan found during initialization"
-                          << std::endl;
         }
     } catch (ai::budget_exhausted_exception) {
         /*--- No plan was found within the given budget for A* ⇒ use GOO to complete the *nearest* partial solution --*/

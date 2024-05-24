@@ -960,7 +960,7 @@ v8::Local<v8::WasmModuleObject> m::wasm::detail::instantiate(v8::Isolate &isolat
     auto buffer = v8::ArrayBuffer::New(&isolate, std::move(bs));
 
     if (Options::Get().statistics)
-        std::cout << "Wasm code size: " << binary_size << 'B' << std::endl;
+        std::cout << "Wasm code size: " << binary_size << " B" << std::endl;
 
     args_t module_args { buffer };
     auto wasm = Ctx->Global()->Get(Ctx, mkstr(isolate, "WebAssembly")).ToLocalChecked().As<v8::Object>(); // WebAssembly class
@@ -969,7 +969,7 @@ v8::Local<v8::WasmModuleObject> m::wasm::detail::instantiate(v8::Isolate &isolat
     free(binary_addr);
 
     if (Options::Get().statistics)
-        std::cout << "Machine code size: " << wasm_module->GetCompiledModule().Serialize().size << 'B' << std::endl;
+        std::cout << "Machine code size: " << wasm_module->GetCompiledModule().Serialize().size << " B" << std::endl;
 
     args_t instance_args { wasm_module, imports };
     return wasm->Get(Ctx, mkstr(isolate, "Instance")).ToLocalChecked().As<v8::Object>()

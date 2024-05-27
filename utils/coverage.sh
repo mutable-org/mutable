@@ -51,7 +51,7 @@ env CFLAGS=--coverage CXXFLAGS=--coverage \
     -DUSE_LLD=ON
 
 cmake --build build/coverage --target clean
-cmake --build build/coverage --target Boost
+cmake --build build/coverage --target Boost gitversion
 cmake --build build/coverage
 
 cd build/coverage

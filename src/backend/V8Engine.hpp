@@ -80,6 +80,7 @@ struct V8InspectorClientImpl : v8_inspector::V8InspectorClient
 void insist(const v8::FunctionCallbackInfo<v8::Value> &info);
 void _throw(const v8::FunctionCallbackInfo<v8::Value> &info);
 void print(const v8::FunctionCallbackInfo<v8::Value> &info);
+void print_memory_consumption(const v8::FunctionCallbackInfo<v8::Value> &info);
 void set_wasm_instance_raw_memory(const v8::FunctionCallbackInfo<v8::Value> &info);
 void read_result_set(const v8::FunctionCallbackInfo<v8::Value> &info);
 

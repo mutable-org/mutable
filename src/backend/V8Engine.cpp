@@ -277,6 +277,17 @@ void m::wasm::detail::print(const v8::FunctionCallbackInfo<v8::Value> &info)
     std::cout << std::endl;
 }
 
+void m::wasm::detail::print_memory_consumption(const v8::FunctionCallbackInfo<v8::Value> &info)
+{
+    M_insist(Options::Get().statistics);
+
+    auto alloc_total_mem = info[0].As<v8::Uint32>()->Value();
+    auto alloc_peak_mem = info[1].As<v8::Uint32>()->Value();
+
+    std::cout << "Allocated memory overall consumption: " << alloc_total_mem / (1024.0 * 1024.0) << " MiB"<< std::endl;
+    std::cout << "Allocated memory peak consumption: " << alloc_peak_mem / (1024.0 * 1024.0) << " MiB"<< std::endl;
+}
+
 void m::wasm::detail::set_wasm_instance_raw_memory(const v8::FunctionCallbackInfo<v8::Value> &info)
 {
     v8::Local<v8::WasmModuleObject> wasm_instance = info[0].As<v8::WasmModuleObject>();
@@ -728,6 +739,7 @@ void V8Engine::compile(const m::MatchBase &plan) const
 #if 1
     /*----- Add print function. --------------------------------------------------------------------------------------*/
     Module::Get().emit_function_import<void(uint32_t)>("print");
+    Module::Get().emit_function_import<void(uint32_t, uint32_t)>("print_memory_consumption");
 #endif
 
     /*----- Emit code for run function which computes the last pipeline and calls other pipeline functions. ----------*/
@@ -743,6 +755,14 @@ void V8Engine::compile(const m::MatchBase &plan) const
     {
         auto S = CodeGenContext::Get().scoped_environment(); // create scoped environment for this function
         run(); // call run function
+        if (Options::Get().statistics) {
+            std::cout << "Pre-allocated memory overall consumption: "
+                      << Module::Allocator().pre_allocated_memory_consumption() / (1024.0 * 1024.0)
+                      << " MiB" << std::endl;
+            Module::Get().emit_call<void>("print_memory_consumption",
+                                          Module::Allocator().allocated_memory_consumption(),
+                                          Module::Allocator().allocated_memory_peak());
+        }
         main.emit_return(CodeGenContext::Get().num_tuples()); // return size of result set
     }
 
@@ -1029,6 +1049,7 @@ v8::Local<v8::Object> m::wasm::detail::create_env(v8::Isolate &isolate, const m:
 }
     ADD_FUNC(insist)
     ADD_FUNC(print)
+    ADD_FUNC(print_memory_consumption)
     ADD_FUNC(read_result_set)
 #undef ADD_FUNC
     {

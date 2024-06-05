@@ -220,6 +220,12 @@ struct LinearAllocator : Allocator
     uint32_t pre_alloc_addr_;
     ///> runtime global size of the currently used memory, used as pointer to next free allocation
     Global<U32x1> alloc_addr_;
+    ///> compile-time total memory consumption
+    uint32_t pre_alloc_total_mem_ = 0;
+    ///> runtime total memory consumption
+    Global<U32x1> alloc_total_mem_;
+    ///> runtime peak memory consumption
+    Global<U32x1> alloc_peak_mem_;
 
     public:
     LinearAllocator(const memory::AddressSpace &memory, uint32_t start_addr)
@@ -229,6 +235,8 @@ struct LinearAllocator : Allocator
         M_insist(start_addr != 0, "memory address 0 is reserved as `nullptr`");
 #ifdef M_ENABLE_SANITY_FIELDS
         alloc_addr_.val().discard();  // artificial use of `alloc_addr_` to silence diagnostics if allocator is not used
+        alloc_total_mem_.val().discard();  // artificial use of `alloc_total_mem_` to silence diagnostics if allocator is not used
+        alloc_peak_mem_.val().discard();  // artificial use of `alloc_peak_mem_` to silence diagnostics if allocator is not used
 #endif
     }
 
@@ -245,6 +253,7 @@ struct LinearAllocator : Allocator
             align_pre_memory(alignment);
         void *ptr = static_cast<uint8_t*>(memory_.addr()) + pre_alloc_addr_;
         pre_alloc_addr_ += bytes; // advance memory size by bytes
+        pre_alloc_total_mem_ += bytes;
         M_insist(memory_.size() >= pre_alloc_addr_, "allocation must fit in memory");
         return ptr;
     }
@@ -257,6 +266,7 @@ struct LinearAllocator : Allocator
             align_pre_memory(alignment);
         Ptr<void> ptr(U32x1(pre_alloc_addr_).template to<void*>());
         pre_alloc_addr_ += bytes; // advance memory size by bytes
+        pre_alloc_total_mem_ += bytes;
         M_insist(memory_.size() >= pre_alloc_addr_, "allocation must fit in memory");
         return ptr;
     }
@@ -266,7 +276,9 @@ struct LinearAllocator : Allocator
         if (alignment != 1U)
             align_memory(alignment);
         Var<Ptr<void>> ptr(alloc_addr_.template to<void*>());
-        alloc_addr_ += bytes; // advance memory size by bytes
+        alloc_addr_ += bytes.clone(); // advance memory size by bytes
+        alloc_total_mem_ += bytes;
+        alloc_peak_mem_ = Select(alloc_peak_mem_ > alloc_addr_, alloc_peak_mem_, alloc_addr_);
         Wasm_insist(memory_.size() >= alloc_addr_, "allocation must fit in memory");
         return ptr;
     }
@@ -284,6 +296,10 @@ struct LinearAllocator : Allocator
         alloc_addr_.init(pre_alloc_addr_);
         pre_allocations_performed_ = true;
     }
+
+    uint32_t pre_allocated_memory_consumption() const override { return pre_alloc_total_mem_; }
+    U32x1 allocated_memory_consumption() const override { return alloc_total_mem_; }
+    U32x1 allocated_memory_peak() const override { return alloc_peak_mem_; }
 
     private:
     /** Aligns the memory for pre-allocations with alignment requirement `align`. */

@@ -6490,6 +6490,13 @@ struct Allocator
      * requested. */
     virtual void perform_pre_allocations() = 0;
 
+    /** Returns the pre-allocated memory overall consumption. */
+    virtual uint32_t pre_allocated_memory_consumption() const = 0;
+    /** Returns the allocated memory overall consumption. */
+    virtual U32x1 allocated_memory_consumption() const = 0;
+    /** Returns the allocated memory peak consumption. */
+    virtual U32x1 allocated_memory_peak() const = 0;
+
     Var<Ptr<void>> allocate(uint32_t bytes, uint32_t align = 1) { return allocate(U32x1(bytes), align); }
     void deallocate(Ptr<void> ptr, uint32_t bytes) { return deallocate(ptr, U32x1(bytes)); }
 

@@ -1,0 +1,45 @@
+description: LIKE expression with a contains pattern.
+db: ours
+query: |
+    SELECT rstring FROM R WHERE rstring LIKE "%lv%";
+required: YES
+
+stages:
+    lexer:
+        out: |
+            -:1:1: SELECT TK_Select
+            -:1:8: rstring TK_IDENTIFIER
+            -:1:16: FROM TK_From
+            -:1:21: R TK_IDENTIFIER
+            -:1:23: WHERE TK_Where
+            -:1:29: rstring TK_IDENTIFIER
+            -:1:37: LIKE TK_Like
+            -:1:42: "%lv%" TK_STRING_LITERAL
+            -:1:48: ; TK_SEMICOL
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    parser:
+        out: |
+            SELECT rstring
+            FROM R
+            WHERE (rstring LIKE "%lv%");
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    sema:
+        out: NULL
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    end2end:
+        cli_args: --insist-no-ternary-logic
+        out: |
+            "WcTOtTu7rMuRlvl"
+            "saedcJMlvIEw1Vx"
+        err: NULL
+        num_err: 0
+        returncode: 0

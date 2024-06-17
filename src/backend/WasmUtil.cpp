@@ -5,6 +5,7 @@
 #include "mutable/util/macro.hpp"
 #include <mutable/util/concepts.hpp>
 #include <optional>
+#include <regex>
 #include <tuple>
 
 
@@ -357,6 +358,16 @@ void ExprCompiler::operator()(const ast::BinaryExpr &e)
             M_insist(CodeGenContext::Get().num_simd_lanes() == 1, "invalid number of SIMD lanes");
             (*this)(*e.lhs);
             NChar str = get<NChar>();
+            if (auto static_pattern = cast<ast::Constant>(e.rhs.get())) { // check whether specialization is applicable
+                auto pattern = Catalog::Get().pool(
+                    interpret(*static_pattern->tok.text.assert_not_none()) // interpret pattern to handle escaped chars
+                );
+                if (std::regex_match(*pattern, std::regex("%[^_%\\\\]+%"))) { // contains expression
+                    set(like_contains(str, pattern));
+                    break;
+                }
+            }
+            /* no specialization applicable, fallback to general dynamic programming approach */
             (*this)(*e.rhs);
             NChar pattern = get<NChar>();
             set(like(str, pattern));
@@ -3492,6 +3503,98 @@ _Boolx1 m::wasm::like(NChar _str, NChar _pattern, const char escape_char)
         return result;
     } else {
         const Var<Boolx1> result(like_non_null(_str, _pattern)); // to prevent duplicated computation due to `clone()`
+        return _Boolx1(result);
+    }
+}
+
+_Boolx1 m::wasm::like_contains(NChar _str, const ThreadSafePooledString &_pattern)
+{
+    static thread_local struct {} _; // unique caller handle
+    struct data_t : GarbageCollectedData
+    {
+        public:
+        ///> one function per static pattern
+        std::unordered_map<ThreadSafePooledString, FunctionProxy<bool(int32_t, char*)>> contains_map;
+
+        data_t(GarbageCollectedData &&d) : GarbageCollectedData(std::move(d)) { }
+    };
+    auto &d = Module::Get().add_garbage_collected_data<data_t>(&_); // garbage collect the `data_t` instance
+
+    M_insist(std::regex_match(*_pattern, std::regex("%[^_%\\\\]+%")), "invalid contains pattern");
+
+    if (_str.length() == 0) {
+        _str.discard();
+        return _Boolx1(false);
+    }
+
+    auto contains_non_null = [&d, &_str, &_pattern](Ptr<Charx1> str) -> Boolx1 {
+        Wasm_insist(str.clone().not_null(), "string operand must not be NULL");
+
+        auto it = d.contains_map.find(_pattern);
+        if (it == d.contains_map.end()) {
+            /*----- Create function to compute the result. -----*/
+            FUNCTION(contains, bool(int32_t, char*))
+            {
+                auto S = CodeGenContext::Get().scoped_environment(); // create scoped environment for this function
+
+                const auto len_ty_str = PARAMETER(0);
+                auto val_str = PARAMETER(1);
+
+                /*----- Copy pattern without enclosing `%` to make it accessible with runtime offset. -----*/
+                const int32_t len_pattern = strlen(*_pattern) - 2; // minus 2 due to enclosing `%`
+                auto pattern = Module::Allocator().raw_malloc<char>(len_pattern);
+                for (std::size_t i = 0; i < len_pattern; ++i)
+                    pattern[i] = (*_pattern)[i + 1]; // access _pattern with offset +1 due to starting `%`
+
+                /*----- Precompute prefix table. -----*/
+                auto tbl = Module::Allocator().raw_malloc<int32_t>(len_pattern + 1);
+                int32_t len_prefix = -1;
+
+                tbl[0] = len_prefix;
+                for (std::size_t i = 1; i < len_pattern + 1; ++i) {
+                    while (len_prefix >= 0 and pattern[len_prefix] != pattern[i - 1])
+                        len_prefix = tbl[len_prefix];
+                    ++len_prefix;
+                    tbl[i] = len_prefix;
+                }
+
+                /*----- Search pattern in string. -----*/
+                const Var<Ptr<Charx1>> end_str(val_str + len_ty_str);
+                Var<I32x1> pos_pattern(0);
+                WHILE (val_str < end_str and *val_str != '\0') {
+                    WHILE(pos_pattern >= 0 and *val_str != *(Ptr<Charx1>(pattern) + pos_pattern)) {
+                        Wasm_insist(pos_pattern < len_pattern + 1);
+                        pos_pattern = *(Ptr<I32x1>(tbl) + pos_pattern);
+                    }
+                    val_str += 1;
+                    pos_pattern += 1;
+                    IF (pos_pattern == len_pattern) {
+                        RETURN(true);
+                    };
+                }
+                RETURN(false);
+            }
+            it = d.contains_map.emplace_hint(it, _pattern, std::move(contains));
+        }
+
+        /*----- Call contains function. ------*/
+        M_insist(it != d.contains_map.end());
+        return (it->second)(_str.length(), str);
+    };
+
+    if (_str.can_be_null()) {
+        auto [_val_str, is_null_str] = _str.split();
+        Ptr<Charx1> val_str(_val_str); // since structured bindings cannot be used in lambda capture
+
+        _Var<Boolx1> result; // always set here
+        IF (is_null_str) {
+            result = _Boolx1::Null();
+        } ELSE {
+            result = contains_non_null(val_str);
+        };
+        return result;
+    } else {
+        const Var<Boolx1> result(contains_non_null(_str)); // to prevent duplicated computation due to `clone()`
         return _Boolx1(result);
     }
 }

@@ -1350,9 +1350,13 @@ Ptr<Charx1> strncpy(Ptr<Charx1> dst, Ptr<Charx1> src, U32x1 count);
  * SQL LIKE
  *====================================================================================================================*/
 
-/** Compares whether the string \p str matches the pattern \p pattern regarding SQL LIKE semantics using escape
+/** Checks whether the string \p str matches the pattern \p pattern regarding SQL LIKE semantics using escape
  * character \p escape_char. */
 _Boolx1 like(NChar str, NChar pattern, const char escape_char = '\\');
+/** Checks whether the string \p str contains the pattern \p pattern.  The implementation is based on the
+ * Knuth–Morris–Pratt algorithm and represents a special case of the SQL LIKE in which the pattern is known at query
+ * compile time and has the form `%.+%`. */
+_Boolx1 like_contains(NChar str, const ThreadSafePooledString &pattern);
 
 
 /*======================================================================================================================

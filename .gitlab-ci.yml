@@ -114,9 +114,10 @@ tagtest:upload:
     tags:
         - linux
     script:
-        - echo ${CI_API_V4_URL}
-        - curl --fail --header "PRIVATE-TOKEN: ${ADD_RELEASES_TOKEN}" --request POST "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/repository/tags?tag_name=testest&ref=${CI_COMMIT_SHA}"
-        - curl --fail --header "PRIVATE-TOKEN: ${ADD_RELEASES_TOKEN}" --request DELETE "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/repository/tags/testest"
+        - |
+          echo ${CI_API_V4_URL}
+          curl --fail --header "PRIVATE-TOKEN: ${ADD_RELEASES_TOKEN}" --request POST "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/repository/tags?tag_name=testest&ref=${CI_COMMIT_SHA}"
+          curl --fail --header "PRIVATE-TOKEN: ${ADD_RELEASES_TOKEN}" --request DELETE "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/repository/tags/testest"
 
 #-----------------------------------------------------------------------------------------------------------------------
 # CHECK

@@ -114,7 +114,7 @@ tagtest:upload:
     tags:
         - linux
     script:
-        - echo $CI_API_V4_URL
+        - echo $CI_API_V4_URL/projects/$CI_PROJECT_ID
         - >-
           curl
           --fail

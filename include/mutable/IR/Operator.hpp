@@ -385,10 +385,7 @@ struct M_EXPORT SemiJoinReductionOperator : Producer, Consumer
     std::vector<semi_join_order_t> semi_join_reduction_order_;
 
     public:
-    SemiJoinReductionOperator(std::vector<projection_type> projections,
-                              std::vector<std::unique_ptr<DataSource>> sources,
-                              std::vector<std::unique_ptr<Join>> joins,
-                              std::vector<semi_join_order_t> semi_join_reduction_order);
+    SemiJoinReductionOperator(std::vector<projection_type> projections);
 
     /*----- Override child setters to *NOT* modify the computed schema! ----------------------------------------------*/
     virtual void add_child(Producer *child) override {

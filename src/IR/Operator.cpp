@@ -269,14 +269,8 @@ Schema compute_projection_schema(std::vector<QueryGraph::projection_type> &proje
     return S;
 }
 
-SemiJoinReductionOperator::SemiJoinReductionOperator(std::vector<projection_type> projections,
-                                                     std::vector<std::unique_ptr<DataSource>> sources,
-                                                     std::vector<std::unique_ptr<Join>> joins,
-                                                     std::vector<semi_join_order_t> semi_join_reduction_order)
+SemiJoinReductionOperator::SemiJoinReductionOperator(std::vector<projection_type> projections)
     : projections_(std::move(projections))
-    , sources_(std::move(sources))
-    , joins_(std::move(joins))
-    , semi_join_reduction_order_(std::move(semi_join_reduction_order))
 {
     /* Compute the schema of the operator. */
     auto &S = schema();

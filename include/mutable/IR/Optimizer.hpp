@@ -69,8 +69,7 @@ struct M_EXPORT Optimizer
 
     /** Optimizes and constructs an operator tree given a join operator tree \p plan and the final plan table entry
      * \p entry for the query graph \p G. */
-    std::unique_ptr<Producer> optimize_plan(const QueryGraph &G, std::unique_ptr<Producer> plan,
-                                            PlanTableEntry &entry) const;
+    std::unique_ptr<Producer> optimize_plan(QueryGraph &G, std::unique_ptr<Producer> plan, PlanTableEntry &entry) const;
 
     /** Computes and returns a `std::vector` of additional projections required *before* evaluating the ORDER BY clause.
      * The returned `std::vector` may be empty, in which case *no* additional projection is required. */

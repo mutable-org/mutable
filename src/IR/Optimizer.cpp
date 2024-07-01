@@ -590,7 +590,33 @@ std::pair<std::unique_ptr<Producer>, PlanTable> Optimizer::optimize_with_plantab
     auto &entry = PT.get_final();
 
     /*----- Construct plan for remaining operations. -----*/
-    plan = optimize_plan(G, std::move(plan), entry);
+    if (Options::Get().decompose) {
+        /* Add `DecomposeOperator` on top of plan. */
+        if (not G.group_by().empty() or
+            not G.aggregates().empty() or
+            not G.order_by().empty() or
+            G.limit().limit or
+            G.limit().offset or
+            std::any_of(G.joins().begin(), G.joins().end(), [](auto &join){ return not join->condition().is_equi(); }) or
+            std::any_of(G.projections().begin(), G.projections().end(), [](auto &p){
+                return not is<const ast::Designator>(p.first) or p.second.has_value(); // only designators without alias supported
+            }))
+        {
+            std::cerr << "WARNING: No compatible query to decompose. Fallback to standard `Optimizer`."
+                      << std::endl;
+
+            std::unique_ptr<Producer> producer;
+            Optimizer Opt(C.plan_enumerator(), C.cost_function());
+            producer = M_TIME_EXPR(Opt(G), "Compute the logical query plan", C.timer());
+            return { std::move(producer), std::move(PT) };
+        }
+        auto decompose_op = std::make_unique<DecomposeOperator>(std::cout, std::move(G.projections()),
+                                                                std::move(G.sources()));
+        decompose_op->add_child(plan.release());
+        plan = std::move(decompose_op);
+    } else {
+        plan = optimize_plan(G, std::move(plan), entry);
+    }
 
     return { std::move(plan), std::move(PT) };
 }
@@ -760,8 +786,8 @@ std::unique_ptr<Producer> Optimizer::construct_join_order(const QueryGraph &G, c
     return std::unique_ptr<Producer>(construct_recursive(Subproblem::All(G.sources().size())));
 }
 
-std::unique_ptr<Producer> Optimizer::optimize_plan(const QueryGraph &G, std::unique_ptr<Producer> plan,
-                                                   PlanTableEntry &entry) const
+std::unique_ptr<Producer> Optimizer::optimize_plan(QueryGraph &G, std::unique_ptr<Producer> plan, PlanTableEntry &entry)
+const
 {
     auto &CE = Catalog::Get().get_database_in_use().cardinality_estimator();
 

@@ -50,6 +50,10 @@ struct M_EXPORT Options
     /** If `true`, compute multiple result sets using semi-join reduction. */
     bool result_db;
 
+    /** If `true`, decompose the single-table query result in multiple result sets, i.e. compute the same result as
+     * using the `result_db` optimizer. */
+    bool decompose;
+
     /** If `true`, do not pass the query to the backend for execution. */
     bool dryrun;
 

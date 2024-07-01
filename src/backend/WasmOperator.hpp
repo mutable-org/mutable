@@ -190,6 +190,7 @@ namespace m {
     X(Aggregation) \
     X(NoOpSorting) \
     X(SemiJoinReduction) \
+    X(Decompose) \
     X(Limit) \
     X(HashBasedGroupJoin)
 #define M_WASM_OPERATOR_LIST_TEMPLATED(X) \
@@ -499,6 +500,17 @@ struct SemiJoinReduction : PhysicalOperator<SemiJoinReduction, SemiJoinReduction
                                       const std::tuple<const SemiJoinReductionOperator*> &partial_inner_nodes);
     static ConditionSet
     adapt_post_conditions(const Match<SemiJoinReduction> &M,
+                          std::vector<std::reference_wrapper<const ConditionSet>> &&post_cond_children);
+};
+
+struct Decompose : PhysicalOperator<Decompose, DecomposeOperator>
+{
+    static void execute(const Match<Decompose> &M, setup_t setup, pipeline_t pipeline, teardown_t teardown);
+    static double cost(const Match<Decompose> &M);
+    static ConditionSet pre_condition(std::size_t child_idx,
+                                      const std::tuple<const DecomposeOperator*> &partial_inner_nodes);
+    static ConditionSet
+    adapt_post_conditions(const Match<Decompose> &M,
                           std::vector<std::reference_wrapper<const ConditionSet>> &&post_cond_children);
 };
 
@@ -1080,6 +1092,37 @@ struct Match<wasm::SemiJoinReduction> : wasm::MatchMultipleChildren
     }
 
     const Operator & get_matched_root() const override { return semi_join_reduction; }
+
+    void accept(wasm::MatchBaseVisitor &v) override;
+    void accept(wasm::ConstMatchBaseVisitor &v) const override;
+
+    protected:
+    void print(std::ostream &out, unsigned level) const override;
+};
+
+template<>
+struct Match<wasm::Decompose> : wasm::MatchSingleChild
+{
+    const DecomposeOperator &decompose_op;
+    std::unique_ptr<const storage::DataLayoutFactory> materializing_factory =
+        M_notnull(options::hard_pipeline_breaker_layout.get())->clone();
+    bool use_open_addressing_hashing =
+        bool(options::hash_table_implementation bitand option_configs::HashTableImplementation::OPEN_ADDRESSING);
+    bool use_in_place_values = bool(options::hash_table_storing_strategy bitand option_configs::StoringStrategy::IN_PLACE);
+    bool use_quadratic_probing = bool(options::hash_table_probing_strategy bitand option_configs::ProbingStrategy::QUADRATIC);
+    double load_factor =
+        use_open_addressing_hashing ? options::load_factor_open_addressing : options::load_factor_chained;
+
+    Match(const DecomposeOperator *decompose, std::vector<unsharable_shared_ptr<const m::MatchBase>> &&children)
+        : wasm::MatchSingleChild(std::move(children))
+        , decompose_op(*decompose)
+    { }
+
+    void execute(setup_t setup, pipeline_t pipeline, teardown_t teardown) const override {
+        wasm::Decompose::execute(*this, std::move(setup), std::move(pipeline), std::move(teardown));
+    }
+
+    const Operator & get_matched_root() const override { return decompose_op; }
 
     void accept(wasm::MatchBaseVisitor &v) override;
     void accept(wasm::ConstMatchBaseVisitor &v) const override;

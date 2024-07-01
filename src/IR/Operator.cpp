@@ -65,6 +65,9 @@ std::ostream & m::operator<<(std::ostream &out, const Operator &op) {
         [&out, &depth](const SemiJoinReductionOperator &op) {
             indent(out, op, depth).out << "SemiJoinReductionOperator";
         },
+        [&out, &depth](const DecomposeOperator &op) {
+            indent(out, op, depth).out << "DecomposeOperator";
+        },
         [&out, &depth](const ProjectionOperator &op) { indent(out, op, depth).out << "ProjectionOperator"; },
         [&out, &depth](const LimitOperator &op) {
             indent(out, op, depth).out << "LimitOperator " << op.limit() << ", " << op.offset();
@@ -155,6 +158,14 @@ void Operator::dot(std::ostream &out) const
         [&out](const SemiJoinReductionOperator &op) {
             out << "    " << id(op) << " [label=<<B>⋉</B><SUB><FONT COLOR=\"0.0 0.0 0.25\" POINT-SIZE=\"10\">"
                 << "Reduction"
+                << "</FONT></SUB>>];\n";
+
+            for (auto c : op.children())
+                out << "    " << id(*c) << EDGE << id(op) << ";\n";
+        },
+        [&out](const DecomposeOperator &op) {
+            out << "    " << id(op) << " [label=<<B>⋉</B><SUB><FONT COLOR=\"0.0 0.0 0.25\" POINT-SIZE=\"10\">"
+                << "Decompse"
                 << "</FONT></SUB>>];\n";
 
             for (auto c : op.children())
@@ -267,6 +278,18 @@ Schema compute_projection_schema(std::vector<QueryGraph::projection_type> &proje
         }
     }
     return S;
+}
+
+DecomposeOperator::DecomposeOperator(std::ostream &out, std::vector<projection_type> projections,
+                                     std::vector<std::unique_ptr<DataSource>> sources)
+    : out(out)
+    , projections_(std::move(projections))
+    , sources_(std::move(sources))
+{
+    /* Compute the schema of the operator. */
+    auto &S = schema();
+    M_insist(S.empty());
+    S = compute_projection_schema(projections_);
 }
 
 SemiJoinReductionOperator::SemiJoinReductionOperator(std::vector<projection_type> projections)
@@ -491,6 +514,39 @@ void SchemaMinimizer::operator()(SemiJoinReductionOperator &op)
     for (auto c : const_cast<const SemiJoinReductionOperator&>(op).children()) {
         required = required_by_op & c->schema(); // what we need from this child
         (*this)(*c);
+        add_constraints(op.schema(), op.child(0)->schema()); // add constraints from child
+    }
+}
+
+void SchemaMinimizer::operator()(DecomposeOperator &op)
+{
+    M_insist(required.empty(), "DecomposeOperator is the root -> no required schema");
+    M_insist(is_top_of_plan_, "DecomposeOperator has to be top of plan");
+
+    Schema required_by_op;
+    Schema ours;
+
+    std::size_t pos_out = 0;
+    for (std::size_t pos_in = 0; pos_in != op.projections().size(); ++pos_in) {
+        M_insist(pos_out <= pos_in);
+        auto &proj = op.projections()[pos_in];
+        auto &e = op.schema()[pos_in];
+
+        if (is_top_of_plan_ or required.has(e.id)) {
+            required_by_op |= proj.first.get().get_required();
+            op.projections()[pos_out++] = std::move(op.projections()[pos_in]);
+            ours.add(e);
+        }
+    }
+    M_insist(pos_out <= op.projections().size());
+    const auto &dummy = op.projections()[0];
+    op.projections().resize(pos_out, dummy);
+
+    op.schema() = std::move(ours);
+    required = std::move(required_by_op);
+    is_top_of_plan_ = false;
+    if (not const_cast<const DecomposeOperator&>(op).children().empty()) {
+        (*this)(*op.child(0));
         add_constraints(op.schema(), op.child(0)->schema()); // add constraints from child
     }
 }

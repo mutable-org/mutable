@@ -84,6 +84,10 @@ void QueryDatabase::execute(Diagnostic &diag)
         std::cout.flush();
     }
 
+    /* Check if the optimizer settings are conflicting. */
+    if(Options::Get().result_db and Options::Get().decompose)
+        throw std::logic_error("the flags `--result_db` and `--decompose` cannot be used together");
+
     /* Set logical optimizer to use. */
     std::unique_ptr<Producer> producer;
     bool result_db_compatible = true;
@@ -112,7 +116,7 @@ void QueryDatabase::execute(Diagnostic &diag)
         dot.show("logical_plan", false, "dot");
     }
 
-    if (Options::Get().result_db and result_db_compatible) {
+    if ((Options::Get().result_db and result_db_compatible) or Options::Get().decompose) {
         logical_plan_ = M_notnull(cast<Consumer>(producer));
     } else {
         if (Options::Get().benchmark)

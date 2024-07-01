@@ -442,6 +442,31 @@ struct M_EXPORT SemiJoinReductionOperator : Producer, Consumer
     void accept(ConstOperatorVisitor &v) const override;
 };
 
+/** Decompose the single-table result into multiple result sets, i.e. compute the same result as the
+ * `SemiJoinReductionOperator`. */
+struct M_EXPORT DecomposeOperator : Consumer, Producer
+{
+    using projection_type = QueryGraph::projection_type;
+
+    std::ostream &out;
+    private:
+    std::vector<projection_type> projections_;
+    std::vector<std::unique_ptr<DataSource>> sources_; ///< collection of all data sources
+
+    public:
+    DecomposeOperator(std::ostream &out, std::vector<projection_type> projections,
+                      std::vector<std::unique_ptr<DataSource>> sources);
+
+    std::vector<projection_type> & projections() { return projections_; }
+    const std::vector<projection_type> & projections() const { return projections_; }
+
+    std::vector<std::unique_ptr<DataSource>> & sources() { return sources_; }
+    const std::vector<std::unique_ptr<DataSource>> & sources() const { return sources_; }
+
+    void accept(OperatorVisitor &v) override;
+    void accept(ConstOperatorVisitor &v) const override;
+};
+
 struct M_EXPORT ProjectionOperator : Producer, Consumer
 {
     using projection_type = QueryGraph::projection_type;
@@ -653,6 +678,7 @@ struct M_EXPORT SortingOperator : Producer, Consumer
     X(DisjunctiveFilterOperator) \
     X(JoinOperator) \
     X(SemiJoinReductionOperator) \
+    X(DecomposeOperator) \
     X(ProjectionOperator) \
     X(LimitOperator) \
     X(GroupingOperator) \

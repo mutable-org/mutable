@@ -313,6 +313,10 @@ int main(int argc, const char **argv)
         nullptr, "--result-db",                                     /* Short, Long      */
         "compute multipe result sets using semi-join reduction",    /* Description      */
         [&](bool) { Options::Get().result_db = true; });            /* Callback         */
+    ADD(bool, Options::Get().decompose, false,                      /* Type, Var, Init  */
+        nullptr, "--decompose",                                     /* Short, Long      */
+        "decompose single-table result into multipe result sets",   /* Description      */
+        [&](bool) { Options::Get().decompose = true; });            /* Callback         */
     ADD(bool, Options::Get().benchmark, false,              /* Type, Var, Init  */
         nullptr, "--benchmark",                             /* Short, Long      */
         "run queries in benchmark mode",                    /* Description      */

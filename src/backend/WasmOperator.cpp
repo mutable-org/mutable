@@ -466,6 +466,7 @@ void m::register_wasm_operators(PhysicalOptimizer &phys_opt)
     phys_opt.register_operator<Print<true>>();
     phys_opt.register_operator<Scan<false>>();
     phys_opt.register_operator<SemiJoinReduction>();
+    phys_opt.register_operator<Decompose>();
     if (options::simd)
         phys_opt.register_operator<Scan<true>>();
     if (bool(options::filter_selection_strategy bitand option_configs::SelectionStrategy::BRANCHING))
@@ -5131,6 +5132,181 @@ void SemiJoinReduction::execute(const Match<SemiJoinReduction> &M, setup_t, pipe
 
 double SemiJoinReduction::cost(const Match<SemiJoinReduction>&) { return 0; };
 
+
+/*======================================================================================================================
+ * Decompose
+ *====================================================================================================================*/
+
+ConditionSet Decompose::pre_condition(std::size_t, const std::tuple<const DecomposeOperator*>&)
+{
+    ConditionSet pre_cond;
+
+    /*----- Decompose operator does not support SIMD. -----*/
+    pre_cond.add_condition(NoSIMD());
+
+    return pre_cond;
+}
+
+ConditionSet
+Decompose::adapt_post_conditions(const Match<Decompose> &,
+                                 std::vector<std::reference_wrapper<const ConditionSet>> &&post_cond_children)
+{
+    M_insist(post_cond_children.size() >= 2);
+    ConditionSet post_cond;
+    post_cond.add_condition(NoSIMD());
+    post_cond.add_condition(Predicated(false));
+    return post_cond;
+}
+
+void Decompose::execute(const Match<Decompose> &M, setup_t, pipeline_t, teardown_t)
+{
+    auto &context = WasmEngine::Get_Wasm_Context_By_ID(Module::ID());
+    context.result_set_factory = M.materializing_factory->clone(); // register factory for printing
+
+    M_insist(bool(M.child));
+    auto &child = M.child;
+    auto &child_op = child->get_matched_root();
+
+    /*----- Compute schema of result sets. -----*/
+    std::unordered_map<ThreadSafePooledString, Schema> result_data_sources; ///< maps data source names to their result schema
+    visit(overloaded {
+        [&M, &result_data_sources](const MatchLeaf &M_leaf){
+            M_insist(is<const Match<Scan<false>>>(M_leaf), "currently only wasm::Scan<false> supported");
+            auto &M_scan = as<const Match<Scan<false>>>(M_leaf);
+
+            Schema s;
+            for (auto &e : M_scan.scan.schema()) {
+                if (M.decompose_op.schema().has(e.id)) // contained in result set
+                    s.add(e);
+            }
+            if (not s.empty()) {
+                result_data_sources.emplace(
+                    std::piecewise_construct,
+                    std::forward_as_tuple(M_scan.scan.alias()),
+                    std::forward_as_tuple(std::move(s))
+                );
+            }
+        },
+        [&M, &result_data_sources](const Match<Projection> &M_proj){
+            Schema s;
+            for (auto &e : M_proj.projection.schema()) {
+                if (M.decompose_op.schema().has(e.id)) // contained in result set
+                    s.add(e);
+            }
+            M_insist(std::all_of(M_proj.projection.schema().begin(), M_proj.projection.schema().end(), [&](auto &e){
+                return e.id.prefix == M_proj.projection.schema()[0].id.prefix;
+            }));
+            if (not s.empty()) {
+                result_data_sources.emplace(
+                    std::piecewise_construct,
+                    std::forward_as_tuple(M_proj.projection.schema()[0].id.prefix),
+                    std::forward_as_tuple(std::move(s))
+                );
+            }
+            throw visit_skip_subtree();
+        },
+        []<typename T>(T&) requires (not std::derived_from<T, MatchLeaf>) { /* nothing to be done */ }
+    }, *child, tag<ConstPreOrderMatchBaseVisitor>());
+
+    /* ----- Create hash table. -----*/
+    std::vector<std::unique_ptr<HashTable>> hash_tables;
+    std::vector<Schema> ht_schemas; // to own hash table schemas for result sets
+    hash_tables.reserve(result_data_sources.size());
+    ht_schemas.reserve(result_data_sources.size());
+    for (auto &[ds_name, proj_schema] : result_data_sources) {
+        uint32_t initial_capacity = compute_initial_ht_capacity(child_op, M.load_factor);
+
+        auto &ht_schema = ht_schemas.emplace_back(proj_schema.deduplicate().drop_constants());
+        std::vector<HashTable::index_t> build_key_indices;
+        for (auto &key : proj_schema)
+            build_key_indices.push_back(ht_schema[key.id].first);
+        if (M.use_open_addressing_hashing) {
+            hash_tables.push_back(
+                std::make_unique<GlobalOpenAddressingInPlaceHashTable>(ht_schema, std::move(build_key_indices),
+                                                                      initial_capacity)
+            );
+            if (M.use_quadratic_probing)
+                as<OpenAddressingHashTableBase>(*hash_tables.back()).set_probing_strategy<QuadraticProbing>();
+            else
+                as<OpenAddressingHashTableBase>(*hash_tables.back()).set_probing_strategy<LinearProbing>();
+        } else {
+            hash_tables.push_back(
+                std::make_unique<GlobalChainedHashTable>(ht_schema, std::move(build_key_indices), initial_capacity)
+            );
+        }
+    }
+
+    /*----- Fill all hash tables. -----*/
+    FUNCTION(decompose_child_pipeline, void(void))
+    {
+        auto S = CodeGenContext::Get().scoped_environment(); // create scoped environment for this function
+
+        child->execute(
+            /* setup=    */ setup_t::Make_Without_Parent([&](){
+                for (auto &ht : hash_tables) {
+                    ht->setup();
+                    ht->set_high_watermark(M.load_factor);
+                }
+            }),
+            /* pipeline= */ [&](){
+                auto &env = CodeGenContext::Get().env();
+                for (auto &ht : hash_tables) {
+                    /*----- Insert key. -----*/
+                    std::vector<SQL_t> key;
+                    for (auto &e : ht->schema())
+                        key.emplace_back(env.extract(e.id));
+                    ht->try_emplace(std::move(key)).second.discard(); // discard returned found flag
+                }
+            },
+            /* teardown= */ teardown_t::Make_Without_Parent([&](){
+                for (auto &ht : hash_tables)
+                    ht->teardown();
+            })
+        );
+    }
+    decompose_child_pipeline(); // call child function
+
+    /*----- Write and print a result set buffer for each hash table. -----*/
+    auto ht_it = hash_tables.begin();
+    for (auto &p : result_data_sources) {
+        auto &ht = *ht_it;
+        ht->setup();
+        context.result_set_infos.push(std::move(p)); // required for printing the result set
+
+        if (not Options::Get().benchmark) {
+            LocalBuffer result_set(ht->schema(), *M.materializing_factory);
+
+            /*----- Write to buffer. -----*/
+            result_set.setup();
+            ht->for_each([&ht, &result_set](HashTable::const_entry_t ht_e){
+                auto &env = CodeGenContext::Get().env();
+                for (auto &e : ht->schema()) {
+                    visit(overloaded {
+                        [&env, &e]<sql_type T>(HashTable::const_reference_t<T> &&r){ env.add(e.id, T(r)); },
+                        [](std::monostate){ M_unreachable("invalid reference"); }
+                    }, ht_e.extract(e.id));
+
+                }
+                result_set.consume(); // fill buffer
+            });
+
+            /*----- Print buffer. -----*/
+            Module::Get().emit_call<void>("read_semi_join_reduction_result_set", result_set.base_address(),
+                                          result_set.size());
+
+            result_set.teardown();
+        } else {
+            /*----- Print number of result rows *without* writing to buffer. -----*/
+            Module::Get().emit_call<void>("read_semi_join_reduction_result_set", Ptr<void>::Nullptr(),
+                                          ht->num_entries());
+        }
+        ht->teardown(); // not required because hash table is never accessed afterwards
+        ++ht_it;
+    }
+}
+
+double Decompose::cost(const Match<Decompose>&) { return 0; };
+
 /*======================================================================================================================
  * Limit
  *====================================================================================================================*/
@@ -6130,6 +6306,13 @@ void Match<m::wasm::SemiJoinReduction>::print(std::ostream &out, unsigned level)
         indent(out, level) << i << ". input";
         child.print(out, level + 1);
     }
+}
+
+void Match<m::wasm::Decompose>::print(std::ostream &out, unsigned level) const
+{
+    indent(out, level) << "wasm::Decompose " << this->decompose_op.schema() << print_info(this->decompose_op)
+                       << " (cumulative cost " << cost() << ')';
+    this->child->print(out, level + 1);
 }
 
 void Match<m::wasm::Limit>::print(std::ostream &out, unsigned level) const

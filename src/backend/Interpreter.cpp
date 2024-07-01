@@ -1145,6 +1145,11 @@ void Pipeline::operator()(const SemiJoinReductionOperator &)
     M_unreachable("Pipeline in Interpreter for SemiJoinReductionOperator not supported.");
 }
 
+void Pipeline::operator()(const DecomposeOperator &)
+{
+    M_unreachable("Pipeline in Interpreter for DecomposeOperator not supported.");
+}
+
 void Pipeline::operator()(const ProjectionOperator &op)
 {
     auto data = as<ProjectionData>(op.data());
@@ -1482,6 +1487,11 @@ void Interpreter::operator()(const JoinOperator &op)
 void Interpreter::operator()(const SemiJoinReductionOperator &)
 {
     M_unreachable("Interpreter for SemiJoinReductionOperator not supported.");
+}
+
+void Interpreter::operator()(const DecomposeOperator &)
+{
+    M_unreachable("Interpreter for DecomposeOperator not supported.");
 }
 
 void Interpreter::operator()(const ProjectionOperator &op)

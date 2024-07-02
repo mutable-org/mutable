@@ -2,6 +2,7 @@
 
 #include <mutable/mutable-config.hpp>
 #include <mutable/catalog/CostFunction.hpp>
+#include <mutable/catalog/YannakakisHeuristic.hpp>
 #include <mutable/IR/PlanEnumerator.hpp>
 #include <mutable/IR/PlanTable.hpp>
 #include <unordered_set>
@@ -78,6 +79,83 @@ struct M_EXPORT Optimizer
                                               const std::vector<order_type> &order_by);
 };
 
+struct M_EXPORT SemiJoinCostFunction
+{
+    double estimate_semi_join_probe_costs(const CardinalityEstimator &CE, const DataModel &model);
+    double estimate_semi_join_hash_costs(const CardinalityEstimator &CE, const DataModel &model);
+    double estimate_semi_join_costs(const CardinalityEstimator &CE, const DataModel &left, const DataModel &right);
+};
+
+struct M_EXPORT TreeEnumerator
+{
+    using cost_table_t = std::vector<std::unordered_map<std::size_t, double>>;
+    using model_table_t = std::vector<std::unordered_map<std::size_t, std::unique_ptr<DataModel>>>;
+    using semi_join_order_t = SemiJoinReductionOperator::semi_join_order_t;
+    using card_order_t = std::vector<std::size_t>;
+
+    private:
+    cost_table_t cost_table_;
+    model_table_t model_table_;
+    public:
+    TreeEnumerator(std::size_t n) : cost_table_(n), model_table_(n) {}
+    std::size_t find_best_root(QueryGraph &G, const CardinalityEstimator &CE, SemiJoinCostFunction &SC, card_order_t card_orders[], std::vector<std::unique_ptr<DataModel>> &base_models);
+    void update_cost_table(std::size_t parent, std::size_t child, double costs) {
+        cost_table_[parent].emplace(child, costs);
+    }
+
+    void compute_cardinality_order(const QueryGraph &G, const CardinalityEstimator &CE, std::size_t node, std::vector<std::size_t> &card_order, std::vector<std::unique_ptr<DataModel>> &base_models);
+
+    void determine_reduced_models(QueryGraph &G, const CardinalityEstimator &CE, card_order_t card_orders[], std::vector<std::unique_ptr<DataModel>> &base_models);
+
+    void update_model_table(std::size_t parent, std::size_t child, std::unique_ptr<DataModel> model) {
+        model_table_[parent].emplace(child, std::move(model));
+    }
+
+    auto parent_node_costs(std::size_t parent, std::size_t child) {
+        return cost_table_[parent].find(child);
+    }
+
+    auto parent_node_model(std::size_t parent, std::size_t child) {
+        return model_table_[parent].find(child);
+    }
+
+    auto cost_begin(std::size_t parent) const { return cost_table_[parent].begin(); }
+    auto model_begin(std::size_t parent) const { return model_table_[parent].begin(); }
+    auto cost_end(std::size_t parent) const { return cost_table_[parent].end(); }
+    auto model_end(std::size_t parent) const { return model_table_[parent].end(); }
+};
+
+namespace Optimizer_ResultDB_utils {
+    using semi_join_order_t = SemiJoinReductionOperator::semi_join_order_t;
+    using fold_t = std::unordered_set<std::size_t>;
+    using card_order_t =  std::vector<std::size_t>;
+    using bc_forest_t = std::unordered_map<Subproblem, std::vector<Subproblem>, SubproblemHash>;
+
+    std::vector<fold_t> compute_folds(const QueryGraph &G);
+    DataSource & get_data_source_with_highest_degree(QueryGraph &G);
+    void fold_query_graph(QueryGraph &G, std::vector<fold_t> &folds);
+    void combine_joins(QueryGraph &G);
+
+    std::vector<semi_join_order_t> compute_semi_join_reduction_order(QueryGraph &G);
+    std::vector<semi_join_order_t> enumerate_semi_join_reduction_order(QueryGraph &G, const CardinalityEstimator &CE, std::vector<std::unique_ptr<DataModel>> &base_models);
+    std::unique_ptr<Producer*[]> compute_and_solve_biconnected_components(QueryGraph &G, std::vector<std::unique_ptr<DataModel>> &base_models);
+    std::unique_ptr<Producer*[]> solve_cycles_without_enum(QueryGraph &G, std::vector<std::unique_ptr<DataModel>> &base_models);
+    void find_vertex_cuts(QueryGraph &G, Subproblem block, Subproblem &already_used, std::vector<fold_t> &folds);
+    void find_and_apply_vertex_cuts(QueryGraph &G, std::vector<Subproblem> &blocks, Subproblem &cut_vertices);
+    void build_bc_forest(std::vector<Subproblem> &blocks, Subproblem &cut_vertices, bc_forest_t &bc_forest);
+    void visit_bc_forest(bc_forest_t &bc_forest, std::vector<Subproblem> &blocks, Subproblem &visited, std::vector<Subproblem> &folding_problems, std::vector<fold_t> &folds);
+    template<typename PlanTable>
+    void optimize_join_order(const QueryGraph &G, PlanTable &PT, Subproblem folding_problem);
+    template<typename PlanTable>
+    Producer* construct_join_order(const QueryGraph &G, const PlanTable &PT, Subproblem problem, std::unique_ptr<Producer*[]> &source_plans);
+    void optimize(QueryGraph &G, std::vector<Subproblem> &folding_problems, std::unique_ptr<Producer*[]> &source_plans, std::vector<std::unique_ptr<DataModel>> &base_models);
+    template<typename PlanTable>
+    void optimize_with_plantable(QueryGraph &G, std::vector<Subproblem> &folding_problems, std::unique_ptr<Producer*[]> &source_plans,  std::vector<std::unique_ptr<DataModel>> &base_models);
+    template<typename PlanTable>
+    std::unique_ptr<Producer*[]> optimize_source_plans(const QueryGraph &G, PlanTable &PT);
+
+}
+
 /** The optimizer interface for SELECT RESULTDB queries.
  *
  * The optimizer constructs an operator tree containing a single `SemiJoinReductionOperator' with the base tables as
@@ -96,15 +174,6 @@ struct M_EXPORT Optimizer_ResultDB
      * compatible is returned. In case the query is not compatible, the optimizer falls back to the standard `Optimizer`
      * and `false` is returned. */
     std::pair<std::unique_ptr<Producer>, bool> operator()(QueryGraph &G) const;
-
-    private:
-    DataSource & get_data_source_with_highest_degree(QueryGraph &G) const;
-
-    std::vector<fold_t> compute_folds(const QueryGraph &G) const;
-    void fold_query_graph(QueryGraph &G, std::vector<fold_t> &folds) const;
-    void combine_joins(QueryGraph &G) const;
-
-    std::vector<semi_join_order_t> compute_semi_join_reduction_order(QueryGraph &G) const;
 };
 
 }

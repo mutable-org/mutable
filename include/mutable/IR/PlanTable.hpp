@@ -8,6 +8,7 @@
 #include <mutable/mutable-config.hpp>
 #include <mutable/catalog/CardinalityEstimator.hpp>
 #include <mutable/catalog/CostFunction.hpp>
+#include <mutable/catalog/YannakakisHeuristic.hpp>
 #include <mutable/IR/Operator.hpp>
 #include <mutable/IR/QueryGraph.hpp>
 #include <mutable/util/ADT.hpp>
@@ -144,6 +145,34 @@ struct M_EXPORT PlanTableBase : crtp<Actual, PlanTableBase>
             swap(cost, rl_cost);
             swap(left, right);
         }
+
+        /*----- Update plan table entry. -----------------------------------------------------------------------------*/
+        if (not has_plan(left | right) or cost < entry.cost) {
+            /* If there is no plan yet for this subproblem or the current plan is better than the best plan yet, update
+             * the plan and costs for this subproblem. */
+            entry.cost = cost;
+            entry.left = left;
+            entry.right = right;
+        }
+    }
+
+    /** Update the entry for `left` joined with `right` (`left|right`) by considering plan `left` join `right`.  The
+     * entry's plan and cost is changed *only* if the plan's cost is less than the cost of the currently best plan.
+     * Note, that contrary to the regular update, we are not necessarily always interested in the join between different
+     * subproblems, as, depending on the assignment of cut vertices, we might stop the enumeration when only two
+     * subproblems are left. Note, that we also need the consider the Yannakakis heuristic for these cases.*/
+    void update_for_cycle_folding(const QueryGraph &G, const CardinalityEstimator &CE, const CostFunction &CF, const YannakakisHeuristic &YH,
+                Subproblem left, Subproblem right, const cnf::CNF &condition)
+    {
+
+        M_insist(not left.empty(), "left side must not be empty");
+        M_insist(not right.empty(), "right side must not be empty");
+        /* Case 2: We are not necessarily interested in the join between both relations, therefore we need to consider
+        * the costs of joining both left and right in the first place, together with estimating the costs of splitting
+        * them up again
+        * TODO: Use condition*/
+        auto &entry = operator[](left | right);
+        auto cost = YH.estimate(G, CE, actual(), left, right) + operator[](left).cost + operator[](right).cost;
 
         /*----- Update plan table entry. -----------------------------------------------------------------------------*/
         if (not has_plan(left | right) or cost < entry.cost) {

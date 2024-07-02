@@ -70,6 +70,9 @@ struct M_EXPORT DataSource
     auto & joins() { return joins_; }
     const auto & joins() const { return joins_; }
 
+    /** Returns the estimated size of a tuple **/
+    virtual std::size_t tuple_size() const = 0;
+
     /** Returns `true` iff the data source is correlated. */
     virtual bool is_correlated() const = 0;
 
@@ -130,6 +133,14 @@ struct M_EXPORT BaseTable : DataSource
     /** Returns a reference to the `Table` providing the tuples. */
     const Table & table() const { return table_; }
 
+    std::size_t tuple_size() const override {
+        std::size_t tuple_size = 0;
+        for (auto &attribute : table_) {
+            tuple_size += attribute.type->size();
+        }
+        return tuple_size;
+    }
+
     ThreadSafePooledOptionalString name() const override { return alias().has_value() ? alias() : table_.name(); }
 
     /** `BaseTable` is never correlated.  Always returns `false`. */
@@ -158,6 +169,8 @@ struct M_EXPORT Query : DataSource
     std::unique_ptr<QueryGraph> extract_query_graph() { return std::exchange(query_graph_, nullptr); }
 
     ThreadSafePooledOptionalString name() const override { return alias(); }
+
+    std::size_t tuple_size() const override;
 
     bool is_correlated() const override;
 };
@@ -344,6 +357,8 @@ struct M_EXPORT QueryGraph
 
     /** Returns `true` iff the graph contains a grouping. */
     bool grouping() const { return not group_by_.empty() or not aggregates_.empty(); }
+    /** Returns the size of a tuple resulting from the join of the subproblem. **/
+    std::size_t get_tuple_size_of_subproblem(Subproblem subproblem) const;
     /** Returns `true` iff the graph is correlated, i.e. it contains a correlated source. */
     bool is_correlated() const;
 
@@ -398,6 +413,16 @@ struct M_EXPORT QueryGraph
 
     void remove_join(const Join &join) { extract_join(join); }
 
+    void get_base_table_identifiers(std::vector<ThreadSafePooledString> &identifiers) {
+        for (std::size_t i = 0; i < num_sources(); i++) {
+            auto &ds = sources_[i];
+            if (auto bt = cast<BaseTable>(ds.get())) identifiers.emplace_back(bt->name());
+            else {
+                auto &Q = as<Query>(*ds);
+                Q.query_graph().get_base_table_identifiers(identifiers);
+            }
+        }
+    }
 
     void dump(std::ostream &out) const;
     void dump() const;

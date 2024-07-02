@@ -2138,5 +2138,17 @@ void QueryGraph::dump(std::ostream &out) const
 
     out << "\n}" << std::endl;
 }
+std::size_t QueryGraph::get_tuple_size_of_subproblem(Subproblem subproblem) const {
+    std::size_t tuple_size = 0;
+    for (auto node : subproblem) {
+        tuple_size += sources_[node]->tuple_size();
+    }
+    return tuple_size;
+}
 void QueryGraph::dump() const { dump(std::cerr); }
+
+std::size_t Query::tuple_size() const  {
+    return query_graph_->get_tuple_size_of_subproblem(Subproblem::All(query_graph_->num_sources()));
+}
+
 M_LCOV_EXCL_STOP

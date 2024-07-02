@@ -5,6 +5,7 @@ doxy-api/
 third-party/
 coverage/
 catch.xml
+.idea/
 
 # Git version information
 include/mutable/gitversion.tbl

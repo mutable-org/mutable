@@ -18,6 +18,14 @@ struct M_EXPORT Options
         PT_LargeAndSparse,
     };
 
+    enum YannakakisHeuristicType
+    {
+        YH_Decompose,
+        YH_Size,
+        YH_WeakCardinality,
+        YH_StrongCardinality,
+    };
+
     /*----- Help -----------------------------------------------------------------------------------------------------*/
     bool show_help;
     bool show_version;
@@ -50,6 +58,12 @@ struct M_EXPORT Options
     /** If `true`, compute multiple result sets using semi-join reduction. */
     bool result_db;
 
+    /** If `true`, the RESULTDB operation will be enumerated. */
+    bool optimize_result_db;
+
+    /** If `true`, for RESULTDB, cycles will be reduced using greedy two-vertex cuts. */
+    bool greedy_cuts = false;
+
     /** If `true`, decompose the single-table query result in multiple result sets, i.e. compute the same result as
      * using the `result_db` optimizer. */
     bool decompose;
@@ -62,6 +76,9 @@ struct M_EXPORT Options
 
     /** The type of plan table to use for query optimization. */
     PlanTableType plan_table_type = PT_auto;
+
+    /** The type of plan table to use for query optimization. */
+    YannakakisHeuristicType yannakakis_heuristic = YH_WeakCardinality;
 
     /*----- Database configuration. ----------------------------------------------------------------------------------*/
     const char *injected_cardinalities_file;

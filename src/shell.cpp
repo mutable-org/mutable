@@ -313,6 +313,30 @@ int main(int argc, const char **argv)
         nullptr, "--result-db",                                     /* Short, Long      */
         "compute multipe result sets using semi-join reduction",    /* Description      */
         [&](bool) { Options::Get().result_db = true; });            /* Callback         */
+    ADD(bool, Options::Get().optimize_result_db, false,                      /* Type, Var, Init  */
+        nullptr, "--optimize-result-db",                                     /* Short, Long      */
+        "enumerate best way to apply semi-join reductions",    /* Description      */
+        [&](bool) { Options::Get().optimize_result_db = true; });            /* Callback         */
+    ADD(bool, Options::Get().greedy_cuts, false,                      /* Type, Var, Init  */
+        nullptr, "--greedy-cuts",                                     /* Short, Long      */
+        "use greedy two-vertex cuts",    /* Description      */
+        [&](bool) { Options::Get().greedy_cuts = true; });            /* Callback         */
+    ADD(bool, Options::Get().yannakakis_heuristic, Options::YH_WeakCardinality,                      /* Type, Var, Init  */
+        nullptr, "--yh-d",                                     /* Short, Long      */
+        "use the decompose based heuristic for result db",    /* Description      */
+        [&](bool) { Options::Get().yannakakis_heuristic = Options::YH_Decompose; });
+    ADD(bool, Options::Get().yannakakis_heuristic, Options::YH_WeakCardinality,                      /* Type, Var, Init  */
+        nullptr, "--yh-s",                                     /* Short, Long      */
+        "use the sized based heuristic for result db",    /* Description      */
+        [&](bool) { Options::Get().yannakakis_heuristic = Options::YH_Size; });
+    ADD(bool, Options::Get().yannakakis_heuristic, Options::YH_WeakCardinality,                      /* Type, Var, Init  */
+        nullptr, "--yh-wc",                                     /* Short, Long      */
+        "use the weak cardinality based heuristic for result db",    /* Description      */
+        [&](bool) { Options::Get().yannakakis_heuristic = Options::YH_WeakCardinality; });
+    ADD(bool, Options::Get().yannakakis_heuristic, Options::YH_WeakCardinality,                      /* Type, Var, Init  */
+        nullptr, "--yh-sc",                                     /* Short, Long      */
+        "use the strong cardinality based heuristic for result db",    /* Description      */
+        [&](bool) { Options::Get().yannakakis_heuristic = Options::YH_StrongCardinality; });
     ADD(bool, Options::Get().decompose, false,                      /* Type, Var, Init  */
         nullptr, "--decompose",                                     /* Short, Long      */
         "decompose single-table result into multipe result sets",   /* Description      */

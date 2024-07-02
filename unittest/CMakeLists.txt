@@ -42,6 +42,7 @@ set(
     IR/PlanEnumeratorTest.cpp
     IR/QueryGraphTest.cpp
     IR/TupleTest.cpp
+    IR/OptimizerTest.cpp
 
     # catalog
     catalog/CardinalityEstimatorTest.cpp
@@ -49,6 +50,7 @@ set(
     catalog/SchemaTest.cpp
     catalog/TableFactoryTest.cpp
     catalog/TypeTest.cpp
+    catalog/YannakakisHeuristicTest.cpp
 
     # storage
     storage/ColumnStoreTest.cpp
@@ -64,6 +66,7 @@ set(
 
     # io
     io/DSVReaderTest.cpp
+
 )
 
 if(${WITH_V8})

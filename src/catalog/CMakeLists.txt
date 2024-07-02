@@ -13,4 +13,5 @@ add_library(
     TableFactory.cpp
     TrainedCostFunction.cpp
     Type.cpp
+    YannakakisHeuristic.cpp
 )

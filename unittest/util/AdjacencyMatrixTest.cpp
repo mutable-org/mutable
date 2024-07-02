@@ -110,6 +110,166 @@ TEST_CASE("AdjacencyMatrix/Standalone Matrix", "[core][util][unit]")
     }
 }
 
+TEST_CASE("AdjacencyMatrix/Standalone Matrix/Biconnected", "[core][util][unit]")
+{
+    AdjacencyMatrix adj_mat(10);
+
+    /* Query graph consisting of ten relations with 14 joins edges.
+     * (0,1) (0,2) (2,3) (1,3) (0,3) (3,4) (1,4) (1,8) (4,5) (4,6) (5,6) (5,7) (6,7) (2,9) */
+
+    adj_mat(0, 1) = adj_mat(1, 0) = true;
+    adj_mat(0, 2) = adj_mat(2, 0) = true;
+    adj_mat(2, 3) = adj_mat(3, 2) = true;
+    adj_mat(1, 3) = adj_mat(3, 1) = true;
+    adj_mat(0, 3) = adj_mat(3, 0) = true;
+    adj_mat(4, 3) = adj_mat(3, 4) = true;
+    adj_mat(1, 4) = adj_mat(4, 1) = true;
+    adj_mat(1, 8) = adj_mat(8, 1) = true;
+    adj_mat(4, 5) = adj_mat(5, 4) = true;
+    adj_mat(4, 6) = adj_mat(6, 4) = true;
+    adj_mat(7, 5) = adj_mat(5, 7) = true;
+    adj_mat(6, 7) = adj_mat(7, 6) = true;
+    adj_mat(6, 5) = adj_mat(5, 6) = true;
+    adj_mat(2, 9) = adj_mat(9, 2) = true;
+
+    SECTION("check blocks and cut vertices w/ min size")
+    {
+        const AdjacencyMatrix &adjMat_ConstRef = adj_mat;
+
+        std::unordered_set<SmallBitset, SmallBitsetHash> correct_blocks = {
+             SmallBitset(31), SmallBitset(240)
+        };
+        auto correct_cut_vertices = SmallBitset(16);
+
+        std::vector<SmallBitset> blocks;
+        SmallBitset cut_vertices;
+
+        adj_mat.compute_blocks_and_cut_vertices(blocks, cut_vertices, 3);
+
+        REQUIRE(cut_vertices == correct_cut_vertices);
+        REQUIRE(blocks.size() == correct_blocks.size());
+
+        for (auto block : blocks) {
+            REQUIRE(correct_blocks.contains(block));
+        }
+
+    }
+
+    SECTION("check blocks and cut vertices w/o min size")
+    {
+        const AdjacencyMatrix &adjMat_ConstRef = adj_mat;
+
+        std::unordered_set<SmallBitset, SmallBitsetHash> correct_blocks = {
+                SmallBitset(31), SmallBitset(240), SmallBitset(516),
+                SmallBitset(258)
+        };
+        auto correct_cut_vertices = SmallBitset(22);
+
+        std::vector<SmallBitset> blocks;
+        SmallBitset cut_vertices;
+
+        adj_mat.compute_blocks_and_cut_vertices(blocks, cut_vertices);
+
+        REQUIRE(cut_vertices == correct_cut_vertices);
+        REQUIRE(blocks.size() == correct_blocks.size());
+
+        for (auto block : blocks) {
+            REQUIRE(correct_blocks.contains(block));
+        }
+
+    }
+    SECTION("check two vertex cuts")
+    {
+        const AdjacencyMatrix &adjMat_ConstRef = adj_mat;
+
+        std::unordered_set<SmallBitset, SmallBitsetHash> correct_two_vertex_cuts = {
+                SmallBitset(9), SmallBitset(10), SmallBitset(96)
+        };
+
+        std::vector<SmallBitset> two_vertex_cuts_0;
+        std::vector<SmallBitset> two_vertex_cuts_1;
+        std::vector<SmallBitset> two_vertex_cuts_2;
+
+        /* None already used */
+        SmallBitset already_used;
+        adj_mat.find_two_vertex_cuts(two_vertex_cuts_0, SmallBitset(31), already_used);
+        REQUIRE(two_vertex_cuts_0.size() == 2);
+
+        adj_mat.find_two_vertex_cuts(two_vertex_cuts_0, SmallBitset(240), already_used);
+        REQUIRE(two_vertex_cuts_0.size() == 3);
+        for (auto cut: two_vertex_cuts_0) {
+            REQUIRE(correct_two_vertex_cuts.contains(cut));
+        }
+
+        already_used = SmallBitset::Singleton(3);
+        adj_mat.find_two_vertex_cuts(two_vertex_cuts_1, SmallBitset(31), already_used);
+        REQUIRE(two_vertex_cuts_1.empty());
+
+        adj_mat.find_two_vertex_cuts(two_vertex_cuts_1, SmallBitset(240), already_used);
+        REQUIRE(two_vertex_cuts_1.size() == 1);
+        REQUIRE(two_vertex_cuts_1.front() == SmallBitset(96));
+
+        already_used = SmallBitset(104);
+        adj_mat.find_two_vertex_cuts(two_vertex_cuts_2, SmallBitset(31), already_used);
+        REQUIRE(two_vertex_cuts_2.empty());
+
+        adj_mat.find_two_vertex_cuts(two_vertex_cuts_2, SmallBitset(240), already_used);
+        REQUIRE(two_vertex_cuts_2.empty());
+
+    }
+}
+
+TEST_CASE("AdjacencyMatrix/Standalone Matrix/Two Vertex Cuts", "[core][util][unit]")
+{
+    AdjacencyMatrix adj_mat(10);
+
+    /* Query graph consisting of ten relations with 14 joins edges.
+     * (0,1) (1,2) (2,3) (3,4) (4,5) (5,6) (6,7) (7,8) (8,9) (9,0) (1,8) (2,7) (2,6) (3,6) */
+
+    adj_mat(0, 1) = adj_mat(1, 0) = true;
+    adj_mat(1, 2) = adj_mat(2, 1) = true;
+    adj_mat(2, 3) = adj_mat(3, 2) = true;
+    adj_mat(3, 4) = adj_mat(4, 3) = true;
+    adj_mat(4, 5) = adj_mat(5, 4) = true;
+    adj_mat(5, 6) = adj_mat(6, 5) = true;
+    adj_mat(6, 7) = adj_mat(7, 6) = true;
+    adj_mat(7, 8) = adj_mat(8, 7) = true;
+    adj_mat(8, 9) = adj_mat(9, 8) = true;
+    adj_mat(9, 0) = adj_mat(0, 9) = true;
+    adj_mat(1, 8) = adj_mat(8, 1) = true;
+    adj_mat(2, 7) = adj_mat(7, 2) = true;
+    adj_mat(2, 6) = adj_mat(6, 2) = true;
+    adj_mat(3, 6) = adj_mat(6, 3) = true;
+
+    std::unordered_set<SmallBitset, SmallBitsetHash> correct_two_vertex_cuts_0 = {
+            SmallBitset(258), SmallBitset(132), SmallBitset(72),
+            SmallBitset(68)
+    };
+    std::unordered_set<SmallBitset, SmallBitsetHash> correct_two_vertex_cuts_1 = {
+            SmallBitset(258), SmallBitset(72)
+    };
+
+    std::vector<SmallBitset> two_vertex_cuts_0;
+    std::vector<SmallBitset> two_vertex_cuts_1;
+
+    SmallBitset already_used;
+
+    adj_mat.find_two_vertex_cuts(two_vertex_cuts_0, SmallBitset::All(10), already_used);
+
+    REQUIRE(two_vertex_cuts_0.size() == 4);
+    for (auto cut: two_vertex_cuts_0) {
+        REQUIRE(correct_two_vertex_cuts_0.contains(cut));
+    }
+
+    already_used = Subproblem(20);
+    adj_mat.find_two_vertex_cuts(two_vertex_cuts_1, SmallBitset::All(10), already_used);
+
+    REQUIRE(two_vertex_cuts_1.size() == 2);
+    for (auto cut: two_vertex_cuts_1) {
+        REQUIRE(correct_two_vertex_cuts_1.contains(cut));
+    }
+}
+
 TEST_CASE("AdjacencyMatrix/QueryGraph Matrix", "[core][util][unit]")
 {
     /* Get Catalog and create new database to use for unit testing. */

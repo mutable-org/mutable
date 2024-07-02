@@ -277,6 +277,11 @@ inline SmallBitset next_subset(SmallBitset subset, SmallBitset set)
     return SmallBitset(uint64_t(subset) - uint64_t(set)) & set;
 }
 
+struct SmallBitsetHash
+{
+    std::size_t operator()(SmallBitset S) const { return murmur3_64(uint64_t(S)); }
+};
+
 /** Implements an array of dynamic but fixed size. */
 template<typename T>
 struct dyn_array

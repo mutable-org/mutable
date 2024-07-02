@@ -2,6 +2,7 @@
 
 #include <array>
 #include <mutable/util/ADT.hpp>
+#include <unordered_set>
 
 
 namespace m {
@@ -165,6 +166,57 @@ exit:
         return not (left & neighbors).empty();
     }
 
+    /** Returns `true` if the graph would still be connected after removing the nodes specified in `removed` */
+    bool is_connected_after_removal(SmallBitset removed, SmallBitset block) const {
+
+        auto visited(removed);
+        auto rec = [this, &block, &visited](SmallBitset node, auto&& rec) -> void {
+            visited |= node;
+            auto allowed_neighbors = (neighbors(node) & block) - visited;
+            for (size_t neighbor_id : allowed_neighbors) {
+                auto neighbor = SmallBitset::Singleton(neighbor_id);
+                if (not (visited & neighbor).empty()) continue;
+                rec(neighbor, rec);
+            }
+        };
+        /* Take any node from the remaining nodes */
+        SmallBitset root = block - removed;
+        if (root.empty()) {
+            return true;
+        }
+        rec(root.hi() , rec);
+
+        /* At the end, all nodes should be visited to be connected still. */
+        return visited == block;
+    }
+
+    /** Finds all 2-vertex cuts within the block (biconnected component) of graph and stores them as Smallbitsets in the vector passed as argument.
+     * Further, only nodes which are not already contained in `already_used` are considered to avoid joining more than
+     * two relations together during the greedy phase at the beginning.
+     * Note that this implementation is "inefficient" as of now, as it runs in O(n^2) compared to the existing, linear approaches
+     * However, given the sizes of nodes that are typically considered during join enumerations, this is not a huge problem. */
+    void find_two_vertex_cuts(std::vector<SmallBitset> &vertex_cuts, SmallBitset block, SmallBitset &already_used) {
+        std::unordered_set<SmallBitset, SmallBitsetHash> visited_pairs;
+        SmallBitset visited(already_used);
+        auto rec = [this, &block, &visited_pairs, &vertex_cuts, &visited](SmallBitset node, auto&& rec) -> void {
+            for (std::size_t neighbor_id : (block & neighbors(node)) - visited) {
+                auto neighbor = SmallBitset::Singleton(neighbor_id);
+                auto pair = node | neighbor;
+                if (visited_pairs.contains(pair)) continue;
+                if (not is_connected_after_removal(pair, block)) vertex_cuts.emplace_back(pair);
+                visited_pairs.emplace(pair);
+                rec(neighbor, rec);
+            }
+            visited |= node;
+        };
+        /* Take any node from the remaining nodes */
+        SmallBitset root = block - already_used;
+        if (root.empty()) {
+            return;
+        }
+        rec(root.hi() , rec);
+    }
+
     /** Computes the *transitive closure* of this adjacency matrix.  That is, compute for each pair of vertices *(i, j)*
      * whether *j* can be reached from *i* by any finite path.  Treats edges as directed and hence does not exploit
      * symmetry.  */
@@ -219,6 +271,60 @@ exit:
             for_each_CSG_undirected(super_second, N_first, callback_partial);
         };
         for_each_CSG_undirected(super, callback_CSG);
+    }
+
+    /** Compute the blocks (biconnected components) and cut vertices using the method described in */
+    void compute_blocks_and_cut_vertices(std::vector<SmallBitset> &blocks, SmallBitset &cut_vertices, std::size_t min_size = 2) {
+
+        M_insist(min_size >= 2);
+        std::unordered_set<SmallBitset, SmallBitsetHash> visited;
+        std::unordered_map<SmallBitset, std::size_t, SmallBitsetHash> depth;
+        std::unordered_map<SmallBitset, std::size_t, SmallBitsetHash> low;
+        std::unordered_map<SmallBitset, SmallBitset, SmallBitsetHash> parent;
+
+        auto rec = [&min_size, &visited, &depth, &low, &parent, &blocks, &cut_vertices, this](SmallBitset current, std::size_t current_depth, auto&& rec) -> SmallBitset {
+            visited.emplace(current);
+            depth.emplace(current, current_depth);
+            low.emplace(current, current_depth);
+            SmallBitset current_block = current;
+            std::size_t child_count = 0;
+
+            /* Check all neighbors */
+            for (auto neighbor_id: neighbors(current)) {
+                SmallBitset neighbor = SmallBitset::Singleton(neighbor_id);
+
+                /* Neighbor was not explored yet */
+                if (not visited.contains(neighbor)) {
+                    parent.emplace(neighbor, current);
+                    SmallBitset child_block = rec(neighbor, current_depth + 1, rec);
+
+                    if (child_block.size() >= (min_size - 1)) {
+                        child_count += 1;
+                    }
+
+                    /* if the lowest connected depth of the neighbor is at least as high as the current depth, we found a component */
+                    if (low[neighbor] >= depth[current]) {
+                        child_block |= current;
+
+                        /* Only add blocks that have a size of at least 2. */
+                        if (child_block.size() >= min_size) {
+                            blocks.emplace_back(child_block);
+                            if (current != SmallBitset(1) or child_count > 1) cut_vertices |= current;
+                        }
+                    } else {
+                        /* Add the block returned by the neighbor call to the current block. */
+                        current_block |= child_block;
+                    }
+                    low[current] = std::min(low[current], low[neighbor]);
+                } else if (neighbor != parent[current]) {
+                    low[current] = std::min(low[current], depth[neighbor]);
+                }
+            }
+
+            return current_block;
+        };
+
+        rec(SmallBitset(1), 0, rec);
     }
 
     /** Computes the minimum spanning forest for this graph.  Expects the graph to be undirected, meaning that the

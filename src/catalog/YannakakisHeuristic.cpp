@@ -10,9 +10,9 @@ using namespace m;
 template<typename PlanTable>
 double YannakakisHeuristic::estimate_decompose_costs(const QueryGraph &G, const PlanTable &PT, const CardinalityEstimator &CE, Subproblem problem)
 {
-    /* Account for costs created by splitting the left and right subproblem again */
+    /* Single Tables do not need to be decomposed again */
     auto model = CE.estimate_full_reduction(G, *PT[problem].model);
-    return CE.predict_cardinality(*model);
+    return CE.predict_cardinality(*model) * G.get_tuple_size_of_subproblem(problem) * (problem.size() - 1);
 }
 
 template
@@ -33,7 +33,7 @@ template<typename PlanTable>
 double
 DecomposeHeuristic::operator()(estimate_tag, const PlanTable &PT, Subproblem left, Subproblem right, const QueryGraph &G, const CardinalityEstimator &CE) const
 {
-    return estimate_decompose_costs(G, PT, CE, left) + estimate_decompose_costs(G, PT, CE, right);
+    return 10 * (estimate_decompose_costs(G, PT, CE, left) + estimate_decompose_costs(G, PT, CE, right));
 }
 
 template
@@ -61,7 +61,7 @@ template<typename PlanTable>
 double
 SizeHeuristic::operator()(estimate_tag, const PlanTable &PT, Subproblem left, Subproblem right, const QueryGraph &G, const CardinalityEstimator &CE) const
 {
-    double decompose_costs = estimate_decompose_costs(G, PT, CE, left) + estimate_decompose_costs(G, PT, CE, right);
+    double decompose_costs = 5 * (estimate_decompose_costs(G, PT, CE, left) + estimate_decompose_costs(G, PT, CE, right));
     auto reduction_costs = [&](Subproblem main, Subproblem other) {
         auto main_size = CE.predict_cardinality(*PT[main].model);
         auto neighbors_without_other = (G.adjacency_matrix().neighbors(main) - other);
@@ -116,7 +116,7 @@ template<typename PlanTable>
 double
 WeakCardinalityHeuristic::operator()(estimate_tag, const PlanTable &PT, Subproblem left, Subproblem right, const QueryGraph &G, const CardinalityEstimator &CE) const
 {
-    double decompose_costs = estimate_decompose_costs(G, PT, CE, left) + estimate_decompose_costs(G, PT, CE, right);
+    double decompose_costs =  (estimate_decompose_costs(G, PT, CE, left) + estimate_decompose_costs(G, PT, CE, right));
     auto reduction_costs = [&](Subproblem main, Subproblem other) {
         auto main_neighbors = G.adjacency_matrix().neighbors(main);
         auto main_model = CE.copy(*PT[main].model);
@@ -182,7 +182,7 @@ double
 StrongCardinalityHeuristic::operator()(estimate_tag, const PlanTable &PT, Subproblem left, Subproblem right, const QueryGraph &G, const CardinalityEstimator &CE) const
 {
     // TODO
-    return estimate_decompose_costs(G, PT, CE, left) + estimate_decompose_costs(G, PT, CE, right);
+    return 10 * (estimate_decompose_costs(G, PT, CE, left) + estimate_decompose_costs(G, PT, CE, right));
 }
 
 template

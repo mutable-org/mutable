@@ -67,6 +67,12 @@ std::unique_ptr<DataModel> CartesianProductEstimator::empty_model() const
     return model;
 }
 
+std::unique_ptr<DataModel> CartesianProductEstimator::copy(const DataModel &_data) const
+{
+    auto &data = as<const CartesianProductDataModel>(_data);
+    return std::make_unique<CartesianProductDataModel>(data); // copy
+}
+
 std::unique_ptr<DataModel> CartesianProductEstimator::estimate_scan(const QueryGraph &G, Subproblem P) const
 {
     M_insist(P.size() == 1, "Subproblem must identify exactly one DataSource");
@@ -115,6 +121,25 @@ CartesianProductEstimator::estimate_join(const QueryGraph&, const DataModel &_le
     auto model = std::make_unique<CartesianProductDataModel>();
     model->size = left.size * right.size; // this model cannot estimate the effects of a join condition
     return model;
+}
+
+std::unique_ptr<DataModel>
+CartesianProductEstimator::estimate_semi_join(const QueryGraph &G, const DataModel &_left, const DataModel &_right,
+                   const cnf::CNF &condition) const
+{
+    auto left = as<const CartesianProductDataModel>(_left);
+    auto model = std::make_unique<CartesianProductDataModel>();
+    model->size = left.size; // The left is not reduced as a cartesian product is assumed.
+    return model;
+}
+
+std::unique_ptr<DataModel>
+CartesianProductEstimator::estimate_full_reduction(const m::QueryGraph &G, const m::DataModel &_model) const
+{
+    auto model = as<const CartesianProductDataModel>(_model);
+    auto reduced_model = std::make_unique<CartesianProductDataModel>();
+    reduced_model->size = model.size; // The left is not reduced as a cartesian product is assumed.
+    return reduced_model;
 }
 
 template<typename PlanTable>
@@ -209,24 +234,13 @@ void InjectionCardinalityEstimator::read_json(Diagnostic &diag, std::istream &in
                     << "A dummy estimator will be used to do estimations.\n";
         return;
     }
+
     cardinality_table_.reserve(database_entry->size());
     std::vector<std::string> names;
-    for (auto &subproblem_entry : *database_entry) {
-        json* relations_array;
-        json* size;
-        try {
-            relations_array = &subproblem_entry.at("relations");
-            size = &subproblem_entry.at("size");
-        } catch (json::exception &exception) {
-            diag.w(pos) << "The entry " << subproblem_entry << " for the db \"" << name_of_database << "\""
-                        << " does not have the required form of {\"relations\": ..., \"size\": ... } "
-                        << "and will thus be ignored.\n";
-            continue;
-        }
-
+    auto write_identifier_to_buffer = [&names, this](auto &relations_array) {
         names.clear();
         for (auto it = relations_array->begin(); it != relations_array->end(); ++it)
-            names.emplace_back(it->get<std::string>());
+            names.emplace_back(it->template get<std::string>());
         std::sort(names.begin(), names.end());
 
         buf_.clear();
@@ -236,11 +250,58 @@ void InjectionCardinalityEstimator::read_json(Diagnostic &diag, std::istream &in
             buf_append(*it);
         }
         buf_.emplace_back(0);
+    };
+    for (auto &subproblem_entry : *database_entry) {
+        json* relations_array;
+        json* size;
+
+        /* Regular Join */
+        try {
+            relations_array = &subproblem_entry.at("relations");
+            size = &subproblem_entry.at("size");
+        } catch (json::exception &exception) {
+            diag.w(pos) << "The entry " << subproblem_entry << " for the db \"" << name_of_database << "\""
+                        << " does not have the required form of {\"relations\": ..., \"size\": ... [, \"reductions\": ...] } "
+                        << "and will thus be ignored.\n";
+            continue;
+        }
+
+        write_identifier_to_buffer(relations_array);
         ThreadSafePooledString str = C.pool(buf_view());
-        auto res = cardinality_table_.emplace(std::move(str), *size);
+
+        auto res = cardinality_table_.emplace(std::move(str), CardinalityEntry(*size, std::unordered_map<ThreadSafePooledString, std::size_t>(0)));
         M_insist(res.second, "insertion must not fail as we do not allow for duplicates in the input file");
+
+        /* Semi joins */
+        json* reductions_array;
+        try {
+            reductions_array = &subproblem_entry.at("reductions");
+        } catch (json::exception &exception) {
+            /* No warning here */
+            continue;
+        }
+
+        res.first->second.semi_join_table.reserve(reductions_array->size());
+        for (auto &reduction_entry : *reductions_array) {
+            json* right_relations;
+            try {
+                right_relations = &reduction_entry.at("right_relations");
+                size = &reduction_entry.at("size");
+            } catch (json::exception &exception) {
+                diag.w(pos) << "The entry " << reduction_entry << " for the db \"" << name_of_database << "\""
+                            << " does not have the required form of {\"right_relations\": ..., \"size\": ...} "
+                            << "and will thus be ignored.\n";
+                continue;
+            }
+            write_identifier_to_buffer(right_relations);
+            ThreadSafePooledString reduced_by_str = C.pool(buf_view());
+            auto [reduce_it, success] = res.first->second.semi_join_table.emplace(std::move(reduced_by_str), *size);
+            M_insist(success, "insertion must not fail as we do not allow for duplicate reduction entries for the same left relation in the input file");
+        }
+
     }
 }
+
 
 /*----- Model calculation --------------------------------------------------------------------------------------------*/
 
@@ -249,14 +310,19 @@ std::unique_ptr<DataModel> InjectionCardinalityEstimator::empty_model() const
     return std::make_unique<InjectionCardinalityDataModel>(Subproblem(), 0);
 }
 
+std::unique_ptr<DataModel> InjectionCardinalityEstimator::copy(const DataModel &_data) const
+{
+    auto &data = as<const InjectionCardinalityDataModel>(_data);
+    return std::make_unique<InjectionCardinalityDataModel>(data); // copy
+}
+
 std::unique_ptr<DataModel> InjectionCardinalityEstimator::estimate_scan(const QueryGraph &G, Subproblem P) const
 {
     M_insist(P.size() == 1);
-    const auto idx = *P.begin();
-    auto &DS = *G.sources()[idx];
+    auto id = make_identifier(G, P);
 
-    if (auto it = cardinality_table_.find(DS.name().assert_not_none()); it != cardinality_table_.end()) {
-        return std::make_unique<InjectionCardinalityDataModel>(P, it->second);
+    if (auto it = cardinality_table_.find(id); it != cardinality_table_.end()) {
+        return std::make_unique<InjectionCardinalityDataModel>(P, it->second.size);
     } else {
         /* no match, fall back */
         auto fallback_model = fallback_.estimate_scan(G, P);
@@ -268,8 +334,7 @@ std::unique_ptr<DataModel>
 InjectionCardinalityEstimator::estimate_filter(const QueryGraph&, const DataModel &_data, const cnf::CNF&) const
 {
     /* This model cannot estimate the effects of applying a filter. */
-    auto &data = as<const InjectionCardinalityDataModel>(_data);
-    return std::make_unique<InjectionCardinalityDataModel>(data); // copy
+    return copy(_data);
 }
 
 std::unique_ptr<DataModel>
@@ -305,7 +370,7 @@ InjectionCardinalityEstimator::estimate_grouping(const QueryGraph&, const DataMo
     if (auto it = cardinality_table_.find(id); it != cardinality_table_.end()) {
         /* Clamp injected cardinality to at most the cardinality of the grouping's child since it cannot produce more
          * tuples than it receives. */
-        return std::make_unique<InjectionCardinalityDataModel>(data.subproblem_, std::min(it->second, data.size_));
+        return std::make_unique<InjectionCardinalityDataModel>(data.subproblem_, std::min(it->second.size, data.size_));
     } else {
         /* This model cannot estimate the effects of grouping. */
         return std::make_unique<InjectionCardinalityDataModel>(data); // copy
@@ -327,7 +392,7 @@ InjectionCardinalityEstimator::estimate_join(const QueryGraph &G, const DataMode
         /* Clamp injected cardinality to at most the cardinality of the cartesian product of the join's children
          * since it cannot produce more tuples than that. */
         const std::size_t max_cardinality = left.size_ * right.size_;
-        return std::make_unique<InjectionCardinalityDataModel>(subproblem, std::min(it->second, max_cardinality));
+        return std::make_unique<InjectionCardinalityDataModel>(subproblem, std::min(it->second.size, max_cardinality));
     } else {
         /* Fallback to CartesianProductEstimator. */
         if (not Options::Get().quiet)
@@ -343,6 +408,68 @@ InjectionCardinalityEstimator::estimate_join(const QueryGraph &G, const DataMode
     }
 }
 
+std::unique_ptr<DataModel>
+InjectionCardinalityEstimator::estimate_semi_join(const QueryGraph &G, const DataModel &_left, const DataModel &_right,
+                                             const cnf::CNF &condition) const
+{
+    auto &left  = as<const InjectionCardinalityDataModel>(_left);
+    auto &right = as<const InjectionCardinalityDataModel>(_right);
+
+    Subproblem new_reduced_by = left.reduced_by_ | right.subproblem_ | right.reduced_by_;
+    ThreadSafePooledString left_id = make_identifier(G, left.subproblem_);
+    ThreadSafePooledString reduced_id = make_identifier(G, new_reduced_by);
+
+
+    if (auto left_it = cardinality_table_.find(left_id); left_it != cardinality_table_.end()) {
+            if (auto right_it = left_it->second.semi_join_table.find(reduced_id); right_it != left_it->second.semi_join_table.end()) {
+                /* Clamp injected cardinality to at most the size of the left input,
+                 * since the relation can not become larger. */
+                return std::make_unique<InjectionCardinalityDataModel>(left.subproblem_,
+                                                                       new_reduced_by, std::min(right_it->second, left.size_));
+            }
+        }
+    /* Fallback to CartesianProductEstimator. */
+    if (not Options::Get().quiet)
+        std::cerr << "warning: failed to estimate the semi-join of " << left_id << " and " << reduced_id
+                  << '\n';
+    auto left_fallback = std::make_unique<CartesianProductEstimator::CartesianProductDataModel>();
+    left_fallback->size = left.size_;
+    auto right_fallback = std::make_unique<CartesianProductEstimator::CartesianProductDataModel>();
+    right_fallback->size = right.size_;
+    auto fallback_model = fallback_.estimate_semi_join(G, *left_fallback, *right_fallback, condition);
+    return std::make_unique<InjectionCardinalityDataModel>(left.subproblem_, new_reduced_by,
+                                                           fallback_.predict_cardinality(*fallback_model));
+}
+
+std::unique_ptr<DataModel>
+InjectionCardinalityEstimator::estimate_full_reduction(const m::QueryGraph &G, const m::DataModel &_model) const
+{
+    auto &model = as<const InjectionCardinalityDataModel>(_model);
+
+    auto reduced_by_all = Subproblem::All(G.num_sources()) - model.subproblem_;
+    ThreadSafePooledString left_id = make_identifier(G, model.subproblem_);
+    ThreadSafePooledString neighbor_id = make_identifier(G, reduced_by_all);
+
+    if (auto left_it = cardinality_table_.find(left_id); left_it != cardinality_table_.end()) {
+        if (auto right_it = left_it->second.semi_join_table.find(neighbor_id); right_it != left_it->second.semi_join_table.end()) {
+            /* Clamp injected cardinality to at most the size of the left input,
+             * since the relation can not become larger. */
+            return std::make_unique<InjectionCardinalityDataModel>(model.subproblem_, reduced_by_all,
+                                                                   std::min(right_it->second, model.size_));
+        }
+    }
+
+    /* Fallback to CartesianProductEstimator. */
+    if (not Options::Get().quiet)
+        std::cerr << "warning: failed to estimate the full reduction of " << left_id
+                  << '\n';
+    auto model_fallback = std::make_unique<CartesianProductEstimator::CartesianProductDataModel>();
+    model_fallback->size = model.size_;
+    auto fallback_model = fallback_.estimate_full_reduction(G, *model_fallback);
+    return std::make_unique<InjectionCardinalityDataModel>(model.subproblem_, reduced_by_all,
+                                                           fallback_.predict_cardinality(*fallback_model));
+}
+
 template<typename PlanTable>
 std::unique_ptr<DataModel>
 InjectionCardinalityEstimator::operator()(estimate_join_all_tag, PlanTable &&PT, const QueryGraph &G,
@@ -355,7 +482,7 @@ InjectionCardinalityEstimator::operator()(estimate_join_all_tag, PlanTable &&PT,
         std::size_t max_cardinality = 1;
         for (auto it = to_join.begin(); it != to_join.end(); ++it)
             max_cardinality *= as<const InjectionCardinalityDataModel>(*PT[it.as_set()].model).size_;
-        return std::make_unique<InjectionCardinalityDataModel>(to_join, std::min(it->second, max_cardinality));
+        return std::make_unique<InjectionCardinalityDataModel>(to_join, std::min(it->second.size, max_cardinality));
     } else {
         /* Fallback to cartesian product. */
         if (not Options::Get().quiet)
@@ -387,19 +514,37 @@ M_LCOV_EXCL_START
 void InjectionCardinalityEstimator::print(std::ostream &out) const
 {
     constexpr uint32_t max_rows_printed = 100;     /// Number of rows of the cardinality_table printed
+    constexpr uint32_t max_semi_joins_printed = 500; /// Number of rows of the semi_join_cardinality_table printed
     std::size_t sub_len = 13;                         /// Length of Subproblem column
     for (auto &entry : cardinality_table_)
         sub_len = std::max(sub_len, strlen(*entry.first));
 
-    out << std::left << "InjectionCardinalityEstimator\n"
+    out << std::left << "InjectionCardinalityEstimator - Joins\n"
         << std::setw(sub_len) << "Subproblem" << "Size" << "\n" << std::right;
 
     /* ------- Print maximum max_rows_printed rows of the cardinality_table_ */
     uint32_t counter = 0;
     for (auto &entry : cardinality_table_) {
         if (counter >= max_rows_printed) break;
-        out << std::left << std::setw(sub_len) << entry.first << entry.second << "\n";
+        out << std::left << std::setw(sub_len) << entry.first << entry.second.size << "\n";
         counter++;
+    }
+
+    out << std::left << "InjectionCardinalityEstimator - Semi-Joins\n"
+        <<  "Left Subproblem" << "Reduced by" << "Right Subproblem" << "Size" << "\n" << std::right;
+
+    counter = 0;
+    for (auto left_it = cardinality_table_.begin(); left_it != cardinality_table_.end(); left_it++) {{
+            for (auto right_it = left_it->second.semi_join_table.begin(); right_it != left_it->second.semi_join_table.end(); right_it++) {
+                if (counter >= max_rows_printed) break;
+                if (left_it == cardinality_table_.begin()) {
+                    out << std::left << left_it->first << right_it->first << right_it->second << "\n";
+                } else {
+                    out << std::left << std::setw(sub_len) << right_it->first << right_it->second << "\n";
+                }
+                counter++;
+            }
+        }
     }
 }
 M_LCOV_EXCL_STOP
@@ -409,8 +554,12 @@ ThreadSafePooledString InjectionCardinalityEstimator::make_identifier(const Quer
     auto &C = Catalog::Get();
     static thread_local std::vector<ThreadSafePooledString> names;
     names.clear();
-    for (auto id : S)
-        names.emplace_back(G.sources()[id]->name());
+    for (auto id : S) {
+        auto &ds = G.sources()[id];
+        if (auto Q = cast<Query>(ds.get())) {
+            Q->query_graph().get_base_table_identifiers(names);
+        } else names.emplace_back(ds->name());
+    }
     std::sort(names.begin(), names.end(), [](auto lhs, auto rhs){ return strcmp(*lhs, *rhs) < 0; });
 
     buf_.clear();
@@ -423,7 +572,6 @@ ThreadSafePooledString InjectionCardinalityEstimator::make_identifier(const Quer
     buf_.emplace_back(0);
     return C.pool(buf_view());
 }
-
 
 /*======================================================================================================================
  * SpnEstimator
@@ -587,6 +735,12 @@ std::unique_ptr<DataModel> SpnEstimator::empty_model() const
     return std::make_unique<SpnDataModel>(table_spn_map(), 0);
 }
 
+std::unique_ptr<DataModel> SpnEstimator::copy(const DataModel &_data) const
+{
+    auto &data = as<const SpnDataModel>(_data);
+    return std::make_unique<SpnDataModel>(data); // copy
+}
+
 std::unique_ptr<DataModel> SpnEstimator::estimate_scan(const QueryGraph &G, Subproblem P) const
 {
     M_insist(P.size() == 1);
@@ -722,6 +876,60 @@ SpnEstimator::estimate_join(const QueryGraph&, const DataModel &_left, const Dat
     return new_left;
 }
 
+std::unique_ptr<DataModel>
+SpnEstimator::estimate_semi_join(const QueryGraph&, const DataModel &_left, const DataModel &_right,
+                            const cnf::CNF &condition) const
+{
+    auto &left = as<const SpnDataModel>(_left);
+    auto &right = as<const SpnDataModel>(_right);
+
+    auto new_left = std::make_unique<SpnDataModel>(left);
+    auto new_right = std::make_unique<SpnDataModel>(right);
+
+    JoinTranslator jt;
+
+    if (not condition.empty()) {
+        /* only consider single equi join */
+        jt(*condition[0][0]);
+        auto first_identifier = std::make_pair(jt.join_designator[0].first, jt.join_designator[0].second);
+        auto second_identifier = std::make_pair(jt.join_designator[1].first, jt.join_designator[1].second);
+        SpnJoin join = std::make_pair(first_identifier, second_identifier);
+
+        /* if a data model is only responsible for one table (one spn) add the maximum frequency of the value
+        * of the joined attribute */
+        if (left.spns_.size() == 1) { new_left->max_frequencies_.emplace_back(max_frequency(left, join)); }
+        if (right.spns_.size() == 1) { new_right->max_frequencies_.emplace_back(max_frequency(right, join)); }
+
+        /* compute the estimated cardinality of the join via distinct count estimates.
+         * See http://www.cidrdb.org/cidr2021/papers/cidr2021_paper01.pdf */
+        std::size_t mf_left = std::accumulate(
+                new_left->max_frequencies_.begin(), new_left->max_frequencies_.end(), 1, std::multiplies<>());
+
+        std::size_t mf_right = std::accumulate(
+                new_right->max_frequencies_.begin(), new_right->max_frequencies_.end(), 1, std::multiplies<>());
+
+        std::size_t left_clause = new_left->num_rows_ / mf_left;
+        std::size_t right_clause = new_right->num_rows_ / mf_right;
+
+        std::size_t num_rows_join = std::min<std::size_t>(left_clause, right_clause) * mf_left;
+
+        new_left->num_rows_ = num_rows_join;
+    } else {
+        /* compute cartesian product since there is no join condition */
+        if (left.spns_.size() == 1) { new_left->max_frequencies_.emplace_back(left.num_rows_); }
+        if (right.spns_.size() == 1) { new_right->max_frequencies_.emplace_back(right.num_rows_); }
+
+        new_left->num_rows_ = left.num_rows_ * right.num_rows_;
+    }
+
+    /* copy data from new_right to new_left to collect all information in one DataModel */
+    new_left->spns_.insert(new_right->spns_.begin(), new_right->spns_.end());
+    new_left->max_frequencies_.insert(
+            new_left->max_frequencies_.end(), new_right->max_frequencies_.begin(), new_right->max_frequencies_.end());
+
+    return new_left;
+}
+
 template<typename PlanTable>
 std::unique_ptr<DataModel>
 SpnEstimator::operator()(estimate_join_all_tag, PlanTable &&PT, const QueryGraph&, Subproblem to_join,
@@ -787,6 +995,21 @@ SpnEstimator::operator()(estimate_join_all_tag, PlanTable &&PT, const QueryGraph
     }
 
     return std::make_unique<SpnDataModel>(final_model);
+}
+
+std::unique_ptr<DataModel>
+SpnEstimator::estimate_full_reduction(const QueryGraph &G, const DataModel &_model) const
+{
+    //TODO: Not supported yet, currently just Cartesian Product is assumed
+    auto &model = as<const SpnDataModel>(_model);
+    auto new_model = std::make_unique<SpnDataModel>(model);
+
+    if (model.spns_.size() == 1) { new_model->max_frequencies_.emplace_back(model.num_rows_); }
+
+    new_model->num_rows_ = model.num_rows_;
+
+    return new_model;
+
 }
 
 std::size_t SpnEstimator::predict_cardinality(const DataModel &_data) const

@@ -8,6 +8,7 @@
 #include <mutable/util/Pool.hpp>
 #include <sstream>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 
@@ -45,6 +46,7 @@ struct M_EXPORT DataModel
 
     /** Assigns `this` to the `Subproblem` `s`, i.e. this model now describes the result of evaluating `s`. */
     virtual void assign_to(Subproblem s) = 0;
+
 };
 
 
@@ -73,6 +75,12 @@ struct M_EXPORT CardinalityEstimator : estimate_join_all_tag::base_type
 
     /** Returns a `DataModel` representing the empty set. */
     virtual std::unique_ptr<DataModel> empty_model() const = 0;
+
+    /** Returns a `DataModel` containing the same data as the passed one.
+     * @param model     the `DataModel` describing the model to be copied
+     * @return          the `DataModel` describing the copy
+     */
+    virtual std::unique_ptr<DataModel> copy(const DataModel &data) const = 0;
 
     /** Creates a `DataModel` for a single `DataSource`.
      *
@@ -121,6 +129,25 @@ struct M_EXPORT CardinalityEstimator : estimate_join_all_tag::base_type
     virtual std::unique_ptr<DataModel>
     estimate_join(const QueryGraph &G, const DataModel &left, const DataModel &right,
                   const cnf::CNF &condition) const = 0;
+
+    /** Form a new `DataModel` by computing the left semi join between the left and the right `DataModel`.
+    *
+    * @param left      the `DataModel` describing the data coming from the left input
+    * @param right     the `DataModel` describing the data coming from the right input
+    * @param condition the join condition as `cnf::CNF`
+    * @return          the `DataModel` describing the semi-join result
+    */
+    virtual std::unique_ptr<DataModel>
+    estimate_semi_join(const QueryGraph &G, const DataModel &left, const DataModel &right,
+                  const cnf::CNF &condition) const = 0;
+
+    /** Form a new `DataModel` by computing the size of the given `DataModel` after it was reduced by all its neighbors`.
+    *
+    * @param model     the `DataModel` describing the model from the model to be reduced
+    * @return          the `DataModel` describing the fully reduced result
+    */
+    virtual std::unique_ptr<DataModel>
+    estimate_full_reduction(const QueryGraph &G, const DataModel &model) const = 0;
 
     /** Compute a `DataModel` for the result of joining *all* `DataSource`s in `to_join` by `condition`. */
     template<typename PlanTable>
@@ -180,6 +207,7 @@ struct M_EXPORT CartesianProductEstimator : CardinalityEstimatorCRTP<CartesianPr
         CartesianProductDataModel(std::size_t size) : size(size) { }
 
         void assign_to(Subproblem) override { /* nothing to be done */ }
+
     };
 
     CartesianProductEstimator() { }
@@ -191,6 +219,7 @@ struct M_EXPORT CartesianProductEstimator : CardinalityEstimatorCRTP<CartesianPr
      *================================================================================================================*/
 
     std::unique_ptr<DataModel> empty_model() const override;
+    std::unique_ptr<DataModel> copy(const DataModel &data) const override;
     std::unique_ptr<DataModel> estimate_scan(const QueryGraph &G, Subproblem P) const override;
     std::unique_ptr<DataModel>
     estimate_filter(const QueryGraph &G, const DataModel &data, const cnf::CNF &filter) const override;
@@ -201,6 +230,11 @@ struct M_EXPORT CartesianProductEstimator : CardinalityEstimatorCRTP<CartesianPr
     std::unique_ptr<DataModel>
     estimate_join(const QueryGraph &G, const DataModel &left, const DataModel &right,
                   const cnf::CNF &condition) const override;
+    std::unique_ptr<DataModel>
+    estimate_semi_join(const QueryGraph &G, const DataModel &left, const DataModel &right,
+                  const cnf::CNF &condition) const override;
+    std::unique_ptr<DataModel>
+    estimate_full_reduction(const QueryGraph &G, const DataModel &model) const override;
 
     template<typename PlanTable>
     std::unique_ptr<DataModel>
@@ -234,10 +268,12 @@ struct M_EXPORT InjectionCardinalityEstimator : CardinalityEstimatorCRTP<Injecti
 
         private:
         Subproblem subproblem_;
+        Subproblem reduced_by_ = Subproblem();
         std::size_t size_;
 
         public:
         InjectionCardinalityDataModel(Subproblem S, std::size_t size) : subproblem_(S), size_(size) { }
+        InjectionCardinalityDataModel(Subproblem S, Subproblem R, std::size_t size) : subproblem_(S), reduced_by_(R), size_(size) { }
         InjectionCardinalityDataModel(const InjectionCardinalityDataModel&) = default;
         InjectionCardinalityDataModel(InjectionCardinalityDataModel&&) = default;
         InjectionCardinalityDataModel & operator=(InjectionCardinalityDataModel &&other) = default;
@@ -252,7 +288,12 @@ struct M_EXPORT InjectionCardinalityEstimator : CardinalityEstimatorCRTP<Injecti
     ///> buffer used to construct identifiers
     mutable std::ostringstream oss_;
 
-    std::unordered_map<ThreadSafePooledString, std::size_t> cardinality_table_;
+    struct CardinalityEntry {
+        std::size_t size;
+        std::unordered_map<ThreadSafePooledString, std::size_t> semi_join_table;
+    };
+
+    std::unordered_map<ThreadSafePooledString, CardinalityEntry> cardinality_table_;
     CartesianProductEstimator fallback_;
 
     public:
@@ -283,6 +324,7 @@ struct M_EXPORT InjectionCardinalityEstimator : CardinalityEstimatorCRTP<Injecti
      *================================================================================================================*/
 
     std::unique_ptr<DataModel> empty_model() const override;
+    std::unique_ptr<DataModel> copy(const DataModel &data) const override;
     std::unique_ptr<DataModel> estimate_scan(const QueryGraph &G, Subproblem P) const override;
     std::unique_ptr<DataModel>
     estimate_filter(const QueryGraph &G, const DataModel &data, const cnf::CNF &filter) const override;
@@ -293,6 +335,11 @@ struct M_EXPORT InjectionCardinalityEstimator : CardinalityEstimatorCRTP<Injecti
     std::unique_ptr<DataModel>
     estimate_join(const QueryGraph &G, const DataModel &left, const DataModel &right,
                   const cnf::CNF &condition) const override;
+    std::unique_ptr<DataModel>
+    estimate_semi_join(const QueryGraph &G, const DataModel &left, const DataModel &right,
+                  const cnf::CNF &condition) const override;
+    std::unique_ptr<DataModel>
+    estimate_full_reduction(const QueryGraph &G, const DataModel &model) const override;
 
     template<typename PlanTable>
     std::unique_ptr<DataModel>
@@ -393,6 +440,7 @@ struct M_EXPORT SpnEstimator : CardinalityEstimatorCRTP<SpnEstimator>
 
     public:
     std::unique_ptr<DataModel> empty_model() const override;
+    std::unique_ptr<DataModel> copy(const DataModel &data) const override;
     std::unique_ptr<DataModel> estimate_scan(const QueryGraph &G, Subproblem P) const override;
     std::unique_ptr<DataModel>
     estimate_filter(const QueryGraph &G, const DataModel &data, const cnf::CNF &filter) const override;
@@ -403,6 +451,11 @@ struct M_EXPORT SpnEstimator : CardinalityEstimatorCRTP<SpnEstimator>
     std::unique_ptr<DataModel>
     estimate_join(const QueryGraph &G, const DataModel &left, const DataModel &right,
                   const cnf::CNF &condition) const override;
+    std::unique_ptr<DataModel>
+    estimate_semi_join(const QueryGraph &G, const DataModel &left, const DataModel &right,
+                  const cnf::CNF &condition) const override;
+    std::unique_ptr<DataModel>
+    estimate_full_reduction(const QueryGraph &G, const DataModel &model) const override;
 
     template<typename PlanTable>
     std::unique_ptr<DataModel>

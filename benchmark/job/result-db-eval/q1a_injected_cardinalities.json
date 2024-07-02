@@ -1,0 +1,23 @@
+{
+"job": [
+{"relations": ["ct"], "size": 1, "reductions": [{"right_relations": ["mi_idx", "it", "t", "mc"], "size": 1}]},
+{"relations": ["it"], "size": 1, "reductions": [{"right_relations": ["mc", "ct", "t", "mi_idx"], "size": 1}]},
+{"relations": ["mc"], "size": 28889, "reductions": [{"right_relations": ["ct"], "size": 28657}, {"right_relations": ["it", "mi_idx", "t"], "size": 147}, {"right_relations": ["mi_idx", "it", "t", "ct"], "size": 142}]},
+{"relations": ["mi_idx"], "size": 1380035, "reductions": [{"right_relations": ["ct", "mc", "t"], "size": 38489}, {"right_relations": ["it"], "size": 250}, {"right_relations": ["mc", "ct", "t", "it"], "size": 105}]},
+{"relations": ["t"], "size": 2528312, "reductions": [{"right_relations": ["mi_idx", "it", "ct", "mc"], "size": 105}]},
+{"relations": ["mc", "ct"], "size": 28657, "reductions": [{"right_relations": ["it", "mi_idx", "t"], "size": 142}]},
+{"relations": ["mi_idx", "it"], "size": 250, "reductions": [{"right_relations": ["ct", "mc", "t"], "size": 105}]},
+{"relations": ["mi_idx", "mc"], "size": 62658, "reductions": [{"right_relations": ["ct"], "size": 62017}, {"right_relations": ["t"], "size": 62658}, {"right_relations": ["it"], "size": 147}, {"right_relations": ["it", "ct"], "size": 142}, {"right_relations": ["t", "ct"], "size": 62017}, {"right_relations": ["t", "it"], "size": 147}, {"right_relations": ["t", "it", "ct"], "size": 142}]},
+{"relations": ["t", "mc"], "size": 28889, "reductions": [{"right_relations": ["ct"], "size": 28657}, {"right_relations": ["it", "mi_idx"], "size": 147}, {"right_relations": ["it", "mi_idx", "ct"], "size": 142}]},
+{"relations": ["t", "mi_idx"], "size": 1380035, "reductions": [{"right_relations": ["it"], "size": 250}, {"right_relations": ["ct", "mc"], "size": 38489}, {"right_relations": ["ct", "mc", "it"], "size": 105}]},
+{"relations": ["mi_idx", "mc", "ct"], "size": 62017, "reductions": [{"right_relations": ["t"], "size": 62017}, {"right_relations": ["it"], "size": 142}, {"right_relations": ["it", "t"], "size": 142}]},
+{"relations": ["t", "mc", "ct"], "size": 28657, "reductions": [{"right_relations": ["it", "mi_idx"], "size": 142}]},
+{"relations": ["mi_idx", "mc", "it"], "size": 147, "reductions": [{"right_relations": ["ct"], "size": 142}, {"right_relations": ["t"], "size": 147}, {"right_relations": ["t", "ct"], "size": 142}]},
+{"relations": ["t", "mi_idx", "it"], "size": 250, "reductions": [{"right_relations": ["ct", "mc"], "size": 105}]},
+{"relations": ["t", "mi_idx", "mc"], "size": 62658, "reductions": [{"right_relations": ["ct"], "size": 62017}, {"right_relations": ["it"], "size": 147}, {"right_relations": ["it", "ct"], "size": 142}]},
+{"relations": ["mc", "mi_idx", "it", "ct"], "size": 142, "reductions": [{"right_relations": ["t"], "size": 142}]},
+{"relations": ["mi_idx", "t", "mc", "ct"], "size": 62017, "reductions": [{"right_relations": ["it"], "size": 142}]},
+{"relations": ["mi_idx", "t", "mc", "it"], "size": 147, "reductions": [{"right_relations": ["ct"], "size": 142}]},
+{"relations": ["mc", "mi_idx", "it", "ct", "t"], "size": 142, "reductions": []}
+]
+}

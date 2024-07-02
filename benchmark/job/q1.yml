@@ -2,79 +2,89 @@ description: Join Order Benchmark Query 1
 suite: job
 benchmark: q1
 readonly: true
-pattern: '^Execute query:.*'
-cases:
-    a: |
-        SELECT MIN(mc.note) AS production_note,
-               MIN(t.title) AS movie_title,
-               MIN(t.production_year) AS movie_year
-        FROM company_type AS ct,
-             info_type AS it,
-             movie_companies AS mc,
-             movie_info_idx AS mi_idx,
-             title AS t
-        WHERE ct.kind = "production companies"
-          AND it.info = "top 250 rank"
-          AND NOT (mc.note LIKE "%(as Metro-Goldwyn-Mayer Pictures)%")
-          AND (mc.note LIKE "%(co-production)%"
-               OR mc.note LIKE "%(presents)%")
-          AND ct.id = mc.company_type_id
-          AND t.id = mc.movie_id
-          AND t.id = mi_idx.movie_id
-          AND mc.movie_id = mi_idx.movie_id
-          AND it.id = mi_idx.info_type_id;
-    b: |
-        SELECT MIN(mc.note) AS production_note,
-               MIN(t.title) AS movie_title,
-               MIN(t.production_year) AS movie_year
-        FROM company_type AS ct,
-             info_type AS it,
-             movie_companies AS mc,
-             movie_info_idx AS mi_idx,
-             title AS t
-        WHERE ct.kind = "production companies"
-          AND it.info = "bottom 10 rank"
-          AND NOT (mc.note LIKE "%(as Metro-Goldwyn-Mayer Pictures)%")
-          AND t.production_year BETWEEN 2005 AND 2010
-          AND ct.id = mc.company_type_id
-          AND t.id = mc.movie_id
-          AND t.id = mi_idx.movie_id
-          AND mc.movie_id = mi_idx.movie_id
-          AND it.id = mi_idx.info_type_id;
-    c: |
-        SELECT MIN(mc.note) AS production_note,
-               MIN(t.title) AS movie_title,
-               MIN(t.production_year) AS movie_year
-        FROM company_type AS ct,
-             info_type AS it,
-             movie_companies AS mc,
-             movie_info_idx AS mi_idx,
-             title AS t
-        WHERE ct.kind = "production companies"
-          AND it.info = "top 250 rank"
-          AND NOT (mc.note LIKE "%(as Metro-Goldwyn-Mayer Pictures)%")
-          AND (mc.note LIKE "%(co-production)%")
-          AND t.production_year >2010
-          AND ct.id = mc.company_type_id
-          AND t.id = mc.movie_id
-          AND t.id = mi_idx.movie_id
-          AND mc.movie_id = mi_idx.movie_id
-          AND it.id = mi_idx.info_type_id;
-    d: |
-        SELECT MIN(mc.note) AS production_note,
-               MIN(t.title) AS movie_title,
-               MIN(t.production_year) AS movie_year
-        FROM company_type AS ct,
-             info_type AS it,
-             movie_companies AS mc,
-             movie_info_idx AS mi_idx,
-             title AS t
-        WHERE ct.kind = "production companies"
-          AND it.info = "bottom 10 rank"
-          AND NOT (mc.note LIKE "%(as Metro-Goldwyn-Mayer Pictures)%")
-          AND t.production_year >2000
-          AND ct.id = mc.company_type_id
-          AND t.id = mc.movie_id
-          AND t.id = mi_idx.movie_id
-          AND mc.movie_id = mi_idx.movie_id
-          AND it.id = mi_idx.info_type_id;
+systems:
+    mutable:
+        configurations:
+            'WasmV8, PAX4M':
+                args: >-
+                  --backend WasmV8
+                  --data-layout PAX4M
+                  --cardinality-estimator Injected
+                  --use-cardinality-file benchmark/tpc-h/q1.json
+                  --result-db
+                pattern: '^Compile SQL to machine code:.*'
+        cases:
+            a: |
+                SELECT MIN(mc.note) AS production_note,
+                       MIN(t.title) AS movie_title,
+                       MIN(t.production_year) AS movie_year
+                FROM company_type AS ct,
+                     info_type AS it,
+                     movie_companies AS mc,
+                     movie_info_idx AS mi_idx,
+                     title AS t
+                WHERE ct.kind = "production companies"
+                  AND it.info = "top 250 rank"
+                  AND NOT (mc.note LIKE "%(as Metro-Goldwyn-Mayer Pictures)%")
+                  AND (mc.note LIKE "%(co-production)%"
+                       OR mc.note LIKE "%(presents)%")
+                  AND ct.id = mc.company_type_id
+                  AND t.id = mc.movie_id
+                  AND t.id = mi_idx.movie_id
+                  AND mc.movie_id = mi_idx.movie_id
+                  AND it.id = mi_idx.info_type_id;
+            b: |
+                SELECT MIN(mc.note) AS production_note,
+                       MIN(t.title) AS movie_title,
+                       MIN(t.production_year) AS movie_year
+                FROM company_type AS ct,
+                     info_type AS it,
+                     movie_companies AS mc,
+                     movie_info_idx AS mi_idx,
+                     title AS t
+                WHERE ct.kind = "production companies"
+                  AND it.info = "bottom 10 rank"
+                  AND NOT (mc.note LIKE "%(as Metro-Goldwyn-Mayer Pictures)%")
+                  AND t.production_year BETWEEN 2005 AND 2010
+                  AND ct.id = mc.company_type_id
+                  AND t.id = mc.movie_id
+                  AND t.id = mi_idx.movie_id
+                  AND mc.movie_id = mi_idx.movie_id
+                  AND it.id = mi_idx.info_type_id;
+            c: |
+                SELECT MIN(mc.note) AS production_note,
+                       MIN(t.title) AS movie_title,
+                       MIN(t.production_year) AS movie_year
+                FROM company_type AS ct,
+                     info_type AS it,
+                     movie_companies AS mc,
+                     movie_info_idx AS mi_idx,
+                     title AS t
+                WHERE ct.kind = "production companies"
+                  AND it.info = "top 250 rank"
+                  AND NOT (mc.note LIKE "%(as Metro-Goldwyn-Mayer Pictures)%")
+                  AND (mc.note LIKE "%(co-production)%")
+                  AND t.production_year >2010
+                  AND ct.id = mc.company_type_id
+                  AND t.id = mc.movie_id
+                  AND t.id = mi_idx.movie_id
+                  AND mc.movie_id = mi_idx.movie_id
+                  AND it.id = mi_idx.info_type_id;
+            d: |
+                SELECT MIN(mc.note) AS production_note,
+                       MIN(t.title) AS movie_title,
+                       MIN(t.production_year) AS movie_year
+                FROM company_type AS ct,
+                     info_type AS it,
+                     movie_companies AS mc,
+                     movie_info_idx AS mi_idx,
+                     title AS t
+                WHERE ct.kind = "production companies"
+                  AND it.info = "bottom 10 rank"
+                  AND NOT (mc.note LIKE "%(as Metro-Goldwyn-Mayer Pictures)%")
+                  AND t.production_year >2000
+                  AND ct.id = mc.company_type_id
+                  AND t.id = mc.movie_id
+                  AND t.id = mi_idx.movie_id
+                  AND mc.movie_id = mi_idx.movie_id
+                  AND it.id = mi_idx.info_type_id;

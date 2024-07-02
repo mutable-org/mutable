@@ -1,6 +1,7 @@
 from typing import DefaultDict
 import copy
 from collections import defaultdict
+from multipledispatch import dispatch
 from itertools import count
 import graphviz as gv
 from queue import Queue
@@ -25,6 +26,11 @@ class Relation:
 
     def __eq__(self, other):
         return (self.id == other.id)
+
+    def __lt__(self, other):
+        if self.id < other.id:
+            return True
+        return False
 
     def __hash__(self):
         return hash(id)
@@ -89,7 +95,28 @@ class JoinGraph:
 
         Parameters
         ----------
-        - relations: set[Relation]
+        - left: set[Relation]
+            The left set of relations.
+        - right: set[Relation]
+            The right set of relations.
+
+        Returns
+        -------
+        A set of joins connecting `left` and `right`.
+
+        """
+        joins: set[Join] = set()
+        for join in self.joins:
+            if join.left_relation in relations and join.right_relation in relations:
+                joins.add(join)
+        return joins
+
+    def get_joins_between_left_right(self, left: set[Relation], right: set[Relation]) -> set[Join]:
+        """ Compute the set of joins between `left` and `right`.
+
+        Parameters
+        ----------
+        - : set[Relation]
             The relation for which to compute the corresponding joins.
 
         Returns
@@ -99,10 +126,12 @@ class JoinGraph:
         """
         joins: set[Join] = set()
         for join in self.joins:
-            if join.left_relation in relations and join.right_relation in relations:
+            if join.left_relation in left and join.right_relation in right\
+                    or join.right_relation in left and join.left_relation in right:
                 joins.add(join)
         return joins
 
+    @dispatch(Relation)
     def neighbors(self, r: Relation) -> set[Relation]:
         """ Computes a set of neighbors of `r`.
 
@@ -115,13 +144,31 @@ class JoinGraph:
         -------
         A set of relations representing the neighbors of `r`.
         """
-        neighbors = set()
+        neighbors: set[Relation] = set()
         for j in self.joins:
             if (r.name == j.left_relation.name):
                 neighbors.add(j.right_relation)
             elif (r.name == j.right_relation.name):
                 neighbors.add(j.left_relation)
         return neighbors
+
+    def neighbors_of_set(self, relations: set[Relation]):
+        """ Computes a set of neighbors of the relation set `relations`.
+
+        Parameters
+        ----------
+        - r: relations
+            The relations to be considered.
+
+        Returns
+        -------
+        A set of relations representing the neighbors of `relations`. Note that no relation from `relations` will be
+        part of the result.
+        """
+        neighbors = set()
+        for r in relations:
+            neighbors |= self.neighbors(r)
+        return neighbors - relations
 
     def reachable(self, r: Relation, excluded_relations: set[Relation]) -> set[Relation]:
         """ Computes the set of relations reachable (via joins) from `r`. While traversing the graph, nodes in the
@@ -150,6 +197,8 @@ class JoinGraph:
         frontier = Queue()
         frontier.put(r)
 
+        excluded_relations = excluded_relations.copy()
+
         while not frontier.empty():
             current_relation = frontier.get()
             res.add(current_relation)
@@ -158,6 +207,7 @@ class JoinGraph:
             excluded_relations.add(current_relation)
 
         return res
+
 
     def connected(self, relations: set[Relation]) -> bool:
         if len(relations) == 0:

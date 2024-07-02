@@ -118,6 +118,15 @@ systems:
             TDMinCutAGaT:
                 args: '--plan-enumerator TDMinCutAGaT'
                 pattern: '^Compute the logical query plan:.*'
+            RESULTDB:
+                args: '--result-db'
+                pattern: '^Compute the logical semi-join reduction query plan:.*'
+            RESULTDB-Opt:
+                args: '--result-db --optimize-result-db'
+                pattern: '^Compute the logical semi-join reduction query plan:.*'
+            RESULTDB-Opt-Greedy:
+                args: '--result-db --optimize-result-db --greedy-cuts'
+                pattern: '^Compute the logical semi-join reduction query plan:.*'
         cases:
             2:  SELECT
                     *

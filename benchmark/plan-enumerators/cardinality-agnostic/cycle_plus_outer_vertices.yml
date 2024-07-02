@@ -1,7 +1,7 @@
 description: Plan enumeration of cycle queries with methods that are agnostic to cardinalities.
 suite: plan-enumerators
 benchmark: cardinality-agnostic
-name: cycle
+name: cycle_plus_outer_vertices
 readonly: true
 chart:
     x:
@@ -136,44 +136,22 @@ systems:
                 WHERE
                     T0.key = T1.fkey
                 ;
-            3: SELECT
-                    *
-                FROM
-                    T0,
-                    T1,
-                    T2
-                WHERE
-                    T0.key = T1.fkey AND
-                    T1.key = T2.fkey AND
-                    T2.key = T0.fkey
-                ;
-            4:  SELECT
-                    *
-                FROM
-                    T0,
-                    T1,
-                    T2,
-                    T3
-                WHERE
-                    T0.key = T1.fkey AND
-                    T1.key = T2.fkey AND
-                    T2.key = T3.fkey AND
-                    T3.key = T0.fkey
-                ;
-            5:  SELECT
+            6: SELECT
                     *
                 FROM
                     T0,
                     T1,
                     T2,
                     T3,
-                    T4
+                    T4,
+                    T5
                 WHERE
                     T0.key = T1.fkey AND
                     T1.key = T2.fkey AND
-                    T2.key = T3.fkey AND
-                    T3.key = T4.fkey AND
-                    T4.key = T0.fkey
+                    T2.key = T0.fkey AND
+                    T0.key = T3.fkey AND
+                    T1.key = T4.fkey AND
+                    T2.key = T5.fkey
                 ;
             8:  SELECT
                     *
@@ -190,38 +168,13 @@ systems:
                     T0.key = T1.fkey AND
                     T1.key = T2.fkey AND
                     T2.key = T3.fkey AND
-                    T3.key = T4.fkey AND
-                    T4.key = T5.fkey AND
-                    T5.key = T6.fkey AND
-                    T6.key = T7.fkey AND
-                    T7.key = T0.fkey
+                    T3.key = T0.fkey AND
+                    T0.key = T4.fkey AND
+                    T1.key = T5.fkey AND
+                    T2.key = T6.fkey AND
+                    T3.key = T7.fkey
                 ;
-            10: SELECT
-                    *
-                FROM
-                    T0,
-                    T1,
-                    T2,
-                    T3,
-                    T4,
-                    T5,
-                    T6,
-                    T7,
-                    T8,
-                    T9
-                WHERE
-                    T0.key = T1.fkey AND
-                    T1.key = T2.fkey AND
-                    T2.key = T3.fkey AND
-                    T3.key = T4.fkey AND
-                    T4.key = T5.fkey AND
-                    T5.key = T6.fkey AND
-                    T6.key = T7.fkey AND
-                    T7.key = T8.fkey AND
-                    T8.key = T9.fkey AND
-                    T9.key = T0.fkey
-                ;
-            12: SELECT
+            12:  SELECT
                     *
                 FROM
                     T0,
@@ -242,50 +195,15 @@ systems:
                     T2.key = T3.fkey AND
                     T3.key = T4.fkey AND
                     T4.key = T5.fkey AND
-                    T5.key = T6.fkey AND
-                    T6.key = T7.fkey AND
-                    T7.key = T8.fkey AND
-                    T8.key = T9.fkey AND
-                    T9.key = T10.fkey AND
-                    T10.key = T11.fkey AND
-                    T11.key = T0.fkey
+                    T5.key = T0.fkey AND
+                    T0.key = T6.fkey AND
+                    T1.key = T7.fkey AND
+                    T2.key = T8.fkey AND
+                    T3.key = T9.fkey AND
+                    T4.key = T10.fkey AND
+                    T5.key = T11.fkey
                 ;
-            15: SELECT
-                    *
-                FROM
-                    T0,
-                    T1,
-                    T2,
-                    T3,
-                    T4,
-                    T5,
-                    T6,
-                    T7,
-                    T8,
-                    T9,
-                    T10,
-                    T11,
-                    T12,
-                    T13,
-                    T14
-                WHERE
-                    T0.key = T1.fkey AND
-                    T1.key = T2.fkey AND
-                    T2.key = T3.fkey AND
-                    T3.key = T4.fkey AND
-                    T4.key = T5.fkey AND
-                    T5.key = T6.fkey AND
-                    T6.key = T7.fkey AND
-                    T7.key = T8.fkey AND
-                    T8.key = T9.fkey AND
-                    T9.key = T10.fkey AND
-                    T10.key = T11.fkey AND
-                    T11.key = T12.fkey AND
-                    T12.key = T13.fkey AND
-                    T13.key = T14.fkey AND
-                    T14.key = T0.fkey
-                ;
-            18: SELECT
+            16:  SELECT
                     *
                 FROM
                     T0,
@@ -303,9 +221,7 @@ systems:
                     T12,
                     T13,
                     T14,
-                    T15,
-                    T16,
-                    T17
+                    T15
                 WHERE
                     T0.key = T1.fkey AND
                     T1.key = T2.fkey AND
@@ -314,17 +230,15 @@ systems:
                     T4.key = T5.fkey AND
                     T5.key = T6.fkey AND
                     T6.key = T7.fkey AND
-                    T7.key = T8.fkey AND
-                    T8.key = T9.fkey AND
-                    T9.key = T10.fkey AND
-                    T10.key = T11.fkey AND
-                    T11.key = T12.fkey AND
-                    T12.key = T13.fkey AND
-                    T13.key = T14.fkey AND
-                    T14.key = T15.fkey AND
-                    T15.key = T16.fkey AND
-                    T16.key = T17.fkey AND
-                    T17.key = T0.fkey
+                    T7.key = T0.fkey AND
+                    T0.key = T8.fkey AND
+                    T1.key = T9.fkey AND
+                    T2.key = T10.fkey AND
+                    T3.key = T11.fkey AND
+                    T4.key = T12.fkey AND
+                    T5.key = T13.fkey AND
+                    T6.key = T14.fkey AND
+                    T7.key = T15.fkey
                 ;
             20: SELECT
                     *
@@ -359,15 +273,15 @@ systems:
                     T6.key = T7.fkey AND
                     T7.key = T8.fkey AND
                     T8.key = T9.fkey AND
-                    T9.key = T10.fkey AND
-                    T10.key = T11.fkey AND
-                    T11.key = T12.fkey AND
-                    T12.key = T13.fkey AND
-                    T13.key = T14.fkey AND
-                    T14.key = T15.fkey AND
-                    T15.key = T16.fkey AND
-                    T16.key = T17.fkey AND
-                    T17.key = T18.fkey AND
-                    T18.key = T19.fkey AND
-                    T19.key = T0.fkey
+                    T9.key = T0.fkey AND
+                    T0.key = T10.fkey AND
+                    T1.key = T11.fkey AND
+                    T2.key = T12.fkey AND
+                    T3.key = T13.fkey AND
+                    T4.key = T14.fkey AND
+                    T5.key = T15.fkey AND
+                    T6.key = T16.fkey AND
+                    T7.key = T17.fkey AND
+                    T8.key = T18.fkey AND
+                    T9.key = T19.fkey
                 ;

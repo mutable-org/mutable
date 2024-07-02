@@ -16,7 +16,7 @@ CREATE TABLE info_type (
     info CHAR(32) NOT NULL
 );
 -- 113 rows
-IMPORT INTO info_type DSV "benchmark/job/data/info_type.csv";
+IMPORT INTO info_type DSV "benchmark/job/data/info_type.csv" ROWS 100;
 
 CREATE TABLE movie_companies (
     id INT(4) NOT NULL PRIMARY KEY,
@@ -26,7 +26,7 @@ CREATE TABLE movie_companies (
     note CHAR(208)
 );
 -- 2.609.129 rows -> ~557 MiB
-IMPORT INTO movie_companies DSV "benchmark/job/data/movie_companies.csv";
+IMPORT INTO movie_companies DSV "benchmark/job/data/movie_companies.csv" ROWS 100;
 
 CREATE TABLE movie_info_idx (
     id INT(4) NOT NULL PRIMARY KEY,
@@ -36,7 +36,7 @@ CREATE TABLE movie_info_idx (
     note CHAR(1)
 );
 -- 1.380.035 rows -> ~30 MiB
-IMPORT INTO movie_info_idx DSV "benchmark/job/data/movie_info_idx.csv";
+IMPORT INTO movie_info_idx DSV "benchmark/job/data/movie_info_idx.csv" ROWS 100;
 
 CREATE TABLE title (
     id INT(4) NOT NULL PRIMARY KEY,

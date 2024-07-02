@@ -1,0 +1,125 @@
+description: Optimize Job Query Q6a with RESULTDB
+suite: job
+benchmark: RESULTDB Execution times with JOB
+name: Q6a
+readonly: true
+chart:
+    x:
+        scale: linear
+        type: O
+        label: Scale factor
+    y:
+        scale: linear
+        type: Q
+        label: 'Optimization Time [ms]'
+data:
+    'cast_info':                                       # Name of this table.
+        file: 'benchmark/job/data/cast_info.csv'       # Relative path to the file containing the table data
+        format: 'csv'                                     # Format of the file. Optional, defaults to 'csv'.
+        delimiter: ','                                    # Delimiter of the file. Optional, defaults to ','.
+        header: 0                                         # Whether the file has a header line. 1=true, 0=false. Optional, defaults to 0.
+        attributes:                                       # Map from attribute name to its type.
+            'id': 'INT NOT NULL'
+            'person_id': 'INT NOT NULL'
+            'movie_id': 'INT NOT NULL'
+            'person_role_id': 'INT'
+            'note': 'CHAR 74'
+            'nr_order': 'INT'
+            'role_id': 'INT NOT NULL'
+    'keyword':                                       # Name of this table.
+        file: 'benchmark/job/data/keyword.csv'       # Relative path to the file containing the table data
+        format: 'csv'                                     # Format of the file. Optional, defaults to 'csv'.
+        delimiter: ','                                    # Delimiter of the file. Optional, defaults to ','.
+        header: 0                                         # Whether the file has a header line. 1=true, 0=false. Optional, defaults to 0.
+        attributes:                                       # Map from attribute name to its type.
+            'id': 'INT NOT NULL'
+            'keyword': 'CHAR 74 NOT NULL'
+            'phonetic_code': 'CHAR 5'
+    'movie_keyword':
+        file: 'benchmark/job/data/movie_keyword.csv'
+        format: 'csv'
+        delimiter: ','
+        header: 0
+        attributes:
+            'id': 'INT NOT NULL'
+            'movie_id': 'INT NOT NULL'
+            'keyword_id': 'INT NOT NULL'
+    'name':
+        file: 'benchmark/job/data/name.csv'
+        format: 'csv'
+        delimiter: ','
+        header: 0
+        attributes:
+            'id': 'INT NOT NULL'
+            'name': 'CHAR 74 NOT NULL'
+            'imdb_index': 'CHAR 12'
+            'imdb_db': 'INT'
+            'gender': 'CHAR 1'
+            'name_pcode_cf': 'CHAR 5'
+            'name_pcode_nf': 'CHAR 5'
+            'surname_pcode': 'CHAR 5'
+            'md5sum': 'CHAR 32'
+    'title':
+        file: 'benchmark/job/data/title.csv'
+        format: 'csv'
+        delimiter: ','
+        header: 0
+        attributes:
+            'id': 'INT NOT NULL'
+            'title': 'CHAR 334 NOT NULL'
+            'imdb_index': 'CHAR 12'
+            'kind_id': 'INT NOT NULL'
+            'production_year': 'INT'
+            'imdb_id': 'INT'
+            'phonetic_code': 'CHAR 5'
+            'episode_of_id': 'INT'
+            'season_nr': 'INT'
+            'episode_nr': 'INT'
+            'series_years': 'CHAR 49'
+            'md5sum': 'CHAR 32'
+
+systems:
+    mutable:
+        args: >-
+          --backend WasmV8
+          --no-simd
+          --cardinality-estimator Injected
+          --use-cardinality-file benchmark/job/q6a_injected_cardinalities.json
+        configurations:
+            'Single-Table':
+                args: >-
+                  --backend WasmV8
+                pattern: '^Execute query:.*'
+            'RESULTDB, NoOpt':
+                args: >-
+                  --backend WasmV8
+                  --result-db
+                pattern: '^Execute query:.*'
+            'RESULTDB, Opt, NoGreedyCuts':
+                args: >-
+                  --result-db
+                  --optimize-result-db
+                pattern: '^Execute query:.*'
+            'RESULTDB, Opt, GreedyCuts':
+              args: >-
+                --result-db
+                --optimize-result-db
+                --greedy-cuts
+              pattern: '^Execute query:.*'
+        cases:
+            1:  SELECT k.keyword,
+                       n.name,
+                       t.title
+                FROM cast_info AS ci,
+                     keyword AS k,
+                     movie_keyword AS mk,
+                     name AS n,
+                     title AS t
+                WHERE k.keyword = "marvel-cinematic-universe"
+                  AND n.name LIKE "%Downey%Robert%"
+                  AND t.production_year > 2010
+                  AND k.id = mk.keyword_id
+                  AND t.id = mk.movie_id
+                  AND t.id = ci.movie_id
+                  AND ci.movie_id = mk.movie_id
+                  AND n.id = ci.person_id;

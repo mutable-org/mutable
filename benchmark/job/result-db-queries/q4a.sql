@@ -1,8 +1,50 @@
+CREATE DATABASE job;
+USE job;
+
 -- IMPORT DATA --
+CREATE TABLE info_type (
+    id INT(4) NOT NULL PRIMARY KEY,
+    info CHAR(32) NOT NULL
+);
 IMPORT INTO info_type DSV "benchmark/job/data/info_type.csv";
+CREATE TABLE keyword (
+    id INT(4) NOT NULL PRIMARY KEY,
+    keyword CHAR(74) NOT NULL,
+    phonetic_code CHAR(5)
+
+);
 IMPORT INTO keyword DSV "benchmark/job/data/keyword.csv";
+CREATE TABLE movie_info_idx (
+    id INT(4) NOT NULL PRIMARY KEY,
+    movie_id INT(4) NOT NULL,
+    info_type_id INT(4) NOT NULL,
+    info CHAR(74) NOT NULL,
+    note CHAR(74)
+
+);
 IMPORT INTO movie_info_idx DSV "benchmark/job/data/movie_info_idx.csv";
+CREATE TABLE movie_keyword (
+    id INT(4) NOT NULL PRIMARY KEY,
+    movie_id INT(4) NOT NULL,
+    keyword_id INT(4) NOT NULL
+
+);
 IMPORT INTO movie_keyword DSV "benchmark/job/data/movie_keyword.csv";
+CREATE TABLE title (
+    id INT(4) NOT NULL PRIMARY KEY,
+    title CHAR(32) NOT NULL,
+    imdb_index CHAR(12),
+    kind_id INT(4) NOT NULL,
+    production_year INT(4),
+    imdb_id INT(4),
+    phonetic_code CHAR(5),
+    episode_of_id INT(4),
+    season_nr INT(4),
+    episode_nr INT(4),
+    series_years CHAR(49),
+    md5sum CHAR(32)
+
+);
 IMPORT INTO title DSV "benchmark/job/data/title.csv";
 
 -- SQL QUERY --

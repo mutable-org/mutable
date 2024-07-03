@@ -1,7 +1,7 @@
-description: Optimize Job Query Q5b with RESULTDB
+description: Optimize Job Query Q4a with RESULTDB
 suite: job
 benchmark: RESULTDB Optimization times with JOB
-name: Q5b
+name: Q4a
 readonly: true
 chart:
     x:
@@ -11,16 +11,8 @@ chart:
     y:
         scale: linear
         type: Q
-        label: 'Optimization Time [ms]'
+        label: 'Execution Time [ms]'
 data:
-    'company_type':                                       # Name of this table.
-        file: 'benchmark/job/data/company_type.csv'       # Relative path to the file containing the table data
-        format: 'csv'                                     # Format of the file. Optional, defaults to 'csv'.
-        delimiter: ','                                    # Delimiter of the file. Optional, defaults to ','.
-        header: 0                                         # Whether the file has a header line. 1=true, 0=false. Optional, defaults to 0.
-        attributes:                                       # Map from attribute name to its type.
-            'id': 'INT NOT NULL'
-            'kind': 'CHAR 32 NOT NULL'
     'info_type':
         file: 'benchmark/job/data/info_type.csv'
         format: 'csv'
@@ -29,28 +21,35 @@ data:
         attributes:
             'id': 'INT NOT NULL'
             'info': 'CHAR 32 NOT NULL'
-    'movie_companies':
-        file: 'benchmark/job/data/movie_companies.csv'
+    'keyword':
+        file: 'benchmark/job/data/keyword.csv'
+        format: 'csv'
+        delimiter: ','
+        header: 0
+        attributes:
+          'id': 'INT NOT NULL'
+          'keyword': 'CHAR 74 NOT NULL'
+          'phonetic_code': 'CHAR 5'
+    'movie_info_idx':
+        file: 'benchmark/job/data/movie_info_idx.csv'
         format: 'csv'
         delimiter: ','
         header: 0
         attributes:
             'id': 'INT NOT NULL'
             'movie_id': 'INT NOT NULL'
-            'company_id': 'INT NOT NULL'
-            'company_type_id': 'INT NOT NULL'
-            'note': 'CHAR 208'
-    'movie_info':
-        file: 'benchmark/job/data/movie_info.csv'
+            'info_type_id': 'INT NOT NULL'
+            'info': 'CHAR 10 NOT NULL'
+            'note': 'CHAR 1'
+    'movie_keyword':
+        file: 'benchmark/job/data/movie_keyword.csv'
         format: 'csv'
         delimiter: ','
         header: 0
         attributes:
           'id': 'INT NOT NULL'
           'movie_id': 'INT NOT NULL'
-          'info_type_id': 'INT NOT NULL'
-          'info': 'CHAR 43 NOT NULL'
-          'note': 'CHAR 19'
+          'keyword_id': 'INT NOT NUL'
     'title':
         file: 'benchmark/job/data/title.csv'
         format: 'csv'
@@ -77,7 +76,7 @@ systems:
           --backend WasmV8
           --no-simd
           --cardinality-estimator Injected
-          --use-cardinality-file benchmark/job/result-db-eval/q5b_injected_cardinalities.json
+          --use-cardinality-file benchmark/job/result-db-eval/acyclic/q4a_acyclic_injected_cardinalities.json
         configurations:
             'Single-Table':
               args: >-
@@ -99,21 +98,18 @@ systems:
                 --greedy-cuts
               pattern: '^Execute query:.*'
         cases:
-            1:  SELECT t.title
-                FROM company_type AS ct,
-                     info_type AS it,
-                     movie_companies AS mc,
-                     movie_info AS mi,
+            1:  SELECT mi_idx.info,
+                       t.title
+                FROM info_type AS it,
+                     keyword AS k,
+                     movie_info_idx AS mi_idx,
+                     movie_keyword AS mk,
                      title AS t
-                WHERE ct.kind = "production companies"
-                  AND mc.note LIKE "%(VHS)%"
-                  AND mc.note LIKE "%(USA)%"
-                  AND mc.note LIKE "%(1994)%"
-                  AND (mi.info = "USA" OR
-                       mi.info = "America")
-                  AND t.production_year > 2010
-                  AND t.id = mi.movie_id
-                  AND t.id = mc.movie_id
-                  AND mc.movie_id = mi.movie_id
-                  AND ct.id = mc.company_type_id
-                  AND it.id = mi.info_type_id;
+                WHERE it.info = "rating"
+                  AND k.keyword LIKE "%sequel%"
+                  AND mi_idx.info > "5.0"
+                  AND t.production_year > 2005
+                  AND t.id = mi_idx.movie_id
+                  AND t.id = mk.movie_id
+                  AND k.id = mk.keyword_id
+                  AND it.id = mi_idx.info_type_id;

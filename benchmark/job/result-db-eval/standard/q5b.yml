@@ -1,7 +1,7 @@
-description: Optimize Job Query Q1a with RESULTDB
+description: Optimize Job Query Q5b with RESULTDB
 suite: job
 benchmark: RESULTDB Optimization times with JOB
-name: Q1a
+name: Q5b
 readonly: true
 chart:
     x:
@@ -12,7 +12,7 @@ chart:
         scale: linear
         type: Q
         label: 'Optimization Time [ms]'
-data:                                                     # Definition of the tables this experiment uses.
+data:
     'company_type':                                       # Name of this table.
         file: 'benchmark/job/data/company_type.csv'       # Relative path to the file containing the table data
         format: 'csv'                                     # Format of the file. Optional, defaults to 'csv'.
@@ -40,17 +40,17 @@ data:                                                     # Definition of the ta
             'company_id': 'INT NOT NULL'
             'company_type_id': 'INT NOT NULL'
             'note': 'CHAR 208'
-    'movie_info_idx':
-        file: 'benchmark/job/data/movie_info_idx.csv'
+    'movie_info':
+        file: 'benchmark/job/data/movie_info.csv'
         format: 'csv'
         delimiter: ','
         header: 0
         attributes:
-            'id': 'INT NOT NULL'
-            'movie_id': 'INT NOT NULL'
-            'info_type_id': 'INT NOT NULL'
-            'info': 'CHAR 10 NOT NULL'
-            'note': 'CHAR 1'
+          'id': 'INT NOT NULL'
+          'movie_id': 'INT NOT NULL'
+          'info_type_id': 'INT NOT NULL'
+          'info': 'CHAR 43 NOT NULL'
+          'note': 'CHAR 19'
     'title':
         file: 'benchmark/job/data/title.csv'
         format: 'csv'
@@ -76,9 +76,8 @@ systems:
         args: >-
           --backend WasmV8
           --no-simd
-          -t
           --cardinality-estimator Injected
-          --use-cardinality-file benchmark/job/result-db-eval/q1a_injected_cardinalities.json
+          --use-cardinality-file benchmark/job/result-db-eval/standard/q5b_injected_cardinalities.json
         configurations:
             'Single-Table':
               args: >-
@@ -100,21 +99,21 @@ systems:
                 --greedy-cuts
               pattern: '^Execute query:.*'
         cases:
-            1:  SELECT mc.note,
-                       t.title,
-                       t.production_year
+            1:  SELECT t.title
                 FROM company_type AS ct,
                      info_type AS it,
                      movie_companies AS mc,
-                     movie_info_idx AS mi_idx,
+                     movie_info AS mi,
                      title AS t
                 WHERE ct.kind = "production companies"
-                  AND it.info = "top 250 rank"
-                  AND NOT (mc.note LIKE "%(as Metro-Goldwyn-Mayer Pictures)%")
-                  AND (mc.note LIKE "%(co-production)%"
-                       OR mc.note LIKE "%(presents)%")
-                  AND ct.id = mc.company_type_id
+                  AND mc.note LIKE "%(VHS)%"
+                  AND mc.note LIKE "%(USA)%"
+                  AND mc.note LIKE "%(1994)%"
+                  AND (mi.info = "USA" OR
+                       mi.info = "America")
+                  AND t.production_year > 2010
+                  AND t.id = mi.movie_id
                   AND t.id = mc.movie_id
-                  AND t.id = mi_idx.movie_id
-                  AND mc.movie_id = mi_idx.movie_id
-                  AND it.id = mi_idx.info_type_id;
+                  AND mc.movie_id = mi.movie_id
+                  AND ct.id = mc.company_type_id
+                  AND it.id = mi.info_type_id;

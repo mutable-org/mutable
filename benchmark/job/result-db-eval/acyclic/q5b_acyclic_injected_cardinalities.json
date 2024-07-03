@@ -1,0 +1,19 @@
+{
+"job": [
+{"relations": ["ct"], "size": 1, "reductions": [{"right_relations": ["it", "t", "mc", "mi"], "size": 0}]},
+{"relations": ["it"], "size": 113, "reductions": [{"right_relations": ["ct", "t", "mi", "mc"], "size": 0}]},
+{"relations": ["mc"], "size": 0, "reductions": [{"right_relations": ["mi", "t", "it"], "size": 0}, {"right_relations": ["ct"], "size": 0}, {"right_relations": ["t", "mi", "ct", "it"], "size": 0}]},
+{"relations": ["mi"], "size": 552777, "reductions": [{"right_relations": ["mc", "t", "ct"], "size": 0}, {"right_relations": ["it"], "size": 552777}, {"right_relations": ["t", "mc", "it", "ct"], "size": 0}]},
+{"relations": ["t"], "size": 391666, "reductions": [{"right_relations": ["it", "mi"], "size": 81493}, {"right_relations": ["ct", "mc"], "size": 0}, {"right_relations": ["it", "mc", "ct", "mi"], "size": 0}]},
+{"relations": ["mc", "ct"], "size": 0, "reductions": [{"right_relations": ["mi", "t", "it"], "size": 0}]},
+{"relations": ["mi", "it"], "size": 552777, "reductions": [{"right_relations": ["mc", "t", "ct"], "size": 0}]},
+{"relations": ["t", "mc"], "size": 0, "reductions": [{"right_relations": ["ct"], "size": 0}, {"right_relations": ["it", "mi"], "size": 0}, {"right_relations": ["mi", "ct", "it"], "size": 0}]},
+{"relations": ["t", "mi"], "size": 82354, "reductions": [{"right_relations": ["it"], "size": 82354}, {"right_relations": ["ct", "mc"], "size": 0}, {"right_relations": ["mc", "it", "ct"], "size": 0}]},
+{"relations": ["mc", "ct", "t"], "size": 0, "reductions": [{"right_relations": ["it", "mi"], "size": 0}]},
+{"relations": ["mi", "it", "t"], "size": 82354, "reductions": [{"right_relations": ["ct", "mc"], "size": 0}]},
+{"relations": ["mi", "mc", "t"], "size": 0, "reductions": [{"right_relations": ["ct"], "size": 0}, {"right_relations": ["it"], "size": 0}, {"right_relations": ["it", "ct"], "size": 0}]},
+{"relations": ["t", "mc", "ct", "mi"], "size": 0, "reductions": [{"right_relations": ["it"], "size": 0}]},
+{"relations": ["t", "mc", "it", "mi"], "size": 0, "reductions": [{"right_relations": ["ct"], "size": 0}]},
+{"relations": ["t", "mi", "it", "ct", "mc"], "size": 0, "reductions": []}
+]
+}

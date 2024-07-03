@@ -119,7 +119,7 @@ systems:
           --backend WasmV8
           --no-simd
           --cardinality-estimator Injected
-          --use-cardinality-file benchmark/job/result-db-eval/q7b_injected_cardinalities.json
+          --use-cardinality-file benchmark/job/result-db-eval/standard/q7b_injected_cardinalities.json
         configurations:
             'Single-Table':
               args: >-

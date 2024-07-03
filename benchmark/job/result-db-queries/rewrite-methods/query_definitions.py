@@ -1,6 +1,6 @@
 from query_utility import Relation, Join, JoinGraph
 
-def create_q1a():
+def create_q1a(acyclic=False):
     ### Relations
     company_type = Relation("company_type", "ct", ["kind", "id"], ["ct.kind = 'production companies'"])
     info_type = Relation("info_type", "it", ["info", "id"], ["it.info = 'top 250 rank'"])
@@ -15,13 +15,14 @@ def create_q1a():
     j01 = Join(company_type, movie_companies, ["id"], ["company_type_id"])
     j02 = Join(title, movie_companies, ["id"], ["movie_id"])
     j03 = Join(title, movie_info_idx, ["id"], ["movie_id"])
-    j04 = Join(movie_companies, movie_info_idx, ["movie_id"], ["movie_id"])
-    j05 = Join(info_type, movie_info_idx, ["id"], ["info_type_id"])
-    joins = [j01, j02, j03, j04, j05]
+    j04 = Join(info_type, movie_info_idx, ["id"], ["info_type_id"])
+    joins = [j01, j02, j03, j04]
+    if not acyclic:
+        joins.append(Join(movie_companies, movie_info_idx, ["movie_id"], ["movie_id"]))
 
     return JoinGraph(relations, joins)
 
-def create_q2a():
+def create_q2a(acyclic=False):
     ### Relations
     company_name = Relation("company_name", "cn", ["country_code", "id"], ["cn.country_code = '[de]'"])
     keyword = Relation("keyword", "k", ["keyword", "id"], ["k.keyword = 'character-name-in-title'"])
@@ -36,11 +37,13 @@ def create_q2a():
     j03 = Join(title, movie_keyword, ["id"], ["movie_id"])
     j04 = Join(movie_keyword, keyword, ["keyword_id"], ["id"])
     j05 = Join(movie_companies, movie_keyword, ["movie_id"], ["movie_id"])
-    joins = [j01, j02, j03, j04, j05]
+    joins = [j01, j02, j03, j04]
+    if not acyclic:
+        joins.append(j05)
 
     return JoinGraph(relations, joins)
 
-def create_q3b():
+def create_q3b(acyclic=False):
     ### Relations
     keyword = Relation("keyword", "k", ["keyword", "id"], ["k.keyword LIKE '%sequel%'"])
     movie_info = Relation("movie_info", "mi", ["info", "movie_id"], ["mi.info = 'Bulgaria'"])
@@ -53,11 +56,13 @@ def create_q3b():
     j02 = Join(title, movie_keyword, ["id"], ["movie_id"])
     j03 = Join(movie_keyword, movie_info, ["movie_id"], ["movie_id"])
     j04 = Join(keyword, movie_keyword, ["id"], ["keyword_id"])
-    joins = [j01, j02, j03, j04]
+    joins = [j01, j02, j04]
+    if not acyclic:
+        joins.append(j03)
 
     return JoinGraph(relations, joins)
 
-def create_q4a():
+def create_q4a(acyclic=False):
     ### Relations
     info_type = Relation("info_type", "it", ["info", "id"], ["it.info = 'rating'"])
     keyword = Relation("keyword", "k", ["keyword", "id"], ["k.keyword LIKE '%sequel%'"])
@@ -73,11 +78,13 @@ def create_q4a():
     j03 = Join(movie_keyword, movie_info_idx, ["movie_id"], ["movie_id"])
     j04 = Join(keyword, movie_keyword, ["id"], ["keyword_id"])
     j05 = Join(info_type, movie_info_idx, ["id"], ["info_type_id"])
-    joins = [j01, j02, j03, j04, j05]
+    joins = [j01, j02, j04, j05]
+    if not acyclic:
+        joins.append(j03)
 
     return JoinGraph(relations, joins)
 
-def create_q5b():
+def create_q5b(acyclic=False):
     ### Relations
     company_type = Relation("company_type", "ct", ["kind", "id"], ["ct.kind = 'production companies'"])
     info_type = Relation("info_type", "it", ["id"])
@@ -94,11 +101,13 @@ def create_q5b():
     j03 = Join(movie_companies, movie_info, ["movie_id"], ["movie_id"])
     j04 = Join(company_type, movie_companies, ["id"], ["company_type_id"])
     j05 = Join(info_type, movie_info, ["id"], ["info_type_id"])
-    joins = [j01, j02, j03, j04, j05]
+    joins = [j01, j02, j04, j05]
+    if not acyclic:
+        joins.append(j03)
 
     return JoinGraph(relations, joins)
 
-def create_q6a():
+def create_q6a(acyclic=False):
     ### Relations
     cast_info = Relation("cast_info", "ci", ["person_id", "movie_id"])
     keyword = Relation("keyword", "k", ["keyword", "id"], filters=["k.keyword = 'marvel-cinematic-universe'"],
@@ -115,11 +124,13 @@ def create_q6a():
     j03 = Join(title, cast_info, ["id"], ["movie_id"])
     j04 = Join(cast_info, movie_keyword, ["movie_id"], ["movie_id"])
     j05 = Join(name, cast_info, ["id"], ["person_id"])
-    joins = [j01, j02, j03, j04, j05]
+    joins = [j01, j02, j03, j05]
+    if not acyclic:
+        joins.append(j04)
 
     return JoinGraph(relations, joins)
 
-def create_q7b():
+def create_q7b(acyclic=False):
     ### Relations
     aka_name = Relation("aka_name", "an", ["name", "person_id"], filters=["an.name LIKE '%a%'"])
     cast_info = Relation("cast_info", "ci", ["person_id", "movie_id"])
@@ -147,11 +158,13 @@ def create_q7b():
     j09 = Join(person_info, cast_info, ["person_id"], ["person_id"])
     j10 = Join(aka_name, cast_info, ["person_id"], ["person_id"])
     j11 = Join(cast_info, movie_link, ["movie_id"], ["linked_movie_id"])
-    joins = [j01, j02, j03, j04, j05, j06, j07, j08, j09, j10, j11]
+    joins = [j01, j02, j03, j04, j05, j06, j07, j08]
+    if not acyclic:
+        joins.extend([j09, j10, j11])
 
     return JoinGraph(relations, joins)
 
-def create_q8d():
+def create_q8d(acyclic=False):
     ### Relations
     aka_name = Relation("aka_name", "an1", ["name", "person_id"], projections=["name"])
     cast_info = Relation("cast_info", "ci", ["person_id", "movie_id", "role_id"])
@@ -175,7 +188,7 @@ def create_q8d():
 
     return JoinGraph(relations, joins)
 
-def create_q9b():
+def create_q9b(acyclic=False):
     ### Relations
     aka_name = Relation("aka_name", "an", ["name", "person_id"], projections=["name"])
     char_name = Relation("char_name", "chn", ["id", "name"], projections=["name"])
@@ -201,11 +214,14 @@ def create_q9b():
     j07 = Join(char_name, cast_info, ["id"], ["person_role_id"])
     j08 = Join(aka_name, name, ["person_id"], ["id"])
     j09 = Join(aka_name, cast_info, ["person_id"], ["person_id"])
-    joins = [j01, j02, j03, j04, j05, j06, j07, j08, j09]
+    joins = [j01, j02, j03, j04, j05, j06, j07, j08]
+
+    if not acyclic:
+        joins.append(j09)
 
     return JoinGraph(relations, joins)
 
-def create_q10a():
+def create_q10a(acyclic=False):
     ### Relations
     char_name = Relation("char_name", "chn", ["id", "name"], projections=["name"])
     cast_info = Relation("cast_info", "ci", ["movie_id", "role_id", "person_role_id", "note"],
@@ -226,11 +242,14 @@ def create_q10a():
     j05 = Join(role_type, cast_info, ["id"], ["role_id"])
     j06 = Join(company_name, movie_companies, ["id"], ["company_id"])
     j07 = Join(company_type, movie_companies, ["id"], ["company_type_id"])
-    joins = [j01, j02, j03, j04, j05, j06, j07]
+    joins = [j01, j02, j04, j05, j06, j07]
+
+    if not acyclic:
+        joins.append(j03)
 
     return JoinGraph(relations, joins)
 
-def create_q13a():
+def create_q13a(acyclic=False):
     ### Relations
     company_name = Relation("company_name", "cn", ["country_code", "id"], filters=["cn.country_code = '[de]'"])
     company_type = Relation("company_type", "ct", ["id", "kind"], filters=["ct.kind = 'production companies'"])
@@ -255,11 +274,14 @@ def create_q13a():
     j09 = Join(movie_info, movie_info_idx, ["movie_id"], ["movie_id"])
     j10 = Join(movie_info, movie_companies, ["movie_id"], ["movie_id"])
     j11 = Join(movie_info_idx, movie_companies, ["movie_id"], ["movie_id"])
-    joins = [j01, j02, j03, j04, j05, j06, j07, j08, j09, j10, j11]
+    joins = [j01, j02, j03, j04, j05, j06, j07, j08]
+
+    if not acyclic:
+        joins.extend([j09, j10, j11])
 
     return JoinGraph(relations, joins)
 
-def create_q17a():
+def create_q17a(acyclic=False):
     ### Relations
     cast_info = Relation("cast_info", "ci", ["person_id", "movie_id"])
     company_name = Relation("company_name", "cn", ["country_code", "id"], filters=["cn.country_code = '[us]'"])
@@ -280,6 +302,9 @@ def create_q17a():
     j07 = Join(cast_info, movie_companies, ["movie_id"], ["movie_id"])
     j08 = Join(cast_info, movie_keyword, ["movie_id"], ["movie_id"])
     j09 = Join(movie_companies, movie_keyword, ["movie_id"], ["movie_id"])
-    joins = [j01, j02, j03, j04, j05, j06, j07, j08, j09]
+    joins = [j01, j02, j03, j04, j05, j06]
+
+    if not acyclic:
+        joins.extend([j07, j08, j09])
 
     return JoinGraph(relations, joins)

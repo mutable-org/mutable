@@ -1,7 +1,7 @@
-description: Optimize Job Query Q4a with RESULTDB
+description: Optimize Job Query Q3b with RESULTDB
 suite: job
 benchmark: RESULTDB Optimization times with JOB
-name: Q4a
+name: Q3b
 readonly: true
 chart:
     x:
@@ -11,16 +11,8 @@ chart:
     y:
         scale: linear
         type: Q
-        label: 'Execution Time [ms]'
+        label: 'Optimization Time [ms]'
 data:
-    'info_type':
-        file: 'benchmark/job/data/info_type.csv'
-        format: 'csv'
-        delimiter: ','
-        header: 0
-        attributes:
-            'id': 'INT NOT NULL'
-            'info': 'CHAR 32 NOT NULL'
     'keyword':
         file: 'benchmark/job/data/keyword.csv'
         format: 'csv'
@@ -30,17 +22,17 @@ data:
           'id': 'INT NOT NULL'
           'keyword': 'CHAR 74 NOT NULL'
           'phonetic_code': 'CHAR 5'
-    'movie_info_idx':
-        file: 'benchmark/job/data/movie_info_idx.csv'
+    'movie_info':
+        file: 'benchmark/job/data/movie_info.csv'
         format: 'csv'
         delimiter: ','
         header: 0
         attributes:
-            'id': 'INT NOT NULL'
-            'movie_id': 'INT NOT NULL'
-            'info_type_id': 'INT NOT NULL'
-            'info': 'CHAR 10 NOT NULL'
-            'note': 'CHAR 1'
+          'id': 'INT NOT NULL'
+          'movie_id': 'INT NOT NULL'
+          'info_type_id': 'INT NOT NULL'
+          'info': 'CHAR 43 NOT NULL'
+          'note': 'CHAR 19'
     'movie_keyword':
         file: 'benchmark/job/data/movie_keyword.csv'
         format: 'csv'
@@ -76,7 +68,7 @@ systems:
           --backend WasmV8
           --no-simd
           --cardinality-estimator Injected
-          --use-cardinality-file benchmark/job/result-db-eval/q4a_injected_cardinalities.json
+          --use-cardinality-file benchmark/job/result-db-eval/acyclic/q3b_acyclic_injected_cardinalities.json
         configurations:
             'Single-Table':
               args: >-
@@ -98,19 +90,14 @@ systems:
                 --greedy-cuts
               pattern: '^Execute query:.*'
         cases:
-            1:  SELECT mi_idx.info,
-                       t.title
-                FROM info_type AS it,
-                     keyword AS k,
-                     movie_info_idx AS mi_idx,
+            1:  SELECT t.title
+                FROM keyword AS k,
+                     movie_info AS mi,
                      movie_keyword AS mk,
                      title AS t
-                WHERE it.info = "rating"
-                  AND k.keyword LIKE "%sequel%"
-                  AND mi_idx.info > "5.0"
-                  AND t.production_year > 2005
-                  AND t.id = mi_idx.movie_id
+                WHERE k.keyword LIKE "%sequel%"
+                  AND mi.info = "Bulgaria"
+                  AND t.production_year > 2010
+                  AND t.id = mi.movie_id
                   AND t.id = mk.movie_id
-                  AND mk.movie_id = mi_idx.movie_id
-                  AND k.id = mk.keyword_id
-                  AND it.id = mi_idx.info_type_id;
+                  AND k.id = mk.keyword_id;

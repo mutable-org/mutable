@@ -234,38 +234,68 @@ if __name__ == "__main__":
     if __debug__:
         print("Configuration:", config)
 
-    #q1a = q_def.create_q1a()
-    #create_injected_cardinalities(q1a, "q1a_small", config)
+    # q1a = q_def.create_q1a()
+    # create_injected_cardinalities(q1a, "q1a", config)
 
-    #q2a = q_def.create_q2a()
-    #create_injected_cardinalities(q2a, "q2a", config)
+    q1a = q_def.create_q1a(True)
+    create_injected_cardinalities(q1a, "q1a_acyclic", config)
 
-    #q3b = q_def.create_q3b()
-    #create_injected_cardinalities(q3b, "q3b", config)
+    # q2a = q_def.create_q2a()
+    # create_injected_cardinalities(q2a, "q2a", config)
 
-    #q4a = q_def.create_q4a()
-    #create_injected_cardinalities(q4a, "q4a", config)
+    q2a = q_def.create_q2a(True)
+    create_injected_cardinalities(q2a, "q2a_acyclic", config)
 
-    #q5b = q_def.create_q5b()
-    #create_injected_cardinalities(q5b, "q5b", config)
+    # q3b = q_def.create_q3b()
+    # create_injected_cardinalities(q3b, "q3b", config)
 
-    #q6a = q_def.create_q6a()
-    #create_injected_cardinalities(q6a, "q6a", config)
+    q3b = q_def.create_q3b(True)
+    create_injected_cardinalities(q3b, "q3b_acyclic", config)
 
-   # q7b = q_def.create_q7b()
-   # create_injected_cardinalities(q7b, "q7b", config)
+    # q4a = q_def.create_q4a()
+    # create_injected_cardinalities(q4a, "q4a", config)
 
-   # q8d = q_def.create_q8d()
-   # create_injected_cardinalities(q8d, "q8d", config)
+    q4a = q_def.create_q4a(True)
+    create_injected_cardinalities(q4a, "q4a_acyclic", config)
+
+    # q5b = q_def.create_q5b()
+    # create_injected_cardinalities(q5b, "q5b", config)
+
+    q5b = q_def.create_q5b(True)
+    create_injected_cardinalities(q5b, "q5b_acyclic", config)
+
+    # q6a = q_def.create_q6a()
+    # create_injected_cardinalities(q6a, "q6a", config)
+
+    # q7b = q_def.create_q7b()
+    # create_injected_cardinalities(q7b, "q7b", config)
+
+    q7b = q_def.create_q7b(True)
+    create_injected_cardinalities(q7b, "q7_acyclic", config)
+
+    # q8d = q_def.create_q8d()
+    # create_injected_cardinalities(q8d, "q8d", config)
 
     q9b = q_def.create_q9b()
     create_injected_cardinalities(q9b, "q9b", config)
 
+    q9b = q_def.create_q9b(True)
+    create_injected_cardinalities(q9b, "q9b_acyclic", config)
+
     q10a = q_def.create_q10a()
     create_injected_cardinalities(q10a, "q10a", config)
+
+    q10a = q_def.create_q10a(True)
+    create_injected_cardinalities(q10a, "q10a_acyclic", config)
 
     q13a = q_def.create_q13a()
     create_injected_cardinalities(q13a, "q13a", config)
 
+    q13a = q_def.create_q13a(True)
+    create_injected_cardinalities(q13a, "q13a_acyclic", config)
+
     q17a = q_def.create_q17a()
     create_injected_cardinalities(q17a, "q17a", config)
+
+    q17a = q_def.create_q17a(True)
+    create_injected_cardinalities(q17a, "q17a_acyclic", config)

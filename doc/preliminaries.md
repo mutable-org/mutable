@@ -28,9 +28,6 @@ Below is a list of **mandatory** dependencies, that **must be installed**:
 
 - Boost libraries and development header files.
     - On ArchLinux: `pacman -S boost`
-- Graphviz development headers
-    - Make sure `gvc.h` is found in one your system include directories.
-    - On ArchLinux: `pacman -S graphviz`
 
 ### Optional Dependencies
 

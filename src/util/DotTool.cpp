@@ -2,9 +2,7 @@
 
 #include <mutable/util/fn.hpp>
 #include <mutable/util/macro.hpp>
-#include <cstdio>
 #include <fstream>
-#include <graphviz/gvc.h>
 #include <iostream>
 #include <sstream>
 
@@ -19,6 +17,19 @@
 
 using namespace m;
 
+// POD type forward declarations
+struct GVC_t;
+struct Agraph_t;
+struct graph_t;
+
+// function declarations: add the functions that you need here and to the `SYMBOLS` X macro
+static int(*agclose)(Agraph_t*);
+static Agraph_t*(*agmemread)(const char*);
+static GVC_t*(*gvContext)();
+static int(*gvFreeContext)(GVC_t*);
+static int(*gvFreeLayout)(GVC_t*, graph_t*);
+static int(*gvLayout)(GVC_t*, graph_t*, const char*);
+static int(*gvRenderFilename)(GVC_t*, graph_t*, const char*, const char*);
 
 #define SYMBOLS(X) \
     X(agclose) \
@@ -29,18 +40,16 @@ using namespace m;
     X(gvLayout) \
     X(gvRenderFilename)
 
-#define DECLSYM(SYM) static decltype(SYM) *sym_##SYM;
-#define LOADSYM(SYM) { \
-    sym_##SYM = (decltype(SYM)*)(dlsym(libgraphviz, #SYM)); \
-}
+#define LOADSYM(SYM) SYM = (decltype(SYM))(dlsym(libgraphviz, #SYM));
+
 #if __linux
 static constexpr const char * LIB_GRAPHVIZ = "libgvc.so";
 #elif __APPLE__
 static constexpr const char * LIB_GRAPHVIZ = "libgvc.dylib";
 #endif
+
 static void *libgraphviz;
 static GVC_t *gvc;
-SYMBOLS(DECLSYM);
 
 DotTool::DotTool(Diagnostic &diag)
     : diag(diag)
@@ -54,7 +63,7 @@ DotTool::DotTool(Diagnostic &diag)
         if (libgraphviz) {
             /* Load the required symbols from the shared object. */
             SYMBOLS(LOADSYM);
-            gvc = sym_gvContext();
+            gvc = gvContext();
         }
     }
 #endif
@@ -64,11 +73,11 @@ int DotTool::render_to_pdf(const char *path_to_pdf, const char *algo)
 {
     /*----- Render the dot graph with graphviz. ----------------------------------------------------------------------*/
     auto dotstr = stream_.str();
-    Agraph_t *G = M_notnull(sym_agmemread(dotstr.c_str()));
-    sym_gvLayout(gvc, G, algo);
-    auto ret = sym_gvRenderFilename(gvc, G, "pdf", path_to_pdf);
-    sym_gvFreeLayout(gvc, G);
-    sym_agclose(G);
+    Agraph_t *G = M_notnull(agmemread(dotstr.c_str()));
+    gvLayout(gvc, (graph_t*) G, algo);
+    auto ret = gvRenderFilename(gvc, (graph_t*) G, "pdf", path_to_pdf);
+    gvFreeLayout(gvc, (graph_t*) G);
+    agclose(G);
     return ret;
 }
 

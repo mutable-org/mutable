@@ -21,7 +21,7 @@ data:
         attributes:
             'id': 'INT NOT NULL'
             'person_id': 'INT NOT NULL'
-            'name': 'CHAR 218 NOT NULL'
+            'name': 'CHAR 32  NOT NULL'
             'imdb_index': 'CHAR 12'
             'name_pcode_cf': 'CHAR 5'
             'name_pcode_nf': 'CHAR 5'
@@ -73,7 +73,7 @@ data:
         header: 0
         attributes:
           'id': 'INT NOT NULL'
-          'name': 'CHAR 106 NOT NULL'
+          'name': 'CHAR 32  NOT NULL'
           'imdb_index': 'CHAR 12'
           'imdb_id': 'INT'
           'gender': 'CHAR 1'
@@ -99,7 +99,7 @@ data:
         header: 0
         attributes:
             'id': 'INT NOT NULL'
-            'title': 'CHAR 334 NOT NULL'
+            'title': 'CHAR 32  NOT NULL'
             'imdb_index': 'CHAR 12'
             'kind_id': 'INT NOT NULL'
             'production_year': 'INT'
@@ -124,22 +124,30 @@ systems:
             'Single-Table':
               args: >-
                 --backend WasmV8
-              pattern: '^Execute query:.*'
+              pattern:
+                Optimization Time (logical): '^Compute the logical query plan:.*'
+                Execution Time: '^Execute query:.*'
             'RESULTDB, NoOpt':
                 args: >-
                   --result-db
-                pattern: '^Execute query:.*'
+                pattern:
+                  Optimization Time (logical): '^Compute the logical query plan:.*'
+                  Execution Time: '^Execute query:.*'
             'RESULTDB, Opt, NoGreedyCuts':
                 args: >-
                   --result-db
                   --optimize-result-db
-                pattern: '^Execute query:.*'
+                pattern:
+                  Optimization Time (logical): '^Compute the logical query plan:.*'
+                  Execution Time: '^Execute query:.*'
             'RESULTDB, Opt, GreedyCuts':
               args: >-
                 --result-db
                 --optimize-result-db
                 --greedy-cuts
-              pattern: '^Execute query:.*'
+              pattern:
+                Optimization Time (logical): '^Compute the logical query plan:.*'
+                Execution Time: '^Execute query:.*'
         cases:
             1:  SELECT n.name,
                        t.title
@@ -151,10 +159,8 @@ systems:
                      name AS n,
                      person_info AS pi,
                      title AS t
-                WHERE an.name LIKE "%a%"
-                  AND it.info = "mini biography"
+                WHERE it.info = "mini biography"
                   AND lt.link = "features"
-                  AND n.name_pcode_cf LIKE "D%"
                   AND n.gender= "m"
                   AND pi.note = "Volker Boehm"
                   AND t.production_year >= 1980

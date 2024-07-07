@@ -4,9 +4,7 @@ def create_q1a(acyclic=False):
     ### Relations
     company_type = Relation("company_type", "ct", ["kind", "id"], ["ct.kind = 'production companies'"])
     info_type = Relation("info_type", "it", ["info", "id"], ["it.info = 'top 250 rank'"])
-    movie_companies = Relation("movie_companies", "mc", ["company_type_id", "movie_id", "note"],
-                               ["NOT (mc.note LIKE '%(as Metro-Goldwyn-Mayer Pictures)%')",
-                                "(mc.note like '%(co-production)%' OR mc.note LIKE '%(presents)%')"], ["note"])
+    movie_companies = Relation("movie_companies", "mc", ["company_type_id", "movie_id", "note"], projections=["note"])
     movie_info_idx = Relation("movie_info_idx", "mi_idx", ["movie_id", "info_type_id"])
     title = Relation("title", "t", ["id", "title", "production_year"], projections=["title", "production_year"])
     relations = [company_type, info_type, movie_companies, movie_info_idx, title]
@@ -45,7 +43,7 @@ def create_q2a(acyclic=False):
 
 def create_q3b(acyclic=False):
     ### Relations
-    keyword = Relation("keyword", "k", ["keyword", "id"], ["k.keyword LIKE '%sequel%'"])
+    keyword = Relation("keyword", "k", ["keyword", "id"])
     movie_info = Relation("movie_info", "mi", ["info", "movie_id"], ["mi.info = 'Bulgaria'"])
     movie_keyword = Relation("movie_keyword", "mk", ["movie_id", "keyword_id"])
     title = Relation("title", "t", ["id", "title", "production_year"], ["t.production_year > 2010"], ["title"])
@@ -65,7 +63,7 @@ def create_q3b(acyclic=False):
 def create_q4a(acyclic=False):
     ### Relations
     info_type = Relation("info_type", "it", ["info", "id"], ["it.info = 'rating'"])
-    keyword = Relation("keyword", "k", ["keyword", "id"], ["k.keyword LIKE '%sequel%'"])
+    keyword = Relation("keyword", "k", ["keyword", "id"])
     movie_info_idx = Relation("movie_info_idx", "mi_idx", ["info", "movie_id", "info_type_id"], ["mi_idx.info > '5.0'"],
                               ["info"])
     movie_keyword = Relation("movie_keyword", "mk", ["movie_id", "keyword_id"])
@@ -88,10 +86,8 @@ def create_q5b(acyclic=False):
     ### Relations
     company_type = Relation("company_type", "ct", ["kind", "id"], ["ct.kind = 'production companies'"])
     info_type = Relation("info_type", "it", ["id"])
-    movie_companies = Relation("movie_companies", "mc", ["company_type_id", "movie_id", "note"],
-                               filters=["mc.note LIKE '%(VSHS)%'", "mc.note LIKE '%(USA)%'", "mc.note LIKE '%(1994)%'"])
-    movie_info = Relation("movie_info", "mi", ["info", "movie_id", "info_type_id"],
-                          filters=["(mi.info = 'USA' OR mi.info = 'America')"])
+    movie_companies = Relation("movie_companies", "mc", ["company_type_id", "movie_id", "note"])
+    movie_info = Relation("movie_info", "mi", ["info", "movie_id", "info_type_id"])
     title = Relation("title", "t", ["id", "title", "production_year"], ["t.production_year > 2010"], ["title"])
     relations = [company_type, info_type, movie_companies, movie_info, title]
 
@@ -113,7 +109,7 @@ def create_q6a(acyclic=False):
     keyword = Relation("keyword", "k", ["keyword", "id"], filters=["k.keyword = 'marvel-cinematic-universe'"],
                        projections=["keyword"])
     movie_keyword = Relation("movie_keyword", "mk", ["movie_id", "keyword_id"])
-    name = Relation("name", "n", ["id", "name"], filters=["n.name LIKE '%Downey%Robert%'"], projections=["name"])
+    name = Relation("name", "n", ["id", "name"], projections=["name"])
     title = Relation("title", "t", ["id", "title", "production_year"], filters=["t.production_year > 2010"],
                      projections=["title"])
     relations = [cast_info, keyword, movie_keyword, name, title]
@@ -132,13 +128,12 @@ def create_q6a(acyclic=False):
 
 def create_q7b(acyclic=False):
     ### Relations
-    aka_name = Relation("aka_name", "an", ["name", "person_id"], filters=["an.name LIKE '%a%'"])
+    aka_name = Relation("aka_name", "an", ["name", "person_id"])
     cast_info = Relation("cast_info", "ci", ["person_id", "movie_id"])
     info_type = Relation("info_type", "it", ["info", "id"], filters=["it.info = 'mini biography'"])
     link_type = Relation("link_type", "lt", ["id", "link"], filters=["lt.link = 'features'"])
     movie_link = Relation("movie_link", "ml", ["linked_movie_id", "link_type_id"])
-    name = Relation("name", "n", ["id", "gender", "name_pcode_cf"],
-                    filters=["n.name_pcode_cf LIKE 'D%'", "n.gender = 'm'"])
+    name = Relation("name", "n", ["id", "gender", "name_pcode_cf"])
     person_info = Relation("person_info", "pi", ["person_id", "note", "info_type_id"],
                            filters=["pi.note = 'Volker Boehm'"])
     title = Relation("title", "t", ["id", "title"], filters=["t.production_year >= 1980", "t.production_year <= 1984"],
@@ -195,10 +190,8 @@ def create_q9b(acyclic=False):
     cast_info = Relation("cast_info", "ci", ["person_id", "movie_id", "role_id", "person_role_id", "note"],
                          filters=["ci.note = '(voice)'"])
     company_name = Relation("company_name", "cn", ["country_code", "id"], filters=["cn.country_code = '[us]'"])
-    movie_companies = Relation("movie_companies", "mc", ["company_id", "movie_id", "note"],
-                               filters=["mc.note LIKE '%(200%)%'", "(mc.note LIKE '%(USA)%' OR mc.note LIKE '%(worldwide)%')"])
-    name = Relation("name", "n", ["id", "name", "gender"], filters=["n.gender = 'f'", "n.name LIKE '%Angel%'"],
-                    projections=["name"])
+    movie_companies = Relation("movie_companies", "mc", ["company_id", "movie_id", "note"])
+    name = Relation("name", "n", ["id", "name", "gender"], projections=["name"])
     role_type = Relation("role_type", "rt", ["role", "id"], filters=["rt.role = 'actress'"])
     title = Relation("title", "t", ["id", "title", "production_year"],
                      filters=["t.production_year >= 2007", "t.production_year <= 2010"], projections=["title"])
@@ -224,8 +217,7 @@ def create_q9b(acyclic=False):
 def create_q10a(acyclic=False):
     ### Relations
     char_name = Relation("char_name", "chn", ["id", "name"], projections=["name"])
-    cast_info = Relation("cast_info", "ci", ["movie_id", "role_id", "person_role_id", "note"],
-                         filters=["ci.note LIKE '%(voice)%'", "ci.note LIKE '%(uncredited)%'"])
+    cast_info = Relation("cast_info", "ci", ["movie_id", "role_id", "person_role_id", "note"])
     company_name = Relation("company_name", "cn", ["country_code", "id"], filters=["cn.country_code = '[ru]'"])
     company_type = Relation("company_type", "ct", ["id"])
     movie_companies = Relation("movie_companies", "mc", ["company_id", "movie_id", "company_type_id"])
@@ -288,7 +280,7 @@ def create_q17a(acyclic=False):
     keyword = Relation("keyword", "k", ["keyword", "id"], ["k.keyword = 'character-name-in-title'"])
     movie_companies = Relation("movie_companies", "mc", ["company_id", "movie_id"])
     movie_keyword = Relation("movie_keyword", "mk", ["movie_id", "keyword_id"])
-    name = Relation("name", "n", ["id", "name"], filters=["n.name LIKE 'B%'"], projections=["name"])
+    name = Relation("name", "n", ["id", "name"], projections=["name"])
     title = Relation("title", "t", ["id"])
     relations = [cast_info, company_name, keyword, movie_companies, movie_keyword, name, title]
 

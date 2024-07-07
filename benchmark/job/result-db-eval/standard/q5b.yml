@@ -58,7 +58,7 @@ data:
         header: 0
         attributes:
             'id': 'INT NOT NULL'
-            'title': 'CHAR 334 NOT NULL'
+            'title': 'CHAR 32  NOT NULL'
             'imdb_index': 'CHAR 12'
             'kind_id': 'INT NOT NULL'
             'production_year': 'INT'
@@ -82,22 +82,30 @@ systems:
             'Single-Table':
               args: >-
                 --backend WasmV8
-              pattern: '^Execute query:.*'
+              pattern:
+                Optimization Time (logical): '^Compute the logical query plan:.*'
+                Execution Time: '^Execute query:.*'
             'RESULTDB, NoOpt':
                 args: >-
                   --result-db
-                pattern: '^Execute query:.*'
+                pattern:
+                  Optimization Time (logical): '^Compute the logical query plan:.*'
+                  Execution Time: '^Execute query:.*'
             'RESULTDB, Opt, NoGreedyCuts':
                 args: >-
                   --result-db
                   --optimize-result-db
-                pattern: '^Execute query:.*'
+                pattern:
+                  Optimization Time (logical): '^Compute the logical query plan:.*'
+                  Execution Time: '^Execute query:.*'
             'RESULTDB, Opt, GreedyCuts':
               args: >-
                 --result-db
                 --optimize-result-db
                 --greedy-cuts
-              pattern: '^Execute query:.*'
+              pattern:
+                Optimization Time (logical): '^Compute the logical query plan:.*'
+                Execution Time: '^Execute query:.*'
         cases:
             1:  SELECT t.title
                 FROM company_type AS ct,
@@ -106,11 +114,6 @@ systems:
                      movie_info AS mi,
                      title AS t
                 WHERE ct.kind = "production companies"
-                  AND mc.note LIKE "%(VHS)%"
-                  AND mc.note LIKE "%(USA)%"
-                  AND mc.note LIKE "%(1994)%"
-                  AND (mi.info = "USA" OR
-                       mi.info = "America")
                   AND t.production_year > 2010
                   AND t.id = mi.movie_id
                   AND t.id = mc.movie_id

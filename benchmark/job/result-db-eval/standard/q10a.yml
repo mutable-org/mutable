@@ -20,7 +20,7 @@ data:
       header: 0
       attributes:
         'id': 'INT NOT NULL'
-        'name': 'CHAR 218 NOT NULL'
+        'name': 'CHAR 32  NOT NULL'
         'imdb_index': 'CHAR 2'
         'imdb_id': 'INT'
         'name_pcode_nf': 'CHAR 5'
@@ -80,7 +80,7 @@ data:
             'id': 'INT NOT NULL'
             'info': 'CHAR 32 NOT NULL'
     'role_type':
-        file: 'benchmark/job/data/person_info.csv'
+        file: 'benchmark/job/data/role_type.csv'
         format: 'csv'
         delimiter: ','
         header: 0
@@ -94,7 +94,7 @@ data:
         header: 0
         attributes:
             'id': 'INT NOT NULL'
-            'title': 'CHAR 334 NOT NULL'
+            'title': 'CHAR 32  NOT NULL'
             'imdb_index': 'CHAR 12'
             'kind_id': 'INT NOT NULL'
             'production_year': 'INT'
@@ -119,22 +119,30 @@ systems:
             'Single-Table':
               args: >-
                 --backend WasmV8
-              pattern: '^Execute query:.*'
+              pattern:
+                Optimization Time (logical): '^Compute the logical query plan:.*'
+                Execution Time: '^Execute query:.*'
             'RESULTDB, NoOpt':
                 args: >-
                   --result-db
-                pattern: '^Execute query:.*'
+                pattern:
+                  Optimization Time (logical): '^Compute the logical query plan:.*'
+                  Execution Time: '^Execute query:.*'
             'RESULTDB, Opt, NoGreedyCuts':
                 args: >-
                   --result-db
                   --optimize-result-db
-                pattern: '^Execute query:.*'
+                pattern:
+                  Optimization Time (logical): '^Compute the logical query plan:.*'
+                  Execution Time: '^Execute query:.*'
             'RESULTDB, Opt, GreedyCuts':
               args: >-
                 --result-db
                 --optimize-result-db
                 --greedy-cuts
-              pattern: '^Execute query:.*'
+              pattern:
+                Optimization Time (logical): '^Compute the logical query plan:.*'
+                Execution Time: '^Execute query:.*'
         cases:
             1:  SELECT chn.name,
                        t.title
@@ -145,9 +153,7 @@ systems:
                      movie_companies AS mc,
                      role_type AS rt,
                      title AS t
-                WHERE ci.note LIKE "%(voice)%"
-                  AND ci.note LIKE "%(uncredited)%"
-                  AND cn.country_code = "[ru]"
+                WHERE cn.country_code = "[ru]"
                   AND rt.role = "actor"
                   AND t.production_year > 2005
                   AND t.id = mc.movie_id

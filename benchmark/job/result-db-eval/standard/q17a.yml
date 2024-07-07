@@ -33,8 +33,8 @@ data:
       header: 0                                         # Whether the file has a header line. 1=true, 0=false. Optional, defaults to 0.
       attributes: # Map from attribute name to its type.
         'id': 'INT NOT NULL'
-        'name': 'CHAR 74 NOT NULL'
-        'country_code': 'CHAR 255'
+        'name': 'CHAR 32  NOT NULL'
+        'country_code': 'CHAR 32 '
         'imdb_id': 'INT'
         'name_pcode_nf': 'CHAR 5'
         'name_pcode_sf': 'CHAR 5'
@@ -46,7 +46,7 @@ data:
       header: 0
       attributes:
         'id': 'INT NOT NULL'
-        'keyword': 'CHAR 74 NOT NULL'
+        'keyword': 'CHAR 32  NOT NULL'
         'phonetic_code': 'CHAR 5'
     'movie_companies':
       file: 'benchmark/job/data/movie_companies.csv'
@@ -58,7 +58,7 @@ data:
         'movie_id': 'INT NOT NULL'
         'company_id': 'INT NOT NULL'
         'company_type_id': 'INT NOT NULL'
-        'note': 'CHAR 208'
+        'note': 'CHAR 32 '
     'movie_keyword':
       file: 'benchmark/job/data/movie_keyword.csv'
       format: 'csv'
@@ -75,7 +75,7 @@ data:
         header: 0
         attributes:
           'id': 'INT NOT NULL'
-          'name': 'CHAR 106 NOT NULL'
+          'name': 'CHAR 32  NOT NULL'
           'imdb_index': 'CHAR 12'
           'imdb_id': 'INT'
           'gender': 'CHAR 1'
@@ -90,7 +90,7 @@ data:
         header: 0
         attributes:
             'id': 'INT NOT NULL'
-            'title': 'CHAR 334 NOT NULL'
+            'title': 'CHAR 32 NOT NULL'
             'imdb_index': 'CHAR 12'
             'kind_id': 'INT NOT NULL'
             'production_year': 'INT'
@@ -115,22 +115,30 @@ systems:
             'Single-Table':
               args: >-
                 --backend WasmV8
-              pattern: '^Execute query:.*'
+              pattern:
+                Optimization Time (logical): '^Compute the logical query plan:.*'
+                Execution Time: '^Execute query:.*'
             'RESULTDB, NoOpt':
                 args: >-
                   --result-db
-                pattern: '^Execute query:.*'
+                pattern:
+                  Optimization Time (logical): '^Compute the logical query plan:.*'
+                  Execution Time: '^Execute query:.*'
             'RESULTDB, Opt, NoGreedyCuts':
                 args: >-
                   --result-db
                   --optimize-result-db
-                pattern: '^Execute query:.*'
+                pattern:
+                  Optimization Time (logical): '^Compute the logical query plan:.*'
+                  Execution Time: '^Execute query:.*'
             'RESULTDB, Opt, GreedyCuts':
               args: >-
                 --result-db
                 --optimize-result-db
                 --greedy-cuts
-              pattern: '^Execute query:.*'
+              pattern:
+                Optimization Time (logical): '^Compute the logical query plan:.*'
+                Execution Time: '^Execute query:.*'
         cases:
             1:
               SELECT n.name
@@ -143,7 +151,6 @@ systems:
                     title AS t
               WHERE cn.country_code = "[us]"
                     AND k.keyword = "character-name-in-title"
-                    AND n.name LIKE "B%"
                     AND n.id = ci.person_id
                     AND ci.movie_id = t.id
                     AND t.id = mk.movie_id

@@ -101,7 +101,7 @@ data:
           'surname_pcode': 'CHAR 5'
           'md5sum': 'CHAR 32'
     'role_type':
-        file: 'benchmark/job/data/person_info.csv'
+        file: 'benchmark/job/data/role_type.csv'
         format: 'csv'
         delimiter: ','
         header: 0
@@ -135,11 +135,14 @@ systems:
           --backend WasmV8
           --no-simd
           --cardinality-estimator Injected
+          --insist-no-rehashing
+          --hash-table-implementation Chained
           --use-cardinality-file benchmark/job/result-db-eval/standard/q9b_injected_cardinalities.json
         configurations:
             'Single-Table':
               args: >-
                 --backend WasmV8
+                --decompose
               pattern: '^Execute query:.*'
             'RESULTDB, NoOpt':
                 args: >-
@@ -171,11 +174,7 @@ systems:
                      title AS t
                 WHERE ci.note = "(voice)"
                   AND cn.country_code = "[us]"
-                  AND mc.note LIKE "%(200%)%"
-                  AND (mc.note LIKE "%(USA)%"
-                       OR mc.note LIKE "%(worldwide)%")
                   AND n.gender = "f"
-                  AND n.name LIKE "%Angel%"
                   AND rt.role = "actress"
                   AND t.production_year >= 2007
                   AND t.production_year <= 2010

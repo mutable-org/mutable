@@ -116,7 +116,7 @@ template<typename PlanTable>
 double
 WeakCardinalityHeuristic::operator()(estimate_tag, const PlanTable &PT, Subproblem left, Subproblem right, const QueryGraph &G, const CardinalityEstimator &CE) const
 {
-    double decompose_costs =  (estimate_decompose_costs(G, PT, CE, left) + estimate_decompose_costs(G, PT, CE, right));
+    double decompose_costs = 2 * (estimate_decompose_costs(G, PT, CE, left) + estimate_decompose_costs(G, PT, CE, right));
     auto reduction_costs = [&](Subproblem main, Subproblem other) {
         auto main_neighbors = G.adjacency_matrix().neighbors(main);
         auto main_model = CE.copy(*PT[main].model);
@@ -133,11 +133,10 @@ WeakCardinalityHeuristic::operator()(estimate_tag, const PlanTable &PT, Subprobl
             if (other_card < neighbor.second) {
                 main_model = CE.estimate_semi_join(G, *main_model, *PT[other].model, {});
                 other_card = std::numeric_limits<std::size_t>::max();
-                costs += CE.predict_cardinality(*main_model) + main_model_red_card;
+            } else {
+                main_model = CE.estimate_semi_join(G, *main_model, *models.find(neighbor.first)->second, {});
             }
-            main_model = CE.estimate_semi_join(G, *main_model, *models.find(neighbor.first)->second, {});
         }
-        if (other_card != std::numeric_limits<std::size_t>::max()) costs += CE.predict_cardinality(*main_model) + main_model_red_card;
         return costs;
     };
     return decompose_costs + reduction_costs(left, right) + reduction_costs(right, left);

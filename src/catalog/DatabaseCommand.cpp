@@ -90,22 +90,20 @@ void QueryDatabase::execute(Diagnostic &diag)
 
     /* Set logical optimizer to use. */
     std::unique_ptr<Producer> producer;
+    auto logical_plan_computation = C.timer().create_timing("Compute the logical query plan");
     bool result_db_compatible = true;
     if (Options::Get().result_db) {
-        auto logical_plan_computation = C.timer().create_timing("Compute the logical semi-join reduction query plan");
         Optimizer_ResultDB Opt;
         std::tie(producer, result_db_compatible) = Opt(*graph_);
         for (auto &post_opt : C.logical_post_optimizations())
             producer = (*post_opt.second).operator()(std::move(producer));
-        logical_plan_computation.stop();
     } else {
-        auto logical_plan_computation = C.timer().create_timing("Compute the logical query plan");
         Optimizer Opt(C.plan_enumerator(), C.cost_function());
         producer = Opt(*graph_);
         for (auto &post_opt : C.logical_post_optimizations())
             producer = (*post_opt.second).operator()(std::move(producer));
-        logical_plan_computation.stop();
     }
+    logical_plan_computation.stop();
     M_insist(bool(producer), "logical plan must have been computed");
 
     if (Options::Get().plan)

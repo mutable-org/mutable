@@ -154,7 +154,7 @@ Optimizer::compute_projections_required_for_order_by(const std::vector<projectio
 
 /*======================================================================================================================
  * Optimizer_ResultDB
- *====================================================================================================================*/
+ *==============================================================    return PT.======================================================*/
 
 double SemiJoinCostFunction::estimate_semi_join_costs(const CardinalityEstimator &CE, const DataModel &left, const DataModel &right)
 {
@@ -220,7 +220,7 @@ void TreeEnumerator::compute_cardinality_order(const QueryGraph &G, const Cardin
     std::sort(card_order.begin(), card_order.end(), cmp);
 }
 
-std::size_t TreeEnumerator::find_best_root(QueryGraph &G, const CardinalityEstimator &CE, SemiJoinCostFunction &SJ, card_order_t card_orders[], std::vector<std::unique_ptr<DataModel>> &base_models)
+std::pair<std::size_t, double> TreeEnumerator::find_best_root(QueryGraph &G, const CardinalityEstimator &CE, SemiJoinCostFunction &SJ, card_order_t card_orders[], std::vector<std::unique_ptr<DataModel>> &base_models)
 {
     std::vector<semi_join_order_t> semi_join_reduction_order;
     double lowest_costs = std::numeric_limits<double>::infinity();
@@ -268,7 +268,7 @@ std::size_t TreeEnumerator::find_best_root(QueryGraph &G, const CardinalityEstim
         }
     }
 
-    return best_root;
+    return std::make_pair(best_root, lowest_costs);
 }
 
 DataSource & Optimizer_ResultDB_utils::get_data_source_with_highest_degree(QueryGraph &G)
@@ -507,7 +507,7 @@ Optimizer_ResultDB_utils::compute_semi_join_reduction_order(QueryGraph &G)
     return semi_join_reduction_order;
 }
 
-std::vector<Optimizer_ResultDB::semi_join_order_t>
+std::pair<std::vector<Optimizer_ResultDB::semi_join_order_t>, double>
 Optimizer_ResultDB_utils::enumerate_semi_join_reduction_order(QueryGraph &G, const CardinalityEstimator &CE, std::vector<std::unique_ptr<DataModel>> &base_models)
 {
     auto &C = Catalog::Get();
@@ -520,7 +520,7 @@ Optimizer_ResultDB_utils::enumerate_semi_join_reduction_order(QueryGraph &G, con
 
     auto tree_enumerator = TreeEnumerator(G.num_sources());
 
-    auto best_root = tree_enumerator.find_best_root(G, CE, SJ, card_orders, base_models);
+    auto [best_root, costs] = tree_enumerator.find_best_root(G, CE, SJ, card_orders, base_models);
     std::vector<Optimizer_ResultDB::semi_join_order_t> semi_join_reduction_order;
 
     /* Create semi-join order */
@@ -540,7 +540,7 @@ Optimizer_ResultDB_utils::enumerate_semi_join_reduction_order(QueryGraph &G, con
 
     construct_semi_join_order(best_root, best_root, construct_semi_join_order);
 
-    return semi_join_reduction_order;
+    return std::make_pair(semi_join_reduction_order, costs);
 
 }
 
@@ -674,7 +674,7 @@ void Optimizer_ResultDB_utils::visit_bc_forest(bc_forest_t &bc_forest, std::vect
     }
 }
 
-std::unique_ptr<Producer*[]> Optimizer_ResultDB_utils::compute_and_solve_biconnected_components(QueryGraph &G, std::vector<std::unique_ptr<DataModel>> &base_models)
+std::pair<std::unique_ptr<Producer*[]>, double> Optimizer_ResultDB_utils::compute_and_solve_biconnected_components(QueryGraph &G, std::vector<std::unique_ptr<DataModel>> &base_models)
 {
     std::vector<Subproblem> blocks;
     Subproblem cut_vertices = Subproblem();
@@ -733,7 +733,7 @@ std::unique_ptr<Producer*[]> Optimizer_ResultDB_utils::compute_and_solve_biconne
 
     std::size_t rel_no = singletons.size() + complete_join_folds.size() + 2 * folding_problems.size();
     auto final_source_plans = std::make_unique<Producer*[]>(rel_no);
-    optimize(G, updated_folding_problems, final_source_plans, base_models);
+    auto costs = optimize(G, updated_folding_problems, final_source_plans, base_models);
 
     std::vector<fold_t> final_folds;
 
@@ -748,10 +748,10 @@ std::unique_ptr<Producer*[]> Optimizer_ResultDB_utils::compute_and_solve_biconne
     }
 
     fold_query_graph(G, final_folds);
-    return final_source_plans;
+    return std::make_pair(std::move(final_source_plans), costs);
 }
 
-void Optimizer_ResultDB_utils::optimize(QueryGraph &G, std::vector<Subproblem> &folding_problems, std::unique_ptr<Producer*[]> &source_plans, std::vector<std::unique_ptr<DataModel>> &base_models)
+double Optimizer_ResultDB_utils::optimize(QueryGraph &G, std::vector<Subproblem> &folding_problems, std::unique_ptr<Producer*[]> &source_plans, std::vector<std::unique_ptr<DataModel>> &base_models)
 {
     switch (Options::Get().plan_table_type)
     {
@@ -760,28 +760,24 @@ void Optimizer_ResultDB_utils::optimize(QueryGraph &G, std::vector<Subproblem> &
              * Currently a simple heuristic based on the number of data sources.
              * TODO: Consider join edges too.  Eventually consider #CSGs. */
             if (G.num_sources() <= 15) {
-                optimize_with_plantable<PlanTableSmallOrDense>(G, folding_problems, source_plans, base_models);
-                return;
+                return optimize_with_plantable<PlanTableSmallOrDense>(G, folding_problems, source_plans, base_models);
             } else {
-                optimize_with_plantable<PlanTableLargeAndSparse>(G, folding_problems, source_plans, base_models);
-                return;
+                return optimize_with_plantable<PlanTableLargeAndSparse>(G, folding_problems, source_plans, base_models);
             }
         }
 
         case Options::PT_SmallOrDense: {
-            optimize_with_plantable<PlanTableSmallOrDense>(G, folding_problems, source_plans, base_models);
-            return;
+            return optimize_with_plantable<PlanTableSmallOrDense>(G, folding_problems, source_plans, base_models);
         }
 
         case Options::PT_LargeAndSparse: {
-            optimize_with_plantable<PlanTableLargeAndSparse>(G, folding_problems, source_plans, base_models);
-            return;
+            return optimize_with_plantable<PlanTableLargeAndSparse>(G, folding_problems, source_plans, base_models);
         }
     }
 }
 
 template<typename PlanTable>
-void Optimizer_ResultDB_utils::optimize_with_plantable(QueryGraph &G, std::vector<Subproblem> &folding_problems, std::unique_ptr<Producer*[]> &source_plans, std::vector<std::unique_ptr<DataModel>> &base_models)
+double Optimizer_ResultDB_utils::optimize_with_plantable(QueryGraph &G, std::vector<Subproblem> &folding_problems, std::unique_ptr<Producer*[]> &source_plans, std::vector<std::unique_ptr<DataModel>> &base_models)
 {
     PlanTable PT(G);
     auto &C = Catalog::Get();
@@ -792,8 +788,10 @@ void Optimizer_ResultDB_utils::optimize_with_plantable(QueryGraph &G, std::vecto
     auto singletons = Subproblem::All(G.num_sources());
 
     std::size_t next_idx = 0;
+    double costs = 0;
     auto add_to_producers_and_models = [&](Subproblem problem) {
         source_plans[next_idx] = construct_join_order(G, PT, problem, current_source_plans);
+        costs += PT[problem].cost;
         PT[problem].model->assign_to(Subproblem::Singleton(next_idx));
         base_models.emplace_back(std::move(PT[problem].model));
         next_idx++;
@@ -812,7 +810,7 @@ void Optimizer_ResultDB_utils::optimize_with_plantable(QueryGraph &G, std::vecto
         base_models.emplace_back(std::move(PT[Subproblem::Singleton(singleton_id)].model));
         next_idx++;
     }
-
+    return costs;
 }
 
 template<typename PlanTable>
@@ -1060,12 +1058,23 @@ Optimizer_ResultDB::operator()(QueryGraph &G) const
 
     /*----- Fold the query graph and compute semi-join reduction order. -----*/
     Optimizer_ResultDB_utils::combine_joins(G); // in case there are multiple joins between two specific data sources
+
     std::unique_ptr<Producer*[]> source_plans;
     std::vector<std::unique_ptr<DataModel>> base_models;
-    auto planning_time = C.timer().create_timing("Create RESULTDB plan.");
+    std::pair<std::unique_ptr<Producer>, PlanTableEntry> st_optimized;
+    if (Options::Get().optimize_result_db) {
+        Optimizer Opt(C.plan_enumerator(), C.cost_function());
+        st_optimized = Opt.optimize(G);
+    }
+
+    double yk_costs = 0;
     if (G.is_cyclic())
     {
-        if (Options::Get().optimize_result_db) source_plans = Optimizer_ResultDB_utils::compute_and_solve_biconnected_components(G, base_models);
+        if (Options::Get().optimize_result_db) {
+            auto [plans, cycle_costs] = Optimizer_ResultDB_utils::compute_and_solve_biconnected_components(G, base_models);
+            source_plans = std::move(plans);
+            yk_costs += cycle_costs;
+        }
         else
         {
             source_plans = Optimizer_ResultDB_utils::solve_cycles_without_enum(G, base_models);
@@ -1081,9 +1090,18 @@ Optimizer_ResultDB::operator()(QueryGraph &G) const
 
     std::vector<semi_join_order_t> semi_join_reduction_order;
     if (Options::Get().optimize_result_db) {
-        semi_join_reduction_order = Optimizer_ResultDB_utils::enumerate_semi_join_reduction_order(G, CE, base_models);
+        double acyclic_costs;
+        std::tie(semi_join_reduction_order, acyclic_costs) = Optimizer_ResultDB_utils::enumerate_semi_join_reduction_order(G, CE, base_models);
+        yk_costs += acyclic_costs;
     } else {
         semi_join_reduction_order = Optimizer_ResultDB_utils::compute_semi_join_reduction_order(G);
+    }
+
+    if (st_optimized.second.cost <= yk_costs) {
+        auto decompose_op = std::make_unique<DecomposeOperator>(std::cout, std::move(G.projections()),
+                                                                std::move(G.sources()));
+        decompose_op->add_child(st_optimized.first.release());
+        return { std::move(decompose_op), true };
     }
 
 

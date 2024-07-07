@@ -1,23 +1,23 @@
 {
 "job": [
-{"relations": ["cn"], "size": 9775, "reductions": [{"right_relations": ["mk", "k", "t", "mc"], "size": 1513}]},
-{"relations": ["k"], "size": 1, "reductions": [{"right_relations": ["mc", "cn", "t", "mk"], "size": 1}]},
-{"relations": ["mc"], "size": 2609129, "reductions": [{"right_relations": ["cn"], "size": 148132}, {"right_relations": ["k", "mk", "t"], "size": 148487}, {"right_relations": ["mk", "k", "t", "cn"], "size": 7834}]},
-{"relations": ["mk"], "size": 4523930, "reductions": [{"right_relations": ["cn", "mc", "t"], "size": 1163958}, {"right_relations": ["k"], "size": 41840}, {"right_relations": ["mc", "cn", "t", "k"], "size": 4377}]},
-{"relations": ["t"], "size": 2528312, "reductions": [{"right_relations": ["mk", "k", "cn", "mc"], "size": 4377}]},
+{"relations": ["cn"], "size": 9775, "reductions": [{"right_relations": ["mk", "t", "mc", "k"], "size": 1513}]},
+{"relations": ["k"], "size": 1, "reductions": [{"right_relations": ["mc", "t", "mk", "cn"], "size": 1}]},
+{"relations": ["mc"], "size": 2609129, "reductions": [{"right_relations": ["cn"], "size": 148132}, {"right_relations": ["k", "mk", "t"], "size": 148487}, {"right_relations": ["t", "mk", "k", "cn"], "size": 7834}]},
+{"relations": ["mk"], "size": 4523930, "reductions": [{"right_relations": ["cn", "mc", "t"], "size": 1163958}, {"right_relations": ["k"], "size": 41840}, {"right_relations": ["t", "mc", "cn", "k"], "size": 4377}]},
+{"relations": ["t"], "size": 2528312, "reductions": [{"right_relations": ["mk", "cn", "mc", "k"], "size": 4377}]},
 {"relations": ["mc", "cn"], "size": 148132, "reductions": [{"right_relations": ["k", "mk", "t"], "size": 7834}]},
 {"relations": ["mk", "k"], "size": 41840, "reductions": [{"right_relations": ["cn", "mc", "t"], "size": 4377}]},
-{"relations": ["mk", "mc"], "size": 34863638, "reductions": [{"right_relations": ["cn"], "size": 2108405}, {"right_relations": ["t"], "size": 34863638}, {"right_relations": ["k"], "size": 148552}, {"right_relations": ["k", "cn"], "size": 7834}, {"right_relations": ["t", "cn"], "size": 2108405}, {"right_relations": ["t", "k"], "size": 148552}, {"right_relations": ["t", "k", "cn"], "size": 7834}]},
+{"relations": ["mk", "mc"], "size": 34863638, "reductions": [{"right_relations": ["cn"], "size": 2108405}, {"right_relations": ["t"], "size": 34863638}, {"right_relations": ["k"], "size": 148552}, {"right_relations": ["cn", "t"], "size": 2108405}, {"right_relations": ["k", "t"], "size": 148552}, {"right_relations": ["k", "cn"], "size": 7834}, {"right_relations": ["k", "cn", "t"], "size": 7834}]},
 {"relations": ["t", "mc"], "size": 2609129, "reductions": [{"right_relations": ["cn"], "size": 148132}, {"right_relations": ["k", "mk"], "size": 148487}, {"right_relations": ["k", "mk", "cn"], "size": 7834}]},
 {"relations": ["t", "mk"], "size": 4523930, "reductions": [{"right_relations": ["k"], "size": 41840}, {"right_relations": ["cn", "mc"], "size": 1163958}, {"right_relations": ["cn", "mc", "k"], "size": 4377}]},
-{"relations": ["mk", "mc", "cn"], "size": 2108405, "reductions": [{"right_relations": ["t"], "size": 2108405}, {"right_relations": ["k"], "size": 7834}, {"right_relations": ["k", "t"], "size": 7834}]},
+{"relations": ["mk", "mc", "cn"], "size": 2108405, "reductions": [{"right_relations": ["t"], "size": 2108405}, {"right_relations": ["k"], "size": 7834}, {"right_relations": ["t", "k"], "size": 7834}]},
 {"relations": ["t", "mc", "cn"], "size": 148132, "reductions": [{"right_relations": ["k", "mk"], "size": 7834}]},
-{"relations": ["mk", "mc", "k"], "size": 148552, "reductions": [{"right_relations": ["cn"], "size": 7834}, {"right_relations": ["t"], "size": 148552}, {"right_relations": ["t", "cn"], "size": 7834}]},
+{"relations": ["mk", "mc", "k"], "size": 148552, "reductions": [{"right_relations": ["cn"], "size": 7834}, {"right_relations": ["t"], "size": 148552}, {"right_relations": ["cn", "t"], "size": 7834}]},
 {"relations": ["t", "mk", "k"], "size": 41840, "reductions": [{"right_relations": ["cn", "mc"], "size": 4377}]},
-{"relations": ["t", "mk", "mc"], "size": 34863638, "reductions": [{"right_relations": ["cn"], "size": 2108405}, {"right_relations": ["k"], "size": 148552}, {"right_relations": ["k", "cn"], "size": 7834}]},
-{"relations": ["mc", "mk", "k", "cn"], "size": 7834, "reductions": [{"right_relations": ["t"], "size": 7834}]},
-{"relations": ["mk", "t", "mc", "cn"], "size": 2108405, "reductions": [{"right_relations": ["k"], "size": 7834}]},
-{"relations": ["mk", "t", "mc", "k"], "size": 148552, "reductions": [{"right_relations": ["cn"], "size": 7834}]},
-{"relations": ["mc", "mk", "k", "cn", "t"], "size": 7834, "reductions": []}
+{"relations": ["t", "mk", "mc"], "size": 34863638, "reductions": [{"right_relations": ["cn"], "size": 2108405}, {"right_relations": ["k"], "size": 148552}, {"right_relations": ["cn", "k"], "size": 7834}]},
+{"relations": ["mc", "k", "cn", "mk"], "size": 7834, "reductions": [{"right_relations": ["t"], "size": 7834}]},
+{"relations": ["mk", "mc", "cn", "t"], "size": 2108405, "reductions": [{"right_relations": ["k"], "size": 7834}]},
+{"relations": ["mk", "mc", "k", "t"], "size": 148552, "reductions": [{"right_relations": ["cn"], "size": 7834}]},
+{"relations": ["t", "mc", "k", "cn", "mk"], "size": 7834, "reductions": []}
 ]
 }

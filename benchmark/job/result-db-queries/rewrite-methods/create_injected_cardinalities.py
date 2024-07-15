@@ -10,7 +10,7 @@ from typing import Any
 from query_utility import Relation, JoinGraph
 import query_definitions as q_def
 
-OUTPUT_DIR = "benchmark/job/result-db-eval/"
+OUTPUT_DIR = "benchmark/job/result-db-eval"
 
 
 def write_to_file(output_file: str, text: str, mode: str):
@@ -19,7 +19,7 @@ def write_to_file(output_file: str, text: str, mode: str):
 
 
 def create_injected_cardinalities(
-        join_graph: JoinGraph, query_name: str, config, mode='standard'
+    join_graph: JoinGraph, query_name: str, config, mode="standard"
 ) -> None:
     # enumerate each subproblem (of sizes 1, 2, 3, ...)
     # for each subproblem, check if connected
@@ -56,7 +56,7 @@ def create_injected_cardinalities(
                 where_clause += " AND"
             for idx, join in enumerate(join_graph.get_joins(relation_set)):
                 for lhs_attr, rhs_attr in zip(
-                        join.left_attributes, join.right_attributes
+                    join.left_attributes, join.right_attributes
                 ):
                     join_predicate = f"{join.left_relation.alias}.{lhs_attr} = {join.right_relation.alias}.{rhs_attr}"
                     where_clause += f"\n\t{join_predicate}"
@@ -75,7 +75,9 @@ def create_injected_cardinalities(
                     adapted_select_clause += f"{r.alias}.{attr} AS {r.name}_{attr}, "
         return adapted_select_clause
 
-    def create_reduction(main_set: set[Relation], reducer_sets: list[set[Relation]]) -> str:
+    def create_reduction(
+        main_set: set[Relation], reducer_sets: list[set[Relation]]
+    ) -> str:
         reduction_str = ""
         reducer_views = ""
         for idx, reducer_set in enumerate(reducer_sets):
@@ -84,12 +86,8 @@ def create_injected_cardinalities(
                 reducer_from_clause,
                 reducer_where_clause,
             ) = generate_from_and_where_clause(reducer_set)
-            reducer_query = (
-                f"{reducer_select_clause}\n{reducer_from_clause}\n{reducer_where_clause};"
-            )
-            reducer_view = (
-                f"DROP VIEW IF EXISTS reducer_{idx};\nCREATE VIEW reducer_{idx} AS\n{reducer_query}\n\n"
-            )
+            reducer_query = f"{reducer_select_clause}\n{reducer_from_clause}\n{reducer_where_clause};"
+            reducer_view = f"DROP VIEW IF EXISTS reducer_{idx};\nCREATE VIEW reducer_{idx} AS\n{reducer_query}\n\n"
             reducer_views += reducer_view
 
         final_select = "SELECT COUNT(*)"
@@ -98,12 +96,16 @@ def create_injected_cardinalities(
 
         for set_idx, reducer_set in enumerate(reducer_sets):
             if set_idx == 0:
-                final_where += f"EXISTS (SELECT 1 FROM reducer_{set_idx} AS r_{set_idx}_t WHERE "
+                final_where += (
+                    f"EXISTS (SELECT 1 FROM reducer_{set_idx} AS r_{set_idx}_t WHERE "
+                )
             else:
                 final_where += f"AND EXISTS (SELECT 1 FROM reducer_{set_idx} AS r_{set_idx}_t WHERE "
             l_r_joins = join_graph.get_joins_between_left_right(reducer_set, main_set)
             for idx, join in enumerate(l_r_joins):
-                for lhs_attr, rhs_attr in zip(join.left_attributes, join.right_attributes):
+                for lhs_attr, rhs_attr in zip(
+                    join.left_attributes, join.right_attributes
+                ):
                     if join.left_relation in reducer_set:
                         left, right = f"r_{set_idx}_t", "tbr"
                     else:
@@ -140,9 +142,13 @@ def create_injected_cardinalities(
                 f"Failure during execution of `{command}` with return code {return_code}."
             )
         reduced_cardinality = completed_proc.stdout.strip()  # remove whitespaces
-        print(f"{main_set}:{reduce(lambda x, y: x | y, reducer_sets)}:{reduced_cardinality}")
+        print(
+            f"{main_set}:{reduce(lambda x, y: x | y, reducer_sets)}:{reduced_cardinality}"
+        )
 
-        reducer_relation_aliases = [r.alias for r in reduce(lambda x, y: x | y, reducer_sets)]
+        reducer_relation_aliases = [
+            r.alias for r in reduce(lambda x, y: x | y, reducer_sets)
+        ]
         reduction_str += f'"right_relations": {json.dumps(reducer_relation_aliases)}, "size": {reduced_cardinality}'
         reduction_str += "}"
         return reduction_str
@@ -153,7 +159,7 @@ def create_injected_cardinalities(
 
     cardinality_file = f"{OUTPUT_DIR}/{mode}/{query_name}_injected_cardinalities.json"
     cardinality_text = "{\n"
-    cardinality_text += '\t"job": [\n'
+    cardinality_text += '\t"large_joins": [\n'
     for i in range(n + 1):
         for subproblem in combinations(join_graph.relations, i):
             S: set[Relation] = set(subproblem)
@@ -215,7 +221,9 @@ def create_injected_cardinalities(
                         continue
                     checked_combs.add(red_comb_tuple)
                     reductions += ", {"
-                    reductions += create_reduction(S, [set(tup) for tup in red_combination])
+                    reductions += create_reduction(
+                        S, [set(tup) for tup in red_combination]
+                    )
 
             reductions += "]"
 
@@ -247,17 +255,17 @@ if __name__ == "__main__":
     if __debug__:
         print("Configuration:", config)
 
-    #q1a = q_def.create_q1a()
-    #create_injected_cardinalities(q1a, "q1a", config)
+    # q1a = q_def.create_q1a()
+    # create_injected_cardinalities(q1a, "q1a", config)
 
-    #q1a = q_def.create_q1a(True)
-    #create_injected_cardinalities(q1a, "q1a_acyclic", config, "acyclic")
+    # q1a = q_def.create_q1a(True)
+    # create_injected_cardinalities(q1a, "q1a_acyclic", config, "acyclic")
 
-    #q2a = q_def.create_q2a()
-    #create_injected_cardinalities(q2a, "q2a", config)
+    # q2a = q_def.create_q2a()
+    # create_injected_cardinalities(q2a, "q2a", config)
 
-    #q2a = q_def.create_q2a(True)
-    #create_injected_cardinalities(q2a, "q2a_acyclic", config, "acyclic")
+    # q2a = q_def.create_q2a(True)
+    # create_injected_cardinalities(q2a, "q2a_acyclic", config, "acyclic")
 
     # q3b = q_def.create_q3b()
     # create_injected_cardinalities(q3b, "q3b", config)
@@ -265,50 +273,68 @@ if __name__ == "__main__":
     #  q3b = q_def.create_q3b(True)
     # create_injected_cardinalities(q3b, "q3b_acyclic", config, "acyclic")
 
-    #q4a = q_def.create_q4a()
-    #create_injected_cardinalities(q4a, "q4a", config)
+    # q4a = q_def.create_q4a()
+    # create_injected_cardinalities(q4a, "q4a", config)
 
-    #q4a = q_def.create_q4a(True)
-    #create_injected_cardinalities(q4a, "q4a_acyclic", config, "acyclic")
+    # q4a = q_def.create_q4a(True)
+    # create_injected_cardinalities(q4a, "q4a_acyclic", config, "acyclic")
 
     # q5b = q_def.create_q5b()
-    #create_injected_cardinalities(q5b, "q5b", config)
+    # create_injected_cardinalities(q5b, "q5b", config)
 
-    #q5b = q_def.create_q5b(True)
-    #create_injected_cardinalities(q5b, "q5b_acyclic", config, "acyclic")
+    # q5b = q_def.create_q5b(True)
+    # create_injected_cardinalities(q5b, "q5b_acyclic", config, "acyclic")
 
-    #q6a = q_def.create_q6a()
-    #create_injected_cardinalities(q6a, "q6a", config)
+    # q6a = q_def.create_q6a()
+    # create_injected_cardinalities(q6a, "q6a", config)
 
-    q7b = q_def.create_q7b()
-    create_injected_cardinalities(q7b, "q7b", config)
+    #  q7b = q_def.create_q7b()
+    # create_injected_cardinalities(q7b, "q7b", config)
 
-    q7b = q_def.create_q7b(True)
-    create_injected_cardinalities(q7b, "q7_acyclic", config, "acyclic")
+    # q7b = q_def.create_q7b(True)
+    # create_injected_cardinalities(q7b, "q7_acyclic", config, "acyclic")
 
-    #q8d = q_def.create_q8d()
-    #create_injected_cardinalities(q8d, "q8d", config)
+    # q8d = q_def.create_q8d()
+    # create_injected_cardinalities(q8d, "q8d", config)
 
-    q9b = q_def.create_q9b()
-    create_injected_cardinalities(q9b, "q9b", config)
+    # q9b = q_def.create_q9b()
+    # create_injected_cardinalities(q9b, "q9b", config)
 
-    q9b = q_def.create_q9b(True)
-    create_injected_cardinalities(q9b, "q9b_acyclic", config, "acyclic")
+    # q9b = q_def.create_q9b(True)
+    # create_injected_cardinalities(q9b, "q9b_acyclic", config, "acyclic")
 
-    q10a = q_def.create_q10a()
-    create_injected_cardinalities(q10a, "q10a", config)
+    # q10a = q_def.create_q10a()
+    # create_injected_cardinalities(q10a, "q10a", config)
 
-    q10a = q_def.create_q10a(True)
-    create_injected_cardinalities(q10a, "q10a_acyclic", config, "acyclic")
+    # q10a = q_def.create_q10a(True)
+    # create_injected_cardinalities(q10a, "q10a_acyclic", config, "acyclic")
 
-    q13a = q_def.create_q13a()
-    create_injected_cardinalities(q13a, "q13a", config)
+    # q17a = q_def.create_q17a()
+    # create_injected_cardinalities(q17a, "q17a", config)
 
-    q13a = q_def.create_q13a(True)
-    create_injected_cardinalities(q13a, "q13a_acyclic", config, "acyclic")
+    # q17a = q_def.create_q17a(True)
+    # create_injected_cardinalities(q17a, "q17a_acyclic", config, "acyclic")
 
-    q17a = q_def.create_q17a()
-    create_injected_cardinalities(q17a, "q17a", config)
+    #for i in range(5, 10):
+    #    lj_graph = q_def.create_acyclic_join_graph_for_large_join(i)
+    #    create_injected_cardinalities(lj_graph, f"acyclic_{i}", config, 'large_joins/acyclic')
 
-   # q17a = q_def.create_q17a(True)
-    #create_injected_cardinalities(q17a, "q17a_acyclic", config, "acyclic")
+    #for i in range(8, 10):
+    #    lj_graph = q_def.create_cyclic_join_graph_for_large_join(i)
+    #    create_injected_cardinalities(lj_graph, f"cyclic_{i}", config, 'large_joins/cyclic')
+
+    #for i in range(8, 10):
+     #   lj_graph = q_def.create_cyclic_two_vertex_cut_join_graph_for_large_join(i)
+      #  create_injected_cardinalities(lj_graph, f"two_vertex_cut_{i}", config, 'large_joins/two-vertex-cuts')
+
+    #lj_graph = q_def.create_star_schema(4)
+    #create_injected_cardinalities(lj_graph, f"4", config, f'star_schema')
+
+    lj_graph = q_def.create_star_schema(5)
+    create_injected_cardinalities(lj_graph, f"5", config, f'star_schema')
+
+    #lj_graph = q_def.create_star_schema(6)
+    #create_injected_cardinalities(lj_graph, f"6", config, f'star_schema')
+
+    #lj_graph = q_def.create_star_schema(7)
+    #create_injected_cardinalities(lj_graph, f"7", config, f'star_schema')

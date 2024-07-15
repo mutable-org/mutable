@@ -1,0 +1,25 @@
+{
+"large_joins": [
+{"relations": ["r_0"], "size": 14, "reductions": [{"right_relations": ["r_4", "r_3", "r_2", "r_1"], "size": 14}]},
+{"relations": ["r_1"], "size": 16, "reductions": [{"right_relations": ["r_2", "r_3", "r_4", "r_0"], "size": 16}]},
+{"relations": ["r_2"], "size": 18, "reductions": [{"right_relations": ["r_3", "r_4", "r_0", "r_1"], "size": 18}]},
+{"relations": ["r_3"], "size": 12, "reductions": [{"right_relations": ["r_4", "r_0", "r_1", "r_2"], "size": 12}]},
+{"relations": ["r_4"], "size": 10, "reductions": [{"right_relations": ["r_0", "r_1", "r_2", "r_3"], "size": 10}]},
+{"relations": ["r_1", "r_0"], "size": 108, "reductions": [{"right_relations": ["r_4", "r_3", "r_2"], "size": 108}]},
+{"relations": ["r_4", "r_0"], "size": 70, "reductions": [{"right_relations": ["r_1", "r_2", "r_3"], "size": 70}]},
+{"relations": ["r_2", "r_1"], "size": 144, "reductions": [{"right_relations": ["r_0", "r_4", "r_3"], "size": 144}]},
+{"relations": ["r_3", "r_2"], "size": 108, "reductions": [{"right_relations": ["r_1", "r_0", "r_4"], "size": 108}]},
+{"relations": ["r_4", "r_3"], "size": 66, "reductions": [{"right_relations": ["r_2", "r_1", "r_0"], "size": 66}]},
+{"relations": ["r_2", "r_1", "r_0"], "size": 972, "reductions": [{"right_relations": ["r_3", "r_4"], "size": 972}]},
+{"relations": ["r_4", "r_1", "r_0"], "size": 540, "reductions": [{"right_relations": ["r_2", "r_3"], "size": 540}]},
+{"relations": ["r_4", "r_3", "r_0"], "size": 462, "reductions": [{"right_relations": ["r_2", "r_1"], "size": 462}]},
+{"relations": ["r_3", "r_2", "r_1"], "size": 864, "reductions": [{"right_relations": ["r_4", "r_0"], "size": 864}]},
+{"relations": ["r_4", "r_3", "r_2"], "size": 594, "reductions": [{"right_relations": ["r_0", "r_1"], "size": 594}]},
+{"relations": ["r_3", "r_2", "r_1", "r_0"], "size": 5832, "reductions": [{"right_relations": ["r_4"], "size": 5832}]},
+{"relations": ["r_4", "r_2", "r_1", "r_0"], "size": 4860, "reductions": [{"right_relations": ["r_3"], "size": 4860}]},
+{"relations": ["r_4", "r_3", "r_1", "r_0"], "size": 3564, "reductions": [{"right_relations": ["r_2"], "size": 3564}]},
+{"relations": ["r_4", "r_3", "r_2", "r_0"], "size": 4158, "reductions": [{"right_relations": ["r_1"], "size": 4158}]},
+{"relations": ["r_4", "r_3", "r_2", "r_1"], "size": 4750, "reductions": [{"right_relations": ["r_0"], "size": 4750}]},
+{"relations": ["r_3", "r_2", "r_1", "r_0", "r_4"], "size": 16030, "reductions": []}
+]
+}

@@ -1,0 +1,112 @@
+description: Optimize Star Schema Query Q6 with RESULTDB
+suite: star_schema_6
+benchmark: RESULTDB Optimization + Execution times with star schema
+name: Q6
+readonly: true
+chart:
+    x:
+        scale: linear
+        type: O
+        label: Scale factor
+    y:
+        scale: linear
+        type: Q
+        label: 'Optimization Time [ms]'
+data:                                                     # Definition of the tables this experiment uses.
+    'fact':                                       # Name of this table.
+        file: 'benchmark/job/result-db-eval/star_schema/data/fact_6.csv'       # Relative path to the file containing the table data
+        format: 'csv'                                     # Format of the file. Optional, defaults to 'csv'.
+        delimiter: ','                                    # Delimiter of the file. Optional, defaults to ','.
+        header: 0                                         # Whether the file has a header line. 1=true, 0=false. Optional, defaults to 0.
+        attributes:                                       # Map from attribute name to its type.
+            'id_0': 'INT NOT NULL'
+            'id_1': 'INT NOT NULL'
+            'id_2': 'INT NOT NULL'
+            'id_3': 'INT NOT NULL'
+            'id_4': 'INT NOT NULL'
+            'id_5': 'INT NOT NULL'
+            'word': 'CHAR 12 NOT NULL'
+    'dim_0': # Name of this table.
+      file: 'benchmark/job/result-db-eval/star_schema/data/dim.csv'       # Relative path to the file containing the table data
+      format: 'csv'                                     # Format of the file. Optional, defaults to 'csv'.
+      delimiter: ','                                    # Delimiter of the file. Optional, defaults to ','.
+      header: 0                                         # Whether the file has a header line. 1=true, 0=false. Optional, defaults to 0.
+      attributes: # Map from attribute name to its type.
+        'id': 'INT NOT NULL'
+    'dim_1': # Name of this table.
+      file: 'benchmark/job/result-db-eval/star_schema/data/dim.csv'       # Relative path to the file containing the table data
+      format: 'csv'                                     # Format of the file. Optional, defaults to 'csv'.
+      delimiter: ','                                    # Delimiter of the file. Optional, defaults to ','.
+      header: 0                                         # Whether the file has a header line. 1=true, 0=false. Optional, defaults to 0.
+      attributes: # Map from attribute name to its type.
+        'id': 'INT NOT NULL'
+    'dim_2': # Name of this table.
+      file: 'benchmark/job/result-db-eval/star_schema/data/dim.csv'       # Relative path to the file containing the table data
+      format: 'csv'                                     # Format of the file. Optional, defaults to 'csv'.
+      delimiter: ','                                    # Delimiter of the file. Optional, defaults to ','.
+      header: 0                                         # Whether the file has a header line. 1=true, 0=false. Optional, defaults to 0.
+      attributes: # Map from attribute name to its type.
+        'id': 'INT NOT NULL'
+    'dim_3': # Name of this table.
+      file: 'benchmark/job/result-db-eval/star_schema/data/dim.csv'       # Relative path to the file containing the table data
+      format: 'csv'                                     # Format of the file. Optional, defaults to 'csv'.
+      delimiter: ','                                    # Delimiter of the file. Optional, defaults to ','.
+      header: 0                                         # Whether the file has a header line. 1=true, 0=false. Optional, defaults to 0.
+      attributes: # Map from attribute name to its type.
+        'id': 'INT NOT NULL'
+    'dim_4': # Name of this table.
+      file: 'benchmark/job/result-db-eval/star_schema/data/dim.csv'       # Relative path to the file containing the table data
+      format: 'csv'                                     # Format of the file. Optional, defaults to 'csv'.
+      delimiter: ','                                    # Delimiter of the file. Optional, defaults to ','.
+      header: 0                                         # Whether the file has a header line. 1=true, 0=false. Optional, defaults to 0.
+      attributes: # Map from attribute name to its type.
+        'id': 'INT NOT NULL'
+    'dim_5': # Name of this table.
+      file: 'benchmark/job/result-db-eval/star_schema/data/dim.csv'       # Relative path to the file containing the table data
+      format: 'csv'                                     # Format of the file. Optional, defaults to 'csv'.
+      delimiter: ','                                    # Delimiter of the file. Optional, defaults to ','.
+      header: 0                                         # Whether the file has a header line. 1=true, 0=false. Optional, defaults to 0.
+      attributes: # Map from attribute name to its type.
+        'id': 'INT NOT NULL'
+
+systems:
+    mutable:
+        args: >-
+          --backend WasmV8
+          --no-simd
+          -t
+          --cardinality-estimator Injected
+          --hash-table-implementation Chained
+          --use-cardinality-file benchmark/job/result-db-eval/star_schema/5__injected_cardinalities.json
+        configurations:
+            'Decompose':
+              args: ''
+              pattern:
+                Optimization Time (logical): '^Compute the logical query plan:.*'
+                Execution Time: '^Execute query:.*'
+            'RESULTDB, NoOpt':
+                args: >-
+                  --result-db
+                pattern:
+                  Optimization Time (logical): '^Compute the logical query plan:.*'
+                  Execution Time: '^Execute query:.*'
+            'RESULTDB, Opt, NoGreedyCuts':
+                args: >-
+                  --result-db
+                  --optimize-result-db
+                pattern:
+                  Optimization Time (logical): '^Compute the logical query plan:.*'
+                  Execution Time: '^Execute query:.*'
+            'RESULTDB, Opt, GreedyCuts':
+              args: >-
+                --result-db
+                --optimize-result-db
+                --greedy-cuts
+              pattern:
+                Optimization Time (logical): '^Compute the logical query plan:.*'
+                Execution Time: '^Execute query:.*'
+        cases:
+            1:  SELECT f.word
+                FROM fact AS f, dim_0 AS d0, dim_1 AS d1, dim_2 AS d2, dim_3 AS d3, dim_4 AS d4, dim_5 AS d5
+                WHERE f.id_0=d0.id AND f.id_1=d1.id AND f.id_2=d2.id AND f.id_3=d3.id AND f.id_4=d4.id AND f.id_5=d5.id
+                      AND d0.id < 1.7 AND d1.id < 3.4 AND d2.id < 5.1 AND d3.id < 6.8 AND d4.id < 8.5 AND d4.id < 10;

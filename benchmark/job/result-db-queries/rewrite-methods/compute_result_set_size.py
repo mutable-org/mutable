@@ -14,7 +14,7 @@ import query_definitions as q_def
 numeric_attributes = [
     'id', 'person_id', 'movie_id', 'kind_id', 'production_year', 'season_nr', 'episode_nr', 'person_role_id',
     'nr_order', 'role_id', 'imdb_id', 'company_id', 'company_type_id', 'info_type_id', 'keyword_id', 'linked_movie_id',
-    'link_type_id', 'person_type_id', 'episode_of_id' 
+    'link_type_id', 'person_type_id', 'episode_of_id'
 ]
 
 def write_to_file(output_dir: str, output_file: str, text: str, mode: str = 'w') -> None:

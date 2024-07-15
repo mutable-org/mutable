@@ -97,24 +97,24 @@ systems:
     mutable:
         args: --dryrun
         configurations:
-            DPccp:
+            Single-Table:
                 args: '--plan-enumerator DPccp'
                 pattern: '^Compute the logical query plan:.*'
             RESULTDB:
                 args: '--result-db'
-                pattern: '^Compute the logical query plan:.*'
+                pattern: '^Compute the logical yannakakis plan:.*'
             RESULTDB-Opt-Weak:
                 args: '--result-db --optimize-result-db --yh-d'
-                pattern: '^Compute the logical query plan:.*'
+                pattern: '^Compute the logical yannakakis plan:.*'
             RESULTDB-Opt-Strong:
                 args: '--result-db --optimize-result-db'
-                pattern: '^Compute the logical query plan:.*'
+                pattern: '^Compute the logical yannakakis plan:.*'
             RESULTDB-Opt-Greedy-Weak:
                 args: '--result-db --optimize-result-db --greedy-cuts --yh-d'
-                pattern: '^Compute the logical query plan:.*'
+                pattern: '^Compute the logical yannakakis plan:.*'
             RESULTDB-Opt-Greedy:
                 args: '--result-db --optimize-result-db --greedy-cuts'
-                pattern: '^Compute the logical query plan:.*'
+                pattern: '^Compute the logical yannakakis plan:.*'
         cases:
             2:  SELECT
                     *

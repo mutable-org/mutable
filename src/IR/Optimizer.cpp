@@ -168,10 +168,10 @@ double SemiJoinCostFunction::estimate_semi_join_probe_costs(const CardinalityEst
 
 double SemiJoinCostFunction::estimate_semi_join_hash_costs(const CardinalityEstimator &CE, const DataModel &model)
 {
-    return 2 * double(CE.predict_cardinality(model));
+    return double(CE.predict_cardinality(model));
 }
 
-void TreeEnumerator::determine_reduced_models(QueryGraph &G, const CardinalityEstimator &CE, card_order_t card_orders[], std::vector<std::unique_ptr<DataModel>> &base_models)
+void TreeEnumerator::determine_reduced_models(QueryGraph &G, const AdjacencyMatrix& adj_matrix, const CardinalityEstimator &CE, card_order_t card_orders[], std::vector<std::unique_ptr<DataModel>> &base_models)
 {
     auto rec = [&](std::size_t parent, std::size_t node, auto&& rec) {
         /* Check whether the current parent/subtree pair was already evaluated at some point */
@@ -182,7 +182,7 @@ void TreeEnumerator::determine_reduced_models(QueryGraph &G, const CardinalityEs
         auto node_model = CE.copy(*base_models[node]);
 
         /* Account for bottom-up and top-down semi-joins */
-        for (std::size_t child : G.adjacency_matrix().neighbors(Subproblem::Singleton(node))) {
+        for (std::size_t child : adj_matrix.neighbors(Subproblem::Singleton(node))) {
             /* Ignore parent */
             if (child == parent) continue;
             auto it_model = rec(node, child, rec);
@@ -193,21 +193,22 @@ void TreeEnumerator::determine_reduced_models(QueryGraph &G, const CardinalityEs
         return parent_node_model(parent, node);
 
     };
-    /* Enumerate trough each possible root node to find the best one */
+
+    /* Enumerate trough each possible root node */
     for (auto &root : G.sources()) {
         rec(root->id(), root->id(), rec);
-        compute_cardinality_order(G, CE, root->id(), card_orders[root->id()], base_models);
+        compute_cardinality_order(G, adj_matrix, CE, root->id(), card_orders[root->id()], base_models);
     }
 
 }
 
-void TreeEnumerator::compute_cardinality_order(const QueryGraph &G, const CardinalityEstimator &CE, std::size_t node, std::vector<std::size_t> &card_order, std::vector<std::unique_ptr<DataModel>> &base_models)
+void TreeEnumerator::compute_cardinality_order(const QueryGraph &G, const AdjacencyMatrix& adj_matrix, const CardinalityEstimator &CE, std::size_t node, std::vector<std::size_t> &card_order, std::vector<std::unique_ptr<DataModel>> &base_models)
 {
     std::unordered_map<size_t, size_t> cardinalities;
     auto node_problem = Subproblem::Singleton(node);
     auto node_model = CE.copy(*base_models[node]);
     /* Add all neighbors to the vector */
-    for (auto neighbor : G.adjacency_matrix().neighbors(node_problem)) {
+    for (auto neighbor : adj_matrix.neighbors(node_problem)) {
         card_order.emplace_back(neighbor);
         auto neighbor_model = parent_node_model(node, neighbor);
         auto neighbor_cardinality = CE.predict_cardinality(*(CE.estimate_semi_join(G, *node_model, *neighbor_model->second, {})));
@@ -220,14 +221,14 @@ void TreeEnumerator::compute_cardinality_order(const QueryGraph &G, const Cardin
     std::sort(card_order.begin(), card_order.end(), cmp);
 }
 
-std::pair<std::size_t, double> TreeEnumerator::find_best_root(QueryGraph &G, const CardinalityEstimator &CE, SemiJoinCostFunction &SJ, card_order_t card_orders[], std::vector<std::unique_ptr<DataModel>> &base_models)
+std::pair<std::size_t, double> TreeEnumerator::find_best_root(QueryGraph &G, std::unordered_set<std::size_t> required_reductions, const AdjacencyMatrix& adj_matrix, const CardinalityEstimator &CE, SemiJoinCostFunction &SJ, card_order_t card_orders[], std::vector<std::unique_ptr<DataModel>> &base_models)
 {
     std::vector<semi_join_order_t> semi_join_reduction_order;
     double lowest_costs = std::numeric_limits<double>::infinity();
     std::unordered_map<std::size_t, std::unordered_map<std::size_t, std::unique_ptr<DataModel>>> reduced_models;
     std::size_t best_root = 0; // First node
 
-    determine_reduced_models(G, CE, card_orders, base_models);
+    determine_reduced_models(G, adj_matrix, CE, card_orders, base_models);
 
     auto estimate_subtree_costs = [&](std::size_t parent, std::size_t node, auto&& estimate_subtree_costs) {
 
@@ -238,6 +239,7 @@ std::pair<std::size_t, double> TreeEnumerator::find_best_root(QueryGraph &G, con
 
         auto node_model = CE.copy(*base_models[node]);
         auto node_fully_reduced_model = CE.estimate_full_reduction(G, *node_model);
+        bool reduction_required = required_reductions.contains(node);
         double costs = 0;
 
         /* Account for bottom-up and top-down semi-joins */
@@ -247,13 +249,17 @@ std::pair<std::size_t, double> TreeEnumerator::find_best_root(QueryGraph &G, con
             /* Recursively evaluate the child subtree */
             auto it_costs = estimate_subtree_costs(node, child, estimate_subtree_costs);
             auto it_model = parent_node_model(node, child);
-            costs += it_costs->second + // Recursive Tree costs
-                     SJ.estimate_semi_join_costs(CE, *node_model, *it_model->second) // Bottom-up Semi-join costs between node and child
-                     + SJ.estimate_semi_join_costs(CE, *it_model->second, *node_fully_reduced_model); // Top-down Semi-join costs between child and node
-            node_model = CE.estimate_semi_join(G, *node_model, *it_model->second,  {});
+            costs += it_costs->second.first + // Recursive Tree costs
+                     SJ.estimate_semi_join_costs(CE, *node_model, *it_model->second); // Bottom-up Semi-join costs between node and child
+            node_model = CE.estimate_semi_join(G, *node_model, *it_model->second, {});
+            if (it_costs->second.second || parent == node) {
+                // Top-down Semi-join costs between child and node
+                costs += SJ.estimate_semi_join_costs(CE, *it_model->second, *node_fully_reduced_model);
+                reduction_required = true;
+            }
         }
 
-        update_cost_table(parent, node, costs);
+        update_cost_table(parent, node, costs, reduction_required);
         return parent_node_costs(parent, node);
 
     };
@@ -261,25 +267,42 @@ std::pair<std::size_t, double> TreeEnumerator::find_best_root(QueryGraph &G, con
     /* Enumerate trough each possible root node to find the best one */
     for (auto &root : G.sources()) {
 
+        /* Folded node id */
+        if (card_orders[root->id()].empty()) {
+            continue;
+        }
+
         auto it = estimate_subtree_costs(root->id(), root->id(), estimate_subtree_costs);
-        if (it->second < lowest_costs) {
+        if (it->second.first < lowest_costs) {
             best_root = root->id();
-            lowest_costs = it->second;
+            lowest_costs = it->second.first;
         }
     }
 
     return std::make_pair(best_root, lowest_costs);
 }
 
-DataSource & Optimizer_ResultDB_utils::get_data_source_with_highest_degree(QueryGraph &G)
+DataSource & Optimizer_ResultDB_utils::choose_root_node(QueryGraph &G, SemiJoinReductionOperator &op)
 {
-    auto current_highest_degree_it = G.sources().begin();
-    for (auto it = std::next(G.sources().begin()); it != G.sources().end(); ++it) {
-        if ((*it)->joins().size() > (*current_highest_degree_it)->joins().size())
-            current_highest_degree_it = it;
+    const Schema &S = op.schema();
+    std::size_t current_root_idx = -1UL;
+    for (std::size_t idx = 0; idx < G.sources().size(); ++idx) {
+        auto intersection = S & op.child(idx)->schema();
+        if (not intersection.empty()) { // contained in projections
+            if (current_root_idx == -1UL or (G.sources()[idx]->joins().size() > G.sources()[current_root_idx]->joins().size()))
+                current_root_idx = idx;
+        }
     }
-    return **current_highest_degree_it;
+    if (current_root_idx == -1UL) { // no relation found that is part of the projections (likely SELECT *)
+        current_root_idx = 0;
+        for (std::size_t idx = 1; idx < G.sources().size(); ++idx) { // fallback to highest degree
+            if (G.sources()[idx]->joins().size() > G.sources()[current_root_idx]->joins().size())
+                current_root_idx = idx;
+        }
+    }
+    return *G.sources()[current_root_idx];
 }
+
 
 /** Identifies a set of joins that have to be computed such that the join graph becomes acyclic. Currently, the
  * implementation heuristically chooses the node `x` with the highest degree first and subsequently, identifies the node
@@ -455,12 +478,12 @@ void Optimizer_ResultDB_utils::combine_joins(QueryGraph &G)
 }
 
 std::vector<Optimizer_ResultDB::semi_join_order_t>
-Optimizer_ResultDB_utils::compute_semi_join_reduction_order(QueryGraph &G)
+Optimizer_ResultDB_utils::compute_semi_join_reduction_order(QueryGraph &G, SemiJoinReductionOperator &op)
 {
     std::vector<semi_join_order_t> semi_join_reduction_order;
 
-    /*----- Choose node with highest degree as root. -----*/
-    auto &root = get_data_source_with_highest_degree(G);
+    /*----- Choose root node that is part of the projections and has the highest degree. -----*/
+    auto &root = choose_root_node(G, op);
 
     /*----- Compute BFS ordering starting at `root`. -----*/
     auto &mat = G.adjacency_matrix();
@@ -508,7 +531,7 @@ Optimizer_ResultDB_utils::compute_semi_join_reduction_order(QueryGraph &G)
 }
 
 std::pair<std::vector<Optimizer_ResultDB::semi_join_order_t>, double>
-Optimizer_ResultDB_utils::enumerate_semi_join_reduction_order(QueryGraph &G, const CardinalityEstimator &CE, std::vector<std::unique_ptr<DataModel>> &base_models)
+Optimizer_ResultDB_utils::enumerate_semi_join_reduction_order(QueryGraph &G, std::unordered_set<std::size_t> required_reductions, const AdjacencyMatrix& adj_matrix, const CardinalityEstimator &CE, std::vector<std::unique_ptr<DataModel>> &base_models)
 {
     auto &C = Catalog::Get();
     auto SJ = SemiJoinCostFunction();
@@ -516,11 +539,10 @@ Optimizer_ResultDB_utils::enumerate_semi_join_reduction_order(QueryGraph &G, con
     /* Contains for each possible data source (id) the best order in which to apply
      * adjacent semi-joins */
     card_order_t card_orders[G.num_sources()];
-
-
+    
     auto tree_enumerator = TreeEnumerator(G.num_sources());
 
-    auto [best_root, costs] = tree_enumerator.find_best_root(G, CE, SJ, card_orders, base_models);
+    auto [best_root, costs] = tree_enumerator.find_best_root(G, required_reductions, adj_matrix, CE, SJ, card_orders, base_models);
     std::vector<Optimizer_ResultDB::semi_join_order_t> semi_join_reduction_order;
 
     /* Create semi-join order */
@@ -573,13 +595,24 @@ void Optimizer_ResultDB_utils::find_vertex_cuts(QueryGraph &G, Subproblem block,
         }
     }
 
-    auto comp = [&cut_overlaps](Subproblem a, Subproblem b) {
-        return cut_overlaps[a] < cut_overlaps[b];
-    };
+    /* Use Counting Sort */
+    std::vector<std::size_t> helper(vertex_cuts.size(), 0);
+    std::vector<Subproblem> sorted_vertex_cuts(vertex_cuts.size());
 
-    std::sort(vertex_cuts.begin(), vertex_cuts.end(), comp);
+    for (size_t i = 0; i < vertex_cuts.size(); i++) {
+        helper[cut_overlaps[vertex_cuts[i]]] += 1;
+    }
 
-    for (Subproblem pair : vertex_cuts) {
+    for (size_t i = 1; i < helper.size(); i++) {
+        helper[i] += helper[i-1];
+    }
+
+    for (int i = vertex_cuts.size() - 1; i >= 0; i++) {
+        sorted_vertex_cuts[helper[cut_overlaps[vertex_cuts[i]]]] = vertex_cuts[i];
+        helper[cut_overlaps[vertex_cuts[i]]] -= 1;
+    }
+
+    for (Subproblem pair : sorted_vertex_cuts) {
         /* One of the pairs might already be used earlier due to overlaps */
         if ((pair & already_used).empty()) {
             std::unordered_set<std::size_t> fold;
@@ -674,6 +707,158 @@ void Optimizer_ResultDB_utils::visit_bc_forest(bc_forest_t &bc_forest, std::vect
     }
 }
 
+void Optimizer_ResultDB_utils::get_folds_and_folding_problems(QueryGraph &G, std::vector<Optimizer_ResultDB_utils::fold_t> &folds, std::unordered_set<Subproblem, SubproblemHash> &folding_problems) {
+    std::vector<Subproblem> blocks;
+    Subproblem cut_vertices = Subproblem();
+    auto &M = G.adjacency_matrix();
+
+    M.compute_blocks_and_cut_vertices(blocks, cut_vertices, 3);
+
+    /* Use a block-cut-forest to assign each cut vertex to exactly one of its biconnected components */
+    bc_forest_t bc_forest;
+    build_bc_forest(blocks, cut_vertices, bc_forest);
+
+    std::vector<Subproblem> folding_subproblems;
+    /* Define visitor to go through each node within the tree to assign the vertex cuts */
+    Subproblem visited;
+
+    /* Sort the blocks by the number of relations they contain */
+    auto cmp = [](Subproblem left, Subproblem right) {
+        return left.size() > right.size();
+    };
+    std::sort(blocks.begin(), blocks.end(), cmp);
+
+    std::vector<fold_t> complete_join_folds;
+    /* We might have multiple roots due to the block cut forest consisting of multiple trees */
+    visit_bc_forest(bc_forest, blocks, visited, folding_subproblems, folds);
+
+    Subproblem already_used = Subproblem();
+    for (auto folding_subproblem: folding_subproblems) {
+        folding_problems.emplace(folding_subproblem);
+        already_used |= folding_subproblem;
+    }
+
+    /* We also need to add the existing base tables that are not part of any fold to the fold */
+    for (auto node_id: Subproblem::All(G.num_sources()) - visited) {
+        fold_t fold = {node_id};
+        folds.emplace_back(fold);
+    }
+}
+
+void Optimizer_ResultDB_utils::create_folded_adjacency_matrix(std::vector<fold_t> folds, AdjacencyMatrix &old_matrix, AdjacencyMatrix& new_matrix, std::vector<Subproblem>& new_to_old_mapping) {
+    std::vector<std::size_t> pairs(old_matrix.size(), 0);
+    Subproblem folded_nodes = Subproblem();
+    for (auto fold: folds) {
+        std::vector<std::size_t> node_ids;
+        std::size_t reference_node = *fold.begin();
+        Subproblem fold_problem;
+        for (auto it = fold.begin(); it != fold.end(); it++) {
+            pairs[*it] = reference_node;
+            fold_problem |= Subproblem::Singleton(*it);
+        }
+        new_to_old_mapping[reference_node] = fold_problem;
+        folded_nodes |= fold_problem;
+    }
+    /* Also add unaffected sources to the new adjacency matrix */
+    for (auto node_id : Subproblem::All(old_matrix.size()) - folded_nodes) {
+        new_to_old_mapping[node_id] = Subproblem::Singleton(node_id);
+        pairs[node_id] = node_id;
+    }
+    /* Create matrix */
+    for (auto node_id: folded_nodes) {
+        /* It was decided that this node was removed, only required case */
+        if (pairs[node_id] != node_id) {
+            new_matrix[node_id] = Subproblem(0);
+            auto node_problem = Subproblem::Singleton(node_id);
+            auto node_partner_problem = Subproblem::Singleton(pairs[node_id]);
+            for (auto neighbor_id: old_matrix[node_id]) {
+                // Only update unaffected nodes
+                if (neighbor_id == pairs[neighbor_id]) {
+                    // Reference node must not be to be included in itself
+                    if (neighbor_id != pairs[node_id]) new_matrix[neighbor_id] = (old_matrix[neighbor_id] - node_problem) | node_partner_problem;
+                    else new_matrix[neighbor_id] = (old_matrix[neighbor_id] - node_problem);
+                }
+            }
+        }
+    }
+}
+
+void Optimizer_ResultDB_utils::get_greedy_folds_and_folding_problems(QueryGraph &G, std::vector<Optimizer_ResultDB_utils::fold_t> &folds, std::unordered_map<Subproblem, std::vector<Subproblem>, SubproblemHash> &restricted_folding_problems) {
+    std::vector<Subproblem> blocks;
+    Subproblem cut_vertices = Subproblem();
+    auto &M = G.adjacency_matrix();
+
+    M.compute_blocks_and_cut_vertices(blocks, cut_vertices, 3);
+
+    Subproblem already_used = Subproblem();
+    std::vector<fold_t> cut_folds;
+    for (auto block: blocks) {
+        find_vertex_cuts(G, block, already_used, cut_folds);
+    }
+    /* When no nodes have been folded, there is no difference compared to DP_Fold */
+    if (already_used.empty()) return;
+
+    // Use old matrix as default for new matrix!
+    AdjacencyMatrix greedy_matrix(M);
+    std::vector<Subproblem> new_to_old_mapping(G.num_sources(), Subproblem(0));
+    /* Fold Adcaceny Matrix */
+    create_folded_adjacency_matrix(cut_folds, M, greedy_matrix, new_to_old_mapping);
+    /* Reset old blocks */
+    blocks = std::vector<Subproblem>();
+    cut_vertices = Subproblem();
+    /* Compute new blocks */
+    greedy_matrix.compute_blocks_and_cut_vertices(blocks, cut_vertices, 3);
+
+    /* Use a block-cut-forest to assign each cut vertex to exactly one of its biconnected components */
+    bc_forest_t bc_forest;
+    build_bc_forest(blocks, cut_vertices, bc_forest);
+
+    std::vector<Subproblem> folding_subproblems;
+    /* Define visitor to go through each node within the tree to assign the vertex cuts */
+    Subproblem visited;
+
+    /* Sort the blocks by the number of relations they contain */
+    auto cmp = [](Subproblem left, Subproblem right) {
+        return left.size() > right.size();
+    };
+    std::sort(blocks.begin(), blocks.end(), cmp);
+
+    /* We might have multiple roots due to the block cut forest consisting of multiple trees */
+    visit_bc_forest(bc_forest, blocks, visited, folding_subproblems, folds);
+
+    /* The folds might contain two-vertex cut folds, and thus only node, which we need to fix */
+    for (auto fold: folds) {
+        for (auto node_id: fold) {
+            Subproblem old_problem = new_to_old_mapping[node_id];
+            for (auto old_node_id: old_problem) {
+                fold.emplace(old_node_id);
+            }
+            already_used |= old_problem;
+        }
+    }
+
+    /* Create final block fold enumeration problems */
+    for (size_t i = 0; i < folding_subproblems.size(); i++) {
+        std::vector<Subproblem> conditions;
+        for (auto node_id: folding_subproblems[i]) {
+            auto old_problem = new_to_old_mapping[node_id];
+            auto node_problem = Subproblem::Singleton(node_id);
+            if (old_problem != node_problem) {
+                conditions.emplace_back(old_problem);
+                folding_subproblems[i] |= old_problem;
+            }
+        }
+        restricted_folding_problems.emplace(folding_subproblems[i], conditions);
+        already_used |= folding_subproblems[i];
+    }
+
+    /* We also need to add the existing base tables that are not part of any fold to the fold */
+    for (auto node_id: Subproblem::All(G.num_sources()) - already_used) {
+        fold_t fold = {node_id};
+        folds.emplace_back(fold);
+    }
+}
+
 std::pair<std::unique_ptr<Producer*[]>, double> Optimizer_ResultDB_utils::compute_and_solve_biconnected_components(QueryGraph &G, std::vector<std::unique_ptr<DataModel>> &base_models)
 {
     std::vector<Subproblem> blocks;
@@ -706,9 +891,9 @@ std::pair<std::unique_ptr<Producer*[]>, double> Optimizer_ResultDB_utils::comput
 
     std::vector<fold_t> intermediate_folds;
     std::vector<Subproblem> updated_folding_problems;
+    auto count = 0;
     for (auto problem: folding_problems) {
         Subproblem new_problem;
-        auto count = 0;
         for (auto node_id: problem) {
             new_problem |= Subproblem::Singleton(count);
             count++;
@@ -793,15 +978,15 @@ double Optimizer_ResultDB_utils::optimize_with_plantable(QueryGraph &G, std::vec
         source_plans[next_idx] = construct_join_order(G, PT, problem, current_source_plans);
         costs += PT[problem].cost;
         PT[problem].model->assign_to(Subproblem::Singleton(next_idx));
-        base_models.emplace_back(std::move(PT[problem].model));
+        base_models.emplace_back(CE.copy((*PT[problem].model)));
         next_idx++;
     };
     /*----- Compute join order and construct plan containing all joins. -----*/
     for (auto folding_problem : folding_problems) {
         optimize_join_order(G, PT, folding_problem);
         singletons -= folding_problem;
-        add_to_producers_and_models(PT[folding_problem].left);
-        add_to_producers_and_models(PT[folding_problem].right);
+        add_to_producers_and_models(PT[folding_problem].left_fold);
+        add_to_producers_and_models(PT[folding_problem].right_fold);
         }
 
     for (auto singleton_id : singletons) {
@@ -864,6 +1049,8 @@ void Optimizer_ResultDB_utils::optimize_join_order(const QueryGraph &G, PlanTabl
         }
     };
     M_TIME_EXPR(G.adjacency_matrix().for_each_CSG_pair_undirected(folding_problem, callback), "Plan for RESULTDB enumeration", C.timer());
+
+    PT[folding_problem].tuple_size = PT[PT[folding_problem].left].tuple_size + PT[PT[folding_problem].right].tuple_size;
 
     if (Options::Get().statistics) {
         std::cout << "Est. total cost: " << PT.get_final().cost
@@ -935,12 +1122,15 @@ std::unique_ptr<Producer*[]> Optimizer_ResultDB_utils::optimize_source_plans(con
 
     const auto num_sources = G.sources().size();
     auto source_plans = std::make_unique<Producer*[]>(num_sources);
+    std::vector<size_t> tuple_sizes;
+    G.get_projection_sizes_of_subproblems(tuple_sizes);
     for (auto &ds : G.sources()) {
         Subproblem s = Subproblem::Singleton(ds->id());
         if (auto bt = cast<BaseTable>(ds.get())) {
             /* Produce a scan for base tables. */
             PT[s].cost = 0;
             PT[s].model = CE.estimate_scan(G, s);
+            PT[s].tuple_size = tuple_sizes[ds->id()];
             auto &store = bt->table().store();
             auto source = new ScanOperator(store, bt->name().assert_not_none());
             source_plans[ds->id()] = source;
@@ -971,6 +1161,7 @@ std::unique_ptr<Producer*[]> Optimizer_ResultDB_utils::optimize_source_plans(con
             PT[s].cost = sub.cost;
             sub.model->assign_to(s); // adapt model s.t. it describes the result of the current subproblem
             PT[s].model = std::move(sub.model);
+            PT[s].tuple_size = tuple_sizes[ds->id()];
             /* Save the plan in the array of source plans. */
             source_plans[ds->id()] = sub_plan.release();
         }
@@ -1021,6 +1212,323 @@ std::unique_ptr<Producer*[]> Optimizer_ResultDB_utils::solve_cycles_without_enum
     return source_plans;
 }
 
+std::pair<std::unique_ptr<Producer>, bool> Optimizer_ResultDB_utils::dp_resultdb(QueryGraph &G) {
+    switch (Options::Get().plan_table_type)
+    {
+        case Options::PT_auto: {
+            /* Select most suitable type of plan table depending on the query graph structure.
+             * Currently a simple heuristic based on the number of data sources.
+             * TODO: Consider join edges too.  Eventually consider #CSGs. */
+            if (G.num_sources() <= 15) {
+                return dp_resultdb_with_plantable<PlanTableSmallOrDense>(G);
+            } else {
+                return dp_resultdb_with_plantable<PlanTableLargeAndSparse>(G);
+            }
+        }
+
+        case Options::PT_SmallOrDense: {
+            return dp_resultdb_with_plantable<PlanTableSmallOrDense>(G);
+        }
+
+        case Options::PT_LargeAndSparse: {
+            return dp_resultdb_with_plantable<PlanTableLargeAndSparse>(G);
+        }
+    }
+}
+
+template<typename PlanTable>
+std::pair<std::unique_ptr<Producer>, bool> Optimizer_ResultDB_utils::dp_resultdb_with_plantable(QueryGraph &G) {
+    PlanTable PT(G);
+
+    auto &C = Catalog::Get();
+    auto &DB = C.get_database_in_use();
+    auto &CE = DB.cardinality_estimator();
+
+    /* Create source plans for base relations */
+    auto current_source_plans = optimize_source_plans(G, PT);
+    auto complete_problem = Subproblem::All(G.num_sources());
+
+    auto decompose_plan = [&](Subproblem complete_problem) -> std::pair<std::unique_ptr<Producer>, bool> {
+        auto decompose_op = std::make_unique<DecomposeOperator>(std::cout, std::move(G.projections()),
+        std::move(G.sources()));
+        auto single_table_plan = construct_join_order(G, PT, complete_problem, current_source_plans);
+        decompose_op->add_child(single_table_plan);
+        return { std::move(decompose_op), true };
+    };
+
+    /* Is G is acyclic, simply run DP_CCP and TD_Fold */
+    if (not G.is_cyclic()) {
+        /* Add all models for the acyclic enumeration */
+        std::vector<std::unique_ptr<DataModel>> base_models;
+        for (std::size_t i = 0; i < G.num_sources(); i++) {
+            base_models.emplace_back(std::move(PT[Subproblem::Singleton(i)].model));
+        }
+
+        std::unordered_set<std::size_t> required_reductions;
+        for (auto node_id: Subproblem::All(G.num_sources())) {
+            if (PT[Subproblem::Singleton(node_id)].tuple_size != 0)
+                required_reductions.emplace();
+        }
+        auto [reducer_order, reducer_costs] = enumerate_semi_join_reduction_order(G, required_reductions, G.adjacency_matrix(), CE, base_models);
+
+        auto create_semi_join_plan = [&]() -> std::pair<std::unique_ptr<Producer>, bool> {
+            auto semi_join_reduction_op = std::make_unique<SemiJoinReductionOperator>(std::move(G.projections()));
+
+            const auto num_sources = G.num_sources();
+            semi_join_reduction_op->semi_join_reduction_order() = std::move(reducer_order);
+            semi_join_reduction_op->sources() = std::move(G.sources());
+            semi_join_reduction_op->joins() = std::move(G.joins());
+
+
+            /* Add source plans as children. */
+            for (std::size_t i = 0; i < num_sources; ++i)
+                semi_join_reduction_op->add_child(current_source_plans[i]);
+            return { std::move(semi_join_reduction_op), true };
+        };
+
+        if (Options::Get().result_db_optimizer == Options::TD_Root) {
+            return create_semi_join_plan();
+        }
+
+        /* Get best joins plans for single-table result */
+        C.plan_enumerator()(G, C.cost_function(), PT);
+
+        /* Estimate final decompose costs */
+        double decompose_costs = PT[complete_problem].cost + YannakakisHeuristic::estimate_decompose_costs(G, complete_problem, PT[complete_problem], CE);
+
+        std::cerr << "Reducer_costs " << reducer_costs << " Decompose Costs " << decompose_costs
+                      << '\n';
+        if (reducer_costs < decompose_costs) {
+            return create_semi_join_plan();
+        } else {
+            return decompose_plan(complete_problem);
+        }
+    }
+
+    /* TD_Fold-Greedy */
+    std::vector<fold_t> dp_fold_greedy_complete_folds;
+    std::unordered_map<Subproblem, std::vector<Subproblem>, SubproblemHash> dp_fold_greedy_restricted_problems;
+    if (Options::Get().result_db_optimizer == Options::DP_ResultDB || Options::Get().result_db_optimizer == Options::DP_Fold_Greedy)
+        get_greedy_folds_and_folding_problems(G, dp_fold_greedy_complete_folds, dp_fold_greedy_restricted_problems);
+
+    /* TD_Fold */
+    std::vector<fold_t> dp_fold_complete_folds;
+    std::unordered_set<Subproblem, SubproblemHash> dp_fold_problems;
+    if (Options::Get().result_db_optimizer == Options::DP_ResultDB || dp_fold_greedy_restricted_problems.empty())
+        get_folds_and_folding_problems(G, dp_fold_complete_folds, dp_fold_problems);
+
+    // Create Yannakakis-Heuristics
+    std::unordered_map<Subproblem, std::unique_ptr<YannakakisHeuristic>, SubproblemHash> heuristics;
+
+    auto get_tuple_size = [&](Subproblem problem) {
+        auto tuple_size = 0;
+        for (auto relation: problem) {
+            tuple_size += PT[Subproblem::Singleton(relation)].tuple_size;
+        }
+        return tuple_size;
+    };
+
+    auto solve_folding_problem = [&](Subproblem folding_problem, std::vector<Subproblem> restrictions) {
+        /* Problem solved already */
+        if (not PT[folding_problem].left_fold.empty()) {
+            return;
+        }
+        if (Options::Get().result_db_optimizer == Options::DP_ResultDB) {
+            auto callback_without_greedy = [&](Subproblem left, Subproblem right) {
+                PT.update_for_cycle_folding(G, CE, C.cost_function(), *heuristics[folding_problem], left, right, cnf::CNF{});
+            };
+            auto callback_with_greedy = [&](Subproblem left, Subproblem right) {
+                for (auto condition: restrictions) {
+                    if (not(condition.is_subset(left) or condition.is_subset(right))) return;
+                }
+                PT.update_for_cycle_folding(G, CE, C.cost_function(), *heuristics[folding_problem], left, right, cnf::CNF{});
+            };
+            if (restrictions.empty()) {
+                MinCutAGaT{}.partition(G.adjacency_matrix(), callback_without_greedy, folding_problem);
+            } else {
+                MinCutAGaT{}.partition(G.adjacency_matrix(), callback_with_greedy, folding_problem);
+            }
+        } else {
+            if (restrictions.empty()) {
+                auto callback = [&](Subproblem left, Subproblem right) {
+                    if ((left | right) != folding_problem) {
+                        PT.update(G, CE, C.cost_function(), left, right, cnf::CNF{});
+                    } else {
+                        PT.update_for_cycle_folding(G, CE, C.cost_function(), *heuristics[folding_problem], left, right, cnf::CNF{});
+                    }
+                };
+                G.adjacency_matrix().for_each_CSG_pair_undirected(folding_problem, callback);
+            } else {
+                auto callback = [&](Subproblem left, Subproblem right) {
+                    if ((left | right) != folding_problem) {
+                        PT.update(G, CE, C.cost_function(), left, right, cnf::CNF{});
+                    } else {
+                        for (auto condition: restrictions) {
+                            if (not(condition.is_subset(left) or condition.is_subset(right))) return;
+                        }
+                        PT.update_for_cycle_folding(G, CE, C.cost_function(), *heuristics[folding_problem], left, right, cnf::CNF{});
+                    }
+                };
+                G.adjacency_matrix().for_each_CSG_pair_undirected(folding_problem, callback);
+            }
+        }
+
+    };
+
+    auto get_final_problem_cost = [&](Subproblem problem) -> double {
+        return PT[problem].cost + YannakakisHeuristic::estimate_decompose_costs(G, complete_problem,PT[problem], CE);
+    };
+
+    /* Finalize the folds for both TD_Fold and TD_Fold-Greedy */
+    auto add_subproblem_fold_to_folds = [&](Subproblem problem, std::vector<fold_t>& folds){
+        auto create_fold_for_problem = [&](Subproblem problem) {
+            fold_t fold;
+            for (auto node_id: problem) {
+                fold.emplace(node_id);
+            }
+            return fold;
+        };
+        /* Decide whether to use complete join or stop to join */
+        auto create_two_folds = [&]() {
+            folds.emplace_back(create_fold_for_problem(PT[problem].left_fold));
+            folds.emplace_back(create_fold_for_problem(PT[problem].right_fold));
+        };
+        if (Options::Get().result_db_optimizer != Options::DP_ResultDB) create_two_folds();
+        else {
+            auto join_estimation = get_final_problem_cost(problem); //+ heuristics[problem]->estimate(G, CE, PT, problem, Subproblem());
+            auto no_join_estimation = PT[problem].folding_cost;
+            if (join_estimation < no_join_estimation) {
+                folds.emplace_back(create_fold_for_problem(problem));
+            } else {
+                create_two_folds();
+            }
+        }
+    };
+
+    auto get_folding_problem = [&](fold_t &fold) {
+        auto folding_problem = Subproblem();
+        for (auto node_id: fold) {
+            folding_problem |= Subproblem::Singleton(node_id);
+        }
+        return folding_problem;
+    };
+    // Estimate the whole folding costs for the given folds
+    auto estimate_folding_costs = [&](std::vector<fold_t>& folds) -> double {
+        double folding_costs = 0;
+        for (auto fold: folds) {
+            auto folding_problem = get_folding_problem(fold);
+            folding_costs += get_final_problem_cost(folding_problem);
+        }
+        return folding_costs;
+    };
+
+    // Estimate the final costs for the final TD_Root estimation for both DP_Fold and DP_Fold-Greedy
+    auto compute_td_root_order_and_costs = [&](std::vector<fold_t>& folds) {
+        // Use old matrix as default for new matrix
+        AdjacencyMatrix folded_matrix(G.adjacency_matrix());
+        std::vector<Subproblem> new_to_old_mapping(G.num_sources(), Subproblem(1));
+        create_folded_adjacency_matrix(folds, G.adjacency_matrix(), folded_matrix, new_to_old_mapping);
+
+        // Create new base models for the TD_Root numeration
+        std::vector<std::unique_ptr<DataModel>> base_models;
+        std::unordered_set<std::size_t> required_reductions;
+        for (auto node_id: complete_problem) {
+            Subproblem related_problem = new_to_old_mapping[node_id];
+            base_models.emplace_back(CE.copy(*PT[related_problem].model));
+            if (PT[related_problem].tuple_size != 0) required_reductions.emplace(node_id);
+        }
+        return enumerate_semi_join_reduction_order(G, required_reductions, folded_matrix, CE, base_models);
+    };
+
+    auto semi_join_reducer_plan = [&](std::vector<fold_t> folds) -> std::pair<std::unique_ptr<Producer>, bool> {
+        // Create source plans for folds
+        auto source_plans = std::make_unique<Producer*[]>(folds.size());
+        std::vector<std::unique_ptr<DataModel>> base_models;
+        std::unordered_set<std::size_t> required_reductions;
+        for (std::size_t i = 0; i < folds.size(); i++) {
+            auto folding_problem = get_folding_problem(folds[i]);
+            if (PT[folding_problem].tuple_size != 0) required_reductions.emplace(i);
+            if (not PT.has_plan(folding_problem)) {
+                auto callback = [&](Subproblem left, Subproblem right) {
+                    PT.update(G, CE, C.cost_function(), left, right, cnf::CNF{});
+                };
+                G.adjacency_matrix().for_each_CSG_pair_undirected(folding_problem, callback);
+            }
+            auto new_model = CE.copy(*PT[folding_problem].model);
+            new_model->assign_to(Subproblem::Singleton(i));
+            base_models.emplace_back(std::move(new_model));
+            source_plans[i] = construct_join_order(G, PT, folding_problem, current_source_plans);
+        }
+        // Fold the join graph
+        fold_query_graph(G, folds);
+
+        auto [reducer_order, _] = enumerate_semi_join_reduction_order(G, required_reductions, G.adjacency_matrix(), CE, base_models);
+
+        const auto num_sources = G.num_sources();
+
+        // Create semi-join reducer plan
+        auto semi_join_reduction_op = std::make_unique<SemiJoinReductionOperator>(std::move(G.projections()));
+        semi_join_reduction_op->semi_join_reduction_order() = std::move(reducer_order);
+        semi_join_reduction_op->sources() = std::move(G.sources());
+        semi_join_reduction_op->joins() = std::move(G.joins());
+        /* Add source plans as children. */
+        for (std::size_t i = 0; i < num_sources; ++i)
+            semi_join_reduction_op->add_child(source_plans[i]);
+        return { std::move(semi_join_reduction_op), true };
+    };
+    if (Options::Get().result_db_optimizer == Options::DP_ResultDB) C.plan_enumerator()(G, C.cost_function(), PT);
+
+    for (auto problem: dp_fold_problems) {
+        PT[problem].model = CE.estimate_join_all(G, PT, problem, {});
+        PT[problem].tuple_size = get_tuple_size(problem);
+        heuristics[problem] = std::make_unique<WeakCardinalityHeuristic>(WeakCardinalityHeuristic(PT, problem, G, CE));
+        solve_folding_problem(problem, std::vector<Subproblem>());
+        add_subproblem_fold_to_folds(problem, dp_fold_complete_folds);
+    }
+    for (auto problem: dp_fold_greedy_restricted_problems) {
+        PT[problem.first].model = CE.estimate_join_all(G, PT, problem.first, {});
+        PT[problem.first].tuple_size = get_tuple_size(problem.first);
+        heuristics[problem.first] = std::make_unique<WeakCardinalityHeuristic>(WeakCardinalityHeuristic(PT, problem.first, G, CE));
+        solve_folding_problem(problem.first, problem.second);
+        add_subproblem_fold_to_folds(problem.first, dp_fold_greedy_complete_folds);
+    }
+
+    if (Options::Get().result_db_optimizer == Options::DP_Fold) return semi_join_reducer_plan(dp_fold_complete_folds);
+    if (Options::Get().result_db_optimizer == Options::DP_Fold_Greedy) {
+        if (dp_fold_greedy_complete_folds.empty()) return semi_join_reducer_plan(dp_fold_complete_folds);
+        else return semi_join_reducer_plan(dp_fold_greedy_complete_folds);
+    }
+
+
+    auto [dp_fold_reducer_order, dp_fold_reducer_costs] = compute_td_root_order_and_costs(dp_fold_complete_folds);
+
+    double decompose_costs = PT[complete_problem].cost + YannakakisHeuristic::estimate_decompose_costs(G, complete_problem, PT[complete_problem], CE);
+    double td_fold_costs = dp_fold_reducer_costs + estimate_folding_costs(dp_fold_complete_folds);
+    std::cerr << "Reducer_costs " << td_fold_costs << " Decompose Costs " << decompose_costs
+              << '\n';
+    // No check to dp_fold_greedy if no application can be found
+    if (dp_fold_greedy_restricted_problems.empty()) {
+        if (decompose_costs < td_fold_costs) {
+            return decompose_plan(complete_problem);
+        } else {
+            // First, we need to create the source plans in order to return them
+            return semi_join_reducer_plan(dp_fold_complete_folds);
+        }
+    }
+
+    auto [dp_fold_greedy_reducer_order, dp_fold_greedy_reducer_costs] = compute_td_root_order_and_costs(dp_fold_greedy_complete_folds);
+    double td_fold_greedy_costs = dp_fold_greedy_reducer_costs + estimate_folding_costs(dp_fold_greedy_complete_folds);
+
+    return decompose_costs < td_fold_costs ?
+            (decompose_costs < td_fold_greedy_costs ? decompose_plan(complete_problem) :
+                semi_join_reducer_plan(dp_fold_greedy_complete_folds)) :
+                    (td_fold_costs < td_fold_greedy_costs ? semi_join_reducer_plan(dp_fold_complete_folds) :
+                        semi_join_reducer_plan(dp_fold_greedy_complete_folds));
+
+
+
+}
+
 std::pair<std::unique_ptr<Producer>, bool>
 Optimizer_ResultDB::operator()(QueryGraph &G) const
 {
@@ -1052,7 +1560,7 @@ Optimizer_ResultDB::operator()(QueryGraph &G) const
 
         std::unique_ptr<Producer> producer;
         Optimizer Opt(C.plan_enumerator(), C.cost_function());
-        producer = M_TIME_EXPR(Opt(G), "Compute the logical query plan", C.timer());
+        producer = Opt(G);
         return { std::move(producer), false };
     }
 
@@ -1061,25 +1569,18 @@ Optimizer_ResultDB::operator()(QueryGraph &G) const
 
     std::unique_ptr<Producer*[]> source_plans;
     std::vector<std::unique_ptr<DataModel>> base_models;
-    std::pair<std::unique_ptr<Producer>, PlanTableEntry> st_optimized;
+    std::unique_ptr<Producer> st_plan;
+
     if (Options::Get().optimize_result_db) {
-        Optimizer Opt(C.plan_enumerator(), C.cost_function());
-        st_optimized = Opt.optimize(G);
+        return Optimizer_ResultDB_utils::dp_resultdb(G);
     }
 
-    double yk_costs = 0;
+
     if (G.is_cyclic())
     {
-        if (Options::Get().optimize_result_db) {
-            auto [plans, cycle_costs] = Optimizer_ResultDB_utils::compute_and_solve_biconnected_components(G, base_models);
-            source_plans = std::move(plans);
-            yk_costs += cycle_costs;
-        }
-        else
-        {
-            source_plans = Optimizer_ResultDB_utils::solve_cycles_without_enum(G, base_models);
-        }
-    } else {
+        source_plans = Optimizer_ResultDB_utils::solve_cycles_without_enum(G, base_models);
+    }
+    else {
         std::vector<Subproblem> folding_problems;
         source_plans = std::make_unique<Producer*[]>(G.num_sources());
         Optimizer_ResultDB_utils::optimize(G, folding_problems, source_plans, base_models);
@@ -1089,31 +1590,19 @@ Optimizer_ResultDB::operator()(QueryGraph &G) const
     const auto num_sources = G.sources().size();
 
     std::vector<semi_join_order_t> semi_join_reduction_order;
-    if (Options::Get().optimize_result_db) {
-        double acyclic_costs;
-        std::tie(semi_join_reduction_order, acyclic_costs) = Optimizer_ResultDB_utils::enumerate_semi_join_reduction_order(G, CE, base_models);
-        yk_costs += acyclic_costs;
-    } else {
-        semi_join_reduction_order = Optimizer_ResultDB_utils::compute_semi_join_reduction_order(G);
-    }
-
-    if (st_optimized.second.cost <= yk_costs) {
-        auto decompose_op = std::make_unique<DecomposeOperator>(std::cout, std::move(G.projections()),
-                                                                std::move(G.sources()));
-        decompose_op->add_child(st_optimized.first.release());
-        return { std::move(decompose_op), true };
-    }
-
-
-    /* Construct a semi join reduction operator with all necessary information requried by the code generation. */
-    auto semi_join_reduction_op = std::make_unique<SemiJoinReductionOperator>(std::move(G.projections()),
-                                                                              std::move(G.sources()),
-                                                                              std::move(G.joins()),
-                                                                              std::move(semi_join_reduction_order));
-
+    auto semi_join_reduction_op = std::make_unique<SemiJoinReductionOperator>(std::move(G.projections()));
     /* Add source plans as children. */
     for (std::size_t i = 0; i < num_sources; ++i)
         semi_join_reduction_op->add_child(source_plans[i]);
+    semi_join_reduction_order = Optimizer_ResultDB_utils::compute_semi_join_reduction_order(G, *semi_join_reduction_op);
+
+
+    /* Construct a semi join reduction operator with all necessary information requried by the code generation. */
+    semi_join_reduction_op->semi_join_reduction_order() = std::move(semi_join_reduction_order);
+    semi_join_reduction_op->sources() = std::move(G.sources());
+    semi_join_reduction_op->joins() = std::move(G.joins());
+
+
 
     return { std::move(semi_join_reduction_op), true };
 }
@@ -1213,12 +1702,15 @@ std::unique_ptr<Producer*[]> Optimizer::optimize_source_plans(const QueryGraph &
     auto &CE = Catalog::Get().get_database_in_use().cardinality_estimator();
 
     auto source_plans = std::make_unique<Producer*[]>(num_sources);
+    std::vector<size_t> tuple_sizes;
+    G.get_projection_sizes_of_subproblems(tuple_sizes);
     for (auto &ds : G.sources()) {
         Subproblem s = Subproblem::Singleton(ds->id());
         if (auto bt = cast<BaseTable>(ds.get())) {
             /* Produce a scan for base tables. */
             PT[s].cost = 0;
             PT[s].model = CE.estimate_scan(G, s);
+            PT[s].tuple_size = tuple_sizes[ds->id()];
             auto &store = bt->table().store();
             auto source = std::make_unique<ScanOperator>(store, bt->name().assert_not_none());
 
@@ -1250,6 +1742,7 @@ std::unique_ptr<Producer*[]> Optimizer::optimize_source_plans(const QueryGraph &
             PT[s].cost = sub.cost;
             sub.model->assign_to(s); // adapt model s.t. it describes the result of the current subproblem
             PT[s].model = std::move(sub.model);
+            PT[s].tuple_size = tuple_sizes[ds->id()];
             source_plans[ds->id()] = sub_plan.release();
         }
 

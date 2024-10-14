@@ -42,7 +42,7 @@ stages:
         returncode: 0
 
     end2end:
-        cli_args: --insist-no-ternary-logic --result-db --backend WasmV8
+        cli_args: --insist-no-ternary-logic --result-db --backend WasmV8 --hash-table-implementation Chained
         out: |
             Result set for R:
             0,0,0,3,0

@@ -20,6 +20,7 @@ struct estimate_tag : const_virtual_crtp_helper<estimate_tag>::
 
 
 struct PlanTableLargeAndSparse;
+struct PlanTableEntry;
 struct PlanTableSmallOrDense;
 struct CardinalityEstimator;
 
@@ -28,6 +29,7 @@ struct M_EXPORT YannakakisHeuristic : estimate_tag::base_type
 {
     using Subproblem = QueryGraph::Subproblem;
     using estimate_tag::base_type::operator();
+
 
     YannakakisHeuristic() = default;
 
@@ -39,9 +41,8 @@ struct M_EXPORT YannakakisHeuristic : estimate_tag::base_type
         return operator()(estimate_tag{}, PT, left, right, G, CE);
     }
 
-    protected:
-    template<typename PlanTable>
-    static double estimate_decompose_costs(const QueryGraph &G, const PlanTable &PT, const CardinalityEstimator &CE, Subproblem problem);
+    public:
+    static double estimate_decompose_costs(const QueryGraph &G, Subproblem complete_problem, const PlanTableEntry& entry, const CardinalityEstimator &CE);
 };
 
 namespace {

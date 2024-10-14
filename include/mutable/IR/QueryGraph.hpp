@@ -70,8 +70,8 @@ struct M_EXPORT DataSource
     auto & joins() { return joins_; }
     const auto & joins() const { return joins_; }
 
-    /** Returns the estimated size of a tuple **/
-    virtual std::size_t tuple_size() const = 0;
+    /** Returns the estimated size of a tuple only considering the given projections **/
+    virtual std::size_t projection_relations(std::unordered_map<ThreadSafePooledOptionalString, std::unordered_set<ThreadSafePooledOptionalString>>& projections) const = 0;
 
     /** Returns `true` iff the data source is correlated. */
     virtual bool is_correlated() const = 0;
@@ -133,12 +133,11 @@ struct M_EXPORT BaseTable : DataSource
     /** Returns a reference to the `Table` providing the tuples. */
     const Table & table() const { return table_; }
 
-    std::size_t tuple_size() const override {
-        std::size_t tuple_size = 0;
-        for (auto &attribute : table_) {
-            tuple_size += attribute.type->size();
+    std::size_t projection_relations(std::unordered_map<ThreadSafePooledOptionalString, std::unordered_set<ThreadSafePooledOptionalString>>& projections) const override {
+        if (auto it = projections.find(name()); it != projections.end()) {
+            return 1UL;
         }
-        return tuple_size;
+        return 0;
     }
 
     ThreadSafePooledOptionalString name() const override { return alias().has_value() ? alias() : table_.name(); }
@@ -170,7 +169,7 @@ struct M_EXPORT Query : DataSource
 
     ThreadSafePooledOptionalString name() const override { return alias(); }
 
-    std::size_t tuple_size() const override;
+    std::size_t projection_relations(std::unordered_map<ThreadSafePooledOptionalString, std::unordered_set<ThreadSafePooledOptionalString>>& projections) const override;
 
     bool is_correlated() const override;
 };
@@ -358,7 +357,7 @@ struct M_EXPORT QueryGraph
     /** Returns `true` iff the graph contains a grouping. */
     bool grouping() const { return not group_by_.empty() or not aggregates_.empty(); }
     /** Returns the size of a tuple resulting from the join of the subproblem. **/
-    std::size_t get_tuple_size_of_subproblem(Subproblem subproblem) const;
+    void get_projection_sizes_of_subproblems(std::vector<std::size_t>& projection_sizes) const;
     /** Returns `true` iff the graph is correlated, i.e. it contains a correlated source. */
     bool is_correlated() const;
 

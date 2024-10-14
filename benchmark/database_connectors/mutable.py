@@ -81,7 +81,7 @@ class Mutable(Connector):
             command.extend(supplementary_args.split(' '))
         if config:
             command.extend(config['args'].split(' '))
-        command = command + ['--quiet', '-']
+        command = command + ['--plan', '-']
 
         # Variables
         timeout: int

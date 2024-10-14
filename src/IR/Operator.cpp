@@ -64,6 +64,10 @@ std::ostream & m::operator<<(std::ostream &out, const Operator &op) {
         },
         [&out, &depth](const SemiJoinReductionOperator &op) {
             indent(out, op, depth).out << "SemiJoinReductionOperator";
+            for (auto it = op.semi_join_reduction_order().crbegin(); it != op.semi_join_reduction_order().crend(); ++it) {
+                if (it != op.semi_join_reduction_order().crbegin()) out << " → ";
+                out << (*it);
+            }
         },
         [&out, &depth](const DecomposeOperator &op) {
             indent(out, op, depth).out << "DecomposeOperator";

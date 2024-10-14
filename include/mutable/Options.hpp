@@ -26,6 +26,14 @@ struct M_EXPORT Options
         YH_StrongCardinality,
     };
 
+    enum ResultDBOptimizerType
+    {
+        TD_Root,
+        DP_Fold,
+        DP_Fold_Greedy,
+        DP_ResultDB,
+    };
+
     /*----- Help -----------------------------------------------------------------------------------------------------*/
     bool show_help;
     bool show_version;
@@ -61,8 +69,14 @@ struct M_EXPORT Options
     /** If `true`, the RESULTDB operation will be enumerated. */
     bool optimize_result_db;
 
+    /** If `true`, the both Yannakakis and Decomposing options will be evaluated for RESULTDB. */
+    ResultDBOptimizerType result_db_optimizer = DP_ResultDB;
+
     /** If `true`, for RESULTDB, cycles will be reduced using greedy two-vertex cuts. */
     bool greedy_cuts = false;
+
+    /** If `true`, for RESULTDB, top-down will be utilized during enumeration. */
+    bool top_down = false;
 
     /** If `true`, decompose the single-table query result in multiple result sets, i.e. compute the same result as
      * using the `result_db` optimizer. */

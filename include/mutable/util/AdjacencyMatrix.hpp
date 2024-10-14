@@ -77,6 +77,14 @@ struct M_EXPORT AdjacencyMatrix
     /** Returns the bit at position `(i, j)`.  Both `i` and `j` must be in bounds. */
     Proxy<false> operator()(std::size_t i, std::size_t j) { return Proxy<false>(*this, i, j); }
 
+    /** Returns the bitset stored at position 'i'. */
+    SmallBitset &operator[](std::size_t i) { return m_[i]; }
+
+    /** Returns the number of sources represented by the matrix **/
+    std::size_t size() const {
+        return num_vertices_;
+    }
+
     Proxy<true> at(std::size_t i, std::size_t j) const {
         if (i >= num_vertices_ or j >= num_vertices_)
             throw out_of_range("index is out of bounds");
@@ -170,7 +178,7 @@ exit:
     bool is_connected_after_removal(SmallBitset removed, SmallBitset block) const {
 
         auto visited(removed);
-        auto rec = [this, &block, &visited](SmallBitset node, auto&& rec) -> void {
+        auto rec = [&](SmallBitset node, auto&& rec) -> void {
             visited |= node;
             auto allowed_neighbors = (neighbors(node) & block) - visited;
             for (size_t neighbor_id : allowed_neighbors) {

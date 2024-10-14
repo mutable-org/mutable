@@ -1,0 +1,130 @@
+description: Optimize Job Query Q1a with RESULTDB
+suite: job
+benchmark: RESULTDB Optimization times with JOB
+name: Q1a
+readonly: true
+chart:
+    x:
+        scale: linear
+        type: O
+        label: Scale factor
+    y:
+        scale: linear
+        type: Q
+        label: 'Optimization Time [ms]'
+data:                                                     # Definition of the tables this experiment uses.
+    'company_type':                                       # Name of this table.
+        file: 'benchmark/job/data/company_type.csv'       # Relative path to the file containing the table data
+        format: 'csv'                                     # Format of the file. Optional, defaults to 'csv'.
+        delimiter: ','                                    # Delimiter of the file. Optional, defaults to ','.
+        header: 0                                         # Whether the file has a header line. 1=true, 0=false. Optional, defaults to 0.
+        attributes:                                       # Map from attribute name to its type.
+            'id': 'INT NOT NULL'
+            'kind': 'CHAR 32 NOT NULL'
+    'info_type':
+        file: 'benchmark/job/data/info_type.csv'
+        format: 'csv'
+        delimiter: ','
+        header: 0
+        attributes:
+            'id': 'INT NOT NULL'
+            'info': 'CHAR 32 NOT NULL'
+    'movie_companies':
+        file: 'benchmark/job/data/movie_companies.csv'
+        format: 'csv'
+        delimiter: ','
+        header: 0
+        attributes:
+            'id': 'INT NOT NULL'
+            'movie_id': 'INT NOT NULL'
+            'company_id': 'INT NOT NULL'
+            'company_type_id': 'INT NOT NULL'
+            'note': 'CHAR 100'
+    'movie_info_idx':
+        file: 'benchmark/job/data/movie_info_idx.csv'
+        format: 'csv'
+        delimiter: ','
+        header: 0
+        attributes:
+            'id': 'INT NOT NULL'
+            'movie_id': 'INT NOT NULL'
+            'info_type_id': 'INT NOT NULL'
+            'info': 'CHAR 10 NOT NULL'
+            'note': 'CHAR 1'
+    'title':
+        file: 'benchmark/job/data/title.csv'
+        format: 'csv'
+        delimiter: ','
+        header: 0
+        attributes:
+            'id': 'INT NOT NULL'
+            'title': 'CHAR 100 NOT NULL'
+            'imdb_index': 'CHAR 12'
+            'kind_id': 'INT NOT NULL'
+            'production_year': 'INT'
+            'imdb_id': 'INT'
+            'phonetic_code': 'CHAR 5'
+            'episode_of_id': 'INT'
+            'season_nr': 'INT'
+            'episode_nr': 'INT'
+            'series_years': 'CHAR 49'
+            'md5sum': 'CHAR 32'
+
+
+systems:
+    mutable:
+        args: >-
+          --backend WasmV8
+          --no-simd
+          -t
+          --cardinality-estimator Injected
+          --plan-enumerator DPccp
+          --use-cardinality-file benchmark/result-db-eval/job/q1a_injected_cardinalities.json
+        configurations:
+          'ResultDB-Heuristic':
+            args: >-
+              --result-db
+            pattern:
+              Execution Time: '^Execute machine code:.*'
+          'DP_Fold':
+            args: >-
+              --result-db
+              --optimize-result-db
+              --dp_fold
+            pattern:
+              Execution Time: '^Execute machine code:.*'
+          'DP_Fold-Greedy':
+            args: >-
+              --result-db
+              --optimize-result-db
+              --dp_fold_greedy
+            pattern:
+              Execution Time: '^Execute machine code:.*'
+          'DP_ResultDB':
+            args: >-
+              --result-db
+              --optimize-result-db
+              --dp_resultdb
+            pattern:
+              Execution Time: '^Execute machine code:.*'
+          'Decompose':
+            args: >-
+              --decompose
+            pattern:
+              Execution Time: '^Execute machine code:.*'
+        cases:
+            1:  SELECT mc.note,
+                       t.title,
+                       t.production_year
+                FROM company_type AS ct,
+                     info_type AS it,
+                     movie_companies AS mc,
+                     movie_info_idx AS mi_idx,
+                     title AS t
+                WHERE ct.kind = "production companies"
+                  AND it.info = "top 250 rank"
+                  AND ct.id = mc.company_type_id
+                  AND t.id = mc.movie_id
+                  AND t.id = mi_idx.movie_id
+                  AND mc.movie_id = mi_idx.movie_id
+                  AND it.id = mi_idx.info_type_id;

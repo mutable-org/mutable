@@ -6,6 +6,8 @@ third-party/
 coverage/
 catch.xml
 .idea/
+benchmark/job/data
+benchmark/result-db-eval/synthetic/data
 
 # Git version information
 include/mutable/gitversion.tbl

@@ -40,8 +40,12 @@ struct M_EXPORT PlanTableEntry
 {
     Subproblem left; ///< the left subproblem
     Subproblem right; ///< the right subproblem
+    Subproblem left_fold; ///< the left fold problem
+    Subproblem right_fold; ///< the right fold problem
     std::unique_ptr<DataModel> model; ///< the model of this subplan's result
-    double cost = std::numeric_limits<double>::infinity(); ///< the cost of the subproblem
+    std::size_t tuple_size = std::numeric_limits<std::size_t>::infinity(); ///< the byte size of one tuple of this subproblem
+    double folding_cost = std::numeric_limits<double>::infinity(); ///< the folding cost of the subproblem
+    double cost = std::numeric_limits<double>::infinity(); ///< the join cost of the subproblem
     ///> additional data associated to this `PlanTableEntry`; used for holistic optimization
     std::unique_ptr<PlanTableEntryData> data;
 
@@ -135,6 +139,7 @@ struct M_EXPORT PlanTableBase : crtp<Actual, PlanTableBase>
             M_insist(bool(entry_right.model), "must have a model for the right side");
             // TODO use join condition for cardinality estimation
             entry.model = CE.estimate_join(G, *entry_left.model, *entry_right.model, condition);
+            entry.tuple_size = entry_left.tuple_size + entry_right.tuple_size;
         }
 
         /*----- Calculate join cost. ---------------------------------------------------------------------------------*/
@@ -173,14 +178,13 @@ struct M_EXPORT PlanTableBase : crtp<Actual, PlanTableBase>
         * TODO: Use condition*/
         auto &entry = operator[](left | right);
         auto cost = YH.estimate(G, CE, actual(), left, right) + operator[](left).cost + operator[](right).cost;
-
         /*----- Update plan table entry. -----------------------------------------------------------------------------*/
-        if (not has_plan(left | right) or cost < entry.cost) {
+        if (not has_plan(left | right) or cost < entry.folding_cost) {
             /* If there is no plan yet for this subproblem or the current plan is better than the best plan yet, update
              * the plan and costs for this subproblem. */
-            entry.cost = cost;
-            entry.left = left;
-            entry.right = right;
+            entry.folding_cost = cost;
+            entry.left_fold = left;
+            entry.right_fold = right;
         }
     }
 
@@ -284,7 +288,7 @@ struct M_EXPORT PlanTableSmallOrDense : PlanTableBase<PlanTableSmallOrDense>
         if (s.size() == 1) return true;
         auto &e = operator[](s);
         M_insist(e.left.empty() == e.right.empty(), "either both sides are not set or both sides are set");
-        return not e.left.empty();
+        return not (e.left.empty() && e.left_fold.empty());
     }
 
     void reset_costs() {
@@ -370,7 +374,7 @@ struct M_EXPORT PlanTableLargeAndSparse : PlanTableBase<PlanTableLargeAndSparse>
         if (auto it = table_.find(s); it != table_.end()) {
             auto &e = it->second;
             M_insist(e.left.empty() == e.right.empty(), "either both sides are not set or both sides are set");
-            return not e.left.empty();
+            return not (e.left.empty() && e.left_fold.empty());
         } else {
             return false;
         }

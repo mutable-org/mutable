@@ -2138,17 +2138,27 @@ void QueryGraph::dump(std::ostream &out) const
 
     out << "\n}" << std::endl;
 }
-std::size_t QueryGraph::get_tuple_size_of_subproblem(Subproblem subproblem) const {
-    std::size_t tuple_size = 0;
-    for (auto node : subproblem) {
-        tuple_size += sources_[node]->tuple_size();
+void QueryGraph::get_projection_sizes_of_subproblems(std::vector<std::size_t>& projection_sizes) const {
+    std::unordered_map<ThreadSafePooledOptionalString, std::unordered_set<ThreadSafePooledOptionalString>> projections;
+    for (const auto& proj: projections_) {
+        if (auto D = cast<const ast::Designator>(proj.first)) {
+            if (auto it = projections.find(D->table_name.text); it != projections.end()) it->second.emplace(D->attr_name.text);
+            else projections.emplace(D->table_name.text, std::unordered_set<ThreadSafePooledOptionalString>{D->attr_name.text});
+        }
     }
-    return tuple_size;
+    for (auto node : Subproblem::All(num_sources())) {
+        projection_sizes.push_back(sources_[node]->projection_relations(projections));
+    }
 }
 void QueryGraph::dump() const { dump(std::cerr); }
 
-std::size_t Query::tuple_size() const  {
-    return query_graph_->get_tuple_size_of_subproblem(Subproblem::All(query_graph_->num_sources()));
+std::size_t Query::projection_relations(
+        std::unordered_map<ThreadSafePooledOptionalString, std::unordered_set<ThreadSafePooledOptionalString>> &projections) const {
+    std::size_t projection_relations = 0;
+    for (auto node : Subproblem::All(query_graph_->num_sources())) {
+        projection_relations += query_graph_->sources()[node]->projection_relations(projections);
+    }
+    return projection_relations;
 }
 
 M_LCOV_EXCL_STOP

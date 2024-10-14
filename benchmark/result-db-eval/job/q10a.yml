@@ -1,0 +1,159 @@
+description: Optimize Job Query Q10a with RESULTDB
+suite: job
+benchmark: RESULTDB Optimization times with JOB
+name: Q10a
+readonly: true
+chart:
+    x:
+        scale: linear
+        type: O
+        label: Scale factor
+    y:
+        scale: linear
+        type: Q
+        label: 'Optimization Time [ms]'
+data:                                                     # Definition of the tables this experiment uses.
+    'char_name':
+      file: 'benchmark/job/data/char_name.csv'
+      format: 'csv'
+      delimiter: ','
+      header: 0
+      attributes:
+        'id': 'INT NOT NULL'
+        'name': 'CHAR 100 NOT NULL'
+        'imdb_index': 'CHAR 2'
+        'imdb_id': 'INT'
+        'name_pcode_nf': 'CHAR 5'
+        'surname_pcode': 'CHAR 5'
+        'md5sum': 'CHAR 32'
+    'cast_info':
+      file: 'benchmark/job/data/cast_info.csv'
+      format: 'csv'
+      delimiter: ','
+      header: 0
+      attributes:
+        'id': 'INT NOT NULL'
+        'person_id': 'INT NOT NULL'
+        'movie_id': 'INT NOT NULL'
+        'person_role_id': 'INT'
+        'note': 'CHAR 18'
+        'nr_order': 'INT'
+        'role_id': 'INT NOT NULL'
+    'company_name': # Name of this table.
+      file: 'benchmark/job/data/company_name.csv'       # Relative path to the file containing the table data
+      format: 'csv'                                     # Format of the file. Optional, defaults to 'csv'.
+      delimiter: ','                                    # Delimiter of the file. Optional, defaults to ','.
+      header: 0                                         # Whether the file has a header line. 1=true, 0=false. Optional, defaults to 0.
+      attributes: # Map from attribute name to its type.
+        'id': 'INT NOT NULL'
+        'name': 'CHAR 100 NOT NULL'
+        'country_code': 'CHAR 32 '
+        'imdb_id': 'INT'
+        'name_pcode_nf': 'CHAR 5'
+        'name_pcode_sf': 'CHAR 5'
+        'md5sum': 'CHAR 32'
+    'company_type': # Name of this table.
+      file: 'benchmark/job/data/company_type.csv'       # Relative path to the file containing the table data
+      format: 'csv'                                     # Format of the file. Optional, defaults to 'csv'.
+      delimiter: ','                                    # Delimiter of the file. Optional, defaults to ','.
+      header: 0                                         # Whether the file has a header line. 1=true, 0=false. Optional, defaults to 0.
+      attributes: # Map from attribute name to its type.
+        'id': 'INT NOT NULL'
+        'kind': 'CHAR 32 NOT NULL'
+    'movie_companies':
+      file: 'benchmark/job/data/movie_companies.csv'
+      format: 'csv'
+      delimiter: ','
+      header: 0
+      attributes:
+        'id': 'INT NOT NULL'
+        'movie_id': 'INT NOT NULL'
+        'company_id': 'INT NOT NULL'
+        'company_type_id': 'INT NOT NULL'
+        'note': 'CHAR 100'
+    'role_type':
+      file: 'benchmark/job/data/role_type.csv'
+      format: 'csv'
+      delimiter: ','
+      header: 0
+      attributes:
+        'id': 'INT NOT NULL'
+        'role': 'CHAR 32'
+    'title':
+        file: 'benchmark/job/data/title.csv'
+        format: 'csv'
+        delimiter: ','
+        header: 0
+        attributes:
+            'id': 'INT NOT NULL'
+            'title': 'CHAR 100 NOT NULL'
+            'imdb_index': 'CHAR 12'
+            'kind_id': 'INT NOT NULL'
+            'production_year': 'INT'
+            'imdb_id': 'INT'
+            'phonetic_code': 'CHAR 5'
+            'episode_of_id': 'INT'
+            'season_nr': 'INT'
+            'episode_nr': 'INT'
+            'series_years': 'CHAR 49'
+            'md5sum': 'CHAR 32'
+systems:
+  mutable:
+    args: >-
+      --backend WasmV8
+      --no-simd
+      --plan-enumerator DPccp
+      --cardinality-estimator Injected
+      --use-cardinality-file benchmark/result-db-eval/job/q10a_injected_cardinalities.json
+    configurations:
+      'ResultDB-Heuristic':
+        args: >-
+          --result-db
+        pattern:
+          Execution Time: '^Execute machine code:.*'
+      'DP_Fold':
+        args: >-
+          --result-db
+          --optimize-result-db
+          --dp_fold
+        pattern:
+          Execution Time: '^Execute machine code:.*'
+      'DP_Fold-Greedy':
+        args: >-
+          --result-db
+          --optimize-result-db
+          --dp_fold_greedy
+        pattern:
+          Execution Time: '^Execute machine code:.*'
+      'DP_ResultDB':
+        args: >-
+          --result-db
+          --optimize-result-db
+          --dp_resultdb
+        pattern:
+          Execution Time: '^Execute machine code:.*'
+      'Decompose':
+        args: >-
+          --decompose
+        pattern:
+          Execution Time: '^Execute machine code:.*'
+    cases:
+      0: SELECT chn.name,
+               t.title
+        FROM char_name AS chn,
+             cast_info AS ci,
+             company_name AS cn,
+             company_type AS ct,
+             movie_companies AS mc,
+             role_type AS rt,
+             title AS t
+        WHERE cn.country_code = "[ru]"
+          AND rt.role = "actor"
+          AND t.production_year > 2005
+          AND t.id = mc.movie_id
+          AND t.id = ci.movie_id
+          AND ci.movie_id = mc.movie_id
+          AND chn.id = ci.person_role_id
+          AND rt.id = ci.role_id
+          AND cn.id = mc.company_id
+          AND ct.id = mc.company_type_id;

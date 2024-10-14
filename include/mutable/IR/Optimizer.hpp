@@ -88,7 +88,7 @@ struct M_EXPORT SemiJoinCostFunction
 
 struct M_EXPORT TreeEnumerator
 {
-    using cost_table_t = std::vector<std::unordered_map<std::size_t, double>>;
+    using cost_table_t = std::vector<std::unordered_map<std::size_t, std::pair<double, bool>>>;
     using model_table_t = std::vector<std::unordered_map<std::size_t, std::unique_ptr<DataModel>>>;
     using semi_join_order_t = SemiJoinReductionOperator::semi_join_order_t;
     using card_order_t = std::vector<std::size_t>;
@@ -98,14 +98,14 @@ struct M_EXPORT TreeEnumerator
     model_table_t model_table_;
     public:
     TreeEnumerator(std::size_t n) : cost_table_(n), model_table_(n) {}
-    std::pair<std::size_t, double> find_best_root(QueryGraph &G, const CardinalityEstimator &CE, SemiJoinCostFunction &SC, card_order_t card_orders[], std::vector<std::unique_ptr<DataModel>> &base_models);
-    void update_cost_table(std::size_t parent, std::size_t child, double costs) {
-        cost_table_[parent].emplace(child, costs);
+    std::pair<std::size_t, double> find_best_root(QueryGraph &G, std::unordered_set<std::size_t> required_reductions, const AdjacencyMatrix& adj_matrix, const CardinalityEstimator &CE, SemiJoinCostFunction &SC, card_order_t card_orders[], std::vector<std::unique_ptr<DataModel>> &base_models);
+    void update_cost_table(std::size_t parent, std::size_t child, double costs, bool needs_reduction) {
+        cost_table_[parent].emplace(child, std::pair(costs, needs_reduction));
     }
 
-    void compute_cardinality_order(const QueryGraph &G, const CardinalityEstimator &CE, std::size_t node, std::vector<std::size_t> &card_order, std::vector<std::unique_ptr<DataModel>> &base_models);
+    void compute_cardinality_order(const QueryGraph &G, const AdjacencyMatrix& adj_matrix, const CardinalityEstimator &CE, std::size_t node, std::vector<std::size_t> &card_order, std::vector<std::unique_ptr<DataModel>> &base_models);
 
-    void determine_reduced_models(QueryGraph &G, const CardinalityEstimator &CE, card_order_t card_orders[], std::vector<std::unique_ptr<DataModel>> &base_models);
+    void determine_reduced_models(QueryGraph &G, const AdjacencyMatrix& adj_matrix, const CardinalityEstimator &CE, card_order_t card_orders[], std::vector<std::unique_ptr<DataModel>> &base_models);
 
     void update_model_table(std::size_t parent, std::size_t child, std::unique_ptr<DataModel> model) {
         model_table_[parent].emplace(child, std::move(model));
@@ -132,12 +132,12 @@ namespace Optimizer_ResultDB_utils {
     using bc_forest_t = std::unordered_map<Subproblem, std::vector<Subproblem>, SubproblemHash>;
 
     std::vector<fold_t> compute_folds(const QueryGraph &G);
-    DataSource & get_data_source_with_highest_degree(QueryGraph &G);
+    DataSource & choose_root_node(QueryGraph &G, SemiJoinReductionOperator &op);
     void fold_query_graph(QueryGraph &G, std::vector<fold_t> &folds);
     void combine_joins(QueryGraph &G);
 
-    std::vector<semi_join_order_t> compute_semi_join_reduction_order(QueryGraph &G);
-    std::pair<std::vector<semi_join_order_t>, double> enumerate_semi_join_reduction_order(QueryGraph &G, const CardinalityEstimator &CE, std::vector<std::unique_ptr<DataModel>> &base_models);
+    std::vector<semi_join_order_t> compute_semi_join_reduction_order(QueryGraph &G, SemiJoinReductionOperator &op);
+    std::pair<std::vector<semi_join_order_t>, double> enumerate_semi_join_reduction_order(QueryGraph &G, std::unordered_set<std::size_t> required_reductions, const AdjacencyMatrix& adj_matrix, const CardinalityEstimator &CE, std::vector<std::unique_ptr<DataModel>> &base_models);
     std::pair<std::unique_ptr<Producer*[]>, double>  compute_and_solve_biconnected_components(QueryGraph &G, std::vector<std::unique_ptr<DataModel>> &base_models);
     std::unique_ptr<Producer*[]> solve_cycles_without_enum(QueryGraph &G, std::vector<std::unique_ptr<DataModel>> &base_models);
     void find_vertex_cuts(QueryGraph &G, Subproblem block, Subproblem &already_used, std::vector<fold_t> &folds);
@@ -153,6 +153,12 @@ namespace Optimizer_ResultDB_utils {
     double optimize_with_plantable(QueryGraph &G, std::vector<Subproblem> &folding_problems, std::unique_ptr<Producer*[]> &source_plans,  std::vector<std::unique_ptr<DataModel>> &base_models);
     template<typename PlanTable>
     std::unique_ptr<Producer*[]> optimize_source_plans(const QueryGraph &G, PlanTable &PT);
+    std::pair<std::unique_ptr<Producer>, bool> dp_resultdb(QueryGraph &G);
+    template<typename PlanTable>
+    std::pair<std::unique_ptr<Producer>, bool> dp_resultdb_with_plantable(QueryGraph &G);
+    void get_folds_and_folding_problems(QueryGraph &G, std::vector<Optimizer_ResultDB_utils::fold_t> &folds, std::unordered_set<Subproblem, SubproblemHash> &folding_problems);
+    void get_greedy_folds_and_folding_problems(QueryGraph &G, std::vector<Optimizer_ResultDB_utils::fold_t> &folds, std::unordered_map<Subproblem, std::vector<Subproblem>, SubproblemHash> &restricted_folding_problems);
+    void create_folded_adjacency_matrix(std::vector<fold_t> folds, AdjacencyMatrix &old_matrix, AdjacencyMatrix& new_matrix, std::vector<Subproblem>& new_to_old_mapping);
 
 }
 

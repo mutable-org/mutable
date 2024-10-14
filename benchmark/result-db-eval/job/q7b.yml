@@ -1,0 +1,183 @@
+description: Optimize Job Query Q7b with RESULTDB
+suite: job
+benchmark: RESULTDB Optimization times with JOB
+name: Q7b
+readonly: true
+chart:
+    x:
+        scale: linear
+        type: O
+        label: Scale factor
+    y:
+        scale: linear
+        type: Q
+        label: 'Optimization Time [ms]'
+data:
+    'aka_name':
+        file: 'benchmark/job/data/aka_name.csv'
+        format: 'csv'
+        delimiter: ','
+        header: 0
+        attributes:
+            'id': 'INT NOT NULL'
+            'person_id': 'INT NOT NULL'
+            'name': 'CHAR 100 NOT NULL'
+            'imdb_index': 'CHAR 12'
+            'name_pcode_cf': 'CHAR 5'
+            'name_pcode_nf': 'CHAR 5'
+            'surname_pcode': 'CHAR 5'
+            'md5sum': 'CHAR 32'
+    'cast_info':
+        file: 'benchmark/job/data/cast_info.csv'
+        format: 'csv'
+        delimiter: ','
+        header: 0
+        attributes:
+          'id': 'INT NOT NULL'
+          'person_id': 'INT NOT NULL'
+          'movie_id': 'INT NOT NULL'
+          'person_role_id': 'INT'
+          'note': 'CHAR 18'
+          'nr_order': 'INT'
+          'role_id': 'INT NOT NULL'
+    'info_type':
+        file: 'benchmark/job/data/info_type.csv'
+        format: 'csv'
+        delimiter: ','
+        header: 0
+        attributes:
+            'id': 'INT NOT NULL'
+            'info': 'CHAR 32 NOT NULL'
+    'link_type':
+        file: 'benchmark/job/data/link_type.csv'
+        format: 'csv'
+        delimiter: ','
+        header: 0
+        attributes:
+            'id': 'INT NOT NULL'
+            'link': 'CHAR 32 NOT NULL'
+    'movie_link':
+        file: 'benchmark/job/data/movie_link.csv'
+        format: 'csv'
+        delimiter: ','
+        header: 0
+        attributes:
+            'id': 'INT NOT NULL'
+            'movie_id': 'INT NOT NULL'
+            'linked_movie_id': 'INT NOT NULL'
+            'link_type_id': 'INT NOT NULL'
+    'name':
+        file: 'benchmark/job/data/name.csv'
+        format: 'csv'
+        delimiter: ','
+        header: 0
+        attributes:
+          'id': 'INT NOT NULL'
+          'name': 'CHAR 100 NOT NULL'
+          'imdb_index': 'CHAR 12'
+          'imdb_id': 'INT'
+          'gender': 'CHAR 1'
+          'name_pcode_cf': 'CHAR 5'
+          'name_pcode_nf': 'CHAR 5'
+          'surname_pcode': 'CHAR 5'
+          'md5sum': 'CHAR 32'
+    'person_info':
+        file: 'benchmark/job/data/person_info.csv'
+        format: 'csv'
+        delimiter: ','
+        header: 0
+        attributes:
+          'id': 'INT NOT NULL'
+          'person_id': 'INT NOT NULL'
+          'info_type_id': 'INT NOT NULL'
+          'info': 'CHAR 100 NOT NULL'
+          'note': 'CHAR 15'
+    'title':
+        file: 'benchmark/job/data/title.csv'
+        format: 'csv'
+        delimiter: ','
+        header: 0
+        attributes:
+            'id': 'INT NOT NULL'
+            'title': 'CHAR 100 NOT NULL'
+            'imdb_index': 'CHAR 12'
+            'kind_id': 'INT NOT NULL'
+            'production_year': 'INT'
+            'imdb_id': 'INT'
+            'phonetic_code': 'CHAR 5'
+            'episode_of_id': 'INT'
+            'season_nr': 'INT'
+            'episode_nr': 'INT'
+            'series_years': 'CHAR 49'
+            'md5sum': 'CHAR 32'
+
+
+
+systems:
+    mutable:
+        args: >-
+          --backend WasmV8
+          --no-simd
+          --plan-enumerator DPccp
+          --cardinality-estimator Injected
+          --use-cardinality-file benchmark/result-db-eval/job/q7b_injected_cardinalities.json
+        configurations:
+          'ResultDB-Heuristic':
+            args: >-
+              --result-db
+            pattern:
+              Execution Time: '^Execute machine code:.*'
+          'DP_Fold':
+            args: >-
+              --result-db
+              --optimize-result-db
+              --dp_fold
+            pattern:
+              Execution Time: '^Execute machine code:.*'
+          'DP_Fold-Greedy':
+            args: >-
+              --result-db
+              --optimize-result-db
+              --dp_fold_greedy
+            pattern:
+              Execution Time: '^Execute machine code:.*'
+          'DP_ResultDB':
+            args: >-
+              --result-db
+              --optimize-result-db
+              --dp_resultdb
+            pattern:
+              Execution Time: '^Execute machine code:.*'
+          'Decompose':
+            args: >-
+              --decompose
+            pattern:
+              Execution Time: '^Execute machine code:.*'
+        cases:
+            1:  SELECT n.name,
+                       t.title
+                FROM aka_name AS an,
+                     cast_info AS ci,
+                     info_type AS it,
+                     link_type AS lt,
+                     movie_link AS ml,
+                     name AS n,
+                     person_info AS pi,
+                     title AS t
+                WHERE it.info = "mini biography"
+                  AND lt.link = "features"
+                  AND n.gender= "m"
+                  AND pi.note = "Volker Boehm"
+                  AND t.production_year >= 1980
+                  AND t.production_year <= 1984
+                  AND n.id = an.person_id
+                  AND n.id = pi.person_id
+                  AND ci.person_id = n.id
+                  AND t.id = ci.movie_id
+                  AND ml.linked_movie_id = t.id
+                  AND lt.id = ml.link_type_id
+                  AND it.id = pi.info_type_id
+                  AND pi.person_id = an.person_id
+                  AND pi.person_id = ci.person_id
+                  AND an.person_id = ci.person_id
+                  AND ci.movie_id = ml.linked_movie_id;

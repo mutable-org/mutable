@@ -4462,11 +4462,13 @@ void SemiJoinReduction::execute(const Match<SemiJoinReduction> &M, setup_t, pipe
     };
 
     /*----- Bottom-up Semi-joins. -----*/
-    std::unordered_multimap<std::size_t, semi_join_info_t> processed_data_sources;
+    std::multimap<std::size_t, semi_join_info_t> processed_data_sources;
     auto &root = semi_join_reduction_order.front().lhs;
     for (auto it = semi_join_reduction_order.crbegin(); it != semi_join_reduction_order.crend(); ++it) {
         auto &parent = it->lhs;
         auto &child = it->rhs;
+
+        std::cout << child.name() << "\n";
 
         const bool is_leaf = not processed_data_sources.contains(child.id());
         const bool is_root_child = parent == root;
@@ -4717,8 +4719,10 @@ void SemiJoinReduction::execute(const Match<SemiJoinReduction> &M, setup_t, pipe
                         } else {
                             /*----- Probe child hash table and recurse. -----*/
                             std::vector<SQL_t> key;
-                            for (auto &probe_key : it->second.keys)
+                            for (auto &probe_key : it->second.keys) {
                                 key.emplace_back(env.get(probe_key));
+                                std::cout << probe_key << "\n";
+                            }
                             auto hint = it->second.ht->compute_bucket(HashTable::clone(key));
                             Boolx1 found = it->second.ht->find(HashTable::clone(key), hint.clone()).second;
                             probe_hints.emplace_back(std::move(key), hint);

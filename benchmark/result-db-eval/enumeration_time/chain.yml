@@ -115,20 +115,32 @@ data:
             'fkey': 'INT'
 systems:
     mutable:
-        args: --dryrun
+        args: --dryrun  --plan-enumerator DPccp
         configurations:
-            DP_CCP:
-                args: '--plan-enumerator DPccp'
-                pattern: 'Compute the logical query plan:.*'
-            ResultDB-Heuristic:
-                args: '--result-db'
-                pattern: '^Compute the logical query plan:.*'
-            DP_Root:
-                args: '--result-db --optimize-result-db'
-                pattern: '^Compute the logical query plan:.*'
-            DP_ResultDB:
-                args: '--plan-enumerator DPccp --result-db --optimize-result-db --hybrid --top-down'
-                pattern: '^Compute the logical query plan:.*'
+          'ResultDB-Heuristic':
+            args: >-
+              --result-db
+            pattern:
+              Execution Time: '^Compute the logical query plan:.*'
+          'TD_Root':
+            args: >-
+              --result-db
+              --optimize-result-db
+              --td_root
+            pattern:
+              Execution Time: '^Compute the logical query plan:.*'
+          'DP_ResultDB':
+            args: >-
+              --result-db
+              --optimize-result-db
+              --dp_resultdb
+            pattern:
+              Execution Time: '^Compute the logical query plan:.*'
+          'Decompose':
+            args: >-
+              --decompose
+            pattern:
+              Execution Time: '^Compute the logical query plan:.*'
         cases:
             5:  SELECT
                     *

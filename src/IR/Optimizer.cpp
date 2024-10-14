@@ -158,7 +158,7 @@ Optimizer::compute_projections_required_for_order_by(const std::vector<projectio
 
 double SemiJoinCostFunction::estimate_semi_join_costs(const CardinalityEstimator &CE, const DataModel &left, const DataModel &right)
 {
-    return estimate_semi_join_hash_costs(CE, left) + estimate_semi_join_probe_costs(CE, right);
+    return estimate_semi_join_hash_costs(CE, right) + estimate_semi_join_probe_costs(CE, left);
 }
 
 double SemiJoinCostFunction::estimate_semi_join_probe_costs(const CardinalityEstimator &CE, const DataModel &model)
@@ -168,7 +168,7 @@ double SemiJoinCostFunction::estimate_semi_join_probe_costs(const CardinalityEst
 
 double SemiJoinCostFunction::estimate_semi_join_hash_costs(const CardinalityEstimator &CE, const DataModel &model)
 {
-    return double(CE.predict_cardinality(model));
+    return 2 * double(CE.predict_cardinality(model));
 }
 
 void TreeEnumerator::determine_reduced_models(QueryGraph &G, const AdjacencyMatrix& adj_matrix, const CardinalityEstimator &CE, card_order_t card_orders[], std::vector<std::unique_ptr<DataModel>> &base_models)
@@ -252,7 +252,7 @@ std::pair<std::size_t, double> TreeEnumerator::find_best_root(QueryGraph &G, std
             costs += it_costs->second.first + // Recursive Tree costs
                      SJ.estimate_semi_join_costs(CE, *node_model, *it_model->second); // Bottom-up Semi-join costs between node and child
             node_model = CE.estimate_semi_join(G, *node_model, *it_model->second, {});
-            if (it_costs->second.second || parent == node) {
+            if (it_costs->second.second && parent != node) {
                 // Top-down Semi-join costs between child and node
                 costs += SJ.estimate_semi_join_costs(CE, *it_model->second, *node_fully_reduced_model);
                 reduction_required = true;
@@ -591,7 +591,7 @@ void Optimizer_ResultDB_utils::find_vertex_cuts(QueryGraph &G, Subproblem block,
     for (Subproblem pair : vertex_cuts) {
         cut_overlaps.emplace(pair, 0);
         for (size_t pair_node : pair) {
-            cut_overlaps[pair] += node_counts[pair_node] - 1;
+            cut_overlaps[pair] += node_counts[pair_node];
         }
     }
 
@@ -607,8 +607,8 @@ void Optimizer_ResultDB_utils::find_vertex_cuts(QueryGraph &G, Subproblem block,
         helper[i] += helper[i-1];
     }
 
-    for (int i = vertex_cuts.size() - 1; i >= 0; i++) {
-        sorted_vertex_cuts[helper[cut_overlaps[vertex_cuts[i]]]] = vertex_cuts[i];
+    for (int i = vertex_cuts.size() - 1; i >= 0; i--) {
+        sorted_vertex_cuts[helper[cut_overlaps[vertex_cuts[i]]] - 1] = vertex_cuts[i];
         helper[cut_overlaps[vertex_cuts[i]]] -= 1;
     }
 
@@ -645,7 +645,7 @@ void Optimizer_ResultDB_utils::find_and_apply_vertex_cuts(QueryGraph &G, std::ve
         blocks = std::vector<Subproblem>(0);
         cut_vertices = Subproblem();
 
-        /* Get update adjacency matric */
+        /* Get update adjacency matrix */
         auto &M = G.adjacency_matrix();
         M.compute_blocks_and_cut_vertices(blocks, cut_vertices, 3);
     }
@@ -800,6 +800,7 @@ void Optimizer_ResultDB_utils::get_greedy_folds_and_folding_problems(QueryGraph 
 
     // Use old matrix as default for new matrix!
     AdjacencyMatrix greedy_matrix(M);
+    already_used = Subproblem();
     std::vector<Subproblem> new_to_old_mapping(G.num_sources(), Subproblem(0));
     /* Fold Adcaceny Matrix */
     create_folded_adjacency_matrix(cut_folds, M, greedy_matrix, new_to_old_mapping);
@@ -854,7 +855,12 @@ void Optimizer_ResultDB_utils::get_greedy_folds_and_folding_problems(QueryGraph 
 
     /* We also need to add the existing base tables that are not part of any fold to the fold */
     for (auto node_id: Subproblem::All(G.num_sources()) - already_used) {
-        fold_t fold = {node_id};
+        fold_t fold;
+        Subproblem old_problem = new_to_old_mapping[node_id];
+        if (old_problem.empty()) continue;
+        for (auto old_node_id: old_problem) {
+            fold.emplace(old_node_id);
+        }
         folds.emplace_back(fold);
     }
 }
@@ -1261,7 +1267,7 @@ std::pair<std::unique_ptr<Producer>, bool> Optimizer_ResultDB_utils::dp_resultdb
         /* Add all models for the acyclic enumeration */
         std::vector<std::unique_ptr<DataModel>> base_models;
         for (std::size_t i = 0; i < G.num_sources(); i++) {
-            base_models.emplace_back(std::move(PT[Subproblem::Singleton(i)].model));
+            base_models.emplace_back(CE.copy(*PT[Subproblem::Singleton(i)].model));
         }
 
         std::unordered_set<std::size_t> required_reductions;
@@ -1394,8 +1400,9 @@ std::pair<std::unique_ptr<Producer>, bool> Optimizer_ResultDB_utils::dp_resultdb
             folds.emplace_back(create_fold_for_problem(PT[problem].right_fold));
         };
         if (Options::Get().result_db_optimizer != Options::DP_ResultDB) create_two_folds();
-        else {
-            auto join_estimation = get_final_problem_cost(problem); //+ heuristics[problem]->estimate(G, CE, PT, problem, Subproblem());
+        else
+        {
+            auto join_estimation = get_final_problem_cost(problem) + heuristics[problem]->estimate(G, CE, PT, problem, Subproblem());
             auto no_join_estimation = PT[problem].folding_cost;
             if (join_estimation < no_join_estimation) {
                 folds.emplace_back(create_fold_for_problem(problem));

@@ -92,25 +92,18 @@ systems:
           --plan-enumerator DPccp
           -t
           --cardinality-estimator Injected
-          --use-cardinality-file benchmark/job/result-db-eval/synthetic/experiments/4_injected_cardinalities.json
+          --use-cardinality-file benchmark/result-db-eval/synthetic/experiments_chain/4_injected_cardinalities.json
         configurations:
           'ResultDB-Heuristic':
             args: >-
               --result-db
             pattern:
               Execution Time: '^Execute machine code:.*'
-          'DP_Fold':
+          'TD_Root':
             args: >-
               --result-db
               --optimize-result-db
-              --dp_fold
-            pattern:
-              Execution Time: '^Execute machine code:.*'
-          'DP_Fold-Greedy':
-            args: >-
-              --result-db
-              --optimize-result-db
-              --dp_fold_greedy
+              --td_root
             pattern:
               Execution Time: '^Execute machine code:.*'
           'DP_ResultDB':
@@ -128,5 +121,5 @@ systems:
         cases:
             4:  SELECT *
                 FROM rel_0 AS r_0, rel_1 AS r_1, rel_2 AS r_2, rel_3 AS r_3, rel_4 AS r_4, rel_5 AS r_5, rel_6 AS r_6, rel_7 AS r_7
-                WHERE r_0.id_0=r_1.id AND r_1.fk=r_2.id AND r_2.id=r_3.id AND r_3.id=r_4.id AND r_4.id=r_5.id AND r_5.id=r_6.id
-                      AND r_6.id=r_7.fk AND r_7.id=r_0.id_0 AND r_0.id_0 < 1200;
+                WHERE r_0.id_0=r_1.id AND r_1.fk=r_2.id AND r_2.id=r_3.id AND r_4.id=r_5.id AND r_5.id=r_6.id
+              AND r_6.id=r_7.fk AND r_7.id=r_0.id_0 AND r_0.id_0 < 1200;

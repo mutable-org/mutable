@@ -101,6 +101,23 @@ template<typename PlanTable>
 double
 WeakCardinalityHeuristic::operator()(estimate_tag, const PlanTable &PT, Subproblem left, Subproblem right, const QueryGraph &G, const CardinalityEstimator &CE) const
 {
+    if (right.empty()) {
+        auto decompose_costs = estimate_decompose_costs(G, left, PT[left], CE);
+        auto main_neighbors = G.adjacency_matrix().neighbors(left);
+        /* If no neighbors are present, you can simply use the reduction from the neighbor */
+        auto main_model = CE.copy(*PT[left].model);
+        auto main_model_red_card = CE.predict_cardinality(*CE.estimate_full_reduction(G, *main_model));
+        if (main_neighbors.empty()) {
+            return decompose_costs;
+        }
+        double reduction_costs = 0;
+        for (auto neighbor : card_order) {
+            if (not (Subproblem::Singleton(neighbor.first) & main_neighbors)) continue;
+            reduction_costs += CE.predict_cardinality(*main_model) + main_model_red_card;
+            main_model = CE.estimate_semi_join(G, *main_model, *models.find(neighbor.first)->second, {});
+        }
+        return decompose_costs + reduction_costs;
+    }
     auto decompose_costs = estimate_decompose_costs(G, left, PT[left], CE) + estimate_decompose_costs(G, right, PT[right], CE);
     auto reduction_costs = [&](Subproblem main, Subproblem other) {
         auto main_neighbors = G.adjacency_matrix().neighbors(main) - other;

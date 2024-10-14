@@ -90,7 +90,7 @@ systems:
           --plan-enumerator DPccp
           -t
           --cardinality-estimator Injected
-          --use-cardinality-file benchmark/job/result-db-eval/synthetic/experiments_tvc/3_injected_cardinalities.json
+          --use-cardinality-file benchmark/result-db-eval/synthetic/experiments_tvc/3_injected_cardinalities.json
         configurations:
           'ResultDB-Heuristic':
             args: >-

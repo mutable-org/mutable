@@ -10,7 +10,7 @@ from typing import Any
 from query_utility import Relation, JoinGraph
 import query_definitions as q_def
 
-OUTPUT_DIR = "benchmark/job/result-db-eval"
+OUTPUT_DIR = "benchmark/result-db-eval"
 
 
 def write_to_file(output_file: str, text: str, mode: str):
@@ -159,7 +159,7 @@ def create_injected_cardinalities(
 
     cardinality_file = f"{OUTPUT_DIR}/{mode}/{query_name}_injected_cardinalities.json"
     cardinality_text = "{\n"
-    cardinality_text += f'\t"{config["database"]}": [\n'
+    cardinality_text += f'\t"{mode}": [\n'
     for i in range(n + 1):
         for subproblem in combinations(join_graph.relations, i):
             S: set[Relation] = set(subproblem)
@@ -354,20 +354,20 @@ if __name__ == "__main__":
     #     query = q_def.create_star_schema(4, selectivity)
     #     create_injected_cardinalities(query, f"{index}", config, f'star_schema')
 
-    # selectivities = [i + 1 for i in range(10)]
-    # for index, selectivity in enumerate(selectivities):
-    #     query = q_def.create_chain_schema(2, selectivity)
-    #     create_injected_cardinalities(query, f"{index}", config, f'chain_schema')
-
     selectivities = [200 * (i+1) for i in range(10)]
     for index, selectivity in enumerate(reversed(selectivities)):
-        redundant_graph = q_def.create_redundancy_cycle_join(selectivity)
-        create_injected_cardinalities(redundant_graph, f"{index}", config, f'redundant')
+        redundant_graph = q_def.create_redundancy_chain_join(selectivity)
+        create_injected_cardinalities(redundant_graph, f"{index}", config, f'synthetic')
 
-    #selectivities = [200 * (i+1) for i in range(10)]
-    #for index, selectivity in enumerate(reversed(selectivities)):
-    #    redundant_graph = q_def.create_redundancy_tvc_join(selectivity)
-    #    create_injected_cardinalities(redundant_graph, f"{index}", config, f'redundant')
+    # selectivities = [200 * (i+1) for i in range(10)]
+    # for index, selectivity in enumerate(reversed(selectivities)):
+    #     redundant_graph = q_def.create_redundancy_cycle_join(selectivity)
+    #     create_injected_cardinalities(redundant_graph, f"{index}", config, f'synthetic')
+
+    # selectivities = [200 * (i+1) for i in range(10)]
+    # for index, selectivity in enumerate(reversed(selectivities)):
+    #     redundant_graph = q_def.create_redundancy_tvc_join(selectivity)
+    #     create_injected_cardinalities(redundant_graph, f"{index}", config, f'synthetic')
 
 
 

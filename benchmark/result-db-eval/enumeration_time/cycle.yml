@@ -115,26 +115,39 @@ data:
             'fkey': 'INT'
 systems:
     mutable:
-        args: --dryrun
+        args: --dryrun  --plan-enumerator DPccp
         configurations:
-            DP_CCP:
-                args: '--plan-enumerator DPccp'
-                pattern: 'Compute the logical query plan:.*'
-            ResultDB-Heuristic:
-                args: '--result-db --plan-enumerator DPccp'
-                pattern: '^Compute the logical query plan:.*'
-            DP_Fold:
-                args: '--result-db --optimize-result-db'
-                pattern: '^Compute the logical query plan:.*'
-            DP_Fold-Greedy:
-                args: '--result-db --optimize-result-db --greedy-cuts'
-                pattern: '^Compute the logical query plan:.*'
-            DP_ResultDB:
-                args: '--plan-enumerator DPccp --result-db --optimize-result-db --hybrid --top-down'
-                pattern: '^Compute the logical query plan:.*'
-            DP_ResultDB-Uff:
-                args: '--plan-enumerator DPccp --result-db --optimize-result-db --hybrid'
-                pattern: '^Compute the logical query plan:.*'
+          'ResultDB-Heuristic':
+            args: >-
+              --result-db
+            pattern:
+              Execution Time: '^Compute the logical query plan:.*'
+          'DP_Fold':
+            args: >-
+              --result-db
+              --optimize-result-db
+              --dp_fold
+            pattern:
+              Execution Time: '^Compute the logical query plan:.*'
+          'DP_Fold-Greedy':
+            args: >-
+              --result-db
+              --optimize-result-db
+              --dp_fold_greedy
+            pattern:
+              Execution Time: '^Compute the logical query plan:.*'
+          'DP_ResultDB':
+            args: >-
+              --result-db
+              --optimize-result-db
+              --dp_resultdb
+            pattern:
+              Execution Time: '^Compute the logical query plan:.*'
+          'Decompose':
+            args: >-
+              --decompose
+            pattern:
+              Execution Time: '^Compute the logical query plan:.*'
         cases:
             5:  SELECT
                     *

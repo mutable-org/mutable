@@ -594,19 +594,27 @@ def create_star_schema(number_of_dimension_tables: int, selectvities: list[int])
 
     return JoinGraph(relations, joins)
 
-def create_chain_schema(number_of_dimension_tables: int, selectivity: float):
+def create_redundancy_chain_join(selectivity: float):
     relations: list[Relation] = []
     joins: list[Join] = []
 
-    fact_schema = [f"id_{i}" for i in range(number_of_dimension_tables)]
-    fact_schema.append("word")
-    relations.append(Relation(f"fact", f"f", fact_schema))
-    relations.extend([Relation(f"dim_0", f"d_0", ["id", "add_info"]), Relation(f"dim_1", f"d_1", ["id", "add_info"])])
-    relations.extend([Relation(f"add_0", f"a_0", ["id"], [f"a_0.id < {selectivity}"]), Relation(f"add_1", f"a_1", ["id"], [f"a_1.id < {selectivity}"])])
-    for i in range(number_of_dimension_tables):
-        joins.append(Join(relations[i + 1], relations[0], ["id"], [f"id_{i}"]))
-    joins.append(Join(relations[1], relations[3], ["add_info"], [f"id"]))
-    joins.append(Join(relations[2], relations[4], ["add_info"], [f"id"]))
+    # Fact 1
+    relations.append(Relation(f"rel_{0}", f"r_{0}", ["id_0", "id_1", "word"], [f"r_0.id_1 < {selectivity}"]))
+    # Dimension
+    relations.append(Relation(f"rel_{1}", f"r_{1}", ["id", "fk", "word"]))
+    for i in range(2, 7):
+        relations.append(Relation(f"rel_{i}", f"r_{i}", ["id", "word"]))
+    # Fact 2
+    relations.append(Relation(f"rel_{7}", f"r_{7}", ["id", "fk", "word"]))
+
+
+    joins.append(Join(relations[0], relations[1], ["id_0"], ["id"]))
+    joins.append(Join(relations[7], relations[0], ["id"], ["id_0"]))
+    joins.append(Join(relations[1], relations[2], ["fk"], ["id"]))
+    joins.append(Join(relations[2], relations[3], ["id"], ["id"]))
+    joins.append(Join(relations[4], relations[5], ["id"], ["id"]))
+    joins.append(Join(relations[5], relations[6], ["id"], ["id"]))
+    joins.append(Join(relations[6], relations[7], ["id"], ["fk"]))
 
     return JoinGraph(relations, joins)
 

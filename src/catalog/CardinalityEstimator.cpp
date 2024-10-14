@@ -428,10 +428,11 @@ InjectionCardinalityEstimator::estimate_semi_join(const QueryGraph &G, const Dat
                                                                        new_reduced_by, std::min(right_it->second, left.size_));
             }
         }
-    /* Fallback to CartesianProductEstimator. */
+    /* Fallback to CartesianProductEstimator.
     if (not Options::Get().quiet)
         std::cerr << "warning: failed to estimate the semi-join of " << left_id << " and " << reduced_id
                   << '\n';
+    */
     auto left_fallback = std::make_unique<CartesianProductEstimator::CartesianProductDataModel>();
     left_fallback->size = left.size_;
     auto right_fallback = std::make_unique<CartesianProductEstimator::CartesianProductDataModel>();
@@ -459,10 +460,11 @@ InjectionCardinalityEstimator::estimate_full_reduction(const m::QueryGraph &G, c
         }
     }
 
-    /* Fallback to CartesianProductEstimator. */
+    /* Fallback to CartesianProductEstimator.
     if (not Options::Get().quiet)
         std::cerr << "warning: failed to estimate the full reduction of " << left_id
                   << '\n';
+    */
     auto model_fallback = std::make_unique<CartesianProductEstimator::CartesianProductDataModel>();
     model_fallback->size = model.size_;
     auto fallback_model = fallback_.estimate_full_reduction(G, *model_fallback, except);

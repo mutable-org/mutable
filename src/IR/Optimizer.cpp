@@ -1301,9 +1301,7 @@ std::pair<std::unique_ptr<Producer>, bool> Optimizer_ResultDB_utils::dp_resultdb
 
         /* Estimate final decompose costs */
         double decompose_costs = PT[complete_problem].cost + YannakakisHeuristic::estimate_decompose_costs(G, complete_problem, PT[complete_problem], CE);
-
-        std::cerr << "Reducer_costs " << reducer_costs << " Decompose Costs " << decompose_costs
-                      << '\n';
+        
         if (reducer_costs < decompose_costs) {
             return create_semi_join_plan();
         } else {
@@ -1360,6 +1358,7 @@ std::pair<std::unique_ptr<Producer>, bool> Optimizer_ResultDB_utils::dp_resultdb
                     if ((left | right) != folding_problem) {
                         PT.update(G, CE, C.cost_function(), left, right, cnf::CNF{});
                     } else {
+                        PT.update(G, CE, C.cost_function(), left, right, cnf::CNF{});
                         PT.update_for_cycle_folding(G, CE, C.cost_function(), *heuristics[folding_problem], left, right, cnf::CNF{});
                     }
                 };
@@ -1369,6 +1368,7 @@ std::pair<std::unique_ptr<Producer>, bool> Optimizer_ResultDB_utils::dp_resultdb
                     if ((left | right) != folding_problem) {
                         PT.update(G, CE, C.cost_function(), left, right, cnf::CNF{});
                     } else {
+                        PT.update(G, CE, C.cost_function(), left, right, cnf::CNF{});
                         for (auto condition: restrictions) {
                             if (not(condition.is_subset(left) or condition.is_subset(right))) return;
                         }
@@ -1399,16 +1399,12 @@ std::pair<std::unique_ptr<Producer>, bool> Optimizer_ResultDB_utils::dp_resultdb
             folds.emplace_back(create_fold_for_problem(PT[problem].left_fold));
             folds.emplace_back(create_fold_for_problem(PT[problem].right_fold));
         };
-        if (Options::Get().result_db_optimizer != Options::DP_ResultDB) create_two_folds();
-        else
-        {
-            auto join_estimation = get_final_problem_cost(problem) + heuristics[problem]->estimate(G, CE, PT, problem, Subproblem());
-            auto no_join_estimation = PT[problem].folding_cost;
-            if (join_estimation < no_join_estimation) {
-                folds.emplace_back(create_fold_for_problem(problem));
-            } else {
-                create_two_folds();
-            }
+        auto join_estimation = get_final_problem_cost(problem) + heuristics[problem]->estimate(G, CE, PT, problem, Subproblem());
+        auto no_join_estimation = PT[problem].folding_cost;
+        if (join_estimation < no_join_estimation) {
+            folds.emplace_back(create_fold_for_problem(problem));
+        } else {
+            create_two_folds();
         }
     };
 
@@ -1511,8 +1507,6 @@ std::pair<std::unique_ptr<Producer>, bool> Optimizer_ResultDB_utils::dp_resultdb
 
     double decompose_costs = PT[complete_problem].cost + YannakakisHeuristic::estimate_decompose_costs(G, complete_problem, PT[complete_problem], CE);
     double td_fold_costs = dp_fold_reducer_costs + estimate_folding_costs(dp_fold_complete_folds);
-    std::cerr << "Reducer_costs " << td_fold_costs << " Decompose Costs " << decompose_costs
-              << '\n';
     // No check to dp_fold_greedy if no application can be found
     if (dp_fold_greedy_restricted_problems.empty()) {
         if (decompose_costs < td_fold_costs) {

@@ -128,4 +128,4 @@ systems:
             3:  SELECT *
                 FROM rel_0 AS r_0, rel_1 AS r_1, rel_2 AS r_2, rel_3 AS r_3, rel_4 AS r_4, rel_5 AS r_5, rel_6 AS r_6, rel_7 AS r_7
                 WHERE r_0.id_0=r_1.id AND r_1.fk=r_2.id AND r_2.id=r_3.id AND r_3.id=r_4.id AND r_4.id=r_5.id AND r_5.id=r_6.id
-                      AND r_6.id=r_7.fk AND r_0.id_0 < 1400;
+                      AND r_6.id=r_7.fk AND r_0.id_0=r_7.id AND r_0.id_0 < 1400;

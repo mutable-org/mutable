@@ -139,11 +139,35 @@ systems:
           --plan-enumerator DPccp
           --use-cardinality-file benchmark/result-db-eval/job/q9b_injected_cardinalities.json
         configurations:
+          'ResultDB-Heuristic':
+            args: >-
+              --result-db
+            pattern:
+              Execution Time: '^Execute machine code:.*'
           'DP_Fold':
             args: >-
               --result-db
               --optimize-result-db
               --dp_fold
+            pattern:
+              Execution Time: '^Execute machine code:.*'
+          'DP_Fold-Greedy':
+            args: >-
+              --result-db
+              --optimize-result-db
+              --dp_fold_greedy
+            pattern:
+              Execution Time: '^Execute machine code:.*'
+          'DP_ResultDB':
+            args: >-
+              --result-db
+              --optimize-result-db
+              --dp_resultdb
+            pattern:
+              Execution Time: '^Execute machine code:.*'
+          'Decompose':
+            args: >-
+              --decompose
             pattern:
               Execution Time: '^Execute machine code:.*'
         cases:

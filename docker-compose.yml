@@ -1,0 +1,45 @@
+networks:
+  local:
+
+services:
+  mutable:
+    image: mutable:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      PGHOST: postgres
+      PGUSER: postgres
+      PGPASSWORD: 123
+      PGDATABASE: postgres
+    networks:
+      - local
+    ports:
+      - "8888:8888"
+    volumes:
+      - benchmarks:/benchmark
+    stdin_open: true
+    tty: true
+
+  postgres:
+    image: postgres:16.2
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: 123
+      POSTGRES_DB: postgres
+    networks:
+      - local
+    volumes:
+      - postgres:/var/lib/postgresql/data
+
+volumes:
+  postgres:
+    driver_opts:
+      type: none
+      device: ${PWD}/postgres
+      o: bind
+  benchmarks:
+    driver_opts:
+      type: none
+      device: ${PWD}/paper_benchmarks
+      o: bind

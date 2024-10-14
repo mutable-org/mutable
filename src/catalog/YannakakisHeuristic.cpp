@@ -106,14 +106,13 @@ WeakCardinalityHeuristic::operator()(estimate_tag, const PlanTable &PT, Subprobl
         auto main_neighbors = G.adjacency_matrix().neighbors(left);
         /* If no neighbors are present, you can simply use the reduction from the neighbor */
         auto main_model = CE.copy(*PT[left].model);
-        auto main_model_red_card = CE.predict_cardinality(*CE.estimate_full_reduction(G, *main_model));
         if (main_neighbors.empty()) {
             return decompose_costs;
         }
         double reduction_costs = 0;
         for (auto neighbor : card_order) {
             if (not (Subproblem::Singleton(neighbor.first) & main_neighbors)) continue;
-            reduction_costs += CE.predict_cardinality(*main_model) + main_model_red_card;
+            reduction_costs += CE.predict_cardinality(*main_model);
             main_model = CE.estimate_semi_join(G, *main_model, *models.find(neighbor.first)->second, {});
         }
         return decompose_costs + reduction_costs;
@@ -123,9 +122,8 @@ WeakCardinalityHeuristic::operator()(estimate_tag, const PlanTable &PT, Subprobl
         auto main_neighbors = G.adjacency_matrix().neighbors(main) - other;
         /* If no neighbors are present, you can simply use the reduction from the neighbor */
         auto main_model = CE.copy(*PT[main].model);
-        auto main_model_red_card = CE.predict_cardinality(*CE.estimate_full_reduction(G, *main_model));
         if (main_neighbors.empty()) {
-            return double(CE.predict_cardinality(*main_model)) + main_model_red_card;
+            return double(CE.predict_cardinality(*main_model));
         }
         auto other_model = CE.copy(*PT[other].model);
         for (auto other_neighbor: G.adjacency_matrix().neighbors(other) - main) {
@@ -135,7 +133,7 @@ WeakCardinalityHeuristic::operator()(estimate_tag, const PlanTable &PT, Subprobl
         double costs = 0;
         for (auto neighbor : card_order) {
             if (not (Subproblem::Singleton(neighbor.first) & main_neighbors)) continue;
-            costs += CE.predict_cardinality(*main_model) + main_model_red_card;
+            costs += CE.predict_cardinality(*main_model);
             if (other_card < neighbor.second) {
                 main_model = CE.estimate_semi_join(G, *main_model, *PT[other].model, {});
                 other_card = std::numeric_limits<std::size_t>::max();

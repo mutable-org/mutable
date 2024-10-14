@@ -8,6 +8,8 @@ catch.xml
 .idea/
 benchmark/job/data
 benchmark/result-db-eval/synthetic/data
+paper_benchmarks/
+postgres/
 
 # Git version information
 include/mutable/gitversion.tbl

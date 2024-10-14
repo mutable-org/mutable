@@ -43,6 +43,7 @@ screeninfo = "*"
 cycler = "*"
 typeguard = "*"
 sortedcontainers = "*"
+multipledispatch = "*"
 
 [requires]
 python_version = "3.10"

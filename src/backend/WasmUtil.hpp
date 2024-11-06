@@ -1326,13 +1326,13 @@ enum cmp_op
 };
 
 /** Compares two strings \p left and \p right.  Has similar semantics to `strncmp` of libc. */
-_I32x1 strncmp(NChar left, NChar right, U32x1 len);
+_I32x1 strncmp(NChar left, NChar right, U32x1 len, bool reverse = false);
 /** Compares two strings \p left and \p right.  Has similar semantics to `strcmp` of libc. */
-_I32x1 strcmp(NChar left, NChar right);
+_I32x1 strcmp(NChar left, NChar right, bool reverse = false);
 /** Compares two strings \p left and \p right.  Has similar semantics to `strncmp` of libc. */
-_Boolx1 strncmp(NChar left, NChar right, U32x1 len, cmp_op op);
+_Boolx1 strncmp(NChar left, NChar right, U32x1 len, cmp_op op, bool reverse = false);
 /** Compares two strings \p left and \p right.  Has similar semantics to `strcmp` of libc. */
-_Boolx1 strcmp(NChar left, NChar right, cmp_op op);
+_Boolx1 strcmp(NChar left, NChar right, cmp_op op, bool reverse = false);
 
 
 /*======================================================================================================================

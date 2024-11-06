@@ -5514,6 +5514,14 @@ struct Variable<T, Kind, CanBeNull, L>
 #endif
 
     public:
+    friend void swap(Variable &first, Variable &second) {
+        using std::swap;
+        swap(first.storage_, second.storage_);
+#ifdef M_ENABLE_SANITY_FIELDS
+        swap(first.used_,    second.used_);
+#endif
+    }
+
     /** Default-constructs a new `Variable`. */
     Variable() = default;
 

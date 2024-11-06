@@ -3091,7 +3091,7 @@ template struct m::wasm::buffer_swap_proxy_t<true>;
  * string comparison
  *====================================================================================================================*/
 
-_I32x1 m::wasm::strncmp(NChar _left, NChar _right, U32x1 len)
+_I32x1 m::wasm::strncmp(NChar _left, NChar _right, U32x1 len, bool reverse)
 {
     static thread_local struct {} _; // unique caller handle
     struct data_t : GarbageCollectedData
@@ -3105,7 +3105,7 @@ _I32x1 m::wasm::strncmp(NChar _left, NChar _right, U32x1 len)
     };
     auto &d = Module::Get().add_garbage_collected_data<data_t>(&_); // garbage collect the `data_t` instance
 
-    auto strncmp_non_null = [&d, &_left, &_right](Ptr<Charx1> left, Ptr<Charx1> right, U32x1 len) -> I32x1 {
+    auto strncmp_non_null = [&d, &_left, &_right, &reverse](Ptr<Charx1> left, Ptr<Charx1> right, U32x1 len) -> I32x1 {
         Wasm_insist(left.clone().not_null(), "left operand must not be NULL");
         Wasm_insist(right.clone().not_null(), "right operand must not be NULL");
         Wasm_insist(len.clone() != 0U, "length to compare must not be 0");
@@ -3116,7 +3116,7 @@ _I32x1 m::wasm::strncmp(NChar _left, NChar _right, U32x1 len)
             auto left_gt_right = *left.clone() > *right.clone();
             return left_gt_right.to<int32_t>() - (*left < *right).to<int32_t>();
         } else {
-            if (_left.guarantees_terminating_nul() and _right.guarantees_terminating_nul()) {
+            if (_left.guarantees_terminating_nul() and _right.guarantees_terminating_nul() and not reverse) { // reverse needs in-bounds checks
                 if (not d.strncmp_terminating_nul) {
                     /*----- Create function to compute the result for non-nullptr arguments character-wise. -----*/
                     FUNCTION(strncmp_terminating_nul, data_t::fn_t)
@@ -3170,16 +3170,41 @@ _I32x1 m::wasm::strncmp(NChar _left, NChar _right, U32x1 len)
 
                         const auto len_ty_left  = PARAMETER(0);
                         const auto len_ty_right = PARAMETER(1);
-                        auto left  = PARAMETER(2);
-                        auto right = PARAMETER(3);
+                        Var<Ptr<Charx1>> left(PARAMETER(2));
+                        Var<Ptr<Charx1>> right(PARAMETER(3));
                         const auto len = PARAMETER(4);
 
                         Var<I32x1> result; // always set here
 
                         I32x1 len_left  = Select(len < len_ty_left,  len, len_ty_left) .make_signed();
                         I32x1 len_right = Select(len < len_ty_right, len, len_ty_right).make_signed();
-                        Var<Ptr<Charx1>> end_left (left  + len_left);
-                        Var<Ptr<Charx1>> end_right(right + len_right);
+                        Var<Ptr<Charx1>> end_left, end_right;
+
+                        if (not reverse) {
+                            /* Set end variables according to theoretical length. */
+                            end_left  = left  + len_left;
+                            end_right = right + len_right;
+                        } else {
+                            /* Set end variables to first found NUL byte without exceeding the theoretical length. */
+                            end_left = left;
+                            WHILE(*end_left != 0 and end_left != left + len_left) {
+                                end_left += 1;
+                            }
+                            end_right = right;
+                            WHILE(*end_right != 0 and end_right != right + len_right) {
+                                end_right += 1;
+                            }
+
+                            /* Swap variable for current position with the one for end position to iterate reversed. */
+                            swap(left,  end_left);
+                            swap(right, end_right);
+
+                            /* Resolve off-by-one errors created by swapping variables. */
+                            left -= 1;
+                            right -= 1;
+                            end_left -= 1;
+                            end_right -= 1;
+                        }
 
                         LOOP() {
                             /* Check whether one side is shorter than the other. Load next character with in-bounds
@@ -3202,8 +3227,8 @@ _I32x1 m::wasm::strncmp(NChar _left, NChar _right, U32x1 len)
                             BREAK(val_left == 0); // reached end of identical strings
 
                             /* Advance to next character. */
-                            left += 1;
-                            right += 1;
+                            left  += reverse ? -1 : 1;
+                            right += reverse ? -1 : 1;
                             CONTINUE();
                         }
 
@@ -3234,17 +3259,17 @@ _I32x1 m::wasm::strncmp(NChar _left, NChar _right, U32x1 len)
     }
 }
 
-_I32x1 m::wasm::strcmp(NChar left, NChar right)
+_I32x1 m::wasm::strcmp(NChar left, NChar right, bool reverse)
 {
     /* Delegate to `strncmp` with length set to minimum of both string lengths **plus** 1 since we need to check if
      * one string is a prefix of the other, i.e. all of its characters are equal but it is shorter than the other. */
     U32x1 len(std::min<uint32_t>(left.length(), right.length()) + 1U);
-    return strncmp(left, right, len);
+    return strncmp(left, right, len, reverse);
 }
 
-_Boolx1 m::wasm::strncmp(NChar left, NChar right, U32x1 len, cmp_op op)
+_Boolx1 m::wasm::strncmp(NChar left, NChar right, U32x1 len, cmp_op op, bool reverse)
 {
-    _I32x1 res = strncmp(left, right, len);
+    _I32x1 res = strncmp(left, right, len, reverse);
 
     switch (op) {
         case EQ: return res == 0;
@@ -3256,9 +3281,9 @@ _Boolx1 m::wasm::strncmp(NChar left, NChar right, U32x1 len, cmp_op op)
     }
 }
 
-_Boolx1 m::wasm::strcmp(NChar left, NChar right, cmp_op op)
+_Boolx1 m::wasm::strcmp(NChar left, NChar right, cmp_op op, bool reverse)
 {
-    _I32x1 res = strcmp(left, right);
+    _I32x1 res = strcmp(left, right, reverse);
 
     switch (op) {
         case EQ: return res == 0;

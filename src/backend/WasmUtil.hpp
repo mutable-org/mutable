@@ -1357,6 +1357,14 @@ _Boolx1 like(NChar str, NChar pattern, const char escape_char = '\\');
  * Knuth–Morris–Pratt algorithm and represents a special case of the SQL LIKE in which the pattern is known at query
  * compile time and has the form `%[^_%\\]+%`. */
 _Boolx1 like_contains(NChar str, const ThreadSafePooledString &pattern);
+/** Checks whether the string \p str has the prefix \p pattern.  The implementation is based on rewriting to string
+ * comparisons and represents a special case of the SQL LIKE in which the pattern is known at query compile time and
+ * has the form `[^_%\\]+%`. */
+_Boolx1 like_prefix(NChar str, const ThreadSafePooledString &pattern);
+/** Checks whether the string \p str has the suffix \p pattern.  The implementation is based on rewriting to string
+ * comparisons and represents a special case of the SQL LIKE in which the pattern is known at query compile time and
+ * has the form `%[^_%\\]+`. */
+_Boolx1 like_suffix(NChar str, const ThreadSafePooledString &pattern);
 
 
 /*======================================================================================================================

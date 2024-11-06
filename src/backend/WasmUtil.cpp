@@ -366,6 +366,14 @@ void ExprCompiler::operator()(const ast::BinaryExpr &e)
                     set(like_contains(str, pattern));
                     break;
                 }
+                if (std::regex_match(*pattern, std::regex("[^_%\\\\]+%"))) { // prefix expression
+                    set(like_prefix(str, pattern));
+                    break;
+                }
+                if (std::regex_match(*pattern, std::regex("%[^_%\\\\]+"))) { // suffix expression
+                    set(like_suffix(str, pattern));
+                    break;
+                }
             }
             /* no specialization applicable, fallback to general dynamic programming approach */
             (*this)(*e.rhs);
@@ -3622,6 +3630,60 @@ _Boolx1 m::wasm::like_contains(NChar _str, const ThreadSafePooledString &_patter
         const Var<Boolx1> result(contains_non_null(_str)); // to prevent duplicated computation due to `clone()`
         return _Boolx1(result);
     }
+}
+
+_Boolx1 m::wasm::like_prefix(NChar str, const ThreadSafePooledString &pattern)
+{
+    M_insist(std::regex_match(*pattern, std::regex("[^_%\\\\]+%")), "invalid prefix pattern");
+
+    /*----- Create lower bound. -----*/
+    const int32_t len_pattern = strlen(*pattern) - 1; // minus 1 due to ending `%`
+    auto _lower_bound = Module::Allocator().raw_malloc<char>(len_pattern + 1);
+    for (std::size_t i = 0; i < len_pattern; ++i)
+        _lower_bound[i] = (*pattern)[i];
+    _lower_bound[len_pattern] = '\0';
+    NChar lower_bound(Ptr<Charx1>(_lower_bound), false, len_pattern, true);
+
+    /*----- Create upper bound. -----*/
+    auto _upper_bound = Module::Allocator().raw_malloc<char>(len_pattern + 1);
+    for (std::size_t i = 0; i < len_pattern - 1; ++i)
+        _upper_bound[i] = (*pattern)[i];
+    const char last_char = (*pattern)[len_pattern - 1];
+    _upper_bound[len_pattern - 1] = last_char + 1; // increment last character for upper bound
+    _upper_bound[len_pattern] = '\0';
+    NChar upper_bound(Ptr<Charx1>(_upper_bound), false, len_pattern, true);
+
+    /*----- Compute result by checking whether given string is in created interval. -----*/
+    auto str_cpy = str.clone();
+    return strcmp(str_cpy, lower_bound, GE) and strcmp(str, upper_bound, LT);
+}
+
+_Boolx1 m::wasm::like_suffix(NChar str, const ThreadSafePooledString &pattern)
+{
+    M_insist(std::regex_match(*pattern, std::regex("%[^_%\\\\]+")), "invalid suffix pattern");
+
+    /*----- Create lower bound. -----*/
+    const int32_t len_pattern = strlen(*pattern) - 1; // minus 1 due to starting `%`
+    auto _lower_bound = Module::Allocator().raw_malloc<char>(len_pattern + 1);
+    for (std::size_t i = 0; i < len_pattern; ++i)
+        _lower_bound[i] = (*pattern)[i + 1]; // access pattern with offset +1 due to starting `%`
+    _lower_bound[len_pattern] = '\0';
+    NChar lower_bound(Ptr<Charx1>(_lower_bound), false, len_pattern, true);
+
+    /*----- Create upper bound. -----*/
+    auto _upper_bound = Module::Allocator().raw_malloc<char>(len_pattern + 1);
+    const char first_char = (*pattern)[1]; // access first character at offset 1 due to starting `%`
+    _upper_bound[0] = first_char + 1; // increment first character for upper bound
+    for (std::size_t i = 1; i < len_pattern; ++i)
+        _upper_bound[i] = (*pattern)[i + 1]; // access pattern with offset +1 due to starting `%`
+    _upper_bound[len_pattern] = '\0';
+    NChar upper_bound(Ptr<Charx1>(_upper_bound), false, len_pattern, true);
+
+    /*----- Compute result by checking whether given string is in created interval when reversed. -----*/
+    const auto max_length = std::max<uint32_t>(str.length(), len_pattern); // use maximal length due to reversed strncmp
+    auto str_cpy = str.clone();
+    return strncmp(str_cpy, lower_bound, U32x1(max_length), GE, true) and
+           strncmp(str,     upper_bound, U32x1(max_length), LT, true);
 }
 
 

@@ -1,7 +1,7 @@
-description: LIKE expression with a prefix pattern.
+description: LIKE expression with a suffix pattern.
 db: ours
 query: |
-    SELECT rstring FROM R WHERE rstring LIKE "Nmt%";
+    SELECT rstring FROM R WHERE rstring LIKE "%ha";
 required: YES
 
 stages:
@@ -14,8 +14,8 @@ stages:
             -:1:23: WHERE TK_Where
             -:1:29: rstring TK_IDENTIFIER
             -:1:37: LIKE TK_Like
-            -:1:42: "Nmt%" TK_STRING_LITERAL
-            -:1:48: ; TK_SEMICOL
+            -:1:42: "%ha" TK_STRING_LITERAL
+            -:1:47: ; TK_SEMICOL
         err: NULL
         num_err: 0
         returncode: 0
@@ -24,7 +24,7 @@ stages:
         out: |
             SELECT rstring
             FROM R
-            WHERE (rstring LIKE "Nmt%");
+            WHERE (rstring LIKE "%ha");
         err: NULL
         num_err: 0
         returncode: 0
@@ -38,7 +38,7 @@ stages:
     end2end:
         cli_args: --insist-no-ternary-logic
         out: |
-            "Nmt5pToB 1aGsb4"
+            "tevroexFNrTkdha"
         err: NULL
         num_err: 0
         returncode: 0

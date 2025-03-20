@@ -1468,6 +1468,7 @@ template<idx::IndexMethod IndexMethod, typename Index, sql_type SqlT>
 void index_scan_codegen_compilation(const Index &index, const index_scan_bounds_t &bounds,
                                     const Match<IndexScan<IndexMethod>> &M,
                                     setup_t setup, pipeline_t pipeline, teardown_t teardown) {
+    using key_type = Index::key_type;
     using sql_type = SqlT;
 
     if (options::index_scan_compilation_strategy == option_configs::IndexScanCompilationStrategy::CALLBACK) {
@@ -1514,11 +1515,62 @@ void index_scan_codegen_compilation(const Index &index, const index_scan_bounds_
 
         /*----- Emit host calls to query the index for lo and hi bounds. -----*/
         auto compile_bound_lookup = [&](const ast::Expr &bound, bool is_lower_bound) {
-            auto key = CodeGenContext::Get().env().compile(bound);
+            auto [constant, is_negative] = get_valid_bound(bound);
+            auto c = Interpreter::eval(constant);
+            key_type _key;
+            if constexpr(m::boolean<key_type>) {
+                _key = bool(c);
+                M_insist(not is_negative, "boolean cannot be negative");
+            } else if constexpr(m::integral<key_type>) {
+                auto i64 = int64_t(c);
+                M_insist(std::in_range<key_type>(i64), "integeral constant must be in range");
+                _key = key_type(i64);
+                _key = is_negative ? -_key : _key;
+            } else if constexpr(std::same_as<float, key_type>) {
+                auto d = double(c);
+                _key = key_type(d);
+                M_insist(_key == d, "downcasting should not impact precision");
+                _key = is_negative ? -_key : _key;
+            } else if constexpr(std::same_as<double, key_type>) {
+                _key = double(c);
+                _key = is_negative ? -_key : _key;
+            } else if constexpr(std::same_as<const char*, key_type>) {
+                _key = reinterpret_cast<const char*>(c.as_p());
+                M_insist(not is_negative, "string cannot be negative");
+            }
+
+            std::optional<typename sql_type::primitive_type> key;
+            if (options::index_scan_materialization_strategy == option_configs::IndexScanMaterializationStrategy::INLINE) {
+                if constexpr (std::same_as<sql_type, NChar>) {
+                    key.emplace(CodeGenContext::Get().get_literal_address(_key));
+                } else {
+                    key.emplace(_key);
+                }
+            } else if (options::index_scan_materialization_strategy == option_configs::IndexScanMaterializationStrategy::MEMORY) {
+                /* If we materialize before calling the bound functions, the key parameter is independent of the bounds.
+                 * As a result, queries that only differ in the filter predicate are compiled to the exact same
+                 * WebAssembly code, enabling caching of compiled plans in V8. */
+                if constexpr (std::same_as<sql_type, NChar>) {
+                    uint32_t *key_address = Module::Allocator().raw_malloc<uint32_t>();
+                    *key_address = CodeGenContext::Get().get_literal_raw_address(_key);
+
+                    Ptr<U32x1> key_ptr(key_address);
+                    key.emplace(U32x1(*key_ptr).to<char*>(), false, as<const CharacterSequence>(bound.type()));
+                } else {
+                    auto *key_address = Module::Allocator().raw_malloc<typename sql_type::type>();
+                    *key_address = _key;
+
+                    Ptr<typename sql_type::primitive_type> key_ptr(key_address);
+                    key.emplace(*key_ptr);
+                }
+            } else {
+                M_unreachable("unknown materialization strategy");
+            }
+            M_insist(bool(key), "key must be set");
             return Module::Get().emit_call<uint32_t>(
                 /* fn=       */ is_lower_bound ? lower_bound_fn : upper_bound_fn,
                 /* index_id= */ index_id.clone(),
-                /* key=      */ convert<sql_type>(key).insist_not_null()
+                /* key=      */ *key
             );
         };
         Var<U32x1> lo(bool(bounds.lo) ? compile_bound_lookup(bounds.lo->get(), bounds.is_inclusive_lo)

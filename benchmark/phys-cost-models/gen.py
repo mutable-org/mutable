@@ -555,7 +555,7 @@ def gen_column(attr, num_tuples):
 
     data = list(itertools.chain.from_iterable(itertools.repeat(values, math.ceil(num_tuples / len(values)))))[0:num_tuples]
     print(f'  + Generated column {name} of {len(data):,} rows with {len(set(data)):,} distinct values.')
-    if 'sorted' in name:
+    if 'sorted' in name or 'ordered' in name:
         data.sort()
     else:
         random.shuffle(data)

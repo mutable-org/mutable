@@ -75,7 +75,7 @@ SCHEMA = {
     'Selectivity_i32': [
         ( 'id',         'i32', ['NOT NULL'], {'num_distinct_values': NUM_TUPLES} ),
         ( 'i32',        'i32', ['NOT NULL'], {'num_distinct_values': NUM_TUPLES} ),
-        ( 'i32_sorted', 'i32', ['NOT NULL'], {'num_distinct_values': NUM_TUPLES}  ),
+        ( 'i32_sorted', 'i32', ['NOT NULL'], {'num_distinct_values': NUM_TUPLES} ),
         ( 'payload',    'i32', ['NOT NULL'], {'num_distinct_values': NUM_TUPLES} ),
     ],
 

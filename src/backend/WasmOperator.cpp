@@ -1325,6 +1325,7 @@ void Scan<SIMDfied>::execute(const Match<Scan> &M, setup_t setup, pipeline_t pip
     teardown();
 }
 
+
 /*======================================================================================================================
  * Index Scan
  *====================================================================================================================*/
@@ -1634,10 +1635,12 @@ void index_scan_codegen_interpretation(const Index &index, const index_scan_boun
     if (options::index_scan_materialization_strategy == option_configs::IndexScanMaterializationStrategy::MEMORY) {
         /*----- Allocate sufficient memory for results. -----*/
         uint32_t num_results = hi - lo;
-        uint32_t *buffer_address = Module::Allocator().raw_malloc<uint32_t>(num_results);
+        uint32_t *buffer_address = Module::Allocator().raw_malloc<uint32_t>(num_results + 1); // +1 for storing number of results itself
 
-        /*----- Perform index scan and fill memory with results. -----*/
+        /*----- Perform index scan and fill memory with number of results and results. -----*/
         uint32_t *buffer_ptr = buffer_address;
+        *buffer_ptr = num_results; // store in memory to enable caching
+        ++buffer_ptr;
         for (auto it = index.begin() + lo; it != index.begin() + hi; ++it) {
             M_insist(std::in_range<uint32_t>(it->second), "tuple id must fit in uint32_t");
             *buffer_ptr = it->second;
@@ -1648,8 +1651,9 @@ void index_scan_codegen_interpretation(const Index &index, const index_scan_boun
         setup();
 
         /*----- Emit loop code. -----*/
-        Var<Ptr<U32x1>> ptr(buffer_address);
-        Ptr<U32x1> end(buffer_address + num_results);
+        Ptr<U32x1> base(buffer_address + 1); // +1 to skip stored number of results
+        Var<Ptr<U32x1>> ptr(base.clone());
+        const Var<Ptr<U32x1>> end(base + U32x1(*Ptr<U32x1>(buffer_address)).make_signed());
         WHILE(ptr < end) {
             compile_load_point_access(
                 /* tuple_value_schema=   */ M.scan.schema(),

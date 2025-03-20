@@ -463,6 +463,7 @@ def gen_cardinalities(name, schema, path_to_dir):
                 num_distinct_values = args.get('num_distinct_values', NUM_DISTINCT_VALUES)
                 fkey_join_selectivity = args.get('fkey_join_selectivity', FKEY_JOIN_SELECTIVITY)
                 nm_join_selectivity = args.get('nm_join_selectivity', N_M_JOIN_SELECTIVITY)
+                num_tuples = args.get('num_tuples', NUM_TUPLES)
 
                 if 'fid' in attr_name or 'n2m' in attr_name:
                     matcher = re.compile('^REFERENCES (\w+)\((\w+)\)')
@@ -471,8 +472,8 @@ def gen_cardinalities(name, schema, path_to_dir):
                         if match and not join_added: #TODO: add multiple joins on different attributes once supported by `InjectionCardinalityEstimator`
                             join_added = True
                             ref_table = match.group(1)
-                            size = (min(int(fkey_join_selectivity * NUM_TUPLES * NUM_TUPLES), NUM_TUPLES)
-                                   if 'fid' in attr_name else nm_join_selectivity * NUM_TUPLES * NUM_TUPLES)
+                            size = (min(int(fkey_join_selectivity * num_tuples * num_tuples), num_tuples)
+                                   if 'fid' in attr_name else nm_join_selectivity * num_tuples * num_tuples)
                             cardinalities.append(f'        {{ "relations": ["{table_name}", "{ref_table}"], "size": {size} }}')
 
                 cardinalities.append(f'        {{ "relations": ["g#{table_name}.{attr_name}"], "size": {num_distinct_values} }}')
@@ -489,6 +490,7 @@ def gen_column(attr, num_tuples):
     num_distinct_values = args.get('num_distinct_values', NUM_DISTINCT_VALUES)
     fkey_join_selectivity = args.get('fkey_join_selectivity', FKEY_JOIN_SELECTIVITY)
     nm_join_selectivity = args.get('nm_join_selectivity', N_M_JOIN_SELECTIVITY)
+    num_tuples = args.get('num_tuples', num_tuples)
     random.seed(get_string_hash(name))
     np.random.seed(np.uint32(get_string_hash(name)))
 

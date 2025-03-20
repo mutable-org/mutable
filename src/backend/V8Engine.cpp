@@ -822,9 +822,6 @@ void V8Engine::compile(const m::MatchBase &plan) const
     /*----- Export main. ---------------------------------------------------------------------------------------------*/
     Module::Get().emit_function_export("main");
 
-    /*----- Perform memory pre-allocations. --------------------------------------------------------------------------*/
-    Module::Allocator().perform_pre_allocations();
-
     /*----- Dump the generated WebAssembly code ----------------------------------------------------------------------*/
     if (options::wasm_dump)
         Module::Get().dump_all(std::cout);
@@ -910,7 +907,6 @@ void V8Engine::execute(const m::MatchBase &plan)
 
         auto imports = v8::Object::New(isolate_);
         auto env = create_env(*isolate_, plan);
-        M_DISCARD imports->Set(context, mkstr(*isolate_, "imports"), env);
 
         /* Map the remaining address space to the output buffer. */
         M_insist(Is_Page_Aligned(wasm_context.heap));
@@ -921,6 +917,11 @@ void V8Engine::execute(const m::MatchBase &plan)
         auto compile_time = C.timer().create_timing("Compile SQL to machine code");
         /* Compile the plan and thereby build the Wasm module. */
         M_TIME_EXPR(compile(plan), "|- Compile SQL to WebAssembly", C.timer());
+        /* Perform memory pre-allocations and add allocation address initialization to env. */
+        Module::Get().emit_import<uint32_t>("alloc_addr_init");
+        M_DISCARD env->Set(isolate_->GetCurrentContext(), to_v8_string(isolate_, "alloc_addr_init"),
+                           v8::Uint32::New(isolate_, Module::Allocator().perform_pre_allocations()));
+        M_DISCARD imports->Set(context, mkstr(*isolate_, "imports"), env);
         /* Create a WebAssembly instance object. */
         auto instance = M_TIME_EXPR(instantiate(*isolate_, imports), " ` Compile WebAssembly to machine code", C.timer());
         compile_time.stop();

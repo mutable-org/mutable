@@ -922,10 +922,12 @@ struct Module final
     }
 
     /*----- Interpretation & Debugging -------------------------------------------------------------------------------*/
-    ::wasm::ModuleRunner::ExternalInterface * get_mock_interface();
+    ::wasm::ModuleRunner::ExternalInterface * get_mock_interface(::wasm::GlobalValueSet imports = {});
 
     /** Create an instance of this module.  Can be used for interpretation and debugging. */
-    ::wasm::ModuleRunner instantiate() { return ::wasm::ModuleRunner(module_, get_mock_interface()); }
+    ::wasm::ModuleRunner instantiate(::wasm::GlobalValueSet imports = {}) {
+        return ::wasm::ModuleRunner(module_, get_mock_interface(std::move(imports)));
+    }
 
     /*----- Module settings ------------------------------------------------------------------------------------------*/
     void set_feature(::wasm::FeatureSet feature, bool value) { module_.features.set(feature, value); }
@@ -5451,6 +5453,13 @@ class variable_storage<T, VariableKind::Global, /* CanBeNull= */ false, L>
     void init(uint32_t init) requires dsl_pointer_to_primitive<T> {
         Module::Get().module_.getGlobal(names_[0])->init = Module::Builder().makeConst(::wasm::Literal(init));
     }
+    /** Sets the initial value. */
+    template<primitive_convertible U>
+    requires requires (U &&u) { PrimitiveExpr<T, L>(primitive_expr_t<U>(std::forward<U>(u))); }
+    void init(U &&_init) requires (num_globals == 1) {
+        PrimitiveExpr<T, L> init(primitive_expr_t<U>(std::forward<U>(_init)));
+        Module::Get().module_.getGlobal(names_[0])->init = init.expr();
+    }
 
     /** Assign value. */
     template<primitive_convertible U>
@@ -6495,8 +6504,9 @@ struct Allocator
     virtual void deallocate(Ptr<void> ptr, U32x1 bytes) = 0;
 
     /** Performs the actual pre-allocations.  Must be called exactly **once** **after** the last pre-allocation was
-     * requested. */
-    virtual void perform_pre_allocations() = 0;
+     * requested.
+     * Returns the initial allocation address, i.e. an address after the last pre-allocated address. */
+    virtual uint32_t perform_pre_allocations() = 0;
 
     /** Returns the pre-allocated memory overall consumption. */
     virtual uint32_t pre_allocated_memory_consumption() const = 0;

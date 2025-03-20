@@ -118,12 +118,17 @@ struct MockInterface final : ::wasm::ModuleRunner::ExternalInterface
     private:
     ///> the underlying virtual address space used
     const memory::AddressSpace &memory_;
+    ///> the given imports
+    ::wasm::GlobalValueSet imports_;
 
     public:
-    MockInterface(const memory::AddressSpace &memory) : memory_(memory) { }
+    MockInterface(const memory::AddressSpace &memory, ::wasm::GlobalValueSet imports = {})
+        : memory_(memory), imports_(std::move(imports))
+    { }
 
     void importGlobals(::wasm::GlobalValueSet &globals, ::wasm::Module&) override {
-        M_insist(globals.empty(), "imports not supported");
+        M_insist(globals.empty(), "globals can only be imported once");
+        globals = std::move(imports_);
     }
     ::wasm::Literals callImport(::wasm::Function *f, ::wasm::Literals &args) override {
         if (auto it = callback_functions.find(f->name); it != callback_functions.end())
@@ -290,11 +295,12 @@ struct LinearAllocator : Allocator
         };
     }
 
-    void perform_pre_allocations() override {
+    uint32_t perform_pre_allocations() override {
         M_insist(not pre_allocations_performed_,
                  "must not call `perform_pre_allocations()` multiple times");
-        alloc_addr_.init(pre_alloc_addr_);
+        alloc_addr_.init(Module::Get().get_global<uint32_t>("alloc_addr_init"));
         pre_allocations_performed_ = true;
+        return pre_alloc_addr_;
     }
 
     uint32_t pre_allocated_memory_consumption() const override { return pre_alloc_total_mem_; }
@@ -351,10 +357,10 @@ Module::Module()
     module_.features.setSIMD(true);
 }
 
-::wasm::ModuleRunner::ExternalInterface * Module::get_mock_interface()
+::wasm::ModuleRunner::ExternalInterface * Module::get_mock_interface(::wasm::GlobalValueSet imports)
 {
     if (not interface_) [[unlikely]]
-        interface_ = std::make_unique<MockInterface>(Memory());
+        interface_ = std::make_unique<MockInterface>(Memory(), std::move(imports));
     return interface_.get();
 }
 

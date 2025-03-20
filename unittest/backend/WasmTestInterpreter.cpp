@@ -58,15 +58,20 @@ struct invoke_interpreter<PrimitiveExpr<ReturnType, ReturnL>(PrimitiveExpr<Param
     using return_type = std::conditional_t<ReturnL == 1, ReturnType, std::array<ReturnType, ReturnL>>;
 
     return_type operator()(fn_proxy_type &func, PrimitiveExpr<ParamTypes, ParamLs>... parameters) {
-        Module::Allocator().perform_pre_allocations();
+        ::wasm::GlobalValueSet imports;
+
+        Module::Get().emit_global<uint32_t>("alloc_addr_init", false, 0); // XXX: should be an import but does not work
+        auto val_alloc_addr_init = Module::Allocator().perform_pre_allocations();
+        imports.emplace("alloc_addr_init", ::wasm::Literals({ ::wasm::Literal(val_alloc_addr_init) }));
 
         M_insist(Module::Validate(), "invalid module"); // validate test code
 
         M_insist(((parameters.clone().expr()->_id == ::wasm::Expression::ConstId) and ... ),
                  "can only invoke function with constant parameters");
         auto results =
-            Module::Get().instantiate().callFunction(func.c_name(),
-                                                     { static_cast<const ::wasm::Const*>(parameters.expr())->value... });
+            Module::Get().instantiate(std::move(imports)).callFunction(
+                func.c_name(), { static_cast<const ::wasm::Const*>(parameters.expr())->value... }
+            );
 
         if constexpr (std::is_same_v<ReturnType, void>) {
             CHECK(results.isNone());

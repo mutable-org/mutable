@@ -41,6 +41,14 @@ TYPE_TO_STR = {
     'date':         'DATE',
     'datetime':     'DATETIME',
 }
+TYPE_TO_DOMAIN = {
+    'i8':           (np.iinfo(np.int8).min, np.iinfo(np.int8).max),
+    'i16':          (np.iinfo(np.int16).min, np.iinfo(np.int16).max),
+    'i32':          (np.iinfo(np.int32).min, np.iinfo(np.int32).max),
+    'i64':          (np.iinfo(np.int64).min, np.iinfo(np.int64).max),
+    'f':            (np.finfo(np.float32).min, np.finfo(np.float32).max),
+    'd':            (np.finfo(np.float64).min, np.finfo(np.float64).max),
+}
 SCHEMA = {
     'Relation_parent': [
         ( 'id',  'i32', ['NOT NULL', 'PRIMARY KEY'] ),
@@ -341,19 +349,19 @@ def gen_random_int_values(smallest :int, largest :int, num :int):
     assert len(values) == len(set(values))
     return values
 
-# Generate `num` distinct float values, drawn uniformly at random from range [0, 1).
-def gen_random_float_values(num :int):
+# Generate `num` distinct float values, drawn uniformly at random from range [ `smallest`, `largest` ).
+def gen_random_float_values(smallest :float, largest :float, num :int):
     values: set[np.float32] = set()
     while len(values) < num:
-        val = np.float32(np.random.random())
+        val = np.float32(np.random.uniform(low=smallest, high=largest))
         values.add(val)
     return values
 
-# Generate `num` distinct double values, drawn uniformly at random from range [0, 1).
-def gen_random_double_values(num :int):
+# Generate `num` distinct double values, drawn uniformly at random from range [ `smallest`, `largest` ).
+def gen_random_double_values(smallest :float, largest :float, num :int):
     values: set[np.float64] = set()
     while len(values) < num:
-        val = np.float64(np.random.random())
+        val = np.float64(np.random.uniform(low=smallest, high=largest))
         values.add(val)
     return values
 
@@ -491,6 +499,8 @@ def gen_column(attr, num_tuples):
     fkey_join_selectivity = args.get('fkey_join_selectivity', FKEY_JOIN_SELECTIVITY)
     nm_join_selectivity = args.get('nm_join_selectivity', N_M_JOIN_SELECTIVITY)
     num_tuples = args.get('num_tuples', num_tuples)
+    min_value = args.get('min_value', TYPE_TO_DOMAIN[ty][0])
+    max_value = args.get('max_value', TYPE_TO_DOMAIN[ty][1])
     random.seed(get_string_hash(name))
     np.random.seed(np.uint32(get_string_hash(name)))
 
@@ -511,17 +521,17 @@ def gen_column(attr, num_tuples):
     elif ty == 'b':
         values = [ 'TRUE', 'FALSE' ]
     elif ty == 'f':
-        values = gen_random_float_values(num_distinct_values)
+        values = gen_random_float_values(0.0, 1.0, num_distinct_values)
     elif ty == 'd':
-        values = gen_random_double_values(num_distinct_values)
+        values = gen_random_double_values(0.0, 1.0, num_distinct_values)
     elif ty == 'i8':
-        values = gen_random_int_values( -2**7 + 1,  2**7, min( 2**8 - 1, num_distinct_values))
+        values = gen_random_int_values(min_value, max_value, min( 2**8 - 1, num_distinct_values))
     elif ty == 'i16':
-        values = gen_random_int_values(-2**15 + 1, 2**15, min(2**16 - 1, num_distinct_values))
+        values = gen_random_int_values(min_value, max_value, min(2**16 - 1, num_distinct_values))
     elif ty == 'i32':
-        values = gen_random_int_values(-2**31 + 1, 2**31, min(2**32 - 1, num_distinct_values))
+        values = gen_random_int_values(min_value, max_value, min(2**32 - 1, num_distinct_values))
     elif ty == 'i64':
-        values = gen_random_int_values(-2**63 + 1, 2**63, min(2**64 - 1, num_distinct_values))
+        values = gen_random_int_values(min_value, max_value, min(2**64 - 1, num_distinct_values))
     elif ty == 'c1':
         values = gen_random_string_values(1,  min(len(CHARS) ** 1,  num_distinct_values))
     elif ty == 'c2':

@@ -3,9 +3,6 @@
 # GENERAL
 #-----------------------------------------------------------------------------------------------------------------------
 
-variables:
-    PYTHON_VERSION: "3.10"
-
 default:
     before_script:
         - >
@@ -133,7 +130,7 @@ build:debug:linux-amd64:
         - .shared
         - .build_cache
     script:
-        - pipenv --python $PYTHON_VERSION sync
+        - pipenv sync
         - pipenv run cmake -S . -B build/${BUILD_TYPE}
           --fresh
           -G Ninja
@@ -164,7 +161,7 @@ build:debug:macos-amd64:
         - .shared
         - .build_cache
     script:
-        - pipenv --python $PYTHON_VERSION sync
+        - pipenv sync
         - pipenv run cmake -S . -B build/${BUILD_TYPE}
           --fresh
           -G Ninja
@@ -199,7 +196,7 @@ unittest:linux-amd64:
         - job: "build:debug:linux-amd64"
           artifacts: true
     script:
-        - pipenv --python $PYTHON_VERSION sync
+        - pipenv sync
         - env pipenv run utils/unittest-parallel.py -r --out unittest-sanity.xml build/debug/bin/unittest -t '[test-sanity]' || true
         - head -n1 unittest-sanity.xml | perl -n -e '/errors="(\d+)" failures="(\d+)" tests="(\d+)/ && exit ($1 != 2 or $2 != 1 or $3 != 2)'  # we expect 2 errors (abort & segv), one failure (failure), and two tests run (failure & success)
         - env UBSAN_OPTIONS=print_stacktrace=1 ASAN_OPTIONS=detect_stack_use_after_return=1 pipenv run utils/unittest-parallel.py -r --out unittest-results.xml build/debug/bin/unittest
@@ -220,7 +217,7 @@ unittest:macos-amd64:
         - job: "build:debug:macos-amd64"
           artifacts: true
     script:
-        - pipenv --python $PYTHON_VERSION sync
+        - pipenv sync
         - env pipenv run utils/unittest-parallel.py -r --out unittest-sanity.xml build/debug/bin/unittest -t '[test-sanity]' || true
         - head -n1 unittest-sanity.xml | perl -n -e '/errors="(\d+)" failures="(\d+)" tests="(\d+)/ && exit ($1 != 2 or $2 != 1 or $3 != 2)'  # we expect 2 errors (abort & segv), one failure (failure), and two tests run (failure & success)
         - env UBSAN_OPTIONS=print_stacktrace=1 ASAN_OPTIONS=detect_stack_use_after_return=1:detect_container_overflow=0 MallocNanoZone=0 pipenv run utils/unittest-parallel.py -r --out unittest-results.xml build/debug/bin/unittest
@@ -241,7 +238,7 @@ integrationtest:linux-amd64:
         - job: "build:debug:linux-amd64"
           artifacts: true
     script:
-        - pipenv --python $PYTHON_VERSION sync
+        - pipenv sync
         - env UBSAN_OPTIONS=print_stacktrace=1 ASAN_OPTIONS=detect_stack_use_after_return=1 --unset=TERM pipenv run test/IntegrationTest.py --required-only --debug --builddir build/debug
 
 integrationtest:macos-amd64:
@@ -253,7 +250,7 @@ integrationtest:macos-amd64:
         - job: "build:debug:macos-amd64"
           artifacts: true
     script:
-        - pipenv --python $PYTHON_VERSION sync
+        - pipenv sync
         - env UBSAN_OPTIONS=print_stacktrace=1 ASAN_OPTIONS=detect_stack_use_after_return=1:detect_container_overflow=0 MallocNanoZone=0 --unset=TERM pipenv run test/IntegrationTest.py --required-only --debug --builddir build/debug
 
 ensure-exported-symbols:debug:linux:
@@ -402,7 +399,7 @@ benchmark-test:release:linux-amd64:
         - wget 'https://github.com/duckdb/duckdb/releases/download/v0.10.2/duckdb_cli-linux-amd64.zip'
         - unzip 'duckdb_cli-linux-amd64.zip' -d 'benchmark/database_connectors/'
         # Run benchmarks
-        - pipenv --python $PYTHON_VERSION sync
+        - pipenv sync
         - env pipenv run benchmark/Benchmark.py -v -b mutable -o dummy.csv benchmark/dummy
         # Validate results
         - cat dummy.csv | perl -n -e '/dummy,Dummy,(.*),Execution Time/ && print "$1\n"' | sort | uniq > names.txt  # collect system names

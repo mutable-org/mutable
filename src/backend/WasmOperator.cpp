@@ -1523,7 +1523,7 @@ void index_scan_codegen_compilation(const Index &index, const index_scan_bounds_
                 M_insist(not is_negative, "boolean cannot be negative");
             } else if constexpr(m::integral<key_type>) {
                 auto i64 = int64_t(c);
-                M_insist(std::in_range<key_type>(i64), "integeral constant must be in range");
+                M_insist(std::in_range<key_type>(i64), "integral constant must be in range");
                 _key = key_type(i64);
                 _key = is_negative ? -_key : _key;
             } else if constexpr(std::same_as<float, key_type>) {
@@ -1637,7 +1637,7 @@ void index_scan_codegen_compilation(const Index &index, const index_scan_bounds_
     } else if (options::index_scan_compilation_strategy == option_configs::IndexScanCompilationStrategy::EXPOSED_MEMORY) {
         M_unreachable("not implemented yet");
     } else {
-        M_unreachable("unknown compilation stategy");
+        M_unreachable("unknown compilation strategy");
     }
 }
 
@@ -1660,7 +1660,7 @@ void index_scan_codegen_interpretation(const Index &index, const index_scan_boun
             M_insist(not is_negative, "boolean cannot be negative");
         } else if constexpr(m::integral<key_type>) {
             auto i64 = int64_t(c);
-            M_insist(std::in_range<key_type>(i64), "integeral constant must be in range");
+            M_insist(std::in_range<key_type>(i64), "integral constant must be in range");
             key = key_type(i64);
             key = is_negative ? -key : key;
         } else if constexpr(std::same_as<float, key_type>) {
@@ -1814,7 +1814,7 @@ void index_scan_codegen_hybrid(const Index &index, const index_scan_bounds_t &bo
             M_insist(not is_negative, "boolean cannot be negative");
         } else if constexpr(m::integral<key_type>) {
             auto i64 = int64_t(c);
-            M_insist(std::in_range<key_type>(i64), "integeral constant must be in range");
+            M_insist(std::in_range<key_type>(i64), "integral constant must be in range");
             key = key_type(i64);
             key = is_negative ? -key : key;
         } else if constexpr(std::same_as<float, key_type>) {
@@ -1922,7 +1922,7 @@ void index_scan_codegen_hybrid(const Index &index, const index_scan_bounds_t &bo
     } else if (options::index_scan_compilation_strategy == option_configs::IndexScanCompilationStrategy::EXPOSED_MEMORY) {
         M_unreachable("not implemented yet");
     } else {
-        M_unreachable("unknwon compilation strategy");
+        M_unreachable("unknown compilation strategy");
     }
 }
 

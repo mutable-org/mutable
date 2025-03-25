@@ -87,6 +87,26 @@ uint32_t WasmEngine::WasmContext::map_table(const Table &table)
     return off;
 }
 
+uint32_t WasmEngine::WasmContext::map_index(const idx::IndexBase &index)
+{
+    M_insist(Is_Page_Aligned(heap));
+
+    const std::size_t bytes = index.size_in_bytes();
+
+    /* Map entry into WebAssembly linear memory. */
+    const auto off = heap;
+    const auto aligned_bytes = Ceil_To_Next_Page(bytes);
+    const auto &mem = index.memory();
+    if (aligned_bytes) {
+        mem.map(aligned_bytes, 0, vm, off);
+        heap += aligned_bytes;
+        install_guard_page();
+    }
+    M_insist(Is_Page_Aligned(heap));
+
+    return off;
+}
+
 void WasmEngine::WasmContext::install_guard_page()
 {
     M_insist(Is_Page_Aligned(heap));

@@ -50,6 +50,10 @@ struct WasmEngine
          * (in linear memory) of the mapped table.  Installs guard pages after each mapping.  Acknowledges
          * `TRAP_GUARD_PAGES`.  */
         uint32_t map_table(const Table &table);
+        /** Maps an index at the current start of `heap` and advances `heap` past the mapped region.  Returns the address
+         * (in linear memory) of the mapped index.  Installs guard pages after each mapping.  Acknowledges
+         * `TRAP_GUARD_PAGES`.  */
+        uint32_t map_index(const idx::IndexBase &index);
 
         /** Installs a guard page at the current `heap` and increments `heap` to the next page.  Acknowledges
          * `TRAP_GUARD_PAGES`. */

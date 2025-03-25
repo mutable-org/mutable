@@ -1074,11 +1074,12 @@ v8::Local<v8::WasmModuleObject> m::wasm::detail::instantiate(v8::Isolate &isolat
 
 v8::Local<v8::Object> m::wasm::detail::create_env(v8::Isolate &isolate, const m::MatchBase &plan)
 {
+    auto &DB = Catalog::Get().get_database_in_use();
     auto &context = WasmEngine::Get_Wasm_Context_By_ID(Module::ID());
     auto Ctx = isolate.GetCurrentContext();
     auto env = v8::Object::New(&isolate);
 
-    /* Map accessed tables into the Wasm module. */
+    /* Map accessed tables (and possibly indexes) into the Wasm module. */
     auto tables = CollectTables::Collect(plan.get_matched_root());
     for (auto &table : tables) {
         auto off = context.map_table(table.get());
@@ -1094,6 +1095,30 @@ v8::Local<v8::Object> m::wasm::detail::create_env(v8::Isolate &isolate, const m:
         oss << table.get().name() << "_num_rows";
         M_DISCARD env->Set(Ctx, to_v8_string(&isolate, oss.str()), v8::Int32::New(&isolate, table.get().store().num_rows()));
         Module::Get().emit_import<uint32_t>(oss.str().c_str());
+
+        /* Check if array index on any attribute exists. TODO: check whether actual plan applies index scan */
+        if (options::index_scan_strategy != option_configs::IndexScanStrategy::INTERPRETATION and
+            options::index_scan_compilation_strategy == option_configs::IndexScanCompilationStrategy::EXPOSED_MEMORY)
+        {
+            for (auto &attr : table.get()) {
+                if (DB.has_index(table.get().name(), attr.name, idx::IndexMethod::Array)) { // TODO: add other index types
+                    auto &index = DB.get_index(table.get().name(), attr.name, idx::IndexMethod::Array);
+                    auto off = context.map_index(index);
+
+                    /* Add memory address to env. */
+                    std::ostringstream oss;
+                    oss << "index_" << table.get().name() << '_' << attr.name << "_array" << "_mem";
+                    M_DISCARD env->Set(Ctx, to_v8_string(&isolate, oss.str()), v8::Int32::New(&isolate, off));
+                    Module::Get().emit_import<void*>(oss.str().c_str());
+
+                    /* Add table size (num_rows) to env. */
+                    oss.str("");
+                    oss << "index_" << table.get().name() << '_' << attr.name << "_array" << "_num_entries";
+                    M_DISCARD env->Set(Ctx, to_v8_string(&isolate, oss.str()), v8::Int32::New(&isolate, index.num_entries()));
+                    Module::Get().emit_import<uint32_t>(oss.str().c_str());
+                }
+            }
+        }
     }
 
     /* Map all string literals into the Wasm module. */

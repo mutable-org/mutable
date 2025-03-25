@@ -50,6 +50,11 @@ std::string IndexBase::build_query(const Table &table, const Schema &schema)
 }
 
 template<typename Key>
+ArrayIndex<Key>::ArrayIndex()
+    : memory_(Catalog::Get().allocator().allocate(ALLOCATION_SIZE)), num_entries_(0), finalized_(false)
+{ }
+
+template<typename Key>
 void ArrayIndex<Key>::bulkload(const Table &table, const Schema &key_schema)
 {
     /* XXX: Disable timer during execution to not print times for query that is performed as part of bulkloading. */
@@ -141,12 +146,16 @@ void ArrayIndex<Key>::bulkload(const Table &table, const Schema &key_schema)
 template<typename Key>
 void ArrayIndex<Key>::add(const key_type key, const value_type value)
 {
+    if ((num_entries_ + 1) * sizeof(entry_type) > memory_.size())
+        throw m::runtime_error("not enough memory allocated to add another entry");
+
     if constexpr(std::same_as<key_type, const char*>) {
         Catalog &C = Catalog::Get();
-        data_.emplace_back(C.pool(key), value);
+        *end() = entry_type(C.pool(key), value);
     } else {
-        data_.emplace_back(key, value);
+        *end() = entry_type(key, value);
     }
+    ++num_entries_;
     finalized_ = false;
 }
 
@@ -154,7 +163,7 @@ template<arithmetic Key>
 void RecursiveModelIndex<Key>::finalize()
 {
     /* Sort data. */
-    std::sort(base_type::data_.begin(), base_type::data_.end(), base_type::cmp);
+    std::sort(base_type::begin(), base_type::end(), base_type::cmp);
 
     /* Compute number of models. */
     auto begin = base_type::begin();

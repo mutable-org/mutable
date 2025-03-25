@@ -59,7 +59,7 @@ TEMPLATE_TEST_CASE("ArrayIndex::add() with Numeric types", "[core][storage][inde
     }
 
     /* Check sortedness of iterator. */
-    for (auto it = idx.begin() + 1; it != idx.end(); ++it)
+    for (auto it = idx.cbegin() + 1; it != idx.cend(); ++it)
         REQUIRE((it - 1)->first <= it->first);
 
 }

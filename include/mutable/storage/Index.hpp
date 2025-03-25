@@ -7,6 +7,7 @@
 #include <mutable/util/concepts.hpp>
 #include <mutable/util/exception.hpp>
 #include <mutable/util/macro.hpp>
+#include <mutable/util/memory.hpp>
 #include <utility>
 #include <vector>
 
@@ -38,6 +39,10 @@ struct IndexBase
     virtual std::size_t num_entries() const = 0;
     /** Returns the `IndexMethod` of the index. */
     virtual IndexMethod method() const = 0;
+    /** Returns the underlying memory of the index. */
+    virtual const memory::Memory & memory() const = 0;
+    /* Returns the size of the index in bytes. */
+    virtual std::size_t size_in_bytes() const = 0;
 
     virtual void dump(std::ostream &out) const = 0;
     virtual void dump() const = 0;
@@ -51,14 +56,22 @@ struct IndexBase
 template<typename Key>
 struct ArrayIndex : IndexBase
 {
+#ifndef NDEBUG
+    static constexpr std::size_t ALLOCATION_SIZE = 1UL << 30; ///< 1 GiB
+#else
+    static constexpr std::size_t ALLOCATION_SIZE = 1UL << 37; ///< 128 GiB
+#endif
+
     using key_type = Key;
     using value_type = std::size_t;
     using entry_type = std::pair<key_type, value_type>;
-    using container_type = std::vector<entry_type>;
-    using const_iterator = typename container_type::const_iterator;
+    using iterator = entry_type*;
+    using const_iterator = const entry_type*;
 
     protected:
-    container_type data_; ///< A vector holding the index entries consisting of pairs of key and value
+    ///> the underlying memory for a vector holding the index entries consisting of pairs of key and value
+    memory::Memory memory_;
+    std::size_t num_entries_; ///< number of entries
     bool finalized_; ///< flag to signalize whether index is finalized, i.e. array is sorted
 
     /** Custom comparator class to handle the special case of \tparam key_type being `const char*`. */
@@ -78,7 +91,7 @@ struct ArrayIndex : IndexBase
     } cmp;
 
     public:
-    ArrayIndex() : finalized_(false) { }
+    ArrayIndex();
 
     /** Bulkloads the index from \p table on the key contained in \p key_schema by executing a query and adding one
      * entry after another.  The index is finalized in the end.  Throws `m::invalid_arguent` if \p key_schema contains
@@ -86,18 +99,25 @@ struct ArrayIndex : IndexBase
     void bulkload(const Table &table, const Schema &key_schema) override;
 
     /** Returns the number of entries in the index. */
-    std::size_t num_entries() const override { return data_.size(); }
+    std::size_t num_entries() const override { return num_entries_; }
 
     /** Returns the `IndexMethod` of the index. */
     IndexMethod method() const override { return IndexMethod::Array; }
 
+    /** Returns the underlying memory of the index. */
+    const memory::Memory & memory() const override { return memory_; }
+
+    /* Returns the size of the index in bytes. */
+    std::size_t size_in_bytes() const override { return num_entries_ * sizeof(entry_type); }
+
+    public:
     /** Adds a single pair of \p key and \p value to the index.  Note that `finalize()` has to be called afterwards for
      * the vector to be sorted and the index to be usable. */
     void add(const key_type key, const value_type value);
 
     /** Sorts the underlying vector and flags the index as finalized. */
     virtual void finalize() {
-        std::sort(data_.begin(), data_.end(), cmp);
+        std::sort(begin(), end(), cmp);
         finalized_ = true;
     }
 
@@ -109,7 +129,7 @@ struct ArrayIndex : IndexBase
      * index is not finalized. */
     virtual const_iterator lower_bound(const key_type key) const {
         if (not finalized_) throw m::exception("Index is not finalized.");
-        return std::lower_bound(data_.begin(), data_.end(), entry_type{key, value_type()}, cmp);
+        return std::lower_bound(begin(), end(), entry_type{key, value_type()}, cmp);
     }
 
     /** Returns an iterator pointing to the first entry of the vector such that `entry.key` < \p key is `true`, i.e.
@@ -117,15 +137,21 @@ struct ArrayIndex : IndexBase
      * is not finalized. */
     virtual const_iterator upper_bound(const key_type key) const {
         if (not finalized_) throw m::exception("Index is not finalized.");
-        return std::upper_bound(data_.begin(), data_.end(), entry_type{key, value_type()}, cmp);
+        return std::upper_bound(begin(), end(), entry_type{key, value_type()}, cmp);
     }
 
     /** Returns an iterator pointing to the first entry of the index. */
-    const_iterator begin()  const { return data_.cbegin(); }
-    const_iterator cbegin() const { return data_.cbegin(); }
+    protected:
+    iterator       begin()        { return static_cast<entry_type*>(memory_.addr()); }
+    public:
+    const_iterator begin()  const { return static_cast<const entry_type*>(memory_.addr()); }
+    const_iterator cbegin() const { return begin(); }
     /** Returns an interator pointing to the first element following the last entry of the index. */
-    const_iterator end() const  { return data_.cend(); }
-    const_iterator cend() const { return data_.cend(); }
+    protected:
+    iterator       end()        { return static_cast<entry_type*>(memory_.addr()) + num_entries_; }
+    public:
+    const_iterator end()  const { return static_cast<const entry_type*>(memory_.addr()) + num_entries_; }
+    const_iterator cend() const { return end(); }
 
     void dump(std::ostream &out) const override { out << "ArrayIndex<" << typeid(key_type).name() << '>' << std::endl; }
     void dump() const override { dump(std::cerr); }
@@ -139,7 +165,6 @@ struct RecursiveModelIndex : ArrayIndex<Key>
     using key_type = base_type::key_type;
     using value_type = base_type::value_type;
     using entry_type = base_type::entry_type;
-    using container_type = base_type::container_type;
     using const_iterator = base_type::const_iterator;
 
     struct LinearModel
@@ -213,6 +238,12 @@ struct RecursiveModelIndex : ArrayIndex<Key>
     /** Returns the `IndexMethod` of the index. */
     IndexMethod method() const override { return IndexMethod::Rmi; }
 
+    /** Returns the underlying memory of the index. */
+    const memory::Memory & memory() const override { throw m::runtime_error("not yet implemented"); }
+
+    /* Returns the size of the index in bytes. */
+    std::size_t size_in_bytes() const override { throw m::runtime_error("not yet implemented"); }
+
     /** Sorts the underlying vector, builds the linear models, and flags the index as finalized. */
     void finalize() override;
 
@@ -238,7 +269,7 @@ struct RecursiveModelIndex : ArrayIndex<Key>
     private:
     std::size_t predict(const key_type key) const {
         auto segment_id = std::clamp<double>(models_[0](key), 0, models_.size() - 2);
-        auto pred = std::clamp<double>(models_[segment_id + 1](key), 0, base_type::data_.size());
+        auto pred = std::clamp<double>(models_[segment_id + 1](key), 0, base_type::num_entries());
         return static_cast<std::size_t>(pred);
     }
     const_iterator lower_bound_exponential_search(const_iterator pred, const key_type value) const {

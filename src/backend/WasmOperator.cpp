@@ -1469,7 +1469,12 @@ void index_scan_codegen_compilation(const Index &index, const index_scan_bounds_
                                     const Match<IndexScan<IndexMethod>> &M,
                                     setup_t setup, pipeline_t pipeline, teardown_t teardown) {
     using key_type = Index::key_type;
+    using value_type = Index::value_type;
+    constexpr uint32_t entry_size = sizeof(typename Index::entry_type);
     using sql_type = SqlT;
+
+    auto table_name = M.scan.store().table().name();
+    auto attr_name = bounds.attribute.id.name;
 
     if (options::index_scan_compilation_strategy == option_configs::IndexScanCompilationStrategy::CALLBACK) {
         /*----- Resolve callback function names. -----*/
@@ -1555,9 +1560,9 @@ void index_scan_codegen_compilation(const Index &index, const index_scan_bounds_
                     *key_address = CodeGenContext::Get().get_literal_raw_address(_key);
 
                     Ptr<U32x1> key_ptr(key_address);
-                    key.emplace(U32x1(*key_ptr).to<char*>(), false, as<const CharacterSequence>(bound.type()));
+                    key.emplace(U32x1(*key_ptr).to<char*>());
                 } else {
-                    auto *key_address = Module::Allocator().raw_malloc<typename sql_type::type>();
+                    auto *key_address = Module::Allocator().raw_malloc<key_type>();
                     *key_address = _key;
 
                     Ptr<typename sql_type::primitive_type> key_ptr(key_address);
@@ -1611,12 +1616,12 @@ void index_scan_codegen_compilation(const Index &index, const index_scan_bounds_
             );
             lo += num_tuples_in_batch;
             ptr = buffer_address.clone();
-            WHILE(num_tuples_in_batch > 0U) {
+            WHILE (num_tuples_in_batch > 0U) {
                 static Schema empty_schema;
                 compile_load_point_access(
                     /* tuple_value_schema=   */ M.scan.schema(),
                     /* tuple_address_schema= */ empty_schema,
-                    /* base_address=         */ get_base_address(M.scan.store().table().name()),
+                    /* base_address=         */ get_base_address(table_name),
                     /* layout=               */ M.scan.store().table().layout(),
                     /* layout_schema=        */ M.scan.store().table().schema(M.scan.alias()),
                     /* tuple_id=             */ *ptr
@@ -1706,7 +1711,7 @@ void index_scan_codegen_interpretation(const Index &index, const index_scan_boun
         Ptr<U32x1> base(buffer_address + 1); // +1 to skip stored number of results
         Var<Ptr<U32x1>> ptr(base.clone());
         const Var<Ptr<U32x1>> end(base + U32x1(*Ptr<U32x1>(buffer_address)).make_signed());
-        WHILE(ptr < end) {
+        WHILE (ptr < end) {
             compile_load_point_access(
                 /* tuple_value_schema=   */ M.scan.schema(),
                 /* tuple_address_schema= */ empty_schema,
@@ -1896,7 +1901,7 @@ void index_scan_codegen_hybrid(const Index &index, const index_scan_bounds_t &bo
             );
             begin += num_tuples_in_batch;
             ptr = buffer_address.clone();
-            WHILE(num_tuples_in_batch > 0U) {
+            WHILE (num_tuples_in_batch > 0U) {
                 static Schema empty_schema;
                 compile_load_point_access(
                     /* tuple_value_schema=   */ M.scan.schema(),

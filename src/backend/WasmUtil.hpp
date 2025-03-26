@@ -30,7 +30,7 @@ template<bool IsGlobal> struct buffer_swap_proxy_t;
 
 struct NChar : Ptr<Charx1>
 {
-    using primitive_type = NChar;
+    using primitive_type = Ptr<Charx1>;
 
     private:
     bool can_be_null_;

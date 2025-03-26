@@ -975,6 +975,22 @@ Ptr<void> get_base_address(const ThreadSafePooledString &table_name) {
     return Module::Get().get_global<void*>(oss.str().c_str());
 }
 
+/** Returns the number of entries of array index for table \p table_name and attribute \p attr_name. */
+U32x1 get_array_index_num_entries(const ThreadSafePooledString &table_name, const ThreadSafePooledString &attr_name) {
+    static std::ostringstream oss;
+    oss.str("");
+    oss << "index_" << table_name << '_' << attr_name << "_array" << "_num_entries";
+    return Module::Get().get_global<uint32_t>(oss.str().c_str());
+}
+
+/** Returns a pointer to the beginning of array index for table \p table_name and attribute \p attr_name. */
+Ptr<void> get_array_index_base_address(const ThreadSafePooledString &table_name, const ThreadSafePooledString &attr_name) {
+    static std::ostringstream oss;
+    oss.str("");
+    oss << "index_" << table_name << '_' << attr_name << "_array" << "_mem";
+    return Module::Get().get_global<void*>(oss.str().c_str());
+}
+
 /** Computes the initial hash table capacity for \p op. The function ensures that the initial capacity is in the range
  * [0, 2^32 - 1] such that the capacity does *not* exceed the `uint32_t` value limit. */
 uint32_t compute_initial_ht_capacity(const Operator &op, double load_factor) {
@@ -1640,7 +1656,126 @@ void index_scan_codegen_compilation(const Index &index, const index_scan_bounds_
             Module::Allocator().free(buffer_address, alloc_size);
         };
     } else if (options::index_scan_compilation_strategy == option_configs::IndexScanCompilationStrategy::EXPOSED_MEMORY) {
-        M_unreachable("not implemented yet");
+        /*----- Use binary search to query the index for lo and hi bounds. -----*/
+        auto compile_bound_lookup = [&](const ast::Expr &bound, bool is_lower_bound) {
+            auto [constant, is_negative] = get_valid_bound(bound);
+            auto c = Interpreter::eval(constant);
+            key_type _key;
+            if constexpr(m::boolean<key_type>) {
+                _key = bool(c);
+                M_insist(not is_negative, "boolean cannot be negative");
+            } else if constexpr(m::integral<key_type>) {
+                auto i64 = int64_t(c);
+                M_insist(std::in_range<key_type>(i64), "integral constant must be in range");
+                _key = key_type(i64);
+                _key = is_negative ? -_key : _key;
+            } else if constexpr(std::same_as<float, key_type>) {
+                auto d = double(c);
+                _key = key_type(d);
+                M_insist(_key == d, "downcasting should not impact precision");
+                _key = is_negative ? -_key : _key;
+            } else if constexpr(std::same_as<double, key_type>) {
+                _key = double(c);
+                _key = is_negative ? -_key : _key;
+            } else if constexpr(std::same_as<const char*, key_type>) {
+                _key = reinterpret_cast<const char*>(c.as_p());
+                M_insist(not is_negative, "string cannot be negative");
+            }
+
+            std::optional<typename sql_type::primitive_type> key;
+            if (options::index_scan_materialization_strategy == option_configs::IndexScanMaterializationStrategy::INLINE) {
+                if constexpr (std::same_as<sql_type, NChar>) {
+                    key.emplace(CodeGenContext::Get().get_literal_address(_key));
+                } else {
+                    key.emplace(_key);
+                }
+            } else if (options::index_scan_materialization_strategy == option_configs::IndexScanMaterializationStrategy::MEMORY) {
+                /* If we materialize before calling the bound functions, the key parameter is independent of the bounds.
+                 * As a result, queries that only differ in the filter predicate are compiled to the exact same
+                 * WebAssembly code, enabling caching of compiled plans in V8. */
+                if constexpr (std::same_as<sql_type, NChar>) {
+                    uint32_t *key_address = Module::Allocator().raw_malloc<uint32_t>();
+                    *key_address = CodeGenContext::Get().get_literal_raw_address(_key);
+
+                    Ptr<U32x1> key_ptr(key_address);
+                    key.emplace(U32x1(*key_ptr).to<char*>());
+                } else {
+                    auto *key_address = Module::Allocator().raw_malloc<key_type>();
+                    *key_address = _key;
+
+                    Ptr<typename sql_type::primitive_type> key_ptr(key_address);
+                    key.emplace(*key_ptr);
+                }
+            } else {
+                M_unreachable("unknown materialization strategy");
+            }
+            M_insist(bool(key), "key must be set");
+
+            /* Implementation based on https://en.cppreference.com/w/cpp/algorithm/lower_bound and
+             * https://en.cppreference.com/w/cpp/algorithm/upper_bound. */
+            Var<Ptr<void>> first(get_array_index_base_address(table_name, attr_name));
+            Var<U32x1> count(get_array_index_num_entries(table_name, attr_name));
+
+            WHILE (count > 0U) {
+                const Var<U32x1> step(count / 2U);
+                const Var<Ptr<void>> it(first + (step * entry_size).make_signed());
+                Boolx1 cond = M_CONSTEXPR_COND(
+                    std::same_as<M_COMMA(sql_type) NChar>,
+                    strcmp(
+                        NChar(it.to<char*>(), false, as<const CharacterSequence>(bound.type())),
+                        NChar(*key, false, as<const CharacterSequence>(bound.type())),
+                        is_lower_bound ? LT : LE
+                    ).insist_not_null(),
+                    M_CONSTEXPR_COND(
+                        std::same_as<M_COMMA(key_type) bool>,
+                        is_lower_bound ? Boolx1(*it.to<bool*>()).to<uint8_t>() <  (*key).template to<uint8_t>()
+                                       : Boolx1(*it.to<bool*>()).to<uint8_t>() <= (*key).template to<uint8_t>(),
+                        is_lower_bound ? *it.to<key_type*>() < *key : *it.to<key_type*>() <= *key
+                    )
+                );
+                IF (cond) {
+                    first = it + entry_size;
+                    count -= step + 1U;
+                } ELSE {
+                    count = step;
+                };
+            }
+            return first;
+        };
+        Var<Ptr<void>> lo(
+            bool(bounds.lo) ? compile_bound_lookup(bounds.lo->get(), bounds.is_inclusive_lo)
+                            : get_array_index_base_address(table_name, attr_name)
+        );
+        const Var<Ptr<void>> hi(
+            bool(bounds.hi) ? compile_bound_lookup(bounds.hi->get(), not bounds.is_inclusive_hi)
+                            : get_array_index_base_address(table_name, attr_name)
+                              + (get_array_index_num_entries(table_name, attr_name) * entry_size).make_signed()
+        );
+        Wasm_insist(lo <= hi, "bounds need to be valid");
+
+        /*----- Emit setup code *after* allocating memory to guarantee sequential memory allocation for pipeline. -----*/
+        setup();
+
+        /*----- Emit loop code. -----*/
+        WHILE (lo < hi) {
+            constexpr int32_t value_offset =
+                ((sizeof(key_type) + alignof(value_type) - 1U) / alignof(value_type)) * alignof(value_type);
+            U32x1 tuple_id = PrimitiveExpr<value_type>(*(lo + value_offset).to<value_type*>()).template to<uint32_t>();
+            static Schema empty_schema;
+            compile_load_point_access(
+                /* tuple_value_schema=   */ M.scan.schema(),
+                /* tuple_address_schema= */ empty_schema,
+                /* base_address=         */ get_base_address(table_name),
+                /* layout=               */ M.scan.store().table().layout(),
+                /* layout_schema=        */ M.scan.store().table().schema(M.scan.alias()),
+                /* tuple_id=             */ tuple_id
+            );
+            pipeline();
+            lo += int32_t(entry_size);
+        }
+
+        /*----- Emit teardown code. -----*/
+        teardown();
     } else {
         M_unreachable("unknown compilation strategy");
     }

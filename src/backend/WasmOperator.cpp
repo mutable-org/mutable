@@ -1903,7 +1903,12 @@ void index_scan_codegen_hybrid(const Index &index, const index_scan_bounds_t &bo
                                setup_t setup, pipeline_t pipeline, teardown_t teardown)
 {
     using key_type = Index::key_type;
+    using value_type = Index::value_type;
+    constexpr uint32_t entry_size = sizeof(typename Index::entry_type);
     using sql_type = SqlT;
+
+    auto table_name = M.scan.store().table().name();
+    auto attr_name = bounds.attribute.id.name;
 
     /*----- Resolve callback function name. -----*/
     const char *scan_fn;
@@ -1981,10 +1986,10 @@ void index_scan_codegen_hybrid(const Index &index, const index_scan_bounds_t &bo
     M_insist(std::in_range<uint32_t>(hi), "should fit in uint32_t");
 
     /*----- Materialize offsets hi and lo. -----*/
-    Var<U32x1> begin;
+    std::optional<U32x1> begin;
     std::optional<U32x1> end;
     if (options::index_scan_materialization_strategy == option_configs::IndexScanMaterializationStrategy::INLINE) {
-        begin = U32x1(lo);
+        begin.emplace(lo);
         end.emplace(hi);
     } else if (options::index_scan_materialization_strategy == option_configs::IndexScanMaterializationStrategy::MEMORY) {
         /* If we materialize before allocating buffer memory, the addresses are independent of the buffer size.  As a
@@ -1995,7 +2000,7 @@ void index_scan_codegen_hybrid(const Index &index, const index_scan_bounds_t &bo
         offset_address[1] = uint32_t(hi);
 
         Ptr<U32x1> offset_ptr(offset_address);
-        begin = *offset_ptr.clone();
+        begin.emplace(*offset_ptr.clone());
         end.emplace(*(offset_ptr + 1));
     } else {
         M_unreachable("unknown materialization strategy");
@@ -2009,7 +2014,7 @@ void index_scan_codegen_hybrid(const Index &index, const index_scan_bounds_t &bo
         /* Determine alloc size as minimum of number of results and command-line parameter batch size, where 0 is
          * interpreted as infinity. */
         const Var<U32x1> alloc_size([&](){
-            U32x1 num_results = end->clone() - begin;
+            U32x1 num_results = end->clone() - begin->clone();
             U32x1 num_results_cpy = num_results.clone();
             U32x1 batch_size = M.batch_size == 0 ? num_results.clone() : U32x1(M.batch_size);
             U32x1 batch_size_cpy = batch_size.clone();
@@ -2023,25 +2028,26 @@ void index_scan_codegen_hybrid(const Index &index, const index_scan_bounds_t &bo
         /*----- Emit loop code. -----*/
         Var<U32x1> num_tuples_in_batch;
         Var<Ptr<U32x1>> ptr;
-        WHILE (begin < end->clone()) {
+        Var<U32x1> _begin(*begin);
+        WHILE (_begin < end->clone()) {
             auto end_cpy = end->clone();
-            num_tuples_in_batch = Select(*end - begin > alloc_size, alloc_size, end_cpy - begin);
+            num_tuples_in_batch = Select(*end - _begin > alloc_size, alloc_size, end_cpy - _begin);
             /* Call host to fill buffer memory with next batch of tuple ids. */
             Module::Get().emit_call<void>(
                 /* fn=           */ scan_fn,
                 /* index_id=     */ index_id,
-                /* entry_offset= */ begin.val(),
+                /* entry_offset= */ _begin.val(),
                 /* address=      */ buffer_address.clone(),
                 /* batch_size=   */ num_tuples_in_batch.val()
             );
-            begin += num_tuples_in_batch;
+            _begin += num_tuples_in_batch;
             ptr = buffer_address.clone();
             WHILE (num_tuples_in_batch > 0U) {
                 static Schema empty_schema;
                 compile_load_point_access(
                     /* tuple_value_schema=   */ M.scan.schema(),
                     /* tuple_address_schema= */ empty_schema,
-                    /* base_address=         */ get_base_address(M.scan.store().table().name()),
+                    /* base_address=         */ get_base_address(table_name),
                     /* layout=               */ M.scan.store().table().layout(),
                     /* layout_schema=        */ M.scan.store().table().schema(M.scan.alias()),
                     /* tuple_id=             */ *ptr
@@ -2060,7 +2066,34 @@ void index_scan_codegen_hybrid(const Index &index, const index_scan_bounds_t &bo
             Module::Allocator().free(buffer_address, alloc_size);
         };
     } else if (options::index_scan_compilation_strategy == option_configs::IndexScanCompilationStrategy::EXPOSED_MEMORY) {
-        M_unreachable("not implemented yet");
+        /*----- Emit setup code *after* allocating memory to guarantee sequential memory allocation for pipeline. -----*/
+        setup();
+
+        /*----- Emit loop code. -----*/
+        Var<I32x1> lo((*begin * entry_size).make_signed());
+        const Var<I32x1> hi((*end * entry_size).make_signed());
+        WHILE (lo < hi) {
+            constexpr int32_t value_offset =
+                ((sizeof(key_type) + alignof(value_type) - 1U) / alignof(value_type)) * alignof(value_type);
+            U32x1 tuple_id = PrimitiveExpr<value_type>(*(get_array_index_base_address(table_name, attr_name) + lo + value_offset).template to<value_type*>()).template to<uint32_t>();
+            static Schema empty_schema;
+            compile_load_point_access(
+                /* tuple_value_schema=   */ M.scan.schema(),
+                /* tuple_address_schema= */ empty_schema,
+                /* base_address=         */ get_base_address(table_name),
+                /* layout=               */ M.scan.store().table().layout(),
+                /* layout_schema=        */ M.scan.store().table().schema(M.scan.alias()),
+                /* tuple_id=             */ tuple_id
+            );
+            pipeline();
+            lo += int32_t(entry_size);
+        }
+
+        /*----- Emit teardown code. -----*/
+        teardown();
+
+        /*----- Discard unused values. ----*/
+        index_id.discard();
     } else {
         M_unreachable("unknown compilation strategy");
     }

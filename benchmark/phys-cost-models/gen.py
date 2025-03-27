@@ -136,9 +136,9 @@ SCHEMA = {
     ],
 
     'Selectivity-i32-simple': [
-        ( 'id',  'i32', ['NOT NULL'], {'num_tuples': 1_000_000, 'num_distinct_values': 1_000_000} ),
-        ( 'i32', 'i32', ['NOT NULL'], {'num_tuples': 1_000_000,
-                                       'num_distinct_values': 1_000_000,
+        ( 'id',  'i32', ['NOT NULL'], {'num_tuples': 10_000_000} ),
+        ( 'i32', 'i32', ['NOT NULL'], {'num_tuples': 10_000_000,
+                                       'num_distinct_values': 10_000_000,
                                        'min_value': TYPE_TO_DOMAIN['i32'][0] // 2,
                                        'max_value': TYPE_TO_DOMAIN['i32'][1] // 2
                                        }
@@ -146,9 +146,9 @@ SCHEMA = {
     ],
 
     'Selectivity-i64-simple': [
-        ( 'id',  'i32', ['NOT NULL'], {'num_tuples': 1_000_000, 'num_distinct_values': 1_000_000} ),
-        ( 'i64', 'i64', ['NOT NULL'], {'num_tuples': 1_000_000,
-                                       'num_distinct_values': 1_000_000,
+        ( 'id',  'i32', ['NOT NULL'], {'num_tuples': 10_000_000} ),
+        ( 'i64', 'i64', ['NOT NULL'], {'num_tuples': 10_000_000,
+                                       'num_distinct_values': 10_000_000,
                                        'min_value': TYPE_TO_DOMAIN['i64'][0] // 2,
                                        'max_value': TYPE_TO_DOMAIN['i64'][1] // 2
                                        }
@@ -156,13 +156,13 @@ SCHEMA = {
     ],
 
     'Selectivity-f-simple': [
-        ( 'id', 'i32', ['NOT NULL'], {'num_tuples': 1_000_000, 'num_distinct_values': 1_000_000} ),
-        ( 'f',  'f',   ['NOT NULL'], {'num_tuples': 1_000_000, 'num_distinct_values': 1_000_000} ),
+        ( 'id', 'i32', ['NOT NULL'], {'num_tuples': 10_000_000} ),
+        ( 'f',  'f',   ['NOT NULL'], {'num_tuples': 10_000_000, 'num_distinct_values': 10_000_000} ),
     ],
 
     'Selectivity-d-simple': [
-        ( 'id', 'i32', ['NOT NULL'], {'num_tuples': 1_000_000, 'num_distinct_values': 1_000_000} ),
-        ( 'd',  'd',   ['NOT NULL'], {'num_tuples': 1_000_000, 'num_distinct_values': 1_000_000} ),
+        ( 'id', 'i32', ['NOT NULL'], {'num_tuples': 10_000_000} ),
+        ( 'd',  'd',   ['NOT NULL'], {'num_tuples': 10_000_000, 'num_distinct_values': 10_000_000} ),
     ],
 
     'Distinct_multi_i32': [

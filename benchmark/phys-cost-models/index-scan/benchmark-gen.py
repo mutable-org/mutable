@@ -46,33 +46,33 @@ PATTERNS: list[tuple[str, str, str]] = [
     ('size_machindecode',            '\'^Machine code size:/*\'',                      'Machine code size'),
 ]
 
-MATERIALIZATIONS: list[tuple[str, str, str]] = [
-    #  ('wo_materialization', '',                                                   'without materialization'),
-    ('w_materialization',  '--soft-pipeline-breaker AfterFilter,AfterIndexScan', 'with materialization'),
+MATERIALIZATIONS: list[tuple[bool, str, str, str]] = [
+    # (False, 'wo_materialization', '',                                                   'without materialization'),
+    (True,  'w_materialization',  '--soft-pipeline-breaker AfterFilter,AfterIndexScan', 'with materialization'),
 ]
-CACHING_CONFIGURATIONS: list[tuple[str, str, str]] = [
-    ('wo_caching', '--no-wasm-compilation-cache', 'without code caching'),
-    ('w_caching',  ''                           , 'with code caching'),
+CACHING_CONFIGURATIONS: list[tuple[bool, str, str, str]] = [
+    (False, 'wo_caching', '--no-wasm-compilation-cache', 'without code caching'),
+    (True,  'w_caching',  ''                           , 'with code caching'),
 ]
-SCAN_CONFIGURATIONS: list[tuple[str, str]] = [
-    ('table scan + filter, branching',             '--scan-implementations Scan --filter-selection-strategy Branching'),
-    ('table scan + filter, predicated',            '--scan-implementations Scan --filter-selection-strategy Predicated'),
+SCAN_CONFIGURATIONS: list[tuple[str, str, str]] = [
+    ('table_scan+filter', 'branching',             '--scan-implementations Scan --filter-selection-strategy Branching'),
+    ('table_scan+filter', 'predicated',            '--scan-implementations Scan --filter-selection-strategy Predicated'),
 ]
-INDEX_CONFIGURATIONS: list[tuple[str, str]] = [
-    ('index scan (compiled), inline/hostcall',         '--scan-implementations IndexScan --index-scan-strategy Compilation --index-scan-materialization-strategy Inline --index-scan-compilation-strategy Callback'),
-    ('index scan (compiled), memory/hostcall',         '--scan-implementations IndexScan --index-scan-strategy Compilation --index-scan-materialization-strategy Memory --index-scan-compilation-strategy Callback'),
-    #  ('index scan (compiled), inline/exposed memory',   '--scan-implementations IndexScan --index-scan-strategy Compilation --index-scan-materialization-strategy Inline --index-scan-compilation-strategy ExposedMemory'),
-    #  ('index scan (compiled), memory/exposed memory',   '--scan-implementations IndexScan --index-scan-strategy Compilation --index-scan-materialization-strategy Memory --index-scan-compilation-strategy ExposedMemory'),
-    ('index scan (hybrid), inline/hostcall',       '--scan-implementations IndexScan --index-scan-strategy Hybrid --index-scan-materialization-strategy Inline --index-scan-compilation-strategy Callback'),
-    ('index scan (hybrid), memory/hostcall',       '--scan-implementations IndexScan --index-scan-strategy Hybrid --index-scan-materialization-strategy Memory --index-scan-compilation-strategy Callback'),
-    #  ('index scan (hybrid), inline/exposed memory', '--scan-implementations IndexScan --index-scan-strategy Hybrid --index-scan-materialization-strategy Inline --index-scan-compilation-strategy ExposedMemory'),
-    #  ('index scan (hybrid), memory/exposed memory', '--scan-implementations IndexScan --index-scan-strategy Hybrid --index-scan-materialization-strategy Memory --index-scan-compilation-strategy ExposedMemory'),
-    ('index scan (interpreted), inline',        '--scan-implementations IndexScan --index-scan-strategy Interpretation --index-scan-materialization-strategy Inline'),
-    ('index scan (interpreted), memory',        '--scan-implementations IndexScan --index-scan-strategy Interpretation --index-scan-materialization-strategy Memory'),
+INDEX_CONFIGURATIONS: list[tuple[str, str, str, str, str]] = [
+    ('index_scan', 'compiled',    'host_call', 'inline',      '--scan-implementations IndexScan --index-scan-strategy Compilation --index-scan-materialization-strategy Inline --index-scan-compilation-strategy Callback'),
+    ('index_scan', 'compiled',    'host_call', 'memory',      '--scan-implementations IndexScan --index-scan-strategy Compilation --index-scan-materialization-strategy Memory --index-scan-compilation-strategy Callback'),
+    ('index_scan', 'compiled',    'exposed_memory', 'inline', '--scan-implementations IndexScan --index-scan-strategy Compilation --index-scan-materialization-strategy Inline --index-scan-compilation-strategy ExposedMemory'),
+    ('index_scan', 'compiled',    'exposed_memory', 'memory', '--scan-implementations IndexScan --index-scan-strategy Compilation --index-scan-materialization-strategy Memory --index-scan-compilation-strategy ExposedMemory'),
+    ('index_scan', 'hybrid',      'host_call', 'inline',      '--scan-implementations IndexScan --index-scan-strategy Hybrid --index-scan-materialization-strategy Inline --index-scan-compilation-strategy Callback'),
+    ('index_scan', 'hybrid',      'host_call', 'memory',      '--scan-implementations IndexScan --index-scan-strategy Hybrid --index-scan-materialization-strategy Memory --index-scan-compilation-strategy Callback'),
+    ('index_scan', 'hybrid',      'exposed_memory', 'inline', '--scan-implementations IndexScan --index-scan-strategy Hybrid --index-scan-materialization-strategy Inline --index-scan-compilation-strategy ExposedMemory'),
+    ('index_scan', 'hybrid',      'exposed_memory', 'memory', '--scan-implementations IndexScan --index-scan-strategy Hybrid --index-scan-materialization-strategy Memory --index-scan-compilation-strategy ExposedMemory'),
+    ('index_scan', 'interpreted', 'N/A', 'inline',            '--scan-implementations IndexScan --index-scan-strategy Interpretation --index-scan-materialization-strategy Inline'),
+    ('index_scan', 'interpreted', 'N/A', 'memory',            '--scan-implementations IndexScan --index-scan-strategy Interpretation --index-scan-materialization-strategy Memory'),
 ]
-METHODS: list[tuple[str, str]] = [
+INDEXES: list[tuple[str, str]] = [
     ('array', '--index-implementations Array'),
-    ('rmi',   '--index-implementations Rmi'),
+    #  ('rmi',   '--index-implementations Rmi'),
 ]
 LAYOUTS: list[tuple[str, str, str]] = [
     ('row', '--data-layout Row', 'Row layout'),
@@ -87,18 +87,26 @@ LAYOUTS: list[tuple[str, str, str]] = [
 ]
 
 SELECTIVITIES: list[float] = [
-    10**0,  0.5 * 10**0,
-    10**-1, 0.5 * 10**-1,
-    10**-2, 0.5 * 10**-2,
-    10**-3, 0.5 * 10**-3,
-    10**-4, 0.5 * 10**-4,
-    10**-5, 0.5 * 10**-5,
-    10**-6
+    10**0,
+    0.5 * 10**0,
+    10**-1,
+    0.5 * 10**-1,
+    10**-2,
+    0.5 * 10**-2,
+    10**-3,
+    0.5 * 10**-3,
+    10**-4,
+    0.5 * 10**-4,
+    10**-5,
+    0.5 * 10**-5,
+    10**-6,
+    0.5 * 10**-6,
+    10**-7,
 ]
 
 BATCH_SIZE_SELECTIVITY: float = 0.1
 BATCH_SIZE_ARG: str = '--index-sequential-scan-batch-size'
-BATCH_SIZES: list[int] = [10**0, 10**1, 10**2, 10**3, 10**4, 10**5, 10**6]
+BATCH_SIZES: list[int] = [10**0, 10**1, 10**2, 10**3, 10**4, 10**5, 10**6, 10**7]
 
 MUTABLE_ARGS = '--backend WasmV8 --no-simd --statistics'
 
@@ -217,11 +225,11 @@ def generate_point_query_str(table: str, column: str, val) -> str:
 # Generates the indexes section of the benchmark file.
 def generate_indexes_str(column: str) -> str:
     indexes_str: str = '        indexes:\n'
-    for method, _ in METHODS:
+    for index, _ in INDEXES:
         indexes_str += (
-f'            \'{column}_{method}_idx\':\n'
+f'            \'{column}_{index}_idx\':\n'
 f'                attributes: \'{column}\'\n'
-f'                method: \'{method}\'\n'
+f'                method: \'{index}\'\n'
         )
     return indexes_str
 
@@ -265,9 +273,9 @@ f'                    {pattern[2]}: {pattern[1]}\n'
 # Generates the configurations section concerned with scans of the benchmark file.
 def generate_scan_configurations_str(pattern: tuple[str, str, str] | None = None) -> str:
     config_str: str = ''
-    for config, config_args in SCAN_CONFIGURATIONS:
+    for operators, strategy, config_args in SCAN_CONFIGURATIONS:
         config_str += (
-f'            \'{config}, 0, no index\':\n'  # scan config, index, batch size, pattern
+f'            \'operators={operators};strategy={strategy};index_access=N/A;materialization=N/A;batch_size=N/A;index_type=N/A\':\n'  # scan config, index, batch size, pattern
 f'                args: {config_args}\n'
 f'{generate_pattern_str(pattern)}\n'
         )
@@ -277,19 +285,19 @@ f'{generate_pattern_str(pattern)}\n'
 # Generates the configurations section concerned with indexes of the benchmark file.
 def generate_index_configurations_str(pattern: tuple[str, str, str] | None = None) -> str:
     config_str: str = ''
-    for config, config_args in INDEX_CONFIGURATIONS:
-        for method, method_args in METHODS:
-            if 'hostcall' in config:
+    for operators, strategy, index_access, materialization, config_args in INDEX_CONFIGURATIONS:
+        for index_type, index_args in INDEXES:
+            if index_access == 'host_call':
                 for batch_size in BATCH_SIZES:
                     config_str += (
-f'            \'{config}, {batch_size}, {method}\':\n'  # scan config, index, batch size, pattern
-f'                args: {config_args} {method_args} {BATCH_SIZE_ARG} {batch_size}\n'
+f'            \'operators={operators};strategy={strategy};index_access={index_access};materialization={materialization};batch_size={batch_size};index_type={index_type}\':\n'  # scan config, index, batch size, pattern
+f'                args: {config_args} {index_args} {BATCH_SIZE_ARG} {batch_size}\n'
 f'{generate_pattern_str(pattern)}\n'
                     )
             else:
                 config_str += (
-f'            \'{config}, 0, {method}\':\n'  # scan config, index, batch size, pattern
-f'                args: {config_args} {method_args}\n'
+f'            \'operators={operators};strategy={strategy};index_access={index_access};materialization={materialization};batch_size=N/A;index_type={index_type}\':\n'  # scan config, index, batch size, pattern
+f'                args: {config_args} {index_args}\n'
 f'{generate_pattern_str(pattern)}\n'
                     )
     return config_str
@@ -339,13 +347,13 @@ def generate_performance_benchmark(data: pd.core.frame.DataFrame, table: str, co
         if verbose:
             print(f'  + Generated case with selectivity {format_float(actual/n_rows)}.')
 
-    for materialization_abbrev, materialization_args, materialization_description in MATERIALIZATIONS: # Materialization
+    for results_materialized, materialization_abbrev, materialization_args, materialization_description in MATERIALIZATIONS: # Materialization
         for layout_abbrev, layout_args, layout_description in LAYOUTS:
             blueprint: str = (
     f'description: Comparing table scan and index scan on {"ordered" if is_ordered else "unordered"} {get_type_str_from_column(column)} data in {layout_description} {materialization_description} for varying selectivities\n'
     f'suite: phys-cost-models\n'
-    f'benchmark: index-scan\n'
-    f'name: {get_type_str_from_column(column)},{"ordered" if is_ordered else "unordered"},{layout_abbrev},{materialization_abbrev}\n'
+    f'benchmark: index-scan;performance\n'
+    f'name: data_type={get_type_str_from_column(column)};data_layout={layout_abbrev};ordered={is_ordered};results_materialized={results_materialized}\n'
     f'readonly: true\n'
     f'{generate_data_str(table, data.columns, datafile, column)}'
     f'systems:\n'
@@ -398,14 +406,14 @@ def generate_caching_benchmark(data: pd.core.frame.DataFrame, table: str, column
         if verbose:
             print(f'  + Generated case with selectivity {format_float(actual/n_rows)}.')
 
-    for materialization_abbrev, materialization_args, materialization_description in MATERIALIZATIONS: # Materialization
+    for results_materialized, materialization_abbrev, materialization_args, materialization_description in MATERIALIZATIONS: # Materialization
         for layout_abbrev, layout_args, layout_description in LAYOUTS:
-            for caching_abbrev, caching_args, caching_description in CACHING_CONFIGURATIONS:
+            for plan_caching, caching_abbrev, caching_args, caching_description in CACHING_CONFIGURATIONS:
                 blueprint: str = (
         f'description: Comparing table scan and index scan on {"ordered" if is_ordered else "unordered"} {get_type_str_from_column(column)} data in {layout_description} {materialization_description} and {caching_description} for varying selectivities\n'
         f'suite: phys-cost-models\n'
-        f'benchmark: index-scan-caching\n'
-        f'name: {get_type_str_from_column(column)},{"ordered" if is_ordered else "unordered"},{layout_abbrev},{materialization_abbrev},{caching_abbrev}\n'
+        f'benchmark: index-scan;caching\n'
+        f'name: data_type={get_type_str_from_column(column)};data_layout={layout_abbrev};ordered={is_ordered};results_materialized={results_materialized};plan_caching={plan_caching}\n'
         f'readonly: true\n'
         f'{generate_data_str(table, data.columns, datafile, column)}'
         f'systems:\n'

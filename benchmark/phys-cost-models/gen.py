@@ -42,12 +42,25 @@ TYPE_TO_STR = {
     'datetime':     'DATETIME',
 }
 TYPE_TO_DOMAIN = {
+    'b':            (None, None),
     'i8':           (np.iinfo(np.int8).min, np.iinfo(np.int8).max),
     'i16':          (np.iinfo(np.int16).min, np.iinfo(np.int16).max),
     'i32':          (np.iinfo(np.int32).min, np.iinfo(np.int32).max),
     'i64':          (np.iinfo(np.int64).min, np.iinfo(np.int64).max),
     'f':            (np.finfo(np.float32).min, np.finfo(np.float32).max),
     'd':            (np.finfo(np.float64).min, np.finfo(np.float64).max),
+    'c1':           (None, None),
+    'c2':           (None, None),
+    'c3':           (None, None),
+    'c4':           (None, None),
+    'c5':           (None, None),
+    'c6':           (None, None),
+    'c56_dummy':    (None, None),
+    'c59_dummy':    (None, None),
+    'c60_dummy':    (None, None),
+    'c124_dummy':   (None, None),
+    'date':         (None, None),
+    'datetime':     (None, None),
 }
 SCHEMA = {
     'Relation_parent': [

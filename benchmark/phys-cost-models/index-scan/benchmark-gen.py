@@ -108,7 +108,7 @@ BATCH_SIZE_SELECTIVITY: float = 0.1
 BATCH_SIZE_ARG: str = '--index-sequential-scan-batch-size'
 BATCH_SIZES: list[int] = [10**0, 10**1, 10**2, 10**3, 10**4, 10**5, 10**6, 10**7]
 
-MUTABLE_ARGS = '--backend WasmV8 --no-simd --statistics'
+MUTABLE_ARGS = '--backend WasmV8 --no-simd --statistics --wasm-opt 2'
 
 OUTPUT_DIR: str = os.path.join('benchmark', 'phys-cost-models', 'index-scan')
 DATA_DIR: str = os.path.join('benchmark', 'phys-cost-models', 'data')

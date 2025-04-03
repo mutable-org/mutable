@@ -3701,7 +3701,7 @@ I32x1 m::wasm::compare(const Environment &env_left, const Environment &env_right
         /*----- Compile ordering. -----*/
         for (auto &o : order) {
             /*----- Compile order expression for left tuple. -----*/
-            SQL_t _val_left = env_left.template compile(o.first);
+            SQL_t _val_left = env_left.compile(o.first);
 
             std::visit(overloaded {
                 [&]<typename T>(Expr<T> val_left) -> void {
@@ -3804,7 +3804,7 @@ I32x1 m::wasm::compare(const Environment &env_left, const Environment &env_right
                 }
 
                 /*----- Compile order expression for left tuple. -----*/
-                SQL_t _val_left = env_left.template compile(curr->first);
+                SQL_t _val_left = env_left.compile(curr->first);
 
                 std::visit(overloaded {
                     [&]<typename T>(Expr<T> val_left) -> void {

@@ -914,7 +914,7 @@ struct Module final
      * unique caller handle \p handle. */
     template<class C, typename... Args>
     C & add_garbage_collected_data(void *handle, Args... args) {
-        auto it = garbage_collected_data_.template try_emplace(
+        auto it = garbage_collected_data_.try_emplace(
             /* key=   */ handle,
             /* value= */ std::make_unique<C>(GarbageCollectedData(), std::forward<Args>(args)...)
         ).first;

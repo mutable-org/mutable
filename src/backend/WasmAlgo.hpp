@@ -344,7 +344,7 @@ struct HashTable
             M_insist(bool(tru.is_null_mask_) == bool(fals.is_null_mask_), "null mask mismatch");
             if (tru.addr_.can_be_null()) {
                 the_reference r(
-                    /* addr_=         */ NChar(Select(cond.clone(), tru.addr_, fals.addr_), /* can_be_null= */ true,
+                    /* addr_=         */ NChar(Select(cond.clone(), tru.addr_.val(), fals.addr_.val()), /* can_be_null= */ true,
                                                tru.addr_.length(), tru.addr_.guarantees_terminating_nul()),
                     /* is_null_byte_= */ Select(cond.clone(), *tru.is_null_byte_, *fals.is_null_byte_),
                     /* is_null_mask_= */ Select(cond.clone(), *tru.is_null_mask_, *fals.is_null_mask_)
@@ -352,7 +352,7 @@ struct HashTable
                 cond.discard();
                 return r;
             } else {
-                return the_reference(NChar(Select(cond, tru.addr_, fals.addr_), /* can_be_null= */ false,
+                return the_reference(NChar(Select(cond, tru.addr_.val(), fals.addr_.val()), /* can_be_null= */ false,
                                            tru.addr_.length(), tru.addr_.guarantees_terminating_nul()));
             }
         }

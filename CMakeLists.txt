@@ -107,13 +107,21 @@ add_compile_options(
     -Wno-vla-extension
     -Wno-gnu-conditional-omitted-operand
     -Wno-gnu-statement-expression-from-macro-expansion
-    -mavx2
-    -mbmi2
-    -mavx
-    -msse4.2
-    -mbmi
     -fdiagnostics-color=always
 )
+
+# Set x86-specific compile options
+if(CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|amd64")
+    add_compile_options(
+            -mavx2
+            -mbmi2
+            -mavx
+            -msse4.2
+            -mbmi
+    )
+elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "arm64|aarch64")
+    message(STATUS "Skipping x86-specific flags on ARM64")
+endif()
 
 # Configure release builds
 if(${is_release_build})

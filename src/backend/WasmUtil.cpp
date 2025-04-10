@@ -3573,14 +3573,14 @@ _Boolx1 m::wasm::like_contains(NChar _str, const ThreadSafePooledString &_patter
                 auto val_str = PARAMETER(1);
 
                 /*----- Copy pattern without enclosing `%` to make it accessible with runtime offset. -----*/
-                const int32_t len_pattern = strlen(*_pattern) - 2; // minus 2 due to enclosing `%`
+                const int64_t len_pattern = strlen(*_pattern) - 2; // minus 2 due to enclosing `%`
                 auto pattern = Module::Allocator().raw_malloc<char>(len_pattern);
                 for (std::size_t i = 0; i < len_pattern; ++i)
                     pattern[i] = (*_pattern)[i + 1]; // access _pattern with offset +1 due to starting `%`
 
                 /*----- Precompute prefix table. -----*/
-                auto tbl = Module::Allocator().raw_malloc<int32_t>(len_pattern + 1);
-                int32_t len_prefix = -1;
+                auto tbl = Module::Allocator().raw_malloc<int64_t>(len_pattern + 1);
+                int64_t len_prefix = -1;
 
                 tbl[0] = len_prefix;
                 for (std::size_t i = 1; i < len_pattern + 1; ++i) {
@@ -3592,11 +3592,14 @@ _Boolx1 m::wasm::like_contains(NChar _str, const ThreadSafePooledString &_patter
 
                 /*----- Search pattern in string. -----*/
                 const Var<Ptr<Charx1>> end_str(val_str + len_ty_str);
-                Var<I32x1> pos_pattern(0);
+                Var<I64x1> pos_pattern(0);
                 WHILE (val_str < end_str and *val_str != '\0') {
-                    WHILE(pos_pattern >= 0 and *val_str != *(Ptr<Charx1>(pattern) + pos_pattern)) {
+                    WHILE(*val_str != *(Ptr<Charx1>(pattern) + pos_pattern)) {
                         Wasm_insist(pos_pattern < len_pattern + 1);
-                        pos_pattern = *(Ptr<I32x1>(tbl) + pos_pattern);
+                        pos_pattern = *(Ptr<I64x1>(tbl) + pos_pattern);
+                        IF (pos_pattern < 0) {
+                            BREAK();
+                        };
                     }
                     val_str += 1;
                     pos_pattern += 1;

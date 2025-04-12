@@ -40,22 +40,28 @@ stages:
     - upload
     - publish
 
-.build_cache:
+.use_cache:
+    variables:
+        CCACHE_BASEDIR: "${CI_PROJECT_DIR}"
+        CCACHE_DIR: "${CI_PROJECT_DIR}/.ccache"
+        CMAKE_C_COMPILER_LAUNCHER: "ccache"      # use ccache for project and third-parties configured with cmake
+        CMAKE_CXX_COMPILER_LAUNCHER: "ccache"    # use ccache for project and third-parties configured with cmake
     cache:
-        - key: "third-party"
+        - key: "ccache"
           paths:
-              - "third-party"
-              - "build/{debug,release,coverage}/**/*-download"                          # cache CMake download stamps
-              - "build/{debug,release,coverage}/**/*-gitclone-lastrun.txt"              # cache CMake Git stamps
-              - "build/{debug,release,coverage}/**/*-gitinfo.txt"                       # cache CMake Git stamps
-              - "build/{debug,release,coverage}/**/*-configure"                         # cache CMake configure stamps
-
-        - key: "build:${BUILD_TYPE}:${LIBRARY_TYPE}"
+              - ".ccache"                                      # cache ccache cache
+        - key: "V8:${BUILD_TYPE}:${LIBRARY_TYPE}"
           paths:
-              - "build/${BUILD_TYPE}/bin"                                               # cache our executables
-              - "build/${BUILD_TYPE}/lib/libmutable.{a,so,dylib,dll}"                   # cache our library
-              - "build/${BUILD_TYPE}/third-party/src/*-build"                           # cache third-party build
-              - "build/${BUILD_TYPE}/src/**/*.o"                                        # cache all object files
+              - "third-party/v8"                               # cache v8 code
+              - "build/${BUILD_TYPE}/third-party/src/V8-stamp" # cache V8 build
+              - "build/${BUILD_TYPE}/third-party/src/V8-build" # cache V8 build
+    before_script:
+        - echo "Using ccache, caching in ${CCACHE_DIR}."
+        - ccache --max-size=5G
+        - ccache --zero-stats
+        - ccache --show-stats
+    after_script:
+        - ccache --show-stats
 
 .static:
     variables:
@@ -128,7 +134,7 @@ build:debug:linux-amd64:
     extends:
         - .debug
         - .shared
-        - .build_cache
+        - .use_cache
     script:
         - pipenv sync
         - pipenv run cmake -S . -B build/${BUILD_TYPE}
@@ -159,7 +165,7 @@ build:debug:macos-amd64:
     extends:
         - .debug
         - .shared
-        - .build_cache
+        - .use_cache
     script:
         - pipenv sync
         - pipenv run cmake -S . -B build/${BUILD_TYPE}
@@ -292,7 +298,7 @@ build:release:linux-amd64:
     extends:
         - .release
         - .static
-        - .build_cache
+        - .use_cache
     script:
         - cmake -S . -B build/${BUILD_TYPE}
           --fresh
@@ -324,7 +330,7 @@ build:release:macos-amd64:
     extends:
         - .release
         - .static
-        - .build_cache
+        - .use_cache
     script:
         - cmake -S . -B build/${BUILD_TYPE}
           --fresh
@@ -455,7 +461,7 @@ report:coverage:
     extends:
         - .coverage
         - .shared
-        - .build_cache
+        - .use_cache
     rules:
         - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
           when: on_success

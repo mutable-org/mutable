@@ -71,7 +71,7 @@ else()
         list(
             APPEND static_libs
             "${PROJECT_BINARY_DIR}/third-party/src/Binaryen-build/lib/${CMAKE_STATIC_LIBRARY_PREFIX}binaryen${CMAKE_STATIC_LIBRARY_SUFFIX}"
-            "${CMAKE_SOURCE_DIR}/third-party/v8/v8/out-${CMAKE_BUILD_TYPE}/obj/${CMAKE_STATIC_LIBRARY_PREFIX}v8_monolith${CMAKE_STATIC_LIBRARY_SUFFIX}"
+            "${V8_BINARY_DIR}/obj/${CMAKE_STATIC_LIBRARY_PREFIX}v8_monolith${CMAKE_STATIC_LIBRARY_SUFFIX}"
         )
     endif()
     foreach(lib_path IN LISTS BOOST_STATIC_LIBRARY_PATHS)

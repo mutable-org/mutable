@@ -195,7 +195,6 @@ build:debug:macos-amd64:
         - cmake --build build/${BUILD_TYPE} --target Boost gitversion
         - cmake --build build/${BUILD_TYPE} --target all unittest
         - find build/${BUILD_TYPE}/third-party -name '*.dylib' -exec cp {} build/${BUILD_TYPE}/lib \; # collect shared libraries
-        - find build/${BUILD_TYPE}/third-party -name '*.dylib.*' -exec cp {} build/${BUILD_TYPE}/lib \; # collect shared libraries
     artifacts:
         paths:
             - "build/${BUILD_TYPE}/bin/{lex,parse,check,shell,unittest}"

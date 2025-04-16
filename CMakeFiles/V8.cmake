@@ -34,7 +34,6 @@ else()
     set(V8_BUILD_ARGS "${V8_BUILD_ARGS} v8_monolithic=true is_component_build=false")
     set(V8_LIBRARIES v8_monolith)
     set(V8_BUILD_BYPRODUCTS "${V8_BINARY_DIR}/obj/${CMAKE_STATIC_LIBRARY_PREFIX}v8_monolith${CMAKE_STATIC_LIBRARY_SUFFIX}")
-    # set(V8_BUILD_BYPRODUCTS "${CMAKE_SOURCE_DIR}/third-party/v8/v8/out-${CMAKE_BUILD_TYPE}/obj/${CMAKE_STATIC_LIBRARY_PREFIX}v8_monolith${CMAKE_STATIC_LIBRARY_SUFFIX}")
 endif()
 
 if(${USE_LLD})
@@ -66,19 +65,15 @@ ExternalProject_Add(
     CONFIGURE_COMMAND ${CMAKE_COMMAND} -E make_directory "${V8_BINARY_DIR}" &&
                       cd "${CMAKE_SOURCE_DIR}/third-party/v8/v8/" &&
                       PATH=${DEPOT_TOOLS_PATH}:$ENV{PATH} third_party/depot_tools/gn gen "${V8_BINARY_DIR}" --root=${CMAKE_SOURCE_DIR}/third-party/v8/v8 --args=${V8_BUILD_ARGS}
-    # CONFIGURE_COMMAND cd "${CMAKE_SOURCE_DIR}/third-party/v8/v8/" && PATH=${DEPOT_TOOLS_PATH}:$ENV{PATH} "third_party/depot_tools/gn" gen out-${CMAKE_BUILD_TYPE} --root=${CMAKE_SOURCE_DIR}/third-party/v8/v8 --args=${V8_BUILD_ARGS}
     CONFIGURE_HANDLED_BY_BUILD true
     BUILD_BYPRODUCTS ${V8_BUILD_BYPRODUCTS}
     BUILD_COMMAND cd "${CMAKE_SOURCE_DIR}/third-party/v8/v8/" &&
                   PATH=${DEPOT_TOOLS_PATH}:$ENV{PATH} ninja -C "${V8_BINARY_DIR}" ${V8_LIBRARIES}
-    # BUILD_COMMAND cd "${CMAKE_SOURCE_DIR}/third-party/v8/v8/" && PATH=${DEPOT_TOOLS_PATH}:$ENV{PATH} ninja -C out-${CMAKE_BUILD_TYPE} ${V8_LIBRARIES}
     INSTALL_COMMAND ""
 )
 include_directories(SYSTEM third-party/v8/v8/include)
 if(${BUILD_SHARED_LIBS})
-    # link_directories(${CMAKE_SOURCE_DIR}/third-party/v8/v8/out-${CMAKE_BUILD_TYPE})
     link_directories(${V8_BINARY_DIR})
 else()
-    # link_directories(${CMAKE_SOURCE_DIR}/third-party/v8/v8/out-${CMAKE_BUILD_TYPE}/obj)
     link_directories(${V8_BINARY_DIR}/obj)
 endif()

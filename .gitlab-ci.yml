@@ -471,6 +471,7 @@ report:coverage:
     tags:
         - nginx
     script:
+        - unset CMAKE_C_COMPILER_LAUNCHER CMAKE_CXX_COMPILER_LAUNCHER
         - utils/coverage.sh
         - rm -rf /srv/http/mutable/coverage
         - mv build/${BUILD_TYPE}/html /srv/http/mutable/coverage

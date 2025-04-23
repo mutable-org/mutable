@@ -831,6 +831,7 @@ TEST_CASE("exec", "[core][util][fn]")
     SECTION("Valid executable with arguments")
     {
         CHECK_NOTHROW(exec("/bin/sh", { "-c", "ls > /tmp/ls_out.txt" }));
+        REQUIRE(std::filesystem::exists("/tmp/ls_out.txt"));
         CHECK_NOTHROW(exec("/bin/sh", { "-c", "rm /tmp/ls_out.txt" }));
     }
 }

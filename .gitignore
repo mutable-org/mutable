@@ -20,3 +20,4 @@ include/mutable/mutable-config.hpp
 
 # Mac specific
 .DS_Store
+.vscode

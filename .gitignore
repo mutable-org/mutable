@@ -6,6 +6,9 @@ third-party/
 coverage/
 catch.xml
 
+# Measurements
+evaluation/*
+*.csv
 # Git version information
 include/mutable/gitversion.tbl
 
@@ -14,3 +17,6 @@ include/mutable/mutable-config.hpp
 
 # Logs
 *.log
+
+# Mac specific
+.DS_Store

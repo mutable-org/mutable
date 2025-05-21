@@ -13,12 +13,13 @@
 cmake -S . -B build/debug_shared \
     --fresh \
     -G Ninja \
-    -DCMAKE_C_COMPILER=$(brew --prefix llvm@17)/bin/clang \
-    -DCMAKE_CXX_COMPILER=$(brew --prefix llvm@17)/bin/clang++ \
+    -DCMAKE_C_COMPILER="$CC" \
+    -DCMAKE_CXX_COMPILER="$CXX" \
     -DCMAKE_BUILD_TYPE=Debug \
     -DBUILD_SHARED_LIBS=ON \
     -DWITH_V8=ON \
     -DENABLE_SANITIZERS=ON \
     -DENABLE_SANITY_FIELDS=OFF \
     -DBOOST_ROOT=$(brew --prefix boost) \
-    -DUSE_LIBCXX=ON
+    -DUSE_LIBCXX=ON \
+    -DCMAKE_EXPORT_COMPILE_COMMANDS=ON

@@ -4,7 +4,7 @@
 FLAGS=(
     # --help
     # --statistics
-    # --echo
+    --echo
     # --graph
     # --benchmark
     # --times
@@ -16,10 +16,27 @@ FLAGS=(
 CMD="build/debug_shared/bin/shell ${FLAGS[*]} -"
 
 # Define the query in a separate variable
-QUERY=$(cat <<EOF
+# Define queries in separate variables
+QUERY1=$(cat <<EOF
 CREATE DATABASE job_light;
 USE job_light;
+EOF
+)
 
+QUERY2=$(cat <<EOF
+CREATE TABLE movie_companies (
+    id INT(4) NOT NULL PRIMARY KEY,
+    movie_id INT(4) NOT NULL,
+    company_id INT(4) NOT NULL,
+    company_type_id INT(4) NOT NULL,
+    note CHAR(100)
+);
+IMPORT INTO movie_companies DSV "benchmark/job-light/data/movie_companies.csv" ROWS 1000;
+SELECT COUNT(*) FROM movie_companies;
+EOF
+)
+
+QUERY3=$(cat <<EOF
 CREATE TABLE cast_info (
     id INT(4) NOT NULL PRIMARY KEY,
     person_id INT(4) NOT NULL,
@@ -29,10 +46,12 @@ CREATE TABLE cast_info (
     nr_order INT(4),
     role_id INT(4) NOT NULL
 );
-
 IMPORT INTO cast_info DSV "benchmark/job-light/data/cast_info.csv" ROWS 1000;
-SELECT id, person_id, movie_id, person_role_id, note, nr_order, role_id FROM cast_info LIMIT 5;
+SELECT COUNT(*) FROM cast_info LIMIT 5;
+EOF
+)
 
+QUERY4=$(cat <<EOF
 CREATE TABLE title (
     id INT(4) NOT NULL PRIMARY KEY,
     title CHAR(100) NOT NULL,
@@ -48,37 +67,39 @@ CREATE TABLE title (
     md5sum CHAR(32)
 );
 IMPORT INTO title DSV "benchmark/job-light/data/title.csv" ROWS 1000;
-SELECT id, title, kind_id, production_year, imdb_id, phonetic_code, episode_of_id, season_nr, episode_nr, series_years, md5sum FROM title LIMIT 5;
-
-
-SELECT * FROM title LIMIT 5; -- works (limit)
-
-SELECT * FROM title WHERE production_year > 1900; -- works (all rows)
-
-SELECT * FROM title WHERE production_year > 2100; -- works (no rows)
-
-SELECT * FROM title WHERE production_year > 2000; -- works (some rows)
-
-SELECT COUNT(*) FROM title WHERE production_year > 2000; -- works (count)
-
-SELECT * FROM title WHERE title.production_year > 2000; -- works (adress column more specific)
-
-SELECT * FROM title WHERE production_year < 2000 AND production_year>1984; -- works (multiple conditions)
-
-SELECT * FROM cast_info,title  WHERE title.id=cast_info.movie_id; -- works (full inner join)
-
-SELECT COUNT(*) FROM cast_info,title  WHERE title.id=cast_info.movie_id AND title.production_year < 2000 AND title.production_year>1984; -- works (full JOB query)
-
-
+SELECT COUNT(*) FROM title;
 EOF
 )
-# SELECT COUNT(*) FROM cast_info ci,title t WHERE t.id=ci.movie_id; AND t.production_year>1980 AND t.production_year<1984
 
-echo "$CMD"
-echo
-echo "$QUERY"
-echo
+TEST_QUERIES=$(cat <<EOF
+SELECT * FROM title LIMIT 5;
+SELECT * FROM title WHERE production_year > 1900;
+SELECT * FROM title WHERE production_year > 2100;
+SELECT * FROM title WHERE production_year > 2000;
+SELECT COUNT(*) FROM title WHERE production_year > 2000;
+SELECT * FROM title WHERE title.production_year > 2000;
+SELECT * FROM title WHERE production_year < 2000 AND production_year>1984;
+SELECT * FROM cast_info,title  WHERE title.id=cast_info.movie_id;
+SELECT COUNT(*) FROM cast_info,title  WHERE title.id=cast_info.movie_id AND title.production_year < 2000 AND title.production_year>1984;
+EOF
+)
 
+
+QUERY6=$(cat <<EOF
+SELECT COUNT(*) FROM cast_info, title, movie_companies WHERE title.id=cast_info.movie_id AND title.id=movie_companies.movie_id;
+EOF
+)
+
+
+ALL_QUERIES="$QUERY1
+$QUERY2
+$QUERY3
+$QUERY4
+$QUERY6
+"
+
+echo "$ALL_QUERIES" > /tmp/all_queries.sql
+$CMD < /tmp/all_queries.sql
 
 # Execute the command with the query
-echo "$QUERY" | $CMD
+# echo "$ALL_QUERIES" | $CMD

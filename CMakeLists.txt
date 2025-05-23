@@ -7,10 +7,13 @@ project(
     HOMEPAGE_URL "https://bigdata.uni-saarland.de/projects/mutable/"
     LANGUAGES C CXX
 )
+add_compile_options(-Wno-unused-variable -Wno-sign-compare -Wunused-command-line-argument)
+
 
 set(EXECUTABLE_OUTPUT_PATH  "${PROJECT_BINARY_DIR}/bin")
 set(LIBRARY_OUTPUT_PATH     "${PROJECT_BINARY_DIR}/lib")
 
+# Ignore unused command line things
 
 ########################################################################################################################
 ### CMake Modules

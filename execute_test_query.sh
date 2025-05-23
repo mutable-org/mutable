@@ -5,11 +5,12 @@ FLAGS=(
     # --help
     # --statistics
     --echo
-    # --graph
+    --graph
     # --benchmark
     # --times
     # --backend WasmV8
     # --data-layout PAX4M
+    --plan-enumerator GOO
 )
 
 # Build the command with the active flags
@@ -31,8 +32,8 @@ CREATE TABLE movie_companies (
     company_type_id INT(4) NOT NULL,
     note CHAR(100)
 );
-IMPORT INTO movie_companies DSV "benchmark/job-light/data/movie_companies.csv" ROWS 1000;
-SELECT COUNT(*) FROM movie_companies;
+IMPORT INTO movie_companies DSV "benchmark/job-light/data/movie_companies.csv" ROWS 2000;
+-- SELECT COUNT(*) FROM movie_companies;
 EOF
 )
 
@@ -46,8 +47,8 @@ CREATE TABLE cast_info (
     nr_order INT(4),
     role_id INT(4) NOT NULL
 );
-IMPORT INTO cast_info DSV "benchmark/job-light/data/cast_info.csv" ROWS 1000;
-SELECT COUNT(*) FROM cast_info LIMIT 5;
+IMPORT INTO cast_info DSV "benchmark/job-light/data/cast_info.csv" ROWS 1500;
+-- SELECT COUNT(*) FROM cast_info LIMIT 5;
 EOF
 )
 
@@ -67,7 +68,7 @@ CREATE TABLE title (
     md5sum CHAR(32)
 );
 IMPORT INTO title DSV "benchmark/job-light/data/title.csv" ROWS 1000;
-SELECT COUNT(*) FROM title;
+-- SELECT COUNT(*) FROM title;
 EOF
 )
 

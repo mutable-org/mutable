@@ -222,8 +222,8 @@ struct M_EXPORT CartesianProductEstimator : CardinalityEstimatorCRTP<CartesianPr
  *  Container for cardinality range
  */
 struct CardinalityRange {
-    std::size_t lower;
-    std::size_t upper;
+    double lower;
+    double upper;
 };
 /**
  * RangeCartesianProductEstimator that always returns the size of the cartesian product of the given subproblems as the upper bound
@@ -270,7 +270,7 @@ struct M_EXPORT RangeCartesianProductEstimator : CardinalityEstimatorCRTP<RangeC
      * Prediction via model use
      *================================================================================================================*/
 
-    CardinalityRange predict_cardinality(const DataModel &data) const override;
+    std::size_t predict_cardinality(const DataModel &data) const override;
 
     private:
     void print(std::ostream &out) const override;

@@ -154,7 +154,7 @@ M_LCOV_EXCL_STOP
 
 
 /*======================================================================================================================
- * CartesianProductEstimator
+ * RangeCartesianProductEstimator
  *====================================================================================================================*/
 
 std::unique_ptr<DataModel> RangeCartesianProductEstimator::empty_model() const

@@ -5,7 +5,7 @@ set -e
 ccache --set-config sloppiness=time_macros,include_file_ctime,include_file_mtime
 ccache --set-config compression=true
 ccache --set-config compression_level=6
-echo "🔧 Using ccache config:"
+echo "Using ccache config:"
 ccache -p | grep -E 'sloppiness|compression'
 
 LLVM_PATH=$(brew --prefix llvm@17)
@@ -14,14 +14,14 @@ BUILD_DIR="build/debug_shared"
 
 EXTRA_CMAKE_ARGS="$@"
 
-# Step 1: Cleanly specify actual compilers
+# Cleanly specify actual compilers
 export CC="${LLVM_PATH}/bin/clang"
 export CXX="${LLVM_PATH}/bin/clang++"
 
-# Step 2: Create build dir
+# Create build dir
 mkdir -p "$BUILD_DIR"
 
-# Step 3: Run CMake config
+# Run CMake config
 cmake -S . -B "$BUILD_DIR" \
     -G Ninja \
     -DCMAKE_C_COMPILER="$CC" \
@@ -38,9 +38,9 @@ cmake -S . -B "$BUILD_DIR" \
     -DUSE_LIBCXX=ON \
     $EXTRA_CMAKE_ARGS
 
-# Step 4: Build
+# Build
 ninja -C "$BUILD_DIR" -v
 
-# Step 5: Show ccache stats
+# Show ccache stats
 echo
 ccache --show-stats

@@ -152,6 +152,102 @@ void CartesianProductEstimator::print(std::ostream &out) const
 M_LCOV_EXCL_STOP
 
 
+
+/*======================================================================================================================
+ * CartesianProductEstimator
+ *====================================================================================================================*/
+
+std::unique_ptr<DataModel> RangeCartesianProductEstimator::empty_model() const
+{
+    auto model = std::make_unique<RangeCartesianProductDataModel>();
+    model->size = 0;
+    return model;
+}
+
+std::unique_ptr<DataModel> RangeCartesianProductEstimator::estimate_scan(const QueryGraph &G, Subproblem P) const
+{
+    M_insist(P.size() == 1, "Subproblem must identify exactly one DataSource");
+    auto idx = *P.begin();
+    auto &BT = as<const BaseTable>(*G.sources()[idx]);
+    auto model = std::make_unique<RangeCartesianProductDataModel>();
+    model->size = BT.table().store().num_rows();
+    return model;
+}
+
+std::unique_ptr<DataModel>
+RangeCartesianProductEstimator::estimate_filter(const QueryGraph&, const DataModel &_data, const cnf::CNF&) const
+{
+    /* This model cannot estimate the effects of applying a filter. */
+    auto &data = as<const RangeCartesianProductDataModel>(_data);
+    return std::make_unique<RangeCartesianProductDataModel>(data); // copy
+}
+
+std::unique_ptr<DataModel>
+RangeCartesianProductEstimator::estimate_limit(const QueryGraph&, const DataModel &_data, std::size_t limit,
+                                              std::size_t offset) const
+{
+    auto data = as<const RangeCartesianProductDataModel>(_data);
+    const std::size_t remaining = offset > data.size ? 0UL : data.size - offset;
+    auto model = std::make_unique<RangeCartesianProductDataModel>();
+    model->size = std::min(remaining, limit);
+    return model;
+}
+
+std::unique_ptr<DataModel>
+RangeCartesianProductEstimator::estimate_grouping(const QueryGraph&, const DataModel &_data,
+                                                 const std::vector<group_type>&) const
+{
+    auto &data = as<const RangeCartesianProductDataModel>(_data);
+    auto model = std::make_unique<RangeCartesianProductDataModel>();
+    model->size = data.size; // this model cannot estimate the effects of grouping
+    return model;
+}
+
+std::unique_ptr<DataModel>
+RangeCartesianProductEstimator::estimate_join(const QueryGraph&, const DataModel &_left, const DataModel &_right,
+                                              const cnf::CNF&) const
+{
+    auto left = as<const RangeCartesianProductDataModel>(_left);
+    auto right = as<const RangeCartesianProductDataModel>(_right);
+    auto model = std::make_unique<RangeCartesianProductDataModel>();
+    model->size = left.size * right.size; // this model cannot estimate the effects of a join condition
+    return model;
+}
+
+template<typename PlanTable>
+std::unique_ptr<DataModel>
+RangeCartesianProductEstimator::operator()(estimate_join_all_tag, PlanTable &&PT, const QueryGraph&, Subproblem to_join,
+                                           const cnf::CNF&) const
+{
+    M_insist(not to_join.empty());
+    auto model = std::make_unique<RangeCartesianProductDataModel>();
+    model->size = 1UL;
+    for (auto it = to_join.begin(); it != to_join.end(); ++it)
+        model->size *= as<const RangeCartesianProductDataModel>(*PT[it.as_set()].model).size;
+    return model;
+}
+
+template
+std::unique_ptr<DataModel>
+RangeCartesianProductEstimator::operator()(estimate_join_all_tag, const PlanTableSmallOrDense&, const QueryGraph&,
+                                           Subproblem, const cnf::CNF&) const;
+template
+std::unique_ptr<DataModel>
+RangeCartesianProductEstimator::operator()(estimate_join_all_tag, const PlanTableLargeAndSparse&, const QueryGraph&,
+                                           Subproblem, const cnf::CNF&) const;
+
+std::size_t RangeCartesianProductEstimator::predict_cardinality(const DataModel &data) const
+{
+    return as<const RangeCartesianProductDataModel>(data).size;
+}
+
+M_LCOV_EXCL_START
+void RangeCartesianProductEstimator::print(std::ostream &out) const
+{
+    out << "RangeCartesianProductEstimator - returns size of the Cartesian product of the given subproblems";
+}
+M_LCOV_EXCL_STOP
+
 /*======================================================================================================================
  * InjectionCardinalityEstimator
  *====================================================================================================================*/

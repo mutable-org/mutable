@@ -700,6 +700,28 @@ void GOO::operator()(enumerate_tag, PlanTable &PT, const QueryGraph &G, const Co
 
 
 /*======================================================================================================================
+ * CUSTOM_GOO
+ *====================================================================================================================*/
+
+template<typename PlanTable>
+void CustomGOO::operator()(enumerate_tag, PlanTable &PT, const QueryGraph &G, const CostFunction &CF) const
+{
+    const AdjacencyMatrix &M = G.adjacency_matrix();
+    auto &CE = Catalog::Get().get_database_in_use().cardinality_estimator();
+
+    /*----- Initialize subproblems and their neighbors. -----*/
+    node nodes[G.num_sources()];
+    for (std::size_t i = 0; i != G.num_sources(); ++i) {
+        Subproblem S = Subproblem::Singleton(i);
+        Subproblem N = M.neighbors(S);
+        nodes[i] = node(S, N);
+    }
+
+    /*----- Greedyly enumerate joins, thereby computing a plan. -----*/
+    compute_plan(PT, G, M, CF, CE, nodes, nodes + G.num_sources());
+}
+
+/*======================================================================================================================
  * TDGOO
  *====================================================================================================================*/
 

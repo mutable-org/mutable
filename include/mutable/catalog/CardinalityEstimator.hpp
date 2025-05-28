@@ -219,6 +219,64 @@ struct M_EXPORT CartesianProductEstimator : CardinalityEstimatorCRTP<CartesianPr
 };
 
 /**
+ *  Container for cardinality range
+ */
+struct CardinalityRange {
+    std::size_t lower;
+    std::size_t upper;
+};
+/**
+ * RangeCartesianProductEstimator that always returns the size of the cartesian product of the given subproblems as the upper bound
+ */
+struct M_EXPORT RangeCartesianProductEstimator : CardinalityEstimatorCRTP<RangeCartesianProductEstimator>
+{
+    struct RangeCartesianProductDataModel : DataModel
+    {
+        std::size_t size;
+
+        RangeCartesianProductDataModel() = default;
+        RangeCartesianProductDataModel(std::size_t size) : size(size) { }
+
+        void assign_to(Subproblem) override { /* nothing to be done */ }
+    };
+
+    RangeCartesianProductEstimator() { }
+    RangeCartesianProductEstimator(ThreadSafePooledString) { }
+
+
+    /*==================================================================================================================
+     * Model calculation
+     *================================================================================================================*/
+
+    std::unique_ptr<DataModel> empty_model() const override;
+    std::unique_ptr<DataModel> estimate_scan(const QueryGraph &G, Subproblem P) const override;
+    std::unique_ptr<DataModel>
+    estimate_filter(const QueryGraph &G, const DataModel &data, const cnf::CNF &filter) const override;
+    std::unique_ptr<DataModel>
+    estimate_limit(const QueryGraph &G, const DataModel &data, std::size_t limit, std::size_t offset) const override;
+    std::unique_ptr<DataModel>
+    estimate_grouping(const QueryGraph &G, const DataModel &data, const std::vector<group_type> &groups) const override;
+    std::unique_ptr<DataModel>
+    estimate_join(const QueryGraph &G, const DataModel &left, const DataModel &right,
+                  const cnf::CNF &condition) const override;
+
+    template<typename PlanTable>
+    std::unique_ptr<DataModel>
+    operator()(estimate_join_all_tag, PlanTable &&PT, const QueryGraph &G, Subproblem to_join,
+               const cnf::CNF &condition) const;
+
+
+    /*==================================================================================================================
+     * Prediction via model use
+     *================================================================================================================*/
+
+    CardinalityRange predict_cardinality(const DataModel &data) const override;
+
+    private:
+    void print(std::ostream &out) const override;
+};
+
+/**
  * InjectionCardinalityEstimator that estimates cardinalities based on a table that contains sizes for the given
  * subproblems
  * Table is initialized in the constructor by using an external json-file

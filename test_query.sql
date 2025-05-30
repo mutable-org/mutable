@@ -33,5 +33,4 @@ CREATE TABLE movie_companies (
     note CHAR(100)
 );
 IMPORT INTO movie_companies DSV "benchmark/job-light/data/movie_companies.csv" ROWS 20;
-
 SELECT COUNT(*) FROM cast_info, title, movie_companies WHERE title.id=cast_info.movie_id AND title.id=movie_companies.movie_id;

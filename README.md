@@ -1,4 +1,4 @@
-- This tepo is a fork for addition of GitHub Actions workflow definition or Dockerfile which helps easy trying
+- This repo is a fork for addition of GitHub Actions workflow definition or Dockerfile which helps easy trying
 - I am not a member of mutable project team
 ---
 [![pipeline status](https://gitlab.cs.uni-saarland.de/bigdata/mutable/mutable/badges/main/pipeline.svg)](https://gitlab.cs.uni-saarland.de/bigdata/mutable/mutable/-/commits/main)

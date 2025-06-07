@@ -135,6 +135,7 @@ void m::execute_statement(Diagnostic &diag, const ast::Stmt &stmt, const bool is
                 "Compute the logical query plan",
                 timer
             );
+            std::cout << "Output option was traversed" << std::endl;
             optree = std::move(res.first);
             std::filesystem::path JSON_path(Options::Get().output_partial_plans_file);
             errno = 0;

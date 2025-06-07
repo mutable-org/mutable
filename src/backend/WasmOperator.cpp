@@ -5262,7 +5262,11 @@ void SortMergeJoin<SortLeft, SortRight, Predicated, CmpPredicated>::execute(
             pipeline();
         } else {
             M_insist(CodeGenContext::Get().num_simd_lanes() == 1, "invalid number of SIMD lanes");
-            IF (env.compile<_Boolx1>(M.join.predicate()).is_true_and_not_null()) { // predicate fulfilled
+            IF (env.compile<_Boolx1>(M.join.predicate()).is_true_and_not_null()) {
+                // predicate fulfilled - log this event
+                Module::Get().emit_call<void>("log_predicate_fulfilled");
+                // dump the module state for debugging
+                Module::Get().dump_module_state();
                 pipeline();
             };
         }

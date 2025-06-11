@@ -2864,6 +2864,7 @@ void Buffer<IsGlobal>::execute_pipeline_inline(setup_t setup, pipeline_t pipelin
         pred = env.extract_predicate<_Boolx1>().is_true_and_not_null();
     }
     U32x1 num_tuples = pred ? Select(*pred, size, 0U) : size;
+    std::cout << "num_tuples (Line 2867 in WasmUtil.cpp): " << num_tuples << std::endl;
 
     /*----- Compute possible number of SIMD lanes and decide which to use with regard to other operators preferences. */
     const auto num_simd_lanes_preferred =
@@ -2900,6 +2901,7 @@ void Buffer<IsGlobal>::execute_pipeline_inline(setup_t setup, pipeline_t pipelin
             pipeline();
             load_jumps.attach_to_current();
         }
+        std::cout << "WasmUtil.cpp line 2869: num_tuples = " << num_tuples << ", load_tuple_id = " << load_tuple_id.val() << std::endl;
     }
 
     /*----- Emit teardown code. -----*/

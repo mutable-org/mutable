@@ -6,8 +6,18 @@ third-party/
 coverage/
 catch.xml
 
+# Measurements
+evaluation/*
+*.csv
 # Git version information
 include/mutable/gitversion.tbl
 
 # cmake export macros
 include/mutable/mutable-config.hpp
+
+# Logs
+*.log
+
+# Mac specific
+.DS_Store
+.vscode

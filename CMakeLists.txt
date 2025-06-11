@@ -7,10 +7,13 @@ project(
     HOMEPAGE_URL "https://bigdata.uni-saarland.de/projects/mutable/"
     LANGUAGES C CXX
 )
+add_compile_options(-Wno-unused-variable -Wno-sign-compare -Wunused-command-line-argument)
+
 
 set(EXECUTABLE_OUTPUT_PATH  "${PROJECT_BINARY_DIR}/bin")
 set(LIBRARY_OUTPUT_PATH     "${PROJECT_BINARY_DIR}/lib")
 
+# Ignore unused command line things
 
 ########################################################################################################################
 ### CMake Modules
@@ -32,6 +35,56 @@ if(${LLD})
 else()
     set(HAS_LLD FALSE)
 endif()
+
+########################################################################################################################
+### Get Git Version Information
+########################################################################################################################
+
+set(GITREV_BARE_FILE    "gitversion.tbl")
+set(GITREV_BARE_TMP     "gitversion-tmp.tbl")
+set(GITREV_FILE         "${CMAKE_SOURCE_DIR}/include/mutable/${GITREV_BARE_FILE}")
+set(GITREV_TMP          "${CMAKE_BINARY_DIR}/${GITREV_BARE_TMP}")
+
+# Generate a table file with the X-macro, that is included by mutable to obtain Git version information
+
+message("Executing git commands to generate version file") # most useless bullshit i have seen
+
+message("GITREV_FILE path: ${GITREV_FILE}")
+message("GITREV_TMP path: ${GITREV_TMP}")
+
+message("Copying ${GITREV_TMP} to ${GITREV_FILE}")
+
+add_custom_command(
+    OUTPUT "${GITREV_FILE}"
+    COMMAND ${CMAKE_COMMAND} -E echo_append "X(GIT_REV, "                           >  "${GITREV_TMP}"
+    COMMAND ${GIT_EXECUTABLE} rev-parse HEAD | tr -d "\\n"                          >> "${GITREV_TMP}"
+    COMMAND ${CMAKE_COMMAND} -E echo ")"                                            >> "${GITREV_TMP}"
+    COMMAND ${CMAKE_COMMAND} -E echo_append "X(GIT_BRANCH, "                        >> "${GITREV_TMP}"
+    COMMAND ${GIT_EXECUTABLE} rev-parse --abbrev-ref HEAD | tr -d "\\n"             >> "${GITREV_TMP}"
+    COMMAND ${CMAKE_COMMAND} -E echo ")"                                            >> "${GITREV_TMP}"
+    COMMAND ${CMAKE_COMMAND} -E echo_append "X(SEM_VERSION, "                       >> "${GITREV_TMP}"
+    COMMAND ${GIT_EXECUTABLE} describe --tags --match "v*" --abbrev=0 | tr -d "\\n" >> "${GITREV_TMP}"
+    COMMAND ${CMAKE_COMMAND} -E echo ")"                                            >> "${GITREV_TMP}"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different "${GITREV_TMP}" "${GITREV_FILE}"
+    COMMAND ${CMAKE_COMMAND} -E remove "${GITREV_TMP}"
+    DEPENDS .git/HEAD .git/index
+    WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+    VERBATIM
+)
+add_custom_target(gitversion ALL DEPENDS "${GITREV_FILE}")
+# Apparently, CMake's dependency scanner does not recognize the dependency to the GITREV_FILE.  We add it manually.
+set_source_files_properties(
+    "${CMAKE_SOURCE_DIR}/include/mutable/version.hpp"
+    PROPERTIES OBJECT_DEPENDS "${GITREV_FILE}"
+)
+
+########################################################################################################################
+### USE LOCAL BOOST LIBRARY TO PREVENT FIXING DEPENDENCIES
+########################################################################################################################
+
+
+set(BOOST_ROOT "/opt/homebrew/opt/boost")
+include_directories(${BOOST_ROOT}/include)
 
 
 ########################################################################################################################
@@ -180,39 +233,7 @@ if(${ENABLE_SANITY_FIELDS})
 endif()
 
 
-########################################################################################################################
-### Get Git Version Information
-########################################################################################################################
 
-set(GITREV_BARE_FILE    "gitversion.tbl")
-set(GITREV_BARE_TMP     "gitversion-tmp.tbl")
-set(GITREV_FILE         "${CMAKE_SOURCE_DIR}/include/mutable/${GITREV_BARE_FILE}")
-set(GITREV_TMP          "${CMAKE_BINARY_DIR}/${GITREV_BARE_TMP}")
-
-# Generate a table file with the X-macro, that is included by mutable to obtain Git version information
-add_custom_command(
-    OUTPUT "${GITREV_FILE}"
-    COMMAND ${CMAKE_COMMAND} -E echo_append "X(GIT_REV, "                           >  "${GITREV_TMP}"
-    COMMAND ${GIT_EXECUTABLE} rev-parse HEAD | tr -d "\\n"                          >> "${GITREV_TMP}"
-    COMMAND ${CMAKE_COMMAND} -E echo ")"                                            >> "${GITREV_TMP}"
-    COMMAND ${CMAKE_COMMAND} -E echo_append "X(GIT_BRANCH, "                        >> "${GITREV_TMP}"
-    COMMAND ${GIT_EXECUTABLE} rev-parse --abbrev-ref HEAD | tr -d "\\n"             >> "${GITREV_TMP}"
-    COMMAND ${CMAKE_COMMAND} -E echo ")"                                            >> "${GITREV_TMP}"
-    COMMAND ${CMAKE_COMMAND} -E echo_append "X(SEM_VERSION, "                       >> "${GITREV_TMP}"
-    COMMAND ${GIT_EXECUTABLE} describe --tags --match "v*" --abbrev=0 | tr -d "\\n" >> "${GITREV_TMP}"
-    COMMAND ${CMAKE_COMMAND} -E echo ")"                                            >> "${GITREV_TMP}"
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different "${GITREV_TMP}" "${GITREV_FILE}"
-    COMMAND ${CMAKE_COMMAND} -E remove "${GITREV_TMP}"
-    DEPENDS .git/HEAD .git/index
-    WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
-    VERBATIM
-)
-add_custom_target(gitversion ALL DEPENDS "${GITREV_FILE}")
-# Apparently, CMake's dependency scanner does not recognize the dependency to the GITREV_FILE.  We add it manually.
-set_source_files_properties(
-    "${CMAKE_SOURCE_DIR}/include/mutable/version.hpp"
-    PROPERTIES OBJECT_DEPENDS "${GITREV_FILE}"
-)
 
 
 ########################################################################################################################

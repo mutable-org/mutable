@@ -983,11 +983,31 @@ void Pipeline::operator()(const FilterOperator &op)
         op.data(new FilterData(op, this->schema()));
 
     auto data = as<FilterData>(op.data());
+
+    // Count input tuples
+    std::size_t input_count = block_.size();
+    op.add_processed_tuples(input_count);
+
+    std::cout << "Filter: Processing " << input_count << " input tuples" << std::endl;
+
     for (auto it = block_.begin(); it != block_.end(); ++it) {
         Tuple *args[] = { &data->res, &*it };
         data->filter(args);
-        if (data->res.is_null(0) or not data->res[0].as_b()) block_.erase(it);
+        if (data->res.is_null(0) or not data->res[0].as_b()) {
+            block_.erase(it);
+        }
     }
+
+    // Count output tuples (after filtering)
+    std::size_t output_count = block_.size();
+    op.add_emitted_tuples(output_count);
+
+    std::cout << "Filter: " << output_count << " tuples passed filter (filtered out: "
+              << (input_count - output_count) << ")" << std::endl;
+    std::cout << "Filter: Total processed so far: " << op.get_processed_tuples() << std::endl;
+    std::cout << "Filter: Total emitted so far: " << op.get_emitted_tuples() << std::endl;
+
+
     if (not block_.empty())
         op.parent()->accept(*this);
 }
@@ -998,6 +1018,14 @@ void Pipeline::operator()(const DisjunctiveFilterOperator &op)
         op.data(new DisjunctiveFilterData(op, this->schema()));
 
     auto data = as<DisjunctiveFilterData>(op.data());
+
+    // Count input tuples
+    std::size_t input_count = block_.size();
+    op.add_processed_tuples(input_count);
+
+    std::cout << "DisjunctiveFilter: Processing " << input_count << " input tuples" << std::endl;
+
+
     for (auto it = block_.begin(); it != block_.end(); ++it) {
         data->res.set(0, false); // reset
         Tuple *args[] = { &data->res, &*it };
@@ -1010,6 +1038,17 @@ void Pipeline::operator()(const DisjunctiveFilterOperator &op)
         block_.erase(it); // no predicate was satisfied ⇒ drop tuple
 satisfied:;
     }
+
+    // Count output tuples (after filtering)
+    std::size_t output_count = block_.size();
+    op.add_emitted_tuples(output_count);
+
+    std::cout << "DisjunctiveFilter: " << output_count << " tuples passed filter (filtered out: "
+              << (input_count - output_count) << ")" << std::endl;
+    std::cout << "DisjunctiveFilter: Total processed so far: " << op.get_processed_tuples() << std::endl;
+    std::cout << "DisjunctiveFilter: Total emitted so far: " << op.get_emitted_tuples() << std::endl;
+
+
     if (not block_.empty())
         op.parent()->accept(*this);
 }
@@ -1087,6 +1126,13 @@ void Pipeline::operator()(const JoinOperator &op)
         if (data->active_child == size - 1) {
             /* This is the right-most child.  Combine its produced tuple with all combinations of the buffered
              * tuples. */
+
+            // STATISTICS GENERATION
+            std::size_t input_count = block_.size();
+            op.add_processed_tuples(input_count);
+            std::cout << "NestedLoopsJoin: Processing " << input_count << " input tuples from right-most child" << std::endl;
+
+
             std::vector<std::size_t> positions(size - 1, std::size_t(-1L)); // positions within each buffer
             std::size_t child_id = 0; // cursor to the child that provides the next part of the joined tuple
             auto &pipeline = data->pipeline;
@@ -1147,10 +1193,14 @@ void Pipeline::operator()(const JoinOperator &op)
                     }
 
                     if (not pipeline.block_.empty()){
+                        // STATISTICS
                         std::size_t emitted_count = pipeline.block_.size();
-                        std::cout << "NestedLoopsJoin emitted " << emitted_count << " tuples" << std::endl;
-                        data->emitted_tuples += pipeline.block_.size();
+                        data->emitted_tuples += emitted_count;
+                        op.add_emitted_tuples(emitted_count);  // Add to operator counter
+
+                        std::cout << "NestedLoopsJoin: Emitting " << emitted_count << " tuples" << std::endl;
                         std::cout << "NestedLoopsJoin: Total emitted so far: " << data->emitted_tuples << std::endl;
+                        std::cout << "NestedLoopsJoin: Total processed so far: " << op.get_processed_tuples() << std::endl;
                         pipeline.push(*op.parent());
                     }
 
@@ -1171,6 +1221,14 @@ void Pipeline::operator()(const JoinOperator &op)
             }
         } else {
             /* This is not the right-most child.  Collect its produced tuples in a buffer. */
+            // STATISTICS GENERATION
+            std::size_t input_count = block_.size();
+            op.add_processed_tuples(input_count);
+
+            std::cout << "NestedLoopsJoin: Buffering " << input_count << " tuples from child "
+                      << data->active_child << std::endl;
+
+
             const auto &tuple_schema = op.child(data->active_child)->schema();
             if (data->buffer_schemas.size() <= data->active_child) {
                 data->buffer_schemas.emplace_back(this->schema()); // save the schema of the current pipeline
@@ -1190,6 +1248,13 @@ void Pipeline::operator()(const ProjectionOperator &op)
     if (not data->projections)
         data->emit_projections(this->schema(), op);
 
+    // Count input tuples
+    std::size_t input_count = block_.size();
+    op.add_processed_tuples(input_count);
+
+    std::cout << "Projection: Processing " << input_count << " input tuples" << std::endl;
+
+
     pipeline.clear();
     pipeline.block_.mask(block_.mask());
 
@@ -1199,6 +1264,15 @@ void Pipeline::operator()(const ProjectionOperator &op)
         (*data->projections)(args);
     }
 
+    // Count output tuples (same as input for projections)
+    std::size_t output_count = pipeline.block_.size();
+    op.add_emitted_tuples(output_count);
+
+    std::cout << "Projection: Emitted " << output_count << " tuples" << std::endl;
+    std::cout << "Projection: Total processed so far: " << op.get_processed_tuples() << std::endl;
+    std::cout << "Projection: Total emitted so far: " << op.get_emitted_tuples() << std::endl;
+
+
     pipeline.push(*op.parent());
 }
 
@@ -1206,16 +1280,42 @@ void Pipeline::operator()(const LimitOperator &op)
 {
     auto data = as<LimitData>(op.data());
 
+
+    // STATISTICS GENERATION Count input tuples
+    std::size_t input_count = block_.size();
+    op.add_processed_tuples(input_count);
+
+    std::cout << "Limit: Processing " << input_count << " input tuples" << std::endl;
+    std::cout << "Limit: Current tuple count: " << data->num_tuples
+              << ", Offset: " << op.offset() << ", Limit: " << op.limit() << std::endl;
+
+
+    // Track tuples before filtering
+    std::size_t tuples_before_filter = block_.size();
+
+
     for (auto it = block_.begin(); it != block_.end(); ++it) {
         if (data->num_tuples < op.offset() or data->num_tuples >= op.offset() + op.limit())
             block_.erase(it); /* discard this tuple */
         ++data->num_tuples;
     }
 
+    // STATISTICS GENERATION Count output tuples (after limit filtering)
+    std::size_t output_count = block_.size();
+    op.add_emitted_tuples(output_count);
+
+    std::cout << "Limit: " << output_count << " tuples passed limit check (filtered out: "
+              << (input_count - output_count) << ")" << std::endl;
+    std::cout << "Limit: Total processed so far: " << op.get_processed_tuples() << std::endl;
+    std::cout << "Limit: Total emitted so far: " << op.get_emitted_tuples() << std::endl;
+
+
+
     if (not block_.empty())
         op.parent()->accept(*this);
 
     if (data->num_tuples >= op.offset() + op.limit())
+        op.print_operator_stats();
         throw LimitOperator::stack_unwind(); // all tuples produced, now unwind the stack
 }
 

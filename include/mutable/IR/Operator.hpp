@@ -322,9 +322,22 @@ struct M_EXPORT JoinOperator : Producer, Consumer
 
     private:
     cnf::CNF predicate_;
+    mutable std::size_t intermediate_result_size_ = 0;
 
     public:
     JoinOperator(cnf::CNF predicate) : predicate_(std::move(predicate)) { }
+
+    void set_intermediate_result_size(std::size_t size) const {
+        intermediate_result_size_ = size;
+    }
+
+    std::size_t get_intermediate_result_size() const {
+        return intermediate_result_size_;
+    }
+
+    void print_intermediate_results() const {
+        std::cout << "Join at " << this << ": " << intermediate_result_size_ << " intermediate tuples" << std::endl;
+    }
 
     /*----- Override child setters to correctly adapt the constraints of the computed schema! ------------------------*/
     virtual void add_child(Producer *child) override {

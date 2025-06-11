@@ -611,11 +611,13 @@ struct JoinData : OperatorData
     JoinData(const JoinOperator &op) : pipeline(op.schema()) { }
 
     void emit_load_attrs(const Schema &in_schema) {
+        std::size_t counter = 0;
         auto &SM = load_attrs.emplace_back();
         for (std::size_t schema_idx = 0; schema_idx != in_schema.num_entries(); ++schema_idx) {
             auto &e = in_schema[schema_idx];
             auto it = pipeline.schema().find(e.id);
             if (it != pipeline.schema().end()) { // attribute is needed
+                counter++;
                 SM.emit_Ld_Tup(1, schema_idx);
                 SM.emit_St_Tup(0, std::distance(pipeline.schema().begin(), it), e.type);
             }
@@ -632,6 +634,7 @@ struct NestedLoopsJoinData : JoinData
     buffer_type *buffers; ///< tuple buffer per child
     std::size_t active_child;
     Tuple res;
+    uint64_t emitted_tuples = 0;
 
     NestedLoopsJoinData(const JoinOperator &op)
         : JoinData(op)
@@ -650,6 +653,7 @@ struct SimpleHashJoinData : JoinData
     StackMachine build_key; ///< extracts the key of the build input
     StackMachine probe_key; ///< extracts the key of the probe input
     RefCountingHashMap<Tuple, Tuple> ht; ///< hash table on build input
+    size_t emitted_tuples = 0;
 
     Schema key_schema; ///< the `Schema` of the `key`
     Tuple key; ///< `Tuple` to hold the key
@@ -1008,6 +1012,8 @@ void Pipeline::operator()(const JoinOperator &op)
                 pipeline.block_.fill();
                 data->ht.for_all(*args[0], [&](std::pair<const Tuple, Tuple> &v) {
                     if (i == pipeline.block_.capacity()) {
+                        std::size_t emitted = pipeline.block_.size();
+                        data->emitted_tuples += emitted;  // Add this field to SimpleHashJoinData
                         pipeline.push(*op.parent());
                         i = 0;
                     }
@@ -1025,11 +1031,20 @@ void Pipeline::operator()(const JoinOperator &op)
             }
 
             if (i != 0) {
+                // final block is not empty: Emit left over tuples
                 M_insist(i <= pipeline.block_.capacity());
                 pipeline.block_.mask(i == pipeline.block_.capacity() ? -1UL : (1UL << i) - 1);
+                data->emitted_tuples += i;  // Count final batch
+
+                op.set_intermediate_result_size(data->emitted_tuples);  // Store in operator
+                op.print_intermediate_results();
+                // std::cout << "HashJoin at " << &op << ": Emitting " << i << " tuples" << std::endl;
+                // std::cout << "HashJoin at " << &op << ": Total intermediate results: " << data->emitted_tuples << std::endl;
+
                 pipeline.push(*op.parent());
             }
         } else {
+        // This is the building phase
             if (data->load_attrs.size() != 1) {
                 data->load_build_key(this->schema());
                 data->emit_load_attrs(this->schema());
@@ -1094,6 +1109,9 @@ void Pipeline::operator()(const JoinOperator &op)
                                 continue;
                             }
                         }
+                        static thread_local std::size_t tuple_count = 0;
+                        tuple_count++;
+                        std::cout << "NestedLoopsJoin: Combined tuple #" << tuple_count << std::endl;
 
                         for (std::size_t i = 0; i != child_id; ++i) {
                             auto &buffer = data->buffers[i]; // get buffer of i-th child
@@ -1107,8 +1125,14 @@ void Pipeline::operator()(const JoinOperator &op)
                         }
                     }
 
-                    if (not pipeline.block_.empty())
+                    if (not pipeline.block_.empty()){
+                        std::size_t emitted_count = pipeline.block_.size();
+                        std::cout << "NestedLoopsJoin emitted " << emitted_count << " tuples" << std::endl;
+                        data->emitted_tuples += pipeline.block_.size();
+                        std::cout << "NestedLoopsJoin: Total emitted so far: " << data->emitted_tuples << std::endl;
                         pipeline.push(*op.parent());
+                    }
+
                     --child_id;
                 } else { // child whose tuples have been materialized in a buffer
                     ++positions[child_id];
@@ -1449,6 +1473,11 @@ void Interpreter::operator()(const JoinOperator &op)
 {
     if (op.predicate().is_equi()) {
         /* Perform simple hash join. */
+        std::cout << "=== STARTING HASH JOIN ===" << std::endl;
+        std::cout << "Build relation cardinality estimate: " << op.child(0)->info().estimated_cardinality << std::endl;
+        std::cout << "Probe relation cardinality estimate: " << op.child(1)->info().estimated_cardinality << std::endl;
+        std::cout << "Code: Interpreter:1478" << std::endl;
+
         auto data = new SimpleHashJoinData(op);
         op.data(data);
         if (op.has_info())
@@ -1457,7 +1486,12 @@ void Interpreter::operator()(const JoinOperator &op)
         if (data->ht.size() == 0) // no tuples produced
             return;
         data->is_probe_phase = true;
+        std::cout << "=== STARTING PROBE PHASE ===" << std::endl;
         op.child(1)->accept(*this); // probe HT with RHS
+        op.print_intermediate_results();
+        if (data->emitted_tuples > 0) {
+            std::cout << "Total tuples emitted: " << data->emitted_tuples << std::endl;
+        }
     } else {
         /* Perform nested-loops join. */
         auto data = new NestedLoopsJoinData(op);

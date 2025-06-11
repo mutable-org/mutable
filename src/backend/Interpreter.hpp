@@ -183,6 +183,7 @@ struct Pipeline : ConstOperatorVisitor
 
     private:
     Block<64> block_;
+    size_t iterator = 0;
 
     public:
     Pipeline() { }
@@ -199,7 +200,8 @@ struct Pipeline : ConstOperatorVisitor
         block_[0] = std::move(t);
     }
 
-    void push(const Operator &pipeline_start) { (*this)(pipeline_start); }
+    void push(const Operator &pipeline_start) {
+        (*this)(pipeline_start); }
 
     void clear() { block_.clear(); }
 

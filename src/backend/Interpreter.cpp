@@ -919,6 +919,16 @@ void Pipeline::operator()(const ScanOperator &op)
             Tuple *args[] = { &block_[j] };
             loader(args);
         }
+
+        // STATISTICS GENERATION FOR FULL BLOCKS
+        std::size_t block_size = block_.capacity();
+        op.add_processed_tuples(block_size);    // Input = what we read from storage
+        op.add_emitted_tuples(block_size);      // Output = what we send to next operator
+
+        std::cout << "Scan: Read and emitted " << block_size << " tuples" << std::endl;
+        std::cout << "Scan: Total processed so far: " << op.get_processed_tuples() << std::endl;
+
+
         op.parent()->accept(*this);
     }
     if (i != num_rows) {
@@ -930,8 +940,19 @@ void Pipeline::operator()(const ScanOperator &op)
             Tuple *args[] = { &block_[j] };
             loader(args);
         }
+
+        // STATISTICS GENERATION FOR LAST PARTIAL BLOCK
+        op.add_processed_tuples(remainder);     // Input = remaining tuples from storage
+        op.add_emitted_tuples(remainder);       // Output = remaining tuples to next operator
+
+        std::cout << "Scan: Read and emitted final " << remainder << " tuples" << std::endl;
+        std::cout << "Scan: Total processed: " << op.get_processed_tuples() << std::endl;
+        std::cout << "Scan: Total emitted: " << op.get_emitted_tuples() << std::endl;
+
         op.parent()->accept(*this);
     }
+
+    op.print_operator_stats();
 }
 
 void Pipeline::operator()(const CallbackOperator &op)

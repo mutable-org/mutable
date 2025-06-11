@@ -58,6 +58,11 @@ struct M_EXPORT Operator
     protected:
     mutable std::size_t id_ = -1UL; ///< the ID of this `Operator`; used as index in the DP table of `PhysicalOperator`
 
+    // ADDING COUNTERS TO EMIT PHYSICAL OUTPUT TUPLE COUNTS
+    mutable std::size_t processed_tuples_ = 0;  // Input tuples processed by this operator
+    mutable std::size_t emitted_tuples_ = 0;    // Output tuples emitted by this operator
+    mutable std::string operator_id_;
+
     public:
     Operator() = default;
     Operator(Operator &&other) : Operator() { swap(*this, other); }
@@ -86,6 +91,39 @@ struct M_EXPORT Operator
         M_insist(id_ != -1UL, "id must be first set by calling `assign_post_order_ids()`");
         return id_;
     }
+
+    // OPERATOR STATISTIC FUNCTIONS
+    void add_processed_tuples(std::size_t count) const { processed_tuples_ += count; }
+    void add_emitted_tuples(std::size_t count) const { emitted_tuples_ += count; }
+    void set_processed_tuples(std::size_t count) const { processed_tuples_ = count; }
+    void set_emitted_tuples(std::size_t count) const { emitted_tuples_ = count; }
+
+    std::size_t get_processed_tuples() const { return processed_tuples_; }
+    std::size_t get_emitted_tuples() const { return emitted_tuples_; }
+
+    /** Get unique operator identifier */
+    const std::string& get_operator_id() const {
+        if (operator_id_.empty()) {
+            std::ostringstream oss;
+            oss << typeid(*this).name() << "_" << std::hex << this;
+            operator_id_ = oss.str();
+        }
+        return operator_id_;
+    }
+
+    /** Print operator statistics */
+    void print_operator_stats() const {
+        std::cout << "=== " << get_operator_id() << " STATS ===" << std::endl;
+        std::cout << "Processed: " << processed_tuples_ << " tuples" << std::endl;
+        std::cout << "Emitted: " << emitted_tuples_ << " tuples" << std::endl;
+        if (processed_tuples_ > 0) {
+            double selectivity = double(emitted_tuples_) / processed_tuples_;
+            std::cout << "Selectivity: " << selectivity << " ("
+                      << (selectivity * 100.0) << "%)" << std::endl;
+        }
+        std::cout << "=================================" << std::endl;
+    }
+
     private:
     /** Sets the ID of `this`. */
     void id(std::size_t id) const { id_ = id; }
@@ -322,22 +360,21 @@ struct M_EXPORT JoinOperator : Producer, Consumer
 
     private:
     cnf::CNF predicate_;
-    mutable std::size_t intermediate_result_size_ = 0;
 
     public:
     JoinOperator(cnf::CNF predicate) : predicate_(std::move(predicate)) { }
 
+    // STATISTIC FUNCTIONS FOR JOIN OPERATOR
     void set_intermediate_result_size(std::size_t size) const {
-        intermediate_result_size_ = size;
+        set_emitted_tuples(size);
     }
 
     std::size_t get_intermediate_result_size() const {
-        return intermediate_result_size_;
+        return get_emitted_tuples();
     }
 
     void print_intermediate_results() const {
-        std::cout << "Join at " << this << ": " << intermediate_result_size_ << " intermediate tuples" << std::endl;
-    }
+        print_operator_stats();    }
 
     /*----- Override child setters to correctly adapt the constraints of the computed schema! ------------------------*/
     virtual void add_child(Producer *child) override {

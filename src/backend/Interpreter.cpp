@@ -1432,6 +1432,14 @@ void Pipeline::operator()(const GroupingOperator &op)
     auto data = as<HashBasedGroupingData>(op.data());
     auto &groups = data->groups;
 
+    // Count input tuples
+    std::size_t input_count = block_.size();
+    op.add_processed_tuples(input_count);
+
+    std::cout << "Grouping: Processing " << input_count << " input tuples" << std::endl;
+    std::cout << "Grouping: Current number of groups: " << groups.size() << std::endl;
+
+
     Tuple key(op.schema());
     for (auto &tuple : block_) {
         Tuple *args[] = { &key, &tuple };
@@ -1445,12 +1453,22 @@ void Pipeline::operator()(const GroupingOperator &op)
         }
         perform_aggregation(*it, tuple, *data);
     }
+
+    std::cout << "Grouping: Final number of groups: " << groups.size() << std::endl;
+    std::cout << "Grouping: Total processed so far: " << op.get_processed_tuples() << std::endl;
 }
 
 void Pipeline::operator()(const AggregationOperator &op)
 {
     auto data = as<AggregationData>(op.data());
     auto &nth_tuple = data->aggregates[op.schema().num_entries()].as_i();
+
+    // STATISTICS GENERATION Count input tuples
+    std::size_t input_count = block_.size();
+    op.add_processed_tuples(input_count);
+
+    std::cout << "Aggregation: Processing " << input_count << " input tuples" << std::endl;
+    std::cout << "Aggregation: Current nth_tuple counter: " << nth_tuple << std::endl;
 
     for (auto &tuple : block_) {
         nth_tuple += 1UL;
@@ -1537,6 +1555,8 @@ void Pipeline::operator()(const AggregationOperator &op)
             }
         }
     }
+    std::cout << "Aggregation: Processed " << input_count << " tuples, nth_tuple now: " << nth_tuple << std::endl;
+    std::cout << "Aggregation: Total processed so far: " << op.get_processed_tuples() << std::endl;
 }
 
 void Pipeline::operator()(const SortingOperator &op)
@@ -1655,15 +1675,27 @@ void Interpreter::operator()(const LimitOperator &op)
 
 void Interpreter::operator()(const GroupingOperator &op)
 {
+
+    std::cout << "=== STARTING GROUPING OPERATOR ===" << std::endl;
+    std::cout << "Group by attributes: " << op.group_by().size() << std::endl;
+    std::cout << "Aggregate functions: " << op.aggregates().size() << std::endl;
+
     auto &parent = *op.parent();
     auto data = new HashBasedGroupingData(op);
     op.data(data);
 
     op.child(0)->accept(*this);
 
+    std::cout << "=== GROUPING INPUT COMPLETE ===" << std::endl;
+    std::cout << "Total groups created: " << data->groups.size() << std::endl;
+
+    // emit groups
     const auto num_groups = data->groups.size();
     const auto remainder = num_groups % data->pipeline.block_.capacity();
     auto it = data->groups.begin();
+
+    std::size_t total_emitted = 0;
+
     for (std::size_t i = 0; i != num_groups - remainder; i += data->pipeline.block_.capacity()) {
         data->pipeline.block_.clear();
         data->pipeline.block_.fill();
@@ -1671,6 +1703,14 @@ void Interpreter::operator()(const GroupingOperator &op)
             auto node = data->groups.extract(it++);
             swap(data->pipeline.block_[j], node.key());
         }
+        // STATISTICS GENERATION
+        std::size_t block_size = data->pipeline.block_.capacity();
+        total_emitted += block_size;
+        op.add_emitted_tuples(block_size);
+
+        std::cout << "Grouping: Emitting " << block_size << " groups" << std::endl;
+
+
         data->pipeline.push(parent);
     }
     data->pipeline.block_.clear();
@@ -1679,11 +1719,21 @@ void Interpreter::operator()(const GroupingOperator &op)
         auto node = data->groups.extract(it++);
         swap(data->pipeline.block_[i], node.key());
     }
+
+    // STATISTICS GENERATION: remaining partial block
+    total_emitted += remainder;
+    op.add_emitted_tuples(remainder);
+
+    std::cout << "Grouping: Emitting final " << remainder << " groups" << std::endl;
     data->pipeline.push(parent);
 }
 
 void Interpreter::operator()(const AggregationOperator &op)
 {
+    std::cout << "=== STARTING AGGREGATION OPERATOR ===" << std::endl;
+    std::cout << "Aggregate functions: " << op.aggregates().size() << std::endl;
+
+
     op.data(new AggregationData(op));
     auto data = as<AggregationData>(op.data());
 
@@ -1730,10 +1780,20 @@ void Interpreter::operator()(const AggregationOperator &op)
     }
     op.child(0)->accept(*this);
 
+    std::cout << "=== AGGREGATION INPUT COMPLETE ===" << std::endl;
+
     using std::swap;
     data->pipeline.block_.clear();
     data->pipeline.block_.mask(1UL);
     swap(data->pipeline.block_[0], data->aggregates);
+
+    // STATISTICS GENERATION Count the single output tuple
+    op.add_emitted_tuples(1);
+
+    std::cout << "Aggregation: Emitting 1 aggregated result tuple" << std::endl;
+    std::cout << "=== AGGREGATION COMPLETED ===" << std::endl;
+    op.print_operator_stats();
+
     data->pipeline.push(*op.parent());
 }
 

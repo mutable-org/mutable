@@ -216,13 +216,108 @@ struct Pipeline : ConstOperatorVisitor
 /** Evaluates SQL operator trees on the database. */
 struct Interpreter : Backend, ConstOperatorVisitor
 {
+    // Add this as a private method to the Interpreter class
+private:
+void collect_and_analyze_cardinality_stats(const Operator& root) const {
+    std::cout << "\n=== FINAL CARDINALITY STATISTICS ===" << std::endl;
+
+    std::function<void(const Operator&, int)> visit_operator = [&](const Operator& op, int depth) {
+        std::string indent(depth * 2, ' ');
+
+        // Print operator statistics
+        std::cout << indent << typeid(op).name() << ":"
+                  << " Processed=" << op.get_processed_tuples()
+                  << ", Emitted=" << op.get_emitted_tuples();
+
+        // Show estimated vs actual if available
+        if (op.has_info() && op.info().estimated_cardinality > 0) {
+            std::size_t estimated = op.info().estimated_cardinality;
+            std::size_t actual = op.get_emitted_tuples();
+            double error = estimated > 0 ?
+                std::abs(double(actual) - double(estimated)) / double(estimated) * 100.0 : 0.0;
+
+            std::cout << ", Estimated=" << estimated
+                      << ", Error=" << error << "%";
+        }
+
+        // Show selectivity
+        if (op.get_processed_tuples() > 0) {
+            double selectivity = double(op.get_emitted_tuples()) / double(op.get_processed_tuples());
+            std::cout << ", Selectivity=" << selectivity;
+        }
+
+        std::cout << std::endl;
+
+        // Recursively visit children - CHECK IF IT'S A CONSUMER FIRST
+        if (auto consumer = dynamic_cast<const Consumer*>(&op)) {
+            for (auto child : consumer->children()) {
+                visit_operator(*child, depth + 1);
+            }
+        }
+    };
+
+    visit_operator(root, 0);
+
+    // Print summary statistics
+    print_execution_summary(root);
+
+    std::cout << "====================================" << std::endl;
+}
+
+void print_execution_summary(const Operator& root) const {
+    std::size_t total_processed = 0;
+    std::size_t total_emitted = 0;
+    std::size_t operator_count = 0;
+    double total_error = 0.0;
+    std::size_t operators_with_estimates = 0;
+
+    std::function<void(const Operator&)> collect_stats = [&](const Operator& op) {
+        total_processed += op.get_processed_tuples();
+        total_emitted += op.get_emitted_tuples();
+        operator_count++;
+
+        if (op.has_info() && op.info().estimated_cardinality > 0) {
+            std::size_t estimated = op.info().estimated_cardinality;
+            std::size_t actual = op.get_emitted_tuples();
+            double error = estimated > 0 ?
+                std::abs(double(actual) - double(estimated)) / double(estimated) : 0.0;
+            total_error += error;
+            operators_with_estimates++;
+        }
+
+        // CHECK IF IT'S A CONSUMER BEFORE ACCESSING children()
+        if (auto consumer = dynamic_cast<const Consumer*>(&op)) {
+            for (auto child : consumer->children()) {
+                collect_stats(*child);
+            }
+        }
+    };
+
+    collect_stats(root);
+
+    std::cout << "\n--- EXECUTION SUMMARY ---" << std::endl;
+    std::cout << "Total operators: " << operator_count << std::endl;
+    std::cout << "Total tuples processed: " << total_processed << std::endl;
+    std::cout << "Total tuples emitted: " << total_emitted << std::endl;
+    std::cout << "Overall selectivity: " << (total_processed > 0 ? double(total_emitted) / double(total_processed) : 0.0) << std::endl;
+    if (operators_with_estimates > 0) {
+        std::cout << "Average estimation error: " << (total_error / operators_with_estimates * 100.0) << "%" << std::endl;
+    }
+    std::cout << "------------------------" << std::endl;
+}
     public:
     Interpreter() = default;
 
     void register_operators(PhysicalOptimizer &phys_opt) const override { register_interpreter_operators(phys_opt); }
 
     void execute(const MatchBase &plan) const override {
+            std::cout << "=== STARTING PHYSICAL PLAN EXECUTION ===" << std::endl;
+
         (*const_cast<Interpreter*>(this))(plan.get_matched_root()); // use former visitor pattern on logical operators
+
+        std::cout << "=== PHYSICAL PLAN EXECUTION COMPLETE ===" << std::endl;
+        collect_and_analyze_cardinality_stats(plan.get_matched_root());
+
     }
 
     using ConstOperatorVisitor::operator();

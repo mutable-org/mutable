@@ -728,6 +728,7 @@ struct SimpleHashJoinData : JoinData
 struct LimitData : OperatorData
 {
     std::size_t num_tuples = 0;
+    bool limit_reached = false;
 };
 
 struct GroupingData : OperatorData
@@ -1315,8 +1316,9 @@ void Pipeline::operator()(const LimitOperator &op)
         op.parent()->accept(*this);
 
     if (data->num_tuples >= op.offset() + op.limit())
+        data->limit_reached = true;
         op.print_operator_stats();
-        throw LimitOperator::stack_unwind(); // all tuples produced, now unwind the stack
+
 }
 
 void Pipeline::operator()(const GroupingOperator &op)

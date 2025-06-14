@@ -11,6 +11,8 @@
 #include <mutable/util/macro.hpp>
 #include <unordered_map>
 
+#include <mutable/catalog/CardinalityStorage.hpp>
+
 
 namespace m {
 
@@ -317,6 +319,9 @@ void print_execution_summary(const Operator& root) const {
 
         std::cout << "=== PHYSICAL PLAN EXECUTION COMPLETE ===" << std::endl;
         collect_and_analyze_cardinality_stats(plan.get_matched_root());
+
+        CardinalityStorage::instance().map_true_cardinalities_to_logical_plan(plan.get_matched_root());
+
 
     }
 

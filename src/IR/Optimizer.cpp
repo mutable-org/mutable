@@ -206,6 +206,7 @@ std::pair<std::unique_ptr<Producer>, PlanTable> Optimizer::optimize_with_plantab
     /*----- Construct plan for remaining operations. -----*/
     plan = optimize_plan(G, std::move(plan), entry);
 
+    // here we have the final logical plan!
     return { std::move(plan), std::move(PT) };
 }
 

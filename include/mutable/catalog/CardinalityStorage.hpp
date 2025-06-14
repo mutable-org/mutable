@@ -8,6 +8,7 @@
 #include <utility>
 #include <cstddef>
 #include <iostream>
+#include <sstream>
 #include <string>
 #include <vector>
 
@@ -20,22 +21,25 @@ namespace m
         double true_cardinality = -1.0;                       // from last execution
         std::pair<double, double> estimated_range = {-1, -1}; // for later
 
-        // Additional information
-        std::vector<std::string> source_tables; // Source table names
-        std::string filter_condition;           // Filter predicates as string
-        std::string join_condition;             // Join condition as string
+        // Pure information without concatenations
+        std::vector<std::string> source_tables; // Just table names
+        bool has_filter = false;                // Whether a filter exists
+        bool has_join = false;                  // Whether a join exists
+
+        // Store subproblem for later reference
+        Subproblem subproblem;
     };
 
     /**
      * @brief Custom data object to attach to PlanTableEntry
      */
-    struct PlanTableEntryCardinalityData : PlanTableEntryData
+    struct PlanTableEntryCardinalityData : public PlanTableEntryData
     {
         double estimated_cardinality = -1.0;
         double true_cardinality = -1.0;
         std::vector<std::string> source_tables;
-        std::string filter_condition;
-        std::string join_condition;
+        bool has_filter = false;
+        bool has_join = false;
     };
 
     class CardinalityStorage
@@ -69,15 +73,15 @@ namespace m
             if (debug_output_)
             {
                 std::cout << "Processing operator: " << typeid(op).name();
-                if (op.has_info() && op.info().subproblem.size() > 0)
+                if (op.has_info())
                 {
-                    std::cout << ", Subproblem: " << op.info().subproblem;
+                    std::cout << ", Subproblem present";
                 }
                 std::cout << std::endl;
             }
 
             // Get operator information if available
-            if (op.has_info() && op.info().subproblem.size() > 0)
+            if (op.has_info())
             {
                 const Subproblem &subproblem = op.info().subproblem;
                 std::size_t actual_cardinality = op.get_emitted_tuples();
@@ -89,20 +93,20 @@ namespace m
                     card_info.estimated_point = op.info().estimated_cardinality;
                 }
                 card_info.true_cardinality = actual_cardinality;
+                card_info.subproblem = subproblem; // Store subproblem for later reference
 
-                // Extract source tables, filters, and join conditions based on operator type
+                // Extract metadata
                 extract_operator_metadata(op, card_info);
 
                 if (debug_output_)
                 {
-                    std::cout << "  Stored cardinality for subproblem " << subproblem
-                              << ": estimated=" << card_info.estimated_point
+                    std::cout << "  Stored cardinality for subproblem";
+                    std::cout << ": estimated=" << card_info.estimated_point
                               << ", actual=" << card_info.true_cardinality << std::endl;
 
-                    // Print the additional metadata
                     if (!card_info.source_tables.empty())
                     {
-                        std::cout << "  Source tables: ";
+                        std::cout << "  Tables: ";
                         for (const auto &table : card_info.source_tables)
                         {
                             std::cout << table << " ";
@@ -110,15 +114,8 @@ namespace m
                         std::cout << std::endl;
                     }
 
-                    if (!card_info.filter_condition.empty())
-                    {
-                        std::cout << "  Filter condition: " << card_info.filter_condition << std::endl;
-                    }
-
-                    if (!card_info.join_condition.empty())
-                    {
-                        std::cout << "  Join condition: " << card_info.join_condition << std::endl;
-                    }
+                    std::cout << "  Has filter: " << (card_info.has_filter ? "yes" : "no") << std::endl;
+                    std::cout << "  Has join: " << (card_info.has_join ? "yes" : "no") << std::endl;
                 }
             }
 
@@ -133,42 +130,61 @@ namespace m
         }
 
         /**
-         * @brief Extract metadata from operators (tables, filters, joins) - simplified version
+         * @brief Extract metadata from operators (tables, filters, joins)
          *
          * @param op The operator to extract metadata from
          * @param info The CardinalityInfo to store the metadata in
          */
         void extract_operator_metadata(const Operator &op, CardinalityInfo &info)
         {
-            // For ScanOperator - extract table name if possible, but don't stress over it
+            // For ScanOperator - extract table name only
             if (auto scan_op = dynamic_cast<const ScanOperator *>(&op))
             {
                 try
                 {
-                    // Just use a generic table identifier with the operator address
-                    std::ostringstream oss;
-                    oss << "Table@" << reinterpret_cast<const void *>(scan_op);
-                    info.source_tables.push_back(oss.str());
+                    // Just the table name without any prefixes
+                    std::ostringstream ss;
+                    ss << scan_op->alias();
+                    std::string table_name = ss.str();
+                    if (!table_name.empty())
+                    {
+                        info.source_tables.push_back(table_name);
+                        if (debug_output_)
+                        {
+                            std::cout << "  Added table: " << table_name << std::endl;
+                        }
+                    }
                 }
                 catch (...)
                 {
-                    // If even that fails, use a completely generic name
-                    info.source_tables.push_back("Unknown Table");
+                    // Silent failure - we don't want to add fallback names
+                    if (debug_output_)
+                    {
+                        std::cout << "  Failed to extract table name" << std::endl;
+                    }
                 }
             }
 
-            // For FilterOperator - don't try to extract the actual filter, just note it exists
-            if (auto filter_op = dynamic_cast<const FilterOperator *>(&op))
+            // For FilterOperator - just mark presence
+            if (dynamic_cast<const FilterOperator *>(&op))
             {
-                info.filter_condition = "Has Filter";
+                info.has_filter = true;
+                if (debug_output_)
+                {
+                    std::cout << "  Marked filter presence" << std::endl;
+                }
             }
 
-            // For JoinOperator - don't try to extract the actual condition, just note it exists
+            // For JoinOperator - just mark presence and gather source tables
             if (auto join_op = dynamic_cast<const JoinOperator *>(&op))
             {
-                info.join_condition = "Has Join";
+                info.has_join = true;
+                if (debug_output_)
+                {
+                    std::cout << "  Marked join presence" << std::endl;
+                }
 
-                // For joins, merge source tables from children
+                // For joins, gather source tables from children
                 if (auto consumer = dynamic_cast<const Consumer *>(&op))
                 {
                     for (auto child : consumer->children())
@@ -183,6 +199,11 @@ namespace m
                                     info.source_tables.end(),
                                     it->second.source_tables.begin(),
                                     it->second.source_tables.end());
+
+                                if (debug_output_)
+                                {
+                                    std::cout << "  Added tables from child subproblem" << std::endl;
+                                }
                             }
                         }
                     }
@@ -203,7 +224,7 @@ namespace m
             auto PT_copy = std::make_unique<PlanTable>(original_PT);
 
             // For each entry in the plan table
-            for (std::size_t i = 0; i < PT_copy->size(); ++i)
+            for (std::size_t i = 1; i < PT_copy->size(); ++i)
             {
                 Subproblem s(i);
                 if (PT_copy->has_plan(s))
@@ -216,33 +237,22 @@ namespace m
                     {
                         const auto &card_info = it->second;
 
-                        // Create a new data object for this entry
+                        // Create a new data object for this entry with pure information
                         auto data = std::make_unique<PlanTableEntryCardinalityData>();
                         data->estimated_cardinality = card_info.estimated_point;
                         data->true_cardinality = card_info.true_cardinality;
-                        data->source_tables = card_info.source_tables;
-                        data->filter_condition = card_info.filter_condition;
-                        data->join_condition = card_info.join_condition;
+                        data->source_tables = card_info.source_tables; // Just the table names
+                        data->has_filter = card_info.has_filter;       // Boolean flag
+                        data->has_join = card_info.has_join;           // Boolean flag
 
                         // Attach to plan table entry
                         entry.data = std::move(data);
 
                         if (debug_output_)
                         {
-                            std::cout << "  Added cardinality data to subproblem " << s
-                                      << ": estimated=" << card_info.estimated_point
+                            std::cout << "  Added cardinality data to subproblem";
+                            std::cout << ": estimated=" << card_info.estimated_point
                                       << ", actual=" << card_info.true_cardinality << std::endl;
-
-                            // Print the additional metadata
-                            if (!card_info.source_tables.empty())
-                            {
-                                std::cout << "    Tables: ";
-                                for (const auto &table : card_info.source_tables)
-                                {
-                                    std::cout << table << " ";
-                                }
-                                std::cout << std::endl;
-                            }
                         }
                     }
                 }

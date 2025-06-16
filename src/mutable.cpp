@@ -186,6 +186,8 @@ void m::execute_statement(Diagnostic &diag, const ast::Stmt &stmt, const bool is
 
         if (not Options::Get().dryrun)
             M_TIME_EXPR(backend->execute(*physical_plan), "Execute query", timer);
+            // STORE CARDINALITIES
+            C.cardinality_storage().map_true_cardinalities_to_logical_plan(physical_plan->get_matched_root());
     } else if (auto I = cast<const ast::InsertStmt>(&stmt)) {
         auto &DB = C.get_database_in_use();
         auto &T = DB.get_table(I->table_name.text.assert_not_none());

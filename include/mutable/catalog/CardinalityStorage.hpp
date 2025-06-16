@@ -4,10 +4,15 @@
 #include <mutable/IR/Operator.hpp>
 #include <unordered_map>
 #include <memory>
-#include <vector>
-#include <string>
+#include <functional>
+#include <utility>
 #include <cstddef>
 #include <iostream>
+#include <sstream>
+#include <string>
+#include <vector>
+#include <map>
+#include <algorithm>
 
 namespace m
 {

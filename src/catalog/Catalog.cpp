@@ -5,6 +5,8 @@
 #include "storage/PaxStore.hpp"
 #include "storage/RowStore.hpp"
 #include <mutable/catalog/CostFunctionCout.hpp>
+#include <mutable/catalog/CardinalityStorage.hpp>
+#include <mutable/Options.hpp>
 
 
 using namespace m;
@@ -52,6 +54,18 @@ void Catalog::Destroy()
     delete Catalog::the_catalog_;
     Catalog::the_catalog_ = nullptr;
 }
+
+// CARDINALITY STORAGE
+CardinalityStorage& Catalog::cardinality_storage() const {
+    static bool initialized = false;
+    if (!initialized) {
+        CardinalityStorage::instance().set_debug_output(!Options::Get().quiet);
+        initialized = true;
+    }
+    return CardinalityStorage::instance();
+}
+
+
 
 /*===== Databases ====================================================================================================*/
 

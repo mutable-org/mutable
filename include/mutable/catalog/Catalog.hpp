@@ -205,6 +205,8 @@ struct ComponentSet
 
 namespace m {
 
+class CardinalityStorage;
+
 /*======================================================================================================================
  * Catalog
  *====================================================================================================================*/
@@ -336,6 +338,10 @@ struct M_EXPORT Catalog
     ComponentSet<PhysicalPostOptimizationCallback> physical_post_optimizations_;
 
     public:
+    // QUERY CATALOG
+    CardinalityStorage& cardinality_storage() const;
+
+
     /*===== Stores ===================================================================================================*/
     /** Registers a new `Store` with the given `name`. */
     template<typename T>

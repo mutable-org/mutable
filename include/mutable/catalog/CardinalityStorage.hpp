@@ -485,14 +485,9 @@ namespace m
             debug_output_ = enable;
         }
 
-        /**
-         * @brief Singleton access method
-         * @return CardinalityStorage& The global instance
-         */
-        static CardinalityStorage &instance()
+        bool debug_output() const
         {
-            static CardinalityStorage storage;
-            return storage;
+            return debug_output_;
         }
     };
 

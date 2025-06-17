@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <mutable/catalog/CostFunction.hpp>
+#include <mutable/catalog/CardinalityStorage.hpp>
 #include <mutable/IR/PlanTable.hpp>
 #include <mutable/IR/QueryGraph.hpp>
 #include <mutable/mutable-config.hpp>
@@ -124,10 +125,32 @@ namespace m
                                 M_insist((outer->subproblem & inner->subproblem).empty());
                                 M_insist(M.is_connected(outer->subproblem, inner->subproblem));
                                 const Subproblem joined = outer->subproblem | inner->subproblem;
+
+                                // Search the CardinalityStorage for matching plans
+                                bool found = false;
+                                double stored_cardinality = -1.0;
+
+                                // Use Catalog to access CardinalityStorage
+                                stored_cardinality = CardinalityStorage::Get().lookup_join_cardinality(
+                                    outer->subproblem, inner->subproblem, found);
+
+                                // Create data model if needed - use existing code
                                 if (not PT[joined].model)
                                     PT[joined].model = CE.estimate_join(G, *PT[outer->subproblem].model,
                                                                         *PT[inner->subproblem].model, condition);
-                                const double C_joined = CE.predict_cardinality(*PT[joined].model);
+
+                                // Use stored cardinality if found, otherwise use estimate
+                                double C_joined;
+                                if (found)
+                                {
+                                    C_joined = stored_cardinality;
+                                    if (CardinalityStorage::Get().debug_output())
+                                        std::cout << "Using stored true cardinality: " << C_joined << std::endl;
+                                }
+                                else
+                                {
+                                    C_joined = CE.predict_cardinality(*PT[joined].model);
+                                }
                                 if (C_joined < least_cardinality)
                                 {
                                     least_cardinality = C_joined;
@@ -293,10 +316,32 @@ namespace m
                                 M_insist((outer->subproblem & inner->subproblem).empty());
                                 M_insist(M.is_connected(outer->subproblem, inner->subproblem));
                                 const Subproblem joined = outer->subproblem | inner->subproblem;
+
+                                // Search the CardinalityStorage for matching plans
+                                bool found = false;
+                                double stored_cardinality = -1.0;
+
+                                // Use Catalog to access CardinalityStorage
+                                stored_cardinality = CardinalityStorage::Get().lookup_join_cardinality(
+                                    outer->subproblem, inner->subproblem, found);
+
+                                // Create data model if needed - use existing code
                                 if (not PT[joined].model)
                                     PT[joined].model = CE.estimate_join(G, *PT[outer->subproblem].model,
                                                                         *PT[inner->subproblem].model, condition);
-                                const double C_joined = CE.predict_cardinality(*PT[joined].model);
+
+                                // Use stored cardinality if found, otherwise use estimate
+                                double C_joined;
+                                if (found)
+                                {
+                                    C_joined = stored_cardinality;
+                                    if (CardinalityStorage::Get().debug_output())
+                                        std::cout << "Using stored true cardinality: " << C_joined << std::endl;
+                                }
+                                else
+                                {
+                                    C_joined = CE.predict_cardinality(*PT[joined].model);
+                                }
                                 if (C_joined < least_cardinality)
                                 {
                                     least_cardinality = C_joined;

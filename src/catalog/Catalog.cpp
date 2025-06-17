@@ -17,8 +17,7 @@ using namespace m;
 Catalog *Catalog::the_catalog_(nullptr);
 
 Catalog::Catalog()
-    : allocator_(new memory::LinearAllocator()),
-      cardinality_storage_(std::make_unique<CardinalityStorage>()) // Create instance
+    : allocator_(new memory::LinearAllocator())
 {
     /*----- Initialize standard functions. ---------------------------------------------------------------------------*/
 #define M_FUNCTION(NAME, KIND)                                                                                 \
@@ -30,8 +29,6 @@ Catalog::Catalog()
 #include <mutable/tables/Functions.tbl>
 #undef M_FUNCTION
 
-    // Set debug output
-    cardinality_storage_->set_debug_output(!Options::Get().quiet);
 }
 
 Catalog::~Catalog()
@@ -55,12 +52,6 @@ __attribute__((destructor(200))) void Catalog::Destroy()
 {
     delete Catalog::the_catalog_;
     Catalog::the_catalog_ = nullptr;
-}
-
-// CARDINALITY STORAGE
-CardinalityStorage &Catalog::cardinality_storage() const
-{
-    return *cardinality_storage_; // Return reference to owned instance
 }
 
 /*===== Databases ====================================================================================================*/

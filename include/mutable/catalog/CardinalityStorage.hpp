@@ -88,6 +88,18 @@ namespace m
         PlanTableEntryCardinalityData(std::shared_ptr<CardinalityData> data_ptr) : data(data_ptr) {}
     };
 
+    struct StoredQueryPlan
+    {
+        // Simplified representation of the plan structure
+        std::unordered_map<Subproblem, Subproblem, SubproblemHash> join_structure; // maps subproblem -> left child
+
+        // Query identification
+        std::string query_id;
+    };
+
+    /**
+     * @brief Singleton class that stores cardinality information from query execution
+     */
     class CardinalityStorage
     {
     private:
@@ -103,7 +115,28 @@ namespace m
 
         bool debug_output_ = true;
 
+        // Add to the private section of CardinalityStorage class
+        std::vector<StoredQueryPlan> stored_query_plans_;
+
+        // Private constructor for singleton pattern
+        CardinalityStorage() = default;
+
     public:
+        // Delete copy/move constructors and assignment operators
+        CardinalityStorage(const CardinalityStorage &) = delete;
+        CardinalityStorage &operator=(const CardinalityStorage &) = delete;
+        CardinalityStorage(CardinalityStorage &&) = delete;
+        CardinalityStorage &operator=(CardinalityStorage &&) = delete;
+
+        /**
+         * @brief Get the singleton instance
+         */
+        static CardinalityStorage &Get()
+        {
+            static CardinalityStorage instance;
+            return instance;
+        }
+
         /**
          * @brief Maps actual cardinalities from physical operators back to logical plan subproblems
          *
@@ -489,6 +522,161 @@ namespace m
         {
             return debug_output_;
         }
-    };
 
+        /**
+         * @brief Store a query plan for future matching
+         *
+         * @param plan_table The plan table containing the query plan
+         * @param query_id Optional query identifier (e.g., hash of SQL text)
+         */
+        template <typename PlanTable>
+        void store_query_plan(const PlanTable &plan_table, const std::string &query_id = "")
+        {
+            StoredQueryPlan stored_plan;
+            stored_plan.query_id = query_id;
+
+            // Extract the join structure from the plan table
+            for (std::size_t i = 1; i < plan_table.size(); ++i)
+            {
+                Subproblem s(i);
+                if (plan_table.has_plan(s) && s.size() > 1) // Only store joins
+                {
+                    const auto &entry = plan_table[s];
+                    if (entry.left && entry.right)
+                    {
+                        stored_plan.join_structure[s] = *entry.left;
+                        // We only need to store left child - right child is s - left
+                    }
+                }
+            }
+
+            stored_query_plans_.push_back(std::move(stored_plan));
+
+            if (debug_output_)
+            {
+                std::cout << "Stored query plan #" << stored_query_plans_.size()
+                          << " with " << stored_plan.join_structure.size() << " joins" << std::endl;
+            }
+        }
+
+        /**
+         * @brief Find stored query plans that match the given plan
+         *
+         * @param plan_table The plan table to match against stored plans
+         * @param exact_match If true, requires exact join structure match
+         * @return std::vector<size_t> Indices of matching stored plans
+         */
+        template <typename PlanTable>
+        std::vector<size_t> find_matching_query_plans(const PlanTable &plan_table, bool exact_match = false) const
+        {
+            std::vector<size_t> matches;
+
+            // Extract the target plan's join structure
+            std::unordered_map<Subproblem, Subproblem, SubproblemHash> target_structure;
+            for (std::size_t i = 1; i < plan_table.size(); ++i)
+            {
+                Subproblem s(i);
+                if (plan_table.has_plan(s) && s.size() > 1) // Only check joins
+                {
+                    const auto &entry = plan_table[s];
+                    if (entry.left && entry.right)
+                    {
+                        target_structure[s] = entry.left;
+                    }
+                }
+            }
+
+            // Check each stored plan for a match
+            for (size_t i = 0; i < stored_query_plans_.size(); ++i)
+            {
+                const auto &stored_plan = stored_query_plans_[i];
+
+                if (exact_match)
+                {
+                    // For exact match, structure must be identical
+                    if (stored_plan.join_structure == target_structure)
+                    {
+                        matches.push_back(i);
+                    }
+                }
+                else
+                {
+                    // For partial match, check if all tables in target are in stored
+                    // and if the join ordering for those tables matches
+                    bool is_match = true;
+
+                    // Check if all subproblems in target exist in stored with same structure
+                    for (const auto &[subp, left] : target_structure)
+                    {
+                        auto it = stored_plan.join_structure.find(subp);
+                        if (it == stored_plan.join_structure.end() || it->second != left)
+                        {
+                            is_match = false;
+                            break;
+                        }
+                    }
+
+                    if (is_match)
+                    {
+                        matches.push_back(i);
+                    }
+                }
+            }
+
+            return matches;
+        }
+
+        /**
+         * @brief Get a stored query plan by index
+         *
+         * @param index The index of the stored plan
+         * @return const StoredQueryPlan* Pointer to the plan, or nullptr if invalid index
+         */
+        const StoredQueryPlan *get_stored_query_plan(size_t index) const
+        {
+            if (index < stored_query_plans_.size())
+            {
+                return &stored_query_plans_[index];
+            }
+            return nullptr;
+        }
+
+        /**
+         * @brief Get the number of stored query plans
+         *
+         * @return size_t Number of stored plans
+         */
+        size_t get_stored_query_plan_count() const
+        {
+            return stored_query_plans_.size();
+        }
+
+        // Your lookup and query methods
+        double lookup_join_cardinality(const Subproblem &left_sp,
+                                       const Subproblem &right_sp,
+                                       bool &found) const
+            {
+        // Simple implementation - look up in our cache
+        const Subproblem joined = left_sp | right_sp;
+
+        // Try to find the cardinality for this exact join in our cache
+        auto it = subproblem_to_data_.find(joined);
+        if (it != subproblem_to_data_.end())
+        {
+            const auto &data = all_cardinality_data_[it->second];
+            if (data->true_cardinality >= 0)
+            {
+                found = true;
+                if (debug_output_)
+                {
+                    std::cout << "Found stored cardinality for join: " << data->true_cardinality << std::endl;
+                }
+                return data->true_cardinality;
+            }
+        }
+
+        found = false;
+        return -1.0;
+        }
+    };
 } // namespace m

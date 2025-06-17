@@ -359,8 +359,6 @@ namespace m
 
     public:
         // QUERY CATALOG
-        CardinalityStorage &cardinality_storage() const;
-
         /*===== Stores ===================================================================================================*/
         /** Registers a new `Store` with the given `name`. */
         template <typename T>
@@ -700,9 +698,6 @@ namespace m
         auto physical_post_optimizations_end() const { return physical_post_optimizations_.end(); }
         auto physical_post_optimizations_cbegin() const { return physical_post_optimizations_begin(); }
         auto physical_post_optimizations_cend() const { return physical_post_optimizations_end(); }
-
-    private:
-        std::unique_ptr<CardinalityStorage> cardinality_storage_; // Store the instance
     };
 
 }

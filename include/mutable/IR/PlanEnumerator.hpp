@@ -340,12 +340,10 @@ namespace m
                                         std::cout << "Using stored true cardinality: " << C_joined << std::endl;
 
                                     // Update the model's cardinality to match the stored true cardinality
-                                    PT[joined].model->size = C_joined;
+                                    PT[joined].model->set_cardinality(C_joined);
                                 }
-                                else
-                                {
-                                    C_joined = CE.predict_cardinality(*PT[joined].model);
-                                }
+
+                                C_joined = CE.predict_cardinality(*PT[joined].model);
                                 if (C_joined < least_cardinality)
                                 {
                                     least_cardinality = C_joined;

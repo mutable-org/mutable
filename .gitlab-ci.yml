@@ -40,22 +40,28 @@ stages:
     - upload
     - publish
 
-.build_cache:
+.use_cache:
+    variables:
+        CCACHE_BASEDIR: "${CI_PROJECT_DIR}"
+        CCACHE_DIR: "${CI_PROJECT_DIR}/.ccache"
+        CMAKE_C_COMPILER_LAUNCHER: "ccache"      # use ccache for project and third-parties configured with cmake
+        CMAKE_CXX_COMPILER_LAUNCHER: "ccache"    # use ccache for project and third-parties configured with cmake
     cache:
-        - key: "third-party"
+        - key: "ccache"
           paths:
-              - "third-party"
-              - "build/{debug,release,coverage}/**/*-download"                          # cache CMake download stamps
-              - "build/{debug,release,coverage}/**/*-gitclone-lastrun.txt"              # cache CMake Git stamps
-              - "build/{debug,release,coverage}/**/*-gitinfo.txt"                       # cache CMake Git stamps
-              - "build/{debug,release,coverage}/**/*-configure"                         # cache CMake configure stamps
-
-        - key: "build:${BUILD_TYPE}:${LIBRARY_TYPE}"
+              - ".ccache"                                      # cache ccache cache
+        - key: "V8:${BUILD_TYPE}:${LIBRARY_TYPE}"
           paths:
-              - "build/${BUILD_TYPE}/bin"                                               # cache our executables
-              - "build/${BUILD_TYPE}/lib/libmutable.{a,so,dylib,dll}"                   # cache our library
-              - "build/${BUILD_TYPE}/third-party/src/*-build"                           # cache third-party build
-              - "build/${BUILD_TYPE}/src/**/*.o"                                        # cache all object files
+              - "third-party/v8"                               # cache v8 code
+              - "build/${BUILD_TYPE}/third-party/src/V8-stamp" # cache V8 build
+              - "build/${BUILD_TYPE}/third-party/src/V8-build" # cache V8 build
+    before_script:
+        - echo "Using ccache, caching in ${CCACHE_DIR}."
+        - ccache --max-size=5G
+        - ccache --zero-stats
+        - ccache --show-stats
+    after_script:
+        - ccache --show-stats
 
 .static:
     variables:
@@ -115,6 +121,22 @@ check:syntax:
     script:
         - echo ${CI_COMMIT_BEFORE_SHA} ${CI_COMMIT_SHA} ${CI_COMMIT_REF_NAME} | hooks/pre-receive
 
+check:pipenv:linux-amd64:
+    stage: check
+    tags:
+        - linux
+        - amd64
+    script:
+        - pipenv sync
+
+check:pipenv:macos-amd64:
+    stage: check
+    tags:
+        - macos
+        - amd64
+    script:
+        - pipenv sync
+
 
 #-----------------------------------------------------------------------------------------------------------------------
 # DEBUG BUILD
@@ -128,10 +150,9 @@ build:debug:linux-amd64:
     extends:
         - .debug
         - .shared
-        - .build_cache
+        - .use_cache
     script:
-        - pipenv sync
-        - pipenv run cmake -S . -B build/${BUILD_TYPE}
+        - cmake -S . -B build/${BUILD_TYPE}
           --fresh
           -G Ninja
           -DCMAKE_C_COMPILER=clang
@@ -141,8 +162,8 @@ build:debug:linux-amd64:
           -DWITH_V8=ON
           -DENABLE_SANITIZERS=ON
           -DENABLE_SANITY_FIELDS=ON
-        - pipenv run cmake --build build/${BUILD_TYPE} --target Boost gitversion
-        - pipenv run cmake --build build/${BUILD_TYPE} --target all unittest
+        - cmake --build build/${BUILD_TYPE} --target Boost gitversion
+        - cmake --build build/${BUILD_TYPE} --target all unittest
         - find build/${BUILD_TYPE}/third-party -name '*.so' -exec cp {} build/${BUILD_TYPE}/lib \; # collect shared libraries
         - find build/${BUILD_TYPE}/third-party -name '*.so.*' -exec cp {} build/${BUILD_TYPE}/lib \; # collect shared libraries
     artifacts:
@@ -150,6 +171,7 @@ build:debug:linux-amd64:
             - "build/${BUILD_TYPE}/bin/{lex,parse,check,shell,unittest}"
             - "build/${BUILD_TYPE}/lib/"
         expire_in: 1 day
+    dependencies: []
 
 build:debug:macos-amd64:
     stage: build:debug
@@ -159,10 +181,9 @@ build:debug:macos-amd64:
     extends:
         - .debug
         - .shared
-        - .build_cache
+        - .use_cache
     script:
-        - pipenv sync
-        - pipenv run cmake -S . -B build/${BUILD_TYPE}
+        - cmake -S . -B build/${BUILD_TYPE}
           --fresh
           -G Ninja
           -DCMAKE_C_COMPILER=$(brew --prefix llvm@17)/bin/clang
@@ -172,15 +193,15 @@ build:debug:macos-amd64:
           -DWITH_V8=ON
           -DENABLE_SANITIZERS=ON
           -DENABLE_SANITY_FIELDS=ON
-        - pipenv run cmake --build build/${BUILD_TYPE} --target Boost gitversion
-        - pipenv run cmake --build build/${BUILD_TYPE} --target all unittest
+        - cmake --build build/${BUILD_TYPE} --target Boost gitversion
+        - cmake --build build/${BUILD_TYPE} --target all unittest
         - find build/${BUILD_TYPE}/third-party -name '*.dylib' -exec cp {} build/${BUILD_TYPE}/lib \; # collect shared libraries
-        - find build/${BUILD_TYPE}/third-party -name '*.dylib.*' -exec cp {} build/${BUILD_TYPE}/lib \; # collect shared libraries
     artifacts:
         paths:
             - "build/${BUILD_TYPE}/bin/{lex,parse,check,shell,unittest}"
             - "build/${BUILD_TYPE}/lib/"
         expire_in: 1 day
+    dependencies: []
 
 
 #-----------------------------------------------------------------------------------------------------------------------
@@ -292,7 +313,7 @@ build:release:linux-amd64:
     extends:
         - .release
         - .static
-        - .build_cache
+        - .use_cache
     script:
         - cmake -S . -B build/${BUILD_TYPE}
           --fresh
@@ -315,6 +336,7 @@ build:release:linux-amd64:
         paths:
             - "mutable"
         expire_in: 1 day
+    dependencies: []
 
 build:release:macos-amd64:
     stage: build:release
@@ -324,7 +346,7 @@ build:release:macos-amd64:
     extends:
         - .release
         - .static
-        - .build_cache
+        - .use_cache
     script:
         - cmake -S . -B build/${BUILD_TYPE}
           --fresh
@@ -347,6 +369,7 @@ build:release:macos-amd64:
         paths:
             - "mutable"
         expire_in: 1 day
+    dependencies: []
 
 
 #-----------------------------------------------------------------------------------------------------------------------
@@ -441,13 +464,14 @@ report:doxygen:
           when: on_success
         - if: $CI_MERGE_REQUEST_SOURCE_BRANCH_NAME =~ /report/i
           when: on_success
+    dependencies: []
 
 report:coverage:
     stage: report
     tags:
         - nginx
-    needs: [ "build:debug:linux-amd64" ]
     script:
+        - unset CMAKE_C_COMPILER_LAUNCHER CMAKE_CXX_COMPILER_LAUNCHER
         - utils/coverage.sh
         - rm -rf /srv/http/mutable/coverage
         - mv build/${BUILD_TYPE}/html /srv/http/mutable/coverage
@@ -455,12 +479,13 @@ report:coverage:
     extends:
         - .coverage
         - .shared
-        - .build_cache
+        - .use_cache
     rules:
         - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
           when: on_success
         - if: $CI_MERGE_REQUEST_SOURCE_BRANCH_NAME =~ /coverage/i
           when: on_success
+    dependencies: []
 
 
 #-----------------------------------------------------------------------------------------------------------------------

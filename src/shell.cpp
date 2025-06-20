@@ -157,19 +157,19 @@ void hook_highlighter(const std::string &context, Replxx::colors_t &colors)
 #include <mutable/tables/Keywords.tbl>
 #undef M_KEYWORD
         /* Operators */
-        { "\\(",  Replxx::Color::NORMAL},
-        { "\\)",  Replxx::Color::NORMAL},
-        { "\\~",  Replxx::Color::NORMAL},
-        { "\\+",  Replxx::Color::NORMAL},
-        { "\\-",  Replxx::Color::NORMAL},
-        { "\\*",  Replxx::Color::NORMAL},
-        { "\\/",  Replxx::Color::NORMAL},
-        { "\\%",  Replxx::Color::NORMAL},
-        { "\\.",  Replxx::Color::NORMAL},
-        { "\\=",  Replxx::Color::NORMAL},
-        { "\\!=", Replxx::Color::NORMAL},
-        { "\\<",  Replxx::Color::NORMAL},
-        { "\\>",  Replxx::Color::NORMAL},
+        { "\\(",  Replxx::Color::LIGHTGRAY},
+        { "\\)",  Replxx::Color::LIGHTGRAY},
+        { "\\~",  Replxx::Color::LIGHTGRAY},
+        { "\\+",  Replxx::Color::LIGHTGRAY},
+        { "\\-",  Replxx::Color::LIGHTGRAY},
+        { "\\*",  Replxx::Color::LIGHTGRAY},
+        { "\\/",  Replxx::Color::LIGHTGRAY},
+        { "\\%",  Replxx::Color::LIGHTGRAY},
+        { "\\.",  Replxx::Color::LIGHTGRAY},
+        { "\\=",  Replxx::Color::LIGHTGRAY},
+        { "\\!=", Replxx::Color::LIGHTGRAY},
+        { "\\<",  Replxx::Color::LIGHTGRAY},
+        { "\\>",  Replxx::Color::LIGHTGRAY},
         /* Constants */
         {"[\\-|+]{0,1}[0-9]+",          Replxx::Color::BLUE}, // integral numbers
         {"[\\-|+]{0,1}[0-9]*\\.[0-9]+", Replxx::Color::BLUE}, // fixed-point and floating-point numbers

@@ -60,12 +60,10 @@ cd build/coverage
 lcov ${LCOV_FLAGS} --zerocounters --directory src --directory unittest
 # Create baseline to make sure untouched files show up in the report
 lcov ${LCOV_FLAGS} --capture --initial --directory src --directory unittest --output-file base.info
-# lcov ${LCOV_FLAGS} --capture --initial --output-file unittest.base
 # Run tests
 bin/unittest --reporter compact '[core]'
 # Capture lcov counters and generate report
 lcov ${LCOV_FLAGS} --capture --directory src --directory unittest --output-file test.info
-# lcov ${LCOV_FLAGS} --capture --directory unittest --output-file unittest.capture
 # Add baseline counters
 lcov ${LCOV_FLAGS} --directory src --directory unittest --add-tracefile base.info --add-tracefile test.info --output-file total.info
 # Filter collected data to final coverage report

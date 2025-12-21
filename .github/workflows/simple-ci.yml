@@ -1,0 +1,177 @@
+name: simplified-mutable-ci
+on:
+  workflow_dispatch:
+    inputs:
+      stage:
+        description: 'all / build-and-test / release'
+        required: true
+        default: all
+        type: choice
+        options: [all, build-and-test, release]
+      create_release:
+        description: 'Create GitHub Release'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  
+jobs:
+  build-and-test:
+    runs-on: ubuntu-22.04
+    env:
+      CC: clang
+      CXX: clang++
+    steps:
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 0}
+      
+      - name: LLVM / Clang 18 / Python env
+        run: | 
+          wget -qO- https://apt.llvm.org/llvm.sh | sudo bash -s -- 18
+          echo "/usr/lib/llvm-18/bin" >> $GITHUB_PATH
+          sudo apt-get update && sudo apt-get install -y ninja-build libboost-dev libtbb-dev libfmt-dev python3-pip libssl-dev
+          git clone https://github.com/pyenv/pyenv.git .pyenv
+          export PYENV_ROOT="$(pwd)/.pyenv"
+          export PATH="$PYENV_ROOT/bin:$PATH"
+          echo "$PYENV_ROOT/bin" >> $GITHUB_PATH
+          eval "$(pyenv init -)"
+          sudo cp -r /usr/include/openssl /usr/lib/ssl/
+          echo "/usr/lib/x86_64-linux-gnu" >> $GITHUB_PATH
+          export PATH=/usr/lib/x86_64-linux-gnu:$PATH
+          pyenv install -v 3.10.17
+      
+      - name: Generate gitversion.tbl
+        run: |
+          REV=$(git rev-parse --short HEAD)
+          BRANCH=$(git rev-parse --abbrev-ref HEAD)
+          TAG=$(git describe --tags --always --dirty)
+          cat > include/mutable/gitversion.tbl <<'EOF'
+          constexpr const char GIT_REV[]      = "${REV}";
+          constexpr const char GIT_BRANCH[]   = "${BRANCH}";
+          constexpr const char SEM_VERSION[]  = "${TAG}";
+          EOF
+      
+      - name: Configure & Build & Test
+        # not zero exit code doesn't stop workflow
+        shell: /usr/bin/bash {0}
+        run: |
+          export PYENV_ROOT="$(pwd)/.pyenv"
+          export PATH="$PYENV_ROOT/bin:$PATH"
+          eval "$(pyenv init -)"
+          pyenv global 3.10.17
+          pip install pipenv
+          
+          cmake -S . -B build -G Ninja -LAH \
+                -DWITH_V8=OFF \
+                -DTHIRD_PARTY_BOOST=OFF \
+                -DENABLE_SANITIZERS=OFF \
+                -DMUTABLE_ENABLE_TESTS=ON \
+                -DBUILD_TESTING=ON \
+                -DCMAKE_BUILD_TYPE=Debug
+          cmake --build build -j$(nproc)
+          cmake --build build --target check-unit
+          cmake --build build --target check-integration
+          echo "---"
+          find build
+
+      - name: Package build artifacts
+        run: |
+          mkdir -p artifacts
+          
+          echo "=== Packaging build artifacts ==="
+          cd build
+          
+          echo "=== Available executables ==="
+          find . -type f -executable -not -path "*/CMakeFiles/*" | sort
+          
+          cd ..
+          
+          find build -type f \( -executable -o -name "*.so" -o -name "*.a" \) -not -path "*/CMakeFiles/*" > file_list.txt
+          find build -name "CTestTestfile.cmake" >> file_list.txt
+          find build -name "cmake_install.cmake" >> file_list.txt
+          find build -name "DartConfiguration.tcl" >> file_list.txt
+          [ -f "build/CMakeCache.txt" ] && echo "build/CMakeCache.txt" >> file_list.txt
+          
+          echo "Files to be archived:"
+          cat file_list.txt
+          
+          tar -czf artifacts/mutable-build-essential.tar.gz -T file_list.txt
+          
+          echo "=== Build Artifacts Manifest ===" > artifacts/MANIFEST.txt
+          echo "Generated: $(date)" >> artifacts/MANIFEST.txt
+          echo "Commit: $(git rev-parse --short HEAD)" >> artifacts/MANIFEST.txt
+          echo "Branch: $(git rev-parse --abbrev-ref HEAD)" >> artifacts/MANIFEST.txt
+          echo "" >> artifacts/MANIFEST.txt
+          echo "Contents:" >> artifacts/MANIFEST.txt
+          tar -tzf artifacts/mutable-build-essential.tar.gz >> artifacts/MANIFEST.txt
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: mutable-build-${{ github.sha }}
+          path: artifacts/
+          retention-days: 30
+
+  release:
+    if: inputs.stage == 'release' || inputs.create_release
+    needs: build-and-test
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+        
+      - uses: actions/download-artifact@v4
+        with: 
+          name: mutable-build-${{ github.sha }}
+          path: artifacts/
+          
+      - name: Prepare release package
+        run: |
+          mkdir -p release
+          cp artifacts/mutable-build-essential.tar.gz release/
+          
+          cd artifacts
+          tar -xzf mutable-build-essential.tar.gz
+          
+          mkdir -p ../release/mutable-release
+          mkdir ../release/mutable-release/test
+          mkdir ../release/mutable-release/unittest
+          find build/unittest -type f -executable -exec cp {} ../release/mutable-release/unittest \; 2>/dev/null || true
+          find build/test -type f -executable -exec cp {} ../release/mutable-release/unittest \; 2>/dev/null || true
+          find build -name "*.so" -o -name "*.a" | head -20 | while read lib; do
+            cp "$lib" ../release/mutable-release/ 2>/dev/null || true
+          done
+          
+          cp ../README.md ../LICENSE ../release/mutable-release/ 2>/dev/null || true
+          cp MANIFEST.txt ../release/mutable-release/
+          
+          cd ../release
+          tar -czf mutable-linux-x64-$(date +%Y%m%d)-$(git rev-parse --short HEAD).tar.gz mutable-release/
+          zip -r mutable-linux-x64-$(date +%Y%m%d)-$(git rev-parse --short HEAD).zip mutable-release/
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: build-${{ github.run_number }}
+          name: "Mutable Build ${{ github.run_number }}"
+          files: |
+            release/mutable-build-essential.tar.gz
+            release/mutable-linux-x64-*.tar.gz
+            release/mutable-linux-x64-*.zip
+          body: |
+            ## Automated Build
+            
+            **Commit:** `${{ github.sha }}`  
+            **Branch:** `${{ github.ref_name }}`  
+            **Build Date:** $(date)
+            
+            ## Downloads
+            
+            - `mutable-build-essential.tar.gz`: Complete build artifacts
+            - `mutable-linux-x64-*.tar.gz`: User-friendly package  
+            - `mutable-linux-x64-*.zip`: Same as above in ZIP format
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
